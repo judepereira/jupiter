@@ -1,4 +1,4 @@
 @NullMarked
-package com.judepereira.base.ui;
+package com.judepereira.aide.ui;
 
 import org.jspecify.annotations.NullMarked;
