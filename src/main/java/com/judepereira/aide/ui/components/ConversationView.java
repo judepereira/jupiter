@@ -1,26 +1,39 @@
 package com.judepereira.aide.ui.components;
 
 import com.flowingcode.vaadin.addons.markdown.MarkdownViewer;
+import com.judepereira.aide.dtos.ChatMessage;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
-import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.markdown.Markdown;
+import com.vaadin.flow.component.grid.dataview.GridListDataView;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.data.renderer.ComponentRenderer;
+import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 import lombok.val;
 import org.springframework.ai.chat.messages.Message;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
-public class ConversationView extends Grid<Message> {
+@Log4j2
+public class ConversationView extends Grid<ChatMessage> {
+
+    @Getter
+    private final List<ChatMessage> messages = Collections.synchronizedList(new ArrayList<>());
+    private final GridListDataView<ChatMessage> messageGridListDataView;
 
     public ConversationView() {
         addThemeVariants(GridVariant.LUMO_WRAP_CELL_CONTENT);
-        addColumn(new ComponentRenderer<Component, Message>(entry -> {
+        addColumn(new ComponentRenderer<Component, ChatMessage>(entry -> {
             val row = new VerticalLayout();
             row.setPadding(false);
-            row.add(new MarkdownViewer(Objects.requireNonNullElse(entry.getText(), "")));
+            MarkdownViewer md = new MarkdownViewer(Objects.requireNonNullElse(entry.getMessage().getText(), ""));
+            md.setWidthFull();
+            row.add(md);
+            log.info("Rendering message: {}", entry.getMessage().getText());
             return row;
         }))
                 .setAutoWidth(true)
@@ -29,5 +42,12 @@ public class ConversationView extends Grid<Message> {
         setSelectionMode(SelectionMode.NONE);
         setAllRowsVisible(true);
         addThemeName("no-border");
+        this.messageGridListDataView = setItems(messages);
+    }
+
+    public synchronized void addMessage(ChatMessage message) {
+        messages.add(message);
+        messageGridListDataView.refreshAll();
+        scrollToItem(message);
     }
 }

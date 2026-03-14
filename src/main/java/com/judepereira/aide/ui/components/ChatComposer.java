@@ -1,42 +1,30 @@
 package com.judepereira.aide.ui.components;
 
 import com.judepereira.aide.ai.ChatClientService;
+import com.judepereira.aide.dtos.ChatMessage;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.KeyModifier;
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.data.value.ValueChangeMode;
 import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.function.Consumer;
 
 public class ChatComposer extends VerticalLayout {
 
     private final ConversationView conversationView = new ConversationView();
     private final TextArea messageInput = new TextArea();
     private final Checkbox useCmdEnter = new Checkbox("Use ⌘ + Enter to send", true);
-    private final List<Message> messages = new ArrayList<>();
+
     private final ChatClientService chatClientService;
 
     public ChatComposer(final ChatClientService chatClientService) {
         this.chatClientService = chatClientService;
         setSizeFull();
-        //todo
-//        setThemeVariants(VerticalLayoutVariant.LUMO_SPACING_XS, VerticalLayoutVariant.LUMO_PADDING);
-
-        var conversationWrapper = new FlexLayout(conversationView);
-        conversationWrapper.setSizeFull();
-
         conversationView.setWidthFull();
-        conversationView.setHeightFull();
+        conversationView.setMinHeight("0");
 
         messageInput.setWidthFull();
         messageInput.setPlaceholder("Let's build...");
@@ -59,13 +47,22 @@ public class ChatComposer extends VerticalLayout {
         messageInput.setMinHeight("100px");
         messageInput.setMaxHeight("300px");
 
-        add(conversationWrapper, messageInput, useCmdEnter);
+        VerticalLayout controlPanel = new VerticalLayout(messageInput, useCmdEnter);
+        controlPanel.setPadding(false);
+
+        var conversationWrapper = new FlexLayout();
+        conversationWrapper.setSizeFull();
+        conversationWrapper.add(conversationView, controlPanel);
+        conversationWrapper.setFlexDirection(FlexLayout.FlexDirection.COLUMN);
+        conversationWrapper.setFlexGrow(1, conversationView);
+        controlPanel.getStyle().setMarginTop("auto");
+
+        add(conversationWrapper);
         expand(conversationWrapper);
     }
 
-    public void addEntry(Message entry) {
-        messages.add(entry);
-        refreshConversation();
+    public void addEntry(ChatMessage entry) {
+        conversationView.addMessage(entry);
     }
 
     private boolean shouldSend(boolean metaPressed) {
@@ -78,21 +75,14 @@ public class ChatComposer extends VerticalLayout {
             return;
         }
 
-        addEntry(new UserMessage(text));
+        addEntry(new ChatMessage(new UserMessage(text)));
         messageInput.clear();
 
         Thread.ofVirtual().start(() -> {
-            AssistantMessage response = new AssistantMessage(chatClientService.getResponse(messages));
+            AssistantMessage response = new AssistantMessage(chatClientService.getResponse(conversationView.getMessages().stream().map(ChatMessage::getMessage).toList()));
 
-            getUI().ifPresent(ui -> ui.access(() -> {
-                addEntry(response);
-                refreshConversation();
-            }));
+            getUI().ifPresent(ui -> ui.access(() -> addEntry(new ChatMessage(response))));
         });
-    }
-
-    private void refreshConversation() {
-        conversationView.setItems(messages);
     }
 }
 
