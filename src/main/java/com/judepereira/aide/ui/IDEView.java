@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.Collections;
 
 @Route(value = "")
-@PageTitle("Aide")
+@PageTitle("Jupiter")
 class IDEView extends BaseLayout implements BeforeEnterObserver {
     private final ChatComposer chatComposer;
     private final ReviewView reviewView = new ReviewView();

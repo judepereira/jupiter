@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 @Push
-@PWA(name = "AIDE", shortName = "AIDE")
+@PWA(name = "Jupiter", shortName = "Jupiter", iconPath = "images/logo.png")
 @StyleSheet("styles.css")
 public class Application implements AppShellConfigurator {
 
