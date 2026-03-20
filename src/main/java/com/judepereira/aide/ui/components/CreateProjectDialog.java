@@ -1,17 +1,20 @@
 package com.judepereira.aide.ui.components;
 
+import com.judepereira.aide.dtos.Dir;
 import com.judepereira.aide.project.Project;
 import com.judepereira.aide.project.ProjectService;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.orderedlayout.FlexLayout;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.treegrid.TreeGrid;
 import com.vaadin.flow.data.provider.hierarchy.TreeData;
 import com.vaadin.flow.data.provider.hierarchy.TreeDataProvider;
+import org.jetbrains.annotations.UnknownNullability;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.function.Consumer;
 
 /**
@@ -29,74 +32,96 @@ public class CreateProjectDialog {
     public void open() {
         Dialog d = new Dialog();
         d.setWidth("800px");
-        d.setHeight("600px");
+        d.setHeaderTitle("New Project");
 
-        TextField name = new TextField("Project name");
+        TextField name = new TextField("Project Name");
         name.setWidthFull();
+        name.getStyle().setPaddingTop("0");
 
-        TextField pathField = new TextField("Selected path");
+        TextField pathField = new TextField("Project Path");
         pathField.setWidthFull();
         pathField.setReadOnly(true);
+        pathField.getStyle().setPaddingTop("0");
 
-        TreeGrid<String> tree = new TreeGrid<>();
-        TreeData<String> data = new TreeData<>();
-        String root = System.getProperty("user.home");
-        data.addItem(null, root);
+        TreeGrid<Dir> tree = new TreeGrid<>();
+        tree.setHeight("400px");
+        TreeData<Dir> data = new TreeData<>();
 
-        // preload root children so the tree shows expandable affordance
-        File rootFile = new File(root);
-        File[] rootDirs = rootFile.listFiles(File::isDirectory);
-        if (rootDirs != null) {
-            for (File dfile : rootDirs) {
-                data.addItem(root, dfile.getAbsolutePath());
+        data.addRootItems(new Dir(new File(System.getProperty("user.home")), true));
+
+        TreeDataProvider<Dir> provider = new TreeDataProvider<>(data) {
+            @Override
+            public boolean hasChildren(Dir item) {
+                return item.getFile().isDirectory();
             }
-        }
-
-        TreeDataProvider<String> provider = new TreeDataProvider<>(data);
+        };
         tree.setDataProvider(provider);
-        tree.addHierarchyColumn(s -> s).setHeader("Directories");
+        tree.addHierarchyColumn(s -> s);
 
         // lazy-load on expand
         tree.addExpandListener(ev -> {
-            for (String node : ev.getItems()) {
-                File fnode = new File(node);
-                File[] dirs = fnode.listFiles(File::isDirectory);
+            for (Dir dir : ev.getItems()) {
+                File[] dirs = dir.getFile().listFiles(File::isDirectory);
                 if (dirs != null) {
+                    Arrays.sort(dirs, (o1, o2) -> o1.getName().startsWith(".") ? 1 :
+                            o2.getName().startsWith(".") ? -1 : o1.getName().compareTo(o2.getName()));
                     for (File dfile : dirs) {
-                        if (!data.getChildren(node).contains(dfile.getAbsolutePath())) {
-                            data.addItem(node, dfile.getAbsolutePath());
+                        if (!data.getChildren(dir).contains(new Dir(dfile))) {
+                            data.addItem(dir, new Dir(dfile));
                         }
                     }
                 }
+
+                provider.refreshItem(dir);
+                pathField.setValue(dir.getFile().getAbsolutePath());
+                itemSelected(dir, pathField, name);
+                tree.select(dir);
             }
-            provider.refreshAll();
         });
 
         tree.addItemClickListener(ev -> {
-            String p = ev.getItem();
-            pathField.setValue(p);
+            itemSelected(ev.getItem(), pathField, name);
+            tree.expand(ev.getItem());
         });
 
-        Button save = new Button("Create project", e -> {
+        Button save = new Button("Create project", _ -> {
             String n = name.getValue();
             String p = pathField.getValue();
-            if (n == null || n.isBlank()) { Notification.show("Project name required"); return; }
-            if (p == null || p.isBlank()) { Notification.show("Select a path"); return; }
+            if (n == null || n.isBlank()) {
+                AppNotifications.showError("Project name required");
+                return;
+            }
+            if (p == null || p.isBlank()) {
+                AppNotifications.showError("Select a path");
+                return;
+            }
             try {
                 var created = projectService.createProject(n, p);
                 d.close();
                 if (onCreated != null) onCreated.accept(created);
+            } catch (IllegalArgumentException ex) {
+                AppNotifications.showError(ex.getMessage());
             } catch (Exception ex) {
-                Notification.show("Failed to create project: " + ex.getMessage());
+                AppNotifications.show("Failed to create project: " + ex.getMessage());
             }
         });
+        save.addThemeVariants(ButtonVariant.LUMO_SUCCESS);
 
-        Button cancel = new Button("Cancel", e -> d.close());
+        Button cancel = new Button("Cancel", _ -> d.close());
+        cancel.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
 
-        FlexLayout foot = new FlexLayout(save, cancel);
-        foot.getStyle().set("justify-content", "flex-end");
+        d.getFooter().add(cancel, save);
 
-        d.add(name, pathField, tree, foot);
+        VerticalLayout vl = new VerticalLayout(name, pathField, tree);
+        vl.setPadding(false);
+
+        d.add(vl);
         d.open();
+    }
+
+    private static void itemSelected(@UnknownNullability Dir d, TextField pathField, TextField name) {
+        File p = d.getFile();
+        pathField.setValue(p.getAbsolutePath());
+        name.setValue(p.getName());
     }
 }
