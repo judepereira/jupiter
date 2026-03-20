@@ -11,6 +11,7 @@ import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.data.value.ValueChangeMode;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import java.util.List;
 
 public class ChatComposer extends VerticalLayout {
 
@@ -65,6 +66,18 @@ public class ChatComposer extends VerticalLayout {
         conversationView.addMessage(entry);
     }
 
+    public void setConversation(List<ChatMessage> entries) {
+        conversationView.setMessages(entries);
+    }
+
+    public void clearConversation() {
+        conversationView.clearMessages();
+    }
+
+    public List<ChatMessage> getConversationSnapshot() {
+        return conversationView.snapshot();
+    }
+
     private boolean shouldSend(boolean metaPressed) {
         return !useCmdEnter.getValue() || metaPressed;
     }
@@ -80,10 +93,7 @@ public class ChatComposer extends VerticalLayout {
 
         Thread.ofVirtual().start(() -> {
             AssistantMessage response = new AssistantMessage(chatClientService.getResponse(conversationView.getMessages().stream().map(ChatMessage::getMessage).toList()));
-
             getUI().ifPresent(ui -> ui.access(() -> addEntry(new ChatMessage(response))));
         });
     }
 }
-
-

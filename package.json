@@ -113,6 +113,7 @@
     "react-dom": "$react-dom",
     "react-router": "$react-router",
     "rehype-sanitize": "$rehype-sanitize",
+    "@vaadin/router": "2.0.1",
     "@vaadin/a11y-base": "24.9.12",
     "@vaadin/accordion": "24.9.12",
     "@vaadin/app-layout": "24.9.12",
@@ -169,7 +170,6 @@
     "@vaadin/time-picker": "24.9.12",
     "@vaadin/tooltip": "24.9.12",
     "@vaadin/upload": "24.9.12",
-    "@vaadin/router": "2.0.1",
     "@vaadin/vertical-layout": "24.9.12",
     "@vaadin/virtual-list": "24.9.12"
   }

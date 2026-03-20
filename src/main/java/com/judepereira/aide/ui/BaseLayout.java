@@ -3,10 +3,15 @@ package com.judepereira.aide.ui;
 import com.judepereira.aide.ui.components.IconButton;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.orderedlayout.ThemableLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import lombok.Data;
 
 import java.util.Arrays;
 
+@Data
 public abstract class BaseLayout extends VerticalLayout {
 
     private enum NavRailPosition {
@@ -25,16 +30,24 @@ public abstract class BaseLayout extends VerticalLayout {
 
     public static final String BAR_THICKNESS = "39px";
 
+    private final HorizontalLayout topBar;
+    private final VerticalLayout leftRail;
+    private final VerticalLayout rightRail;
+
     BaseLayout() {
         setPadding(false);
         setSpacing(false);
-        add(buildNavRail(NavRailPosition.TOP, new IconButton(VaadinIcon.HOME.create())));
-        add(buildNavRail(NavRailPosition.LEFT, new IconButton(VaadinIcon.COG.create())));
-        add(buildNavRail(NavRailPosition.RIGHT, new IconButton(VaadinIcon.LAYOUT.create())));
+
+        topBar = buildNavRail(new HorizontalLayout(), NavRailPosition.TOP, new IconButton(VaadinIcon.HOME.create()));
+        leftRail = buildNavRail(new VerticalLayout(), NavRailPosition.LEFT, new IconButton(VaadinIcon.COG.create()));
+        rightRail = buildNavRail(new VerticalLayout(), NavRailPosition.RIGHT, new IconButton(VaadinIcon.LAYOUT.create()));
+
+        add(topBar);
+        add(leftRail);
+        add(rightRail);
     }
 
-    private Component buildNavRail(final NavRailPosition pos, final IconButton... buttons) {
-        VerticalLayout content = new VerticalLayout();
+    private <T extends FlexComponent & ThemableLayout> T buildNavRail(final T content, final NavRailPosition pos, final IconButton... buttons) {
         content.setPadding(false);
 
         Arrays.stream(buttons).forEach(content::add);
@@ -42,6 +55,7 @@ public abstract class BaseLayout extends VerticalLayout {
         if (pos == NavRailPosition.TOP) {
             content.setHeight(BAR_THICKNESS);
             Arrays.stream(buttons).forEach(IconButton::setLightMode);
+            content.setWidthFull();
         } else {
             content.setWidth(BAR_THICKNESS);
         }

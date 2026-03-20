@@ -32,7 +32,7 @@ public class CreateProjectDialog {
     public void open() {
         Dialog d = new Dialog();
         d.setWidth("800px");
-        d.setHeaderTitle("New Project");
+        d.setHeaderTitle("Add Project");
 
         TextField name = new TextField("Project Name");
         name.setWidthFull();

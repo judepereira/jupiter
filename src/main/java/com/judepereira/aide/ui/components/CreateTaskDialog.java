@@ -4,13 +4,19 @@ import com.judepereira.aide.project.Project;
 import com.judepereira.aide.project.ProjectService;
 import com.judepereira.aide.task.Task;
 import com.judepereira.aide.task.TaskService;
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
-import com.vaadin.flow.component.listbox.MultiSelectListBox;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.listbox.MultiSelectListBox;
+import com.vaadin.flow.component.orderedlayout.Scroller;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.data.renderer.ComponentRenderer;
+import com.vaadin.flow.data.value.ValueChangeMode;
+import com.vaadin.flow.function.SerializableFunction;
+import lombok.val;
 
 import java.util.Set;
 import java.util.function.Consumer;
@@ -20,6 +26,10 @@ import java.util.stream.Collectors;
  * Reusable dialog component for creating a new Task.
  */
 public class CreateTaskDialog {
+    public static final String ERR_MAX_PROJECTS_1 = "At most one project may be selected (multi project selection is coming soon :))";
+    public static final String ASSOCIATE_THIS_TASK_WITH_THE_FOLLOWING_PROJECTS = "Associate this task with the following project(s):";
+    public static final String OR_ADD_A_NEW_PROJECT = "Add a new project";
+
     private final TaskService taskService;
     private final ProjectService projectService;
     private final Consumer<Task> onCreated;
@@ -33,82 +43,126 @@ public class CreateTaskDialog {
     public void open() {
         Dialog d = new Dialog();
         d.setWidth("600px");
+        d.setHeaderTitle("New Task");
 
-        TextField title = new TextField("Title");
-        title.setWidthFull();
+        TextField branchName = new TextField("Branch Name");
+        branchName.getStyle().setPaddingTop("0");
+        branchName.setWidthFull();
 
-        Span slugDisplay = new Span();
-        slugDisplay.getStyle().set("font-size", "var(--lumo-font-size-s)");
+        val projectSelectorLabel = new Span(ASSOCIATE_THIS_TASK_WITH_THE_FOLLOWING_PROJECTS);
 
         var projects = projectService.listProjects();
         MultiSelectListBox<Project> projectSelect = new MultiSelectListBox<>();
         projectSelect.setItems(projects);
-        projectSelect.setItemLabelGenerator(Project::getName);
         projectSelect.setWidthFull();
 
-        // Enforce single selection deterministically
+        projectSelect.setRenderer(new ComponentRenderer<Component, Project>(new SerializableFunction<Project, Component>() {
+            @Override
+            public Component apply(Project project) {
+                val path = new Span(project.getPath());
+                path.getStyle().setFontSize("small");
+                val span = new Span(new Span(project.getName()),new Span(" — "), path);
+                return span;
+            }
+        }));
+
         projectSelect.addValueChangeListener(ev -> {
             Set<Project> s = ev.getValue();
             if (s.size() > 1) {
                 Project chosen = s.stream().reduce((_, second) -> second).orElse(null);
                 projectSelect.deselectAll();
                 projectSelect.select(chosen);
-                Notification.show("Only one project can be selected");
+                AppNotifications.showError(ERR_MAX_PROJECTS_1);
             }
         });
 
+        val projectScroller = new Scroller(projectSelect);
+        projectScroller.setMaxHeight("125px");
+        projectScroller.setWidthFull();
+
         if (projects.isEmpty()) {
             projectSelect.setEnabled(false);
-            projectSelect.getElement().setProperty("title", "No projects available. Create one first.");
+            projectSelectorLabel.setText("Tasks in Jupiter are associated with one or more projects. " +
+                    "A project is a directory that's checked out already. " +
+                    "In order to create your first task, create new project.");
+            projectScroller.setVisible(false);
         }
 
-        title.addValueChangeListener(ev -> slugDisplay.setText(generateSlug(ev.getValue())));
-        // live show slug
-        slugDisplay.setText(generateSlug(title.getValue()));
+        TextField title = new TextField("Title");
+        title.setWidthFull();
+        title.setValueChangeMode(ValueChangeMode.EAGER);
+        title.getStyle().setPaddingTop("0");
 
-        Button createProject = new Button("Create project", _ -> {
+        title.addValueChangeListener(ev -> branchName.setValue(generateSlug(ev.getValue())));
+
+        Button createProject = new Button(projects.isEmpty() ? "Add your first project  🎉" : OR_ADD_A_NEW_PROJECT, ev -> {
             var dlg = new CreateProjectDialog(projectService, created -> {
                 var refreshed = projectService.listProjects();
                 projectSelect.setItems(refreshed);
                 projectSelect.setEnabled(!refreshed.isEmpty());
-                if (created != null) projectSelect.select(created);
+                if (created != null) {
+                    projectScroller.setVisible(true);
+                    projectSelect.select(created);
+                    projectSelectorLabel.setText(ASSOCIATE_THIS_TASK_WITH_THE_FOLLOWING_PROJECTS);
+                    ev.getSource().setText(OR_ADD_A_NEW_PROJECT);
+                }
             });
             dlg.open();
         });
+        createProject.addThemeVariants(ButtonVariant.LUMO_TERTIARY_INLINE, ButtonVariant.LUMO_SMALL);
 
         Button save = new Button("Create", _ -> {
             String t = title.getValue();
-            String slug = slugDisplay.getText();
+            String slug = branchName.getValue();
             Set<Project> selected = projectSelect.getSelectedItems();
-            if (t == null || t.isBlank()) { Notification.show("Title is required"); return; }
-            if (slug == null || slug.isBlank() || !slug.matches("^[A-Za-z0-9_-]+$")) {
-                Notification.show("Slug is required and must match pattern A-Za-z0-9_- ");
+            if (t == null || t.isBlank()) {
+                AppNotifications.showError("Title is required");
                 return;
             }
-            if (selected == null || selected.isEmpty()) { Notification.show("Select a project"); return; }
-            if (selected.size() != 1) { Notification.show("Exactly one project must be selected"); return; }
+            if (slug == null || slug.isBlank() || !slug.matches("^[A-Za-z0-9_-]+$")) {
+                AppNotifications.showError("Branch name is required and must match pattern A-Za-z0-9_-");
+                return;
+            }
+            if (selected == null || selected.isEmpty()) {
+                AppNotifications.showError("A task must be associated with at least one project");
+                return;
+            }
+            if (selected.size() != 1) {
+                AppNotifications.showError(ERR_MAX_PROJECTS_1);
+                return;
+            }
 
             try {
                 var created = taskService.createTask(t, slug, selected.stream().map(Project::getId).collect(Collectors.toSet()));
                 d.close();
-                if (onCreated != null) onCreated.accept(created);
+                if (onCreated != null) {
+                    onCreated.accept(created);
+                }
+            } catch (IllegalArgumentException ex) {
+                AppNotifications.showError(ex.getMessage());
             } catch (Exception ex) {
-                Notification.show("Failed to create task: " + ex.getMessage());
+                AppNotifications.show("Failed to create task: " + ex.getMessage());
             }
         });
 
+        save.addThemeVariants(ButtonVariant.LUMO_SUCCESS);
+
         Button cancel = new Button("Cancel", _ -> d.close());
+        cancel.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
 
-        FlexLayout foot = new FlexLayout(save, cancel);
-        foot.getStyle().set("justify-content", "flex-end");
+        d.getFooter().add(cancel, save);
 
-        d.add(title, slugDisplay, projectSelect, createProject, foot);
+        VerticalLayout content = new VerticalLayout(title, branchName, projectSelectorLabel, projectScroller, createProject);
+        content.setPadding(false);
+        d.add(content);
         d.open();
     }
 
     private String generateSlug(String input) {
-        if (input == null) return "";
-        String s = input.trim().replaceAll("\\s+", "-");
+        if (input == null) {
+            return "";
+        }
+        String s = input.trim().toLowerCase().replaceAll("\\s+", "-");
         s = s.replaceAll("[^A-Za-z0-9_-]", "");
         s = s.replaceAll("[-_]{2,}", "-");
         return s;

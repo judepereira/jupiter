@@ -50,4 +50,22 @@ public class ConversationView extends Grid<ChatMessage> {
         messageGridListDataView.refreshAll();
         scrollToItem(message);
     }
+
+    public synchronized void setMessages(List<ChatMessage> newMessages) {
+        messages.clear();
+        if (newMessages != null && !newMessages.isEmpty()) {
+            messages.addAll(newMessages);
+        }
+        messageGridListDataView.refreshAll();
+        if (!messages.isEmpty()) scrollToItem(messages.get(messages.size() - 1));
+    }
+
+    public synchronized void clearMessages() {
+        messages.clear();
+        messageGridListDataView.refreshAll();
+    }
+
+    public synchronized List<ChatMessage> snapshot() {
+        return new ArrayList<>(messages);
+    }
 }
