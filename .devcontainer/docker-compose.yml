@@ -1,0 +1,32 @@
+version: '3.8'
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/java:1-25-bookworm
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/jupiter
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/jupiter
+      DATABASE_USERNAME: jupiter
+      DATABASE_PASSWORD: jupiter
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jupiter
+      POSTGRES_USER: jupiter
+      POSTGRES_PASSWORD: jupiter
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jupiter -d jupiter"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data: {}

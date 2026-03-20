@@ -1,7 +1,7 @@
-package com.judepereira.aide.task;
+package com.judepereira.jupiter.task;
 
-import com.judepereira.aide.project.Project;
-import com.judepereira.aide.project.ProjectRepository;
+import com.judepereira.jupiter.project.Project;
+import com.judepereira.jupiter.project.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

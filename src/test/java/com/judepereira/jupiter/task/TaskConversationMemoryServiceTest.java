@@ -1,6 +1,6 @@
-package com.judepereira.aide.task;
+package com.judepereira.jupiter.task;
 
-import com.judepereira.aide.dtos.ChatMessage;
+import com.judepereira.jupiter.dtos.ChatMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

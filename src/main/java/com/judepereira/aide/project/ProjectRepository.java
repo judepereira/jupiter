@@ -1,10 +1,4 @@
 package com.judepereira.aide.project;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.Optional;
-
-public interface ProjectRepository extends JpaRepository<Project, Long> {
-    boolean existsByPathIgnoreCase(String path);
-
-    Optional<Project> findByPathIgnoreCase(String path);
-}
+// placeholder for compatibility
+public interface ProjectRepositoryPlaceholder {}

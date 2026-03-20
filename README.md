@@ -78,3 +78,56 @@ docker build --secret id=proKey,src=$HOME/.vaadin/proKey .
 
 The [Building Apps](https://vaadin.com/docs/v25/building-apps) guides contain hands-on advice for adding features to 
 your application.
+
+
+## PostgreSQL Development Setup
+
+This project includes a lightweight development PostgreSQL setup that you can start with Docker Compose.
+
+To start only the postgres service, run:
+
+```bash
+docker compose up -d postgres
+```
+
+Default database settings created by the dev compose setup:
+
+- Database: `jupiter`
+- User: `jupiter`
+- Password: `jupiter`
+- Port: `5432`
+
+The application is configured to auto-connect to a local PostgreSQL instance by default using the JDBC URL:
+
+```
+jdbc:postgresql://localhost:5432/jupiter
+```
+
+### Overriding the connection string
+
+You can override the database connection when starting the app by providing an environment variable. Examples:
+
+```bash
+DATABASE_URL=jdbc:postgresql://localhost:5432/anotherdb ./mvnw
+```
+
+or using the Spring datasource variable:
+
+```bash
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/anotherdb ./mvnw
+```
+
+## Dev Container
+
+You can open this repository in VS Code using the Dev Containers feature (Command Palette: "Reopen in Container").
+
+The provided devcontainer configuration includes both a `postgres` service and an `app` service so you can develop
+against the same Postgres instance used in CI/development. The `app` service in the devcontainer is configured with the
+following environment variable so the application will connect to the Postgres container automatically:
+
+```
+DATABASE_URL=jdbc:postgresql://postgres:5432/jupiter
+```
+
+Opening the repository in the dev container will start the services and make it easy to run and debug the application
+inside a reproducible development environment.
