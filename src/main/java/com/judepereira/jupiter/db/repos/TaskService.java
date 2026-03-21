@@ -1,9 +1,8 @@
 package com.judepereira.jupiter.db.repos;
 
 import com.judepereira.jupiter.db.entities.Task;
-import com.judepereira.jupiter.db.project.Project;
+import com.judepereira.jupiter.db.entities.Project;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.regex.Pattern;
@@ -21,18 +20,15 @@ public class TaskService {
         this.projectRepository = projectRepository;
     }
 
-    @Transactional(readOnly = true)
     public List<Task> listTasks() {
         return taskRepository.findAll();
     }
 
-    @Transactional(readOnly = true)
     public Optional<Task> findBySlug(String slug) {
         if (slug == null) return Optional.empty();
         return taskRepository.findBySlugIgnoreCase(slug.trim());
     }
 
-    @Transactional
     public Task createTask(String title, String branchName, Collection<Long> projectIds) {
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("Task title is required and cannot be blank");

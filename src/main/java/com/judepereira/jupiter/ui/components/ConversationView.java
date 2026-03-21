@@ -56,7 +56,9 @@ public class ConversationView extends Grid<ChatMessage> {
             messages.addAll(newMessages);
         }
         messageGridListDataView.refreshAll();
-        if (!messages.isEmpty()) scrollToItem(messages.get(messages.size() - 1));
+        if (!messages.isEmpty()) {
+            scrollToItem(messages.getLast());
+        }
     }
 
     public synchronized void refreshMessage(ChatMessage message) {

@@ -2,7 +2,7 @@ package com.judepereira.jupiter.entities;
 
 import com.judepereira.jupiter.db.entities.Task;
 import com.judepereira.jupiter.db.repos.TaskService;
-import com.judepereira.jupiter.db.project.Project;
+import com.judepereira.jupiter.db.entities.Project;
 import com.judepereira.jupiter.db.repos.ProjectRepository;
 import com.judepereira.jupiter.db.repos.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;

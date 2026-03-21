@@ -1,6 +1,6 @@
 package com.judepereira.jupiter.project;
 
-import com.judepereira.jupiter.db.project.Project;
+import com.judepereira.jupiter.db.entities.Project;
 import com.judepereira.jupiter.db.services.ProjectService;
 import com.judepereira.jupiter.db.repos.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;

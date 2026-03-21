@@ -18,6 +18,16 @@ public class ChatClientService {
         this.toolFileProvider = toolFileProvider;
     }
 
+    /**
+     * Create a task-scoped ChatClientService whose ToolFileProvider is limited to the
+     * supplied project paths. This returns a lightweight wrapper that uses the same
+     * ChatClient.Builder but a task-scoped ToolFileProvider instance.
+     */
+    public ChatClientService forProjectPaths(List<String> projectPaths) {
+        var scopedProvider = new ToolFileProvider(projectPaths);
+        return new ChatClientService(this.chatClientBuilder, scopedProvider);
+    }
+
     public String getResponse(List<Message> chatHistory) {
         var client = chatClientBuilder.build();
         var prompt = client.prompt()

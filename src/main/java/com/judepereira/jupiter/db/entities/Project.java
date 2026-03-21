@@ -1,4 +1,4 @@
-package com.judepereira.jupiter.db.project;
+package com.judepereira.jupiter.db.entities;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Entity
-@Table(name = "project", indexes = {@Index(columnList = "path", name = "idx_project_path")})
+@Table(name = "projects", indexes = {@Index(columnList = "path", name = "idx_project_path")})
 public class Project {
 
     @EqualsAndHashCode.Include

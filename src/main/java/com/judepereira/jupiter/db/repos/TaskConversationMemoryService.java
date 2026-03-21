@@ -29,7 +29,6 @@ public class TaskConversationMemoryService {
         return Objects.requireNonNull(slug, "Slug cannot be null").trim().toLowerCase(Locale.ENGLISH);
     }
 
-    @Transactional(readOnly = true)
     public List<ChatMessage> getConversation(String slug) {
         String key = normalize(slug);
         return taskRepository.findBySlugIgnoreCase(key)
@@ -51,7 +50,6 @@ public class TaskConversationMemoryService {
                 .orElseGet(List::of);
     }
 
-    @Transactional
     public void saveConversation(String slug, List<ChatMessage> conversation) {
         String key = normalize(slug);
         taskRepository.findBySlugIgnoreCase(key).ifPresent(task -> {
@@ -84,7 +82,6 @@ public class TaskConversationMemoryService {
         });
     }
 
-    @Transactional
     public void appendMessage(String slug, ChatMessage message) {
         if (message == null || message.getMessage() == null) return;
         String key = normalize(slug);

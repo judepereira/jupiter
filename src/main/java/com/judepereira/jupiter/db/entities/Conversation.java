@@ -30,7 +30,6 @@ public class Conversation {
     private String role;
 
     @NotNull
-    @Lob
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 

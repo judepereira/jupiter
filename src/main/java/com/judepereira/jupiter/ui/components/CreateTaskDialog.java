@@ -1,6 +1,6 @@
 package com.judepereira.jupiter.ui.components;
 
-import com.judepereira.jupiter.db.project.Project;
+import com.judepereira.jupiter.db.entities.Project;
 import com.judepereira.jupiter.db.services.ProjectService;
 import com.judepereira.jupiter.db.entities.Task;
 import com.judepereira.jupiter.db.repos.TaskService;
@@ -56,14 +56,10 @@ public class CreateTaskDialog {
         projectSelect.setItems(projects);
         projectSelect.setWidthFull();
 
-        projectSelect.setRenderer(new ComponentRenderer<Component, Project>(new SerializableFunction<Project, Component>() {
-            @Override
-            public Component apply(Project project) {
-                val path = new Span(project.getPath());
-                path.getStyle().setFontSize("small");
-                val span = new Span(new Span(project.getName()),new Span(" — "), path);
-                return span;
-            }
+        projectSelect.setRenderer(new ComponentRenderer<>(project -> {
+            val path = new Span(project.getPath());
+            path.getStyle().setFontSize("small");
+            return new Span(new Span(project.getName()), new Span(" — "), path);
         }));
 
         projectSelect.addValueChangeListener(ev -> {

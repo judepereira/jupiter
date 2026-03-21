@@ -6,3 +6,4 @@
 5. Add git diff viewer
 6. Add code editor (codemirror?)
 7. Support for .env.ai - inject into all tools
+8. truncate output from bash to max 1024 bytes

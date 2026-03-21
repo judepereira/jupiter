@@ -1,7 +1,6 @@
-package com.judepereira.jupiter.ui;
+package com.judepereira.jupiter.ui.views;
 
 import com.judepereira.jupiter.ui.components.IconButton;
-import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;

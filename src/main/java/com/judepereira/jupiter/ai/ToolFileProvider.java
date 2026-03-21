@@ -14,6 +14,7 @@ import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
@@ -24,23 +25,39 @@ import java.util.stream.Collectors;
 @Component
 public class ToolFileProvider {
 
-    private final Path projectRoot;
+    private final List<Path> allowedRoots;
+    private final Path primaryRoot;
 
     public ToolFileProvider() {
-        this.projectRoot = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        this.allowedRoots = List.of(Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize());
+        this.primaryRoot = this.allowedRoots.get(0);
     }
 
-    // package-visible constructor to allow tests to inject a temporary project root
+    // package-visible constructor to allow tests to inject multiple allowed project roots
+    ToolFileProvider(List<String> roots) {
+        // defensively handle null/empty roots by falling back to current working dir
+        if (roots == null || roots.isEmpty()) {
+            this.allowedRoots = List.of(Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize());
+        } else {
+            this.allowedRoots = roots.stream().map(p -> Paths.get(p).toAbsolutePath().normalize()).toList();
+        }
+        this.primaryRoot = this.allowedRoots.get(0);
+    }
+
+    // legacy-package constructor used earlier
     ToolFileProvider(Path projectRoot) {
-        this.projectRoot = projectRoot.toAbsolutePath().normalize();
+        this.allowedRoots = List.of(projectRoot.toAbsolutePath().normalize());
+        this.primaryRoot = this.allowedRoots.get(0);
     }
 
     private Path resolve(String path) {
         Path p = Paths.get(path);
-        if (p.isAbsolute()) {
-            return p.normalize();
+        Path candidate = p.isAbsolute() ? p.normalize() : primaryRoot.resolve(p).normalize();
+        // verify candidate is within allowed roots
+        for (Path root : allowedRoots) {
+            if (candidate.startsWith(root)) return candidate;
         }
-        return projectRoot.resolve(p).normalize();
+        throw new SecurityException("Access to path outside allowed roots: " + candidate);
     }
 
     @Tool
@@ -157,7 +174,7 @@ public class ToolFileProvider {
     @Tool
     public String writeFile(String path, String content) throws IOException {
         Path p = resolve(path);
-        Files.createDirectories(p.getParent() == null ? projectRoot : p.getParent());
+        Files.createDirectories(p.getParent() == null ? primaryRoot : p.getParent());
         Files.write(p, content == null ? new byte[0] : content.getBytes(StandardCharsets.UTF_8));
         return "Wrote file: " + p.toString();
     }
@@ -171,7 +188,7 @@ public class ToolFileProvider {
             return "No patch provided";
         }
         ProcessBuilder pb = new ProcessBuilder("git", "apply", "--whitespace=fix");
-        pb.directory(projectRoot.toFile());
+        pb.directory(primaryRoot.toFile());
         Process p = pb.start();
         // write patch to stdin
         try (var os = p.getOutputStream()) {
@@ -179,7 +196,7 @@ public class ToolFileProvider {
             os.flush();
         }
 
-        boolean finished = p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+        boolean finished = p.waitFor(30, TimeUnit.SECONDS);
         if (!finished) {
             p.destroyForcibly();
             return "git apply timed out";
@@ -195,18 +212,13 @@ public class ToolFileProvider {
         if (command == null) {
             return "No command provided";
         }
-        String shell = System.getProperty("os.name").toLowerCase().contains("win") ? "cmd.exe" : "/bin/sh";
-        ProcessBuilder pb;
-        if (shell.endsWith("cmd.exe")) {
-            pb = new ProcessBuilder(shell, "/c", command);
-        } else {
-            pb = new ProcessBuilder(shell, "-c", command);
-        }
-        pb.directory(projectRoot.toFile());
+        String shell = "/bin/bash";
+        ProcessBuilder pb = new ProcessBuilder(shell, "-c", command);
+        pb.directory(primaryRoot.toFile());
         pb.redirectErrorStream(false);
         Process p = pb.start();
 
-        boolean finished = p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+        boolean finished = p.waitFor(30, TimeUnit.SECONDS);
         if (!finished) {
             p.destroyForcibly();
             return "Command timed out";
@@ -224,6 +236,6 @@ public class ToolFileProvider {
         while ((r = in.read(buf)) != -1) {
             bout.write(buf, 0, r);
         }
-        return new String(bout.toByteArray(), StandardCharsets.UTF_8);
+        return bout.toString(StandardCharsets.UTF_8);
     }
 }
