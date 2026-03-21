@@ -1,8 +1,8 @@
 package com.judepereira.jupiter.ui.components;
 
 import com.judepereira.jupiter.dtos.Dir;
-import com.judepereira.jupiter.project.Project;
-import com.judepereira.jupiter.project.ProjectService;
+import com.judepereira.jupiter.db.project.Project;
+import com.judepereira.jupiter.db.services.ProjectService;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;

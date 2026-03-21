@@ -1,4 +1,4 @@
-package com.judepereira.jupiter.task;
+package com.judepereira.jupiter.db.entities;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;

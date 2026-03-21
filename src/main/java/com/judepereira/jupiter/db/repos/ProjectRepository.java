@@ -1,5 +1,6 @@
-package com.judepereira.jupiter.project;
+package com.judepereira.jupiter.db.repos;
 
+import com.judepereira.jupiter.db.project.Project;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 

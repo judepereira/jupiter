@@ -1,4 +1,4 @@
-package com.judepereira.jupiter.project;
+package com.judepereira.jupiter.db.project;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;

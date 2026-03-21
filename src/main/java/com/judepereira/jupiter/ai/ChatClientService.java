@@ -3,6 +3,7 @@ package com.judepereira.jupiter.ai;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -26,5 +27,16 @@ public class ChatClientService {
         prompt.tools(toolFileProvider);
 
         return prompt.call().content();
+    }
+
+    public Flux<String> streamResponse(List<Message> chatHistory) {
+        var client = chatClientBuilder.build();
+        var prompt = client.prompt()
+                .messages(chatHistory);
+
+        // Register tools so the model can call them
+        prompt.tools(toolFileProvider);
+
+        return prompt.stream().content();
     }
 }

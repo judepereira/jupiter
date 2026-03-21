@@ -1,7 +1,7 @@
-package com.judepereira.jupiter.task;
+package com.judepereira.jupiter.db.repos;
 
-import com.judepereira.jupiter.project.Project;
-import com.judepereira.jupiter.project.ProjectRepository;
+import com.judepereira.jupiter.db.entities.Task;
+import com.judepereira.jupiter.db.project.Project;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

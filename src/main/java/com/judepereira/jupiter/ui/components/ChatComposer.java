@@ -9,11 +9,14 @@ import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.data.value.ValueChangeMode;
+import java.util.List;
 import java.util.function.Consumer;
+
+import lombok.extern.log4j.Log4j2;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import java.util.List;
 
+@Log4j2
 public class ChatComposer extends VerticalLayout {
 
     private final ConversationView conversationView = new ConversationView();
@@ -22,10 +25,6 @@ public class ChatComposer extends VerticalLayout {
 
     private final ChatClientService chatClientService;
     private Consumer<ChatMessage> onMessageAdded;
-
-    public ChatComposer(final ChatClientService chatClientService) {
-        this(chatClientService, null);
-    }
 
     /**
      * Backwards-compatible constructor which accepts an optional callback that's invoked
@@ -77,15 +76,13 @@ public class ChatComposer extends VerticalLayout {
     public void addEntry(ChatMessage entry) {
         conversationView.addMessage(entry);
         // invoke callback exactly once when message is added to view
-        if (onMessageAdded != null) onMessageAdded.accept(entry);
+        if (onMessageAdded != null) {
+            onMessageAdded.accept(entry);
+        }
     }
 
     public void setConversation(List<ChatMessage> entries) {
         conversationView.setMessages(entries);
-    }
-
-    public void setOnMessageAdded(Consumer<ChatMessage> onMessageAdded) {
-        this.onMessageAdded = onMessageAdded;
     }
 
     public void clearConversation() {
@@ -110,8 +107,38 @@ public class ChatComposer extends VerticalLayout {
         messageInput.clear();
 
         Thread.ofVirtual().start(() -> {
-            AssistantMessage response = new AssistantMessage(chatClientService.getResponse(conversationView.getMessages().stream().map(ChatMessage::getMessage).toList()));
-            getUI().ifPresent(ui -> ui.access(() -> addEntry(new ChatMessage(response))));
+            var conversation = conversationView.getMessages().stream().map(ChatMessage::getMessage).toList();
+            ChatMessage streamingEntry = new ChatMessage(new AssistantMessage(""));
+
+            conversationView.getUI().ifPresent(ui -> ui.access(() -> conversationView.addMessage(streamingEntry)));
+
+            StringBuilder content = new StringBuilder();
+            chatClientService.streamResponse(conversation)
+                    .doOnNext(token -> {
+                        if (token == null) {
+                            return;
+                        }
+                        content.append(token);
+                        String current = content.toString();
+                        conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                            streamingEntry.setMessage(new AssistantMessage(current));
+                            conversationView.refreshMessage(streamingEntry);
+                        }));
+                    })
+                    .doOnError(err -> conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                        String current = content + "\n\n[Error: " + err.getMessage() + "]";
+                        streamingEntry.setMessage(new AssistantMessage(current));
+                        conversationView.refreshMessage(streamingEntry);
+                        if (onMessageAdded != null) {
+                            onMessageAdded.accept(streamingEntry);
+                        }
+                    })))
+                    .doOnComplete(() -> {
+                        if (onMessageAdded != null) {
+                            onMessageAdded.accept(streamingEntry);
+                        }
+                    })
+                    .blockLast();
         });
     }
 }

@@ -10,7 +10,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.PathMatcher;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 /**
@@ -69,6 +74,84 @@ public class ToolFileProvider {
         }
         byte[] bytes = Files.readAllBytes(p);
         return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    @Tool
+    public String glob(String pattern, String path) throws IOException {
+        if (pattern == null || pattern.isBlank()) {
+            return "Pattern is required";
+        }
+        Path base = resolve(path == null || path.isBlank() ? "." : path);
+        if (!Files.exists(base)) {
+            return "Path does not exist: " + base;
+        }
+        if (!Files.isDirectory(base)) {
+            return "Not a directory: " + base;
+        }
+
+        PathMatcher matcher = base.getFileSystem().getPathMatcher("glob:" + pattern);
+        try (var stream = Files.walk(base)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .map(base::relativize)
+                    .filter(matcher::matches)
+                    .map(Path::toString)
+                    .sorted()
+                    .collect(Collectors.joining("\n"));
+        }
+    }
+
+    @Tool
+    public String grep(String pattern, String path, String include) throws IOException {
+        if (pattern == null || pattern.isBlank()) {
+            return "Pattern is required";
+        }
+
+        final Pattern pat;
+        try {
+            pat = Pattern.compile(pattern);
+        } catch (PatternSyntaxException e) {
+            return "Invalid regex pattern: " + e.getMessage();
+        }
+
+        Path base = resolve(path == null || path.isBlank() ? "." : path);
+        if (!Files.exists(base)) {
+            return "Path does not exist: " + base;
+        }
+        if (!Files.isDirectory(base)) {
+            return "Not a directory: " + base;
+        }
+
+        boolean useInclude = include != null && !include.isBlank();
+        final PathMatcher includeMatcher = useInclude ? base.getFileSystem().getPathMatcher("glob:" + include) : null;
+
+        List<String> results = new ArrayList<>();
+
+        try (var stream = Files.walk(base)) {
+            stream.filter(Files::isRegularFile).forEach(filePath -> {
+                Path rel = base.relativize(filePath);
+                if (useInclude && !includeMatcher.matches(rel)) {
+                    return;
+                }
+                try (var lines = Files.lines(filePath, StandardCharsets.UTF_8)) {
+                    final int[] lineNo = {0};
+                    lines.forEachOrdered(line -> {
+                        lineNo[0]++;
+                        try {
+                            if (pat.matcher(line).find()) {
+                                results.add(rel.toString() + ":" + lineNo[0] + ": " + line);
+                            }
+                        } catch (Exception ex) {
+                            // if matching a particular line fails for some reason, skip it
+                        }
+                    });
+                } catch (IOException e) {
+                    // unreadable file - skip
+                }
+            });
+        }
+
+        return String.join("\n", results);
     }
 
     @Tool

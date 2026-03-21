@@ -1,5 +1,6 @@
-package com.judepereira.jupiter.task;
+package com.judepereira.jupiter.db.repos;
 
+import com.judepereira.jupiter.db.entities.Conversation;
 import com.judepereira.jupiter.dtos.ChatMessage;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;

@@ -1,5 +1,7 @@
-package com.judepereira.jupiter.project;
+package com.judepereira.jupiter.db.services;
 
+import com.judepereira.jupiter.db.project.Project;
+import com.judepereira.jupiter.db.repos.ProjectRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

@@ -1,9 +1,9 @@
 package com.judepereira.jupiter.ui.components;
 
-import com.judepereira.jupiter.project.Project;
-import com.judepereira.jupiter.project.ProjectService;
-import com.judepereira.jupiter.task.Task;
-import com.judepereira.jupiter.task.TaskService;
+import com.judepereira.jupiter.db.project.Project;
+import com.judepereira.jupiter.db.services.ProjectService;
+import com.judepereira.jupiter.db.entities.Task;
+import com.judepereira.jupiter.db.repos.TaskService;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;

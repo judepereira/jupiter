@@ -2,10 +2,10 @@ package com.judepereira.jupiter.ui;
 
 import com.judepereira.jupiter.ai.ChatClientService;
 
-import com.judepereira.jupiter.project.ProjectService;
-import com.judepereira.jupiter.task.Task;
-import com.judepereira.jupiter.task.TaskConversationMemoryService;
-import com.judepereira.jupiter.task.TaskService;
+import com.judepereira.jupiter.db.services.ProjectService;
+import com.judepereira.jupiter.db.entities.Task;
+import com.judepereira.jupiter.db.repos.TaskConversationMemoryService;
+import com.judepereira.jupiter.db.repos.TaskService;
 import com.judepereira.jupiter.ui.components.ChatComposer;
 import com.judepereira.jupiter.ui.components.IconButton;
 import com.judepereira.jupiter.ui.components.ReviewView;

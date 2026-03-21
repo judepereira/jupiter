@@ -1,6 +1,6 @@
-package com.judepereira.jupiter.task;
+package com.judepereira.jupiter.db.entities;
 
-import com.judepereira.jupiter.project.Project;
+import com.judepereira.jupiter.db.project.Project;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;

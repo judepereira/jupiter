@@ -1,13 +1,15 @@
-package com.judepereira.jupiter.task;
+package com.judepereira.jupiter.entities;
 
-import com.judepereira.jupiter.project.Project;
-import com.judepereira.jupiter.project.ProjectRepository;
+import com.judepereira.jupiter.db.entities.Task;
+import com.judepereira.jupiter.db.repos.TaskService;
+import com.judepereira.jupiter.db.project.Project;
+import com.judepereira.jupiter.db.repos.ProjectRepository;
+import com.judepereira.jupiter.db.repos.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;

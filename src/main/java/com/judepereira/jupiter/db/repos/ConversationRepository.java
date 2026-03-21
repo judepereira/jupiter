@@ -1,5 +1,7 @@
-package com.judepereira.jupiter.task;
+package com.judepereira.jupiter.db.repos;
 
+import com.judepereira.jupiter.db.entities.Conversation;
+import com.judepereira.jupiter.db.entities.Task;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
