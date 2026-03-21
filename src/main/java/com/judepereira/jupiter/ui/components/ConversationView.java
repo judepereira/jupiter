@@ -33,7 +33,6 @@ public class ConversationView extends Grid<ChatMessage> {
             MarkdownViewer md = new MarkdownViewer(Objects.requireNonNullElse(entry.getMessage().getText(), ""));
             md.setWidthFull();
             row.add(md);
-            log.info("Rendering message: {}", entry.getMessage().getText());
             return row;
         }))
                 .setAutoWidth(true)

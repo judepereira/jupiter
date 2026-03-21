@@ -51,7 +51,12 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
         this.projectService = projectService;
         this.memoryService = memoryService;
 
-        chatComposer = new ChatComposer(chatClientService);
+        chatComposer = new ChatComposer(chatClientService, message -> {
+            // persist each newly added message immediately (user or assistant)
+            if (currentTask != null) {
+                memoryService.appendMessage(currentTask.getSlug(), message);
+            }
+        });
         splitLayout = new SplitLayout(chatComposer, reviewView);
         splitLayout.setSizeFull();
         splitLayout.setSplitterPosition(62);

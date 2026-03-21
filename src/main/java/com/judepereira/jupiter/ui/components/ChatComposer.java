@@ -9,6 +9,7 @@ import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.data.value.ValueChangeMode;
+import java.util.function.Consumer;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import java.util.List;
@@ -20,9 +21,20 @@ public class ChatComposer extends VerticalLayout {
     private final Checkbox useCmdEnter = new Checkbox("Use ⌘ + Enter to send", true);
 
     private final ChatClientService chatClientService;
+    private Consumer<ChatMessage> onMessageAdded;
 
     public ChatComposer(final ChatClientService chatClientService) {
+        this(chatClientService, null);
+    }
+
+    /**
+     * Backwards-compatible constructor which accepts an optional callback that's invoked
+     * whenever a message is appended to the conversation (user or assistant). The callback
+     * is not invoked when a conversation is loaded via setConversation(...).
+     */
+    public ChatComposer(final ChatClientService chatClientService, Consumer<ChatMessage> onMessageAdded) {
         this.chatClientService = chatClientService;
+        this.onMessageAdded = onMessageAdded;
         setSizeFull();
         conversationView.setWidthFull();
         conversationView.setMinHeight("0");
@@ -64,10 +76,16 @@ public class ChatComposer extends VerticalLayout {
 
     public void addEntry(ChatMessage entry) {
         conversationView.addMessage(entry);
+        // invoke callback exactly once when message is added to view
+        if (onMessageAdded != null) onMessageAdded.accept(entry);
     }
 
     public void setConversation(List<ChatMessage> entries) {
         conversationView.setMessages(entries);
+    }
+
+    public void setOnMessageAdded(Consumer<ChatMessage> onMessageAdded) {
+        this.onMessageAdded = onMessageAdded;
     }
 
     public void clearConversation() {

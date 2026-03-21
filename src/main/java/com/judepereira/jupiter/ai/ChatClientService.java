@@ -5,23 +5,26 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.function.Function;
 
 @Service
 public class ChatClientService {
 
     private final ChatClient.Builder chatClientBuilder;
+    private final ToolFileProvider toolFileProvider;
 
-    public ChatClientService(ChatClient.Builder chatClientBuilder) {
+    public ChatClientService(ChatClient.Builder chatClientBuilder, ToolFileProvider toolFileProvider) {
         this.chatClientBuilder = chatClientBuilder;
+        this.toolFileProvider = toolFileProvider;
     }
 
     public String getResponse(List<Message> chatHistory) {
-        return chatClientBuilder
-                .build()
-                .prompt()
-                .messages(chatHistory)
-                .call()
-                .content();
+        var client = chatClientBuilder.build();
+        var prompt = client.prompt()
+                .messages(chatHistory);
+
+        // Register tools so the model can call them
+        prompt.tools(toolFileProvider);
+
+        return prompt.call().content();
     }
 }

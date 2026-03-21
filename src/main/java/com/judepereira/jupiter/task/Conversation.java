@@ -1,0 +1,47 @@
+package com.judepereira.jupiter.task;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import java.time.Instant;
+
+@Data
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@Entity
+@Table(name = "conversations", indexes = {@Index(columnList = "task_id, created_at", name = "idx_conversations_task_created_at")})
+public class Conversation {
+
+    @EqualsAndHashCode.Include
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE)
+    private Long id;
+
+    @NotNull
+    @ManyToOne
+    @JoinColumn(name = "task_id", nullable = false)
+    private Task task;
+
+    @NotNull
+    @Column(nullable = false)
+    private String role;
+
+    @NotNull
+    @Lob
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String content;
+
+    @NotNull
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+
+    public Conversation(Task task, String role, String content, Instant createdAt) {
+        this.task = task;
+        this.role = role;
+        this.content = content;
+        this.createdAt = createdAt;
+    }
+}
