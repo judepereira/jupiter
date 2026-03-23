@@ -9,7 +9,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 @Push
-@PWA(name = "Jupiter", shortName = "Jupiter", iconPath = "images/logo.png")
+@PWA(name = "Jupiter",
+        shortName = "Jupiter",
+        iconPath = "images/logo.png",
+        offlinePath = "offline.html",
+        offlineResources = {"images/logo.png"})
 @StyleSheet("styles.css")
 public class Application implements AppShellConfigurator {
 
