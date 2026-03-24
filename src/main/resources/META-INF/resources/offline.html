@@ -139,18 +139,16 @@
         <p>Jupiter cannot connect to its backend. Is the host up and running?</p>
         <div class="controls">
             <button class="reload" id="reloadBtn" type="button">Reload</button>
+            <script>
+                (function () {
+                    var btn = document.getElementById('reloadBtn');
+                    btn.addEventListener('click', function () {
+                        window.location.reload();
+                    });
+                })();
+            </script>
         </div>
     </div>
 </main>
-
-<script>
-    (function () {
-        var btn = document.getElementById('reloadBtn');
-        btn.addEventListener('click', function () {
-            // reload the page
-            window.location.reload();
-        });
-    })();
-</script>
 </body>
 </html>

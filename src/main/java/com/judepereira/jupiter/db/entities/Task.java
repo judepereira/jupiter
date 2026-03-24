@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -28,6 +29,13 @@ public class Task {
     @NotBlank
     @Column(nullable = false, unique = true)
     private String slug;
+
+    /**
+     * Epoch in millis.
+     */
+    @Column(nullable = false)
+    @ColumnDefault("0")
+    private long lastAccessed;
 
     @ManyToMany
     @JoinTable(name = "task_project",

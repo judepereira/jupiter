@@ -1,7 +1,9 @@
 package com.judepereira.jupiter.db.repos;
 
-import com.judepereira.jupiter.db.entities.Task;
 import com.judepereira.jupiter.db.entities.Project;
+import com.judepereira.jupiter.db.entities.Task;
+import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -21,7 +23,7 @@ public class TaskService {
     }
 
     public List<Task> listTasks() {
-        return taskRepository.findAll();
+        return taskRepository.findAllByOrderByLastAccessedDesc(Pageable.ofSize(100));
     }
 
     public Optional<Task> findBySlug(String slug) {
