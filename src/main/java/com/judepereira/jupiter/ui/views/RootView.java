@@ -12,6 +12,7 @@ import com.vaadin.flow.component.html.ListItem;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.html.UnorderedList;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
+import com.vaadin.flow.component.orderedlayout.Scroller;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.dom.Style;
 import com.vaadin.flow.router.Route;
@@ -80,7 +81,11 @@ public class RootView extends VerticalLayout {
                 ul.add(li);
             }
 
-            add(ul);
+            val scroller = new Scroller(ul);
+            scroller.setMaxWidth("800px");
+            scroller.setMaxHeight("300px");
+
+            add(scroller);
         }
         this.projectService = projectService;
     }

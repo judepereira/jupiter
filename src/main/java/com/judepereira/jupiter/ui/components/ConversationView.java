@@ -46,7 +46,7 @@ public class ConversationView extends Grid<ChatMessage> {
 
     public synchronized void addMessage(ChatMessage message) {
         messages.add(message);
-        messageGridListDataView.refreshAll();
+        messageGridListDataView.refreshItem(message);
         scrollToItem(message);
     }
 

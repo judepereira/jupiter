@@ -16,6 +16,7 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.renderer.ComponentRenderer;
 import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.function.SerializableFunction;
+import lombok.extern.log4j.Log4j2;
 import lombok.val;
 
 import java.util.Set;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 /**
  * Reusable dialog component for creating a new Task.
  */
+@Log4j2
 public class CreateTaskDialog {
     public static final String ERR_MAX_PROJECTS_1 = "At most one project may be selected (multi project selection is coming soon :))";
     public static final String ASSOCIATE_THIS_TASK_WITH_THE_FOLLOWING_PROJECTS = "Associate this task with the following project(s):";
@@ -136,8 +138,10 @@ public class CreateTaskDialog {
                 }
             } catch (IllegalArgumentException ex) {
                 AppNotifications.showError(ex.getMessage());
+                log.error("Failed to create task", ex);
             } catch (Exception ex) {
                 AppNotifications.show("Failed to create task: " + ex.getMessage());
+                log.error("Failed to create task", ex);
             }
         });
 

@@ -4,6 +4,7 @@ import com.judepereira.jupiter.ai.ChatClientService;
 import com.judepereira.jupiter.db.entities.Project;
 import com.judepereira.jupiter.db.entities.Task;
 import com.judepereira.jupiter.db.repos.TaskConversationMemoryService;
+import com.judepereira.jupiter.db.repos.TaskRepository;
 import com.judepereira.jupiter.db.repos.TaskService;
 import com.judepereira.jupiter.db.services.ProjectService;
 import com.judepereira.jupiter.dtos.ChatMessage;
@@ -24,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 @Route("ide/:task")
 @PageTitle("Jupiter")
@@ -36,6 +38,7 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
     private final TaskService taskService;
     private final ProjectService projectService;
     private final TaskConversationMemoryService memoryService;
+    private final TaskRepository taskRepository;
 
     private Task currentTask;
     private ComboBox<Task> taskSelector;
@@ -43,7 +46,7 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
     private final SplitLayout splitLayout;
 
     IDEView(ChatClientService chatClientService, TaskService taskService,
-            ProjectService projectService, TaskConversationMemoryService memoryService) {
+            ProjectService projectService, TaskConversationMemoryService memoryService, TaskRepository taskRepository) {
         setSizeFull();
         this.chatClientService = chatClientService;
         this.taskService = taskService;
@@ -66,6 +69,7 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
         addAndExpand(splitLayout);
 
         buildTopBarControls();
+        this.taskRepository = taskRepository;
     }
 
     private TaskContext getCurrentTaskContext() {
@@ -104,6 +108,9 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
         refreshTasksIntoSelector();
         taskSelector.addValueChangeListener(ev -> {
             Task next = ev.getValue();
+            if (next == null) {
+                return;
+            }
             switchTask(next, true);
         });
 
@@ -133,7 +140,7 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
     private void switchTask(Task next, boolean updateUrl) {
         this.currentTask = next;
 
-        contexts.computeIfAbsent(next, this::createTaskContext);
+        contexts.computeIfAbsent(next, _ -> createTaskContext(next));
 
         var conv = memoryService.getConversation(next.getSlug());
         chatComposer.setConversation(conv);
@@ -144,6 +151,9 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
                 ui.navigate(IDEView.class, rr);
             });
         }
+
+        next.setLastAccessed(System.currentTimeMillis());
+        taskRepository.save(next);
     }
 
     private void openCreateTaskDialog() {
