@@ -39,6 +39,7 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
     private final ProjectService projectService;
     private final TaskConversationMemoryService memoryService;
     private final TaskRepository taskRepository;
+    private final com.judepereira.jupiter.db.repos.TodoService todoService;
 
     private Task currentTask;
     private ComboBox<Task> taskSelector;
@@ -46,15 +47,23 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
     private final SplitLayout splitLayout;
 
     IDEView(ChatClientService chatClientService, TaskService taskService,
-            ProjectService projectService, TaskConversationMemoryService memoryService, TaskRepository taskRepository) {
+            ProjectService projectService, TaskConversationMemoryService memoryService, TaskRepository taskRepository,
+            com.judepereira.jupiter.db.repos.TodoService todoService) {
         setSizeFull();
         this.chatClientService = chatClientService;
         this.taskService = taskService;
         this.projectService = projectService;
         this.memoryService = memoryService;
 
+        // Use the task-context-aware consumer so we don't accidentally capture
+        // `currentTask` (which may be null at construction time) and risk NPEs
         chatComposer = new ChatComposer(chatClientService,
-                message -> memoryService.appendMessage(currentTask.getSlug(), message),
+                message -> {
+                    var tc = getCurrentTaskContext();
+                    if (tc != null) {
+                        memoryService.appendMessage(tc.getTask().getSlug(), message);
+                    }
+                },
                 this::getCurrentTaskContext);
         splitLayout = new SplitLayout(chatComposer, reviewView);
         splitLayout.setSizeFull();
@@ -70,6 +79,7 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
 
         buildTopBarControls();
         this.taskRepository = taskRepository;
+        this.todoService = todoService;
     }
 
     private TaskContext getCurrentTaskContext() {
@@ -131,10 +141,9 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
 
     private TaskContext createTaskContext(Task task) {
         var projectPaths = task.getProjects().stream().map(Project::getPath).toList();
-        var scopedClient = chatClientService.forProjectPaths(projectPaths);
-        var onMessage = (Consumer<ChatMessage>) (m -> memoryService.appendMessage(task.getSlug(), m));
-        var isActive = (BooleanSupplier) () -> currentTask.equals(task);
-        return new TaskContext(task, scopedClient, onMessage, isActive);
+        var scopedClient = chatClientService.forProjectPaths(projectPaths, task.getSlug());
+        // TaskContext now holds only task, chat client and todo service.
+        return new TaskContext(task, scopedClient, todoService);
     }
 
     private void switchTask(Task next, boolean updateUrl) {
@@ -144,6 +153,8 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
 
         var conv = memoryService.getConversation(next.getSlug());
         chatComposer.setConversation(conv);
+        // refresh todos UI when switching tasks
+        chatComposer.refreshTodosFromTask();
 
         if (updateUrl) {
             getUI().ifPresent(ui -> {

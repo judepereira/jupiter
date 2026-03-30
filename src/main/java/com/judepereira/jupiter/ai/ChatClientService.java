@@ -18,11 +18,13 @@ public class ChatClientService {
 
     private final ChatClient.Builder chatClientBuilder;
     private final ToolFileProvider toolFileProvider;
+    private final TodoToolProvider todoToolProvider;
     private final String systemPrompt;
 
-    public ChatClientService(ChatClient.Builder chatClientBuilder, ToolFileProvider toolFileProvider) {
+    public ChatClientService(ChatClient.Builder chatClientBuilder, ToolFileProvider toolFileProvider, TodoToolProvider todoToolProvider) {
         this.chatClientBuilder = chatClientBuilder;
         this.toolFileProvider = toolFileProvider;
+        this.todoToolProvider = todoToolProvider;
         this.systemPrompt = loadSystemPrompt();
     }
 
@@ -33,7 +35,18 @@ public class ChatClientService {
      */
     public ChatClientService forProjectPaths(List<String> projectPaths) {
         var scopedProvider = new ToolFileProvider(projectPaths);
-        return new ChatClientService(this.chatClientBuilder, scopedProvider);
+        // create a non-scoped todo provider (app-level) as default for compatibility
+        return new ChatClientService(this.chatClientBuilder, scopedProvider, this.todoToolProvider);
+    }
+
+    /**
+     * Create a task-scoped ChatClientService whose ToolFileProvider is limited to the
+     * supplied project paths and TodoToolProvider is bound to the given task slug.
+     */
+    public ChatClientService forProjectPaths(List<String> projectPaths, String taskSlug) {
+        var scopedProvider = new ToolFileProvider(projectPaths);
+        var scopedTodo = new TodoToolProvider(this.todoToolProvider != null ? this.todoToolProvider.todoService() : null, taskSlug);
+        return new ChatClientService(this.chatClientBuilder, scopedProvider, scopedTodo);
     }
 
     public String getResponse(List<Message> chatHistory) {
@@ -44,6 +57,7 @@ public class ChatClientService {
 
         // Register tools so the model can call them
         prompt.tools(toolFileProvider);
+        if (todoToolProvider != null) prompt.tools(todoToolProvider);
 
         return prompt.call().content();
     }
@@ -56,6 +70,7 @@ public class ChatClientService {
 
         // Register tools so the model can call them
         prompt.tools(toolFileProvider);
+        if (todoToolProvider != null) prompt.tools(todoToolProvider);
 
         return prompt.stream().content();
     }
