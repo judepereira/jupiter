@@ -6,11 +6,11 @@ import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.ThemableLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import lombok.Data;
+import lombok.Getter;
 
 import java.util.Arrays;
 
-@Data
+@Getter
 public abstract class BaseLayout extends VerticalLayout {
 
     private enum NavRailPosition {
