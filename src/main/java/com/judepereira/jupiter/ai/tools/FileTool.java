@@ -5,40 +5,34 @@ import org.springframework.ai.tool.annotation.Tool;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 public class FileTool {
 
-    private final List<Path> allowedRoots;
+    public static final String RG_NOT_FOUND = "rg not found. Please ask the user to install ripgrep.";
     private final Path primaryRoot;
 
     public FileTool(Path projectRoot) {
-        this.allowedRoots = List.of(projectRoot.toAbsolutePath().normalize());
         this.primaryRoot = projectRoot;
     }
 
     private Path resolve(String path) {
         Path p = Paths.get(path);
-        Path candidate = p.isAbsolute() ? p.normalize() : primaryRoot.resolve(p).normalize();
-
-        for (Path root : allowedRoots) {
-            if (candidate.startsWith(root)) return candidate;
-        }
-        throw new SecurityException("Access to path outside allowed roots: " + candidate);
+        return p.isAbsolute() ? p.normalize() : primaryRoot.resolve(p).normalize();
     }
 
-    @Tool
+    @Tool(description = "List files in a directory. If path is not provided, lists files in the current working directory.")
     public String listFiles(String path) throws IOException {
         Path p = resolve(path == null || path.isBlank() ? "." : path);
         if (!Files.exists(p)) {
@@ -58,7 +52,7 @@ public class FileTool {
         }
     }
 
-    @Tool
+    @Tool(description = "Read a file.")
     public String readFile(String path) throws IOException {
         Path p = resolve(path);
         if (!Files.exists(p)) {
@@ -67,11 +61,31 @@ public class FileTool {
         if (Files.isDirectory(p)) {
             return "Path is a directory: " + p;
         }
-        byte[] bytes = Files.readAllBytes(p);
-        return new String(bytes, StandardCharsets.UTF_8);
+
+        try (InputStream in = Files.newInputStream(p)) {
+            byte[] buf = new byte[1025];
+            int r = in.read(buf);
+            if (r == -1) return "Empty file";
+
+            int toDecode = Math.min(r, 1024);
+            var decoder = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT);
+            String content;
+            try {
+                content = decoder.decode(ByteBuffer.wrap(buf, 0, toDecode)).toString();
+            } catch (CharacterCodingException e) {
+                return "File is not text: " + p;
+            }
+
+            if (r > 1024) {
+                content = content + "\n[TRUNCATED to 1024 bytes. Full length: " + p.toFile().length() + " bytes]";
+            }
+            return content;
+        }
     }
 
-    @Tool
+    @Tool(description = "Find file paths/names using wildcard patterns. eg: */src/**/*.java")
     public String glob(String pattern, String path) throws IOException {
         if (pattern == null || pattern.isBlank()) {
             return "Pattern is required";
@@ -84,31 +98,24 @@ public class FileTool {
             return "Not a directory: " + base;
         }
 
-        PathMatcher matcher = base.getFileSystem().getPathMatcher("glob:" + pattern);
-        try (var stream = Files.walk(base)) {
-            return stream
-                    .filter(Files::isRegularFile)
-                    .map(base::relativize)
-                    .filter(matcher::matches)
-                    .map(Path::toString)
-                    .sorted()
-                    .collect(Collectors.joining("\n"));
+        List<String> cmd = new ArrayList<>();
+        cmd.add("rg");
+        cmd.add("--files");
+        cmd.add("-g");
+        cmd.add(pattern);
+
+        try {
+            return runCommand(cmd, base);
+        } catch (IOException e) {
+            return "rg not found. Please ask the user to install ripgrep.";
         }
     }
 
-    @Tool
-    public String grep(String pattern, String path, String include) throws IOException {
+    @Tool(description = "Find content in text files")
+    public String grep(String pattern, String path, String include) {
         if (pattern == null || pattern.isBlank()) {
             return "Pattern is required";
         }
-
-        final Pattern pat;
-        try {
-            pat = Pattern.compile(pattern);
-        } catch (PatternSyntaxException e) {
-            return "Invalid regex pattern: " + e.getMessage();
-        }
-
         Path base = resolve(path == null || path.isBlank() ? "." : path);
         if (!Files.exists(base)) {
             return "Path does not exist: " + base;
@@ -117,71 +124,91 @@ public class FileTool {
             return "Not a directory: " + base;
         }
 
-        boolean useInclude = include != null && !include.isBlank();
-        final PathMatcher includeMatcher = useInclude ? base.getFileSystem().getPathMatcher("glob:" + include) : null;
-
-        List<String> results = new ArrayList<>();
-
-        try (var stream = Files.walk(base)) {
-            stream.filter(Files::isRegularFile).forEach(filePath -> {
-                Path rel = base.relativize(filePath);
-                if (useInclude && !includeMatcher.matches(rel)) {
-                    return;
-                }
-                try (var lines = Files.lines(filePath, StandardCharsets.UTF_8)) {
-                    final int[] lineNo = {0};
-                    lines.forEachOrdered(line -> {
-                        lineNo[0]++;
-                        if (pat.matcher(line).find()) {
-                            results.add(rel + ":" + lineNo[0] + ": " + line);
-                        }
-                    });
-                } catch (IOException e) {
-                    // Ignore.
-                }
-            });
+        List<String> cmd = new ArrayList<>();
+        cmd.add("rg");
+        cmd.add("-n");
+        cmd.add("--hidden");
+        cmd.add("--no-ignore-vcs");
+        cmd.add("--with-filename");
+        if (include != null && !include.isBlank()) {
+            cmd.add("-g");
+            cmd.add(include);
         }
+        cmd.add(pattern);
+        cmd.add(".");
 
-        return String.join("\n", results);
+        try {
+            return runCommand(cmd, base);
+        } catch (IOException e) {
+            return RG_NOT_FOUND;
+        }
     }
 
-    @Tool
-    public String writeFile(String path, String content) throws IOException {
-        Path p = resolve(path);
-        Files.createDirectories(p.getParent() == null ? primaryRoot : p.getParent());
-        Files.write(p, content == null ? new byte[0] : content.getBytes(StandardCharsets.UTF_8));
-        return "Wrote file: " + p;
-    }
-
-    /**
-     * Apply a unified diff patch using `git apply`. The patch text is passed to stdin.
-     */
-    @Tool
-    public String applyPatch(String patchText) throws IOException, InterruptedException {
-        if (patchText == null) {
-            return "No patch provided";
-        }
-        ProcessBuilder pb = new ProcessBuilder("git", "apply", "--whitespace=fix");
-        pb.directory(primaryRoot.toFile());
+    private String runCommand(List<String> cmd, Path dir) throws IOException {
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.directory(dir.toFile());
+        pb.redirectErrorStream(false);
         Process p = pb.start();
 
-        try (var os = p.getOutputStream()) {
-            os.write(patchText.getBytes(StandardCharsets.UTF_8));
-            os.flush();
+        try {
+            boolean finished = p.waitFor(30, TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                return "Command timed out";
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for command", e);
         }
 
-        boolean finished = p.waitFor(30, TimeUnit.SECONDS);
-        if (!finished) {
-            p.destroyForcibly();
-            return "git apply timed out";
-        }
         String stdout = streamToString(p.getInputStream());
         String stderr = streamToString(p.getErrorStream());
         int code = p.exitValue();
         return "exit=" + code + "\nSTDOUT:\n" + stdout + "\nSTDERR:\n" + stderr;
     }
 
-    @Tool
+    @Tool(description = "Write a file. If the parent directory does not exist, it will be created.")
+    public String writeFile(String path, String content) {
+        Path p = resolve(path);
+        try {
+            Files.createDirectories(p.getParent() == null ? primaryRoot : p.getParent());
+            Files.write(p, content == null ? new byte[0] : content.getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            return "Write failed: " + e.getMessage();
+        }
+        return "Wrote file: " + p;
+    }
+
+    @Tool(description = "Apply a unified diff patch using `git apply`. The patch text is passed to stdin.")
+    public String applyPatch(String patchText) {
+        if (patchText == null) {
+            return "No patch provided";
+        }
+        ProcessBuilder pb = new ProcessBuilder("git", "apply", "--whitespace=fix");
+        pb.directory(primaryRoot.toFile());
+        try {
+            Process p = pb.start();
+
+            try (var os = p.getOutputStream()) {
+                os.write(patchText.getBytes(StandardCharsets.UTF_8));
+                os.flush();
+            }
+
+            boolean finished = p.waitFor(30, TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                return "git apply timed out";
+            }
+            String stdout = streamToString(p.getInputStream());
+            String stderr = streamToString(p.getErrorStream());
+            int code = p.exitValue();
+            return "exit=" + code + "\nSTDOUT:\n" + stdout + "\nSTDERR:\n" + stderr;
+        } catch (Exception e) {
+            return "Failed to apply patch: " + e.getMessage();
+        }
+    }
+
+    @Tool(description = "Run a command in a bash shell")
     public String bash(String command) throws IOException, InterruptedException {
         if (command == null) {
             return "No command provided";
