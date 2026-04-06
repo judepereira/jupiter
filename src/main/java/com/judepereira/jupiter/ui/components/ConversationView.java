@@ -11,7 +11,6 @@ import com.vaadin.flow.data.renderer.ComponentRenderer;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import lombok.val;
-import org.springframework.ai.chat.messages.Message;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,7 +45,7 @@ public class ConversationView extends Grid<ChatMessage> {
 
     public synchronized void addMessage(ChatMessage message) {
         messages.add(message);
-        messageGridListDataView.refreshItem(message);
+        messageGridListDataView.refreshAll();
         scrollToItem(message);
     }
 

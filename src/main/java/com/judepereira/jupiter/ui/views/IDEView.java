@@ -1,7 +1,6 @@
 package com.judepereira.jupiter.ui.views;
 
 import com.judepereira.jupiter.ai.ChatClientService;
-import com.judepereira.jupiter.db.entities.Project;
 import com.judepereira.jupiter.db.entities.Task;
 import com.judepereira.jupiter.db.repos.TaskConversationMemoryService;
 import com.judepereira.jupiter.db.repos.TaskRepository;
@@ -13,6 +12,8 @@ import com.judepereira.jupiter.ui.components.ChatComposer;
 import com.judepereira.jupiter.ui.components.CreateTaskDialog;
 import com.judepereira.jupiter.ui.components.IconButton;
 import com.judepereira.jupiter.ui.components.ReviewView;
+import com.vaadin.flow.component.Key;
+import com.vaadin.flow.component.KeyModifier;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.icon.VaadinIcon;
@@ -78,6 +79,8 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
         this.taskRepository = taskRepository;
         this.todoService = todoService;
         this.chatClientBuilder = chatClientBuilder;
+
+        initShortcuts();
     }
 
     private TaskContext getCurrentTaskContext() {
@@ -137,8 +140,11 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
     }
 
     private TaskContext createTaskContext(Task task) {
-        var projectPaths = task.getProjects().stream().map(Project::getPath).toList();
         return new TaskContext(task, chatClientService, todoService);
+    }
+
+    private void initShortcuts() {
+        UI.getCurrent().addShortcutListener(this::openCreateTaskDialog, Key.KEY_N, KeyModifier.ALT);
     }
 
     private void switchTask(Task next, boolean updateUrl) {

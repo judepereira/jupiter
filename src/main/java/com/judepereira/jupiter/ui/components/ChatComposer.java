@@ -93,9 +93,13 @@ public class ChatComposer extends VerticalLayout {
 
         addBtn.addClickListener(ev -> {
             var txt = addTodoField.getValue();
-            if (txt == null || txt.trim().isEmpty()) return;
+            if (txt == null || txt.trim().isEmpty()) {
+                return;
+            }
             var taskContext = activeTaskSupplier.get();
-            if (taskContext == null) return;
+            if (taskContext == null) {
+                return;
+            }
             try {
                 taskContext.addTodo(txt.trim());
                 addTodoField.clear();
@@ -125,21 +129,16 @@ public class ChatComposer extends VerticalLayout {
         expand(conversationWrapper);
     }
 
-    /**
-     * Public helper to refresh todos for the currently active task. Safe to call from other views
-     * after task switch.
-     */
     public void refreshTodosFromTask() {
-
         getUI().ifPresent(ui -> ui.access(this::refreshTodosForActiveTask));
     }
-
-
 
     private void refreshTodosForActiveTask() {
         todosContent.removeAll();
         var taskContext = activeTaskSupplier.get();
-        if (taskContext == null) return;
+        if (taskContext == null) {
+            return;
+        }
         List<Todo> todos;
         try {
             todos = taskContext.listTodos();
@@ -158,7 +157,9 @@ public class ChatComposer extends VerticalLayout {
             cb.addValueChangeListener(ev -> {
                 try {
                     var tc = activeTaskSupplier.get();
-                    if (tc == null) return;
+                    if (tc == null) {
+                        return;
+                    }
                     if (ev.getValue()) {
                         tc.completeTodo(t.getId());
                     } else {

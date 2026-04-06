@@ -1,12 +1,14 @@
 package com.judepereira.jupiter.ui;
 
 import com.judepereira.jupiter.ai.ChatClientService;
+import com.judepereira.jupiter.ai.tools.FileTool;
 import com.judepereira.jupiter.ai.tools.TodoTool;
 import com.judepereira.jupiter.db.entities.Task;
 import com.judepereira.jupiter.db.entities.Todo;
 import com.judepereira.jupiter.db.repos.TodoService;
 import lombok.Data;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +27,7 @@ public class TaskContext {
         this.chatClientService = chatClientService;
         this.todoService = todoService;
         this.tools.add(new TodoTool(todoService, task.getSlug()));
+        this.tools.add(new FileTool(new File(task.getProjects().stream().findAny().get().getPath()).toPath()));
     }
 
 

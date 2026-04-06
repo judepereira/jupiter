@@ -1,7 +1,6 @@
 package com.judepereira.jupiter.ai.tools;
 
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -9,8 +8,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.PathMatcher;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -19,32 +18,14 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
-/**
- * Basic set of tools exposed to the AI system for interacting with the project workspace.
- */
-@Component
 public class FileTool {
 
     private final List<Path> allowedRoots;
     private final Path primaryRoot;
 
-    public FileTool() {
-        this.allowedRoots = List.of(Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize());
-        this.primaryRoot = this.allowedRoots.getFirst();
-    }
-
-    FileTool(List<String> roots) {
-        if (roots == null || roots.isEmpty()) {
-            this.allowedRoots = List.of(Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize());
-        } else {
-            this.allowedRoots = roots.stream().map(p -> Paths.get(p).toAbsolutePath().normalize()).toList();
-        }
-        this.primaryRoot = this.allowedRoots.getFirst();
-    }
-
-    FileTool(Path projectRoot) {
+    public FileTool(Path projectRoot) {
         this.allowedRoots = List.of(projectRoot.toAbsolutePath().normalize());
-        this.primaryRoot = this.allowedRoots.getFirst();
+        this.primaryRoot = projectRoot;
     }
 
     private Path resolve(String path) {
