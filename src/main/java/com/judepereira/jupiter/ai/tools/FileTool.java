@@ -1,4 +1,4 @@
-package com.judepereira.jupiter.ai;
+package com.judepereira.jupiter.ai.tools;
 
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
@@ -23,28 +23,28 @@ import java.util.stream.Collectors;
  * Basic set of tools exposed to the AI system for interacting with the project workspace.
  */
 @Component
-public class ToolFileProvider {
+public class FileTool {
 
     private final List<Path> allowedRoots;
     private final Path primaryRoot;
 
-    public ToolFileProvider() {
+    public FileTool() {
         this.allowedRoots = List.of(Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize());
-        this.primaryRoot = this.allowedRoots.get(0);
+        this.primaryRoot = this.allowedRoots.getFirst();
     }
 
-    ToolFileProvider(List<String> roots) {
+    FileTool(List<String> roots) {
         if (roots == null || roots.isEmpty()) {
             this.allowedRoots = List.of(Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize());
         } else {
             this.allowedRoots = roots.stream().map(p -> Paths.get(p).toAbsolutePath().normalize()).toList();
         }
-        this.primaryRoot = this.allowedRoots.get(0);
+        this.primaryRoot = this.allowedRoots.getFirst();
     }
 
-    ToolFileProvider(Path projectRoot) {
+    FileTool(Path projectRoot) {
         this.allowedRoots = List.of(projectRoot.toAbsolutePath().normalize());
-        this.primaryRoot = this.allowedRoots.get(0);
+        this.primaryRoot = this.allowedRoots.getFirst();
     }
 
     private Path resolve(String path) {
@@ -151,16 +151,12 @@ public class ToolFileProvider {
                     final int[] lineNo = {0};
                     lines.forEachOrdered(line -> {
                         lineNo[0]++;
-                        try {
-                            if (pat.matcher(line).find()) {
-                                results.add(rel.toString() + ":" + lineNo[0] + ": " + line);
-                            }
-                        } catch (Exception ex) {
-
+                        if (pat.matcher(line).find()) {
+                            results.add(rel + ":" + lineNo[0] + ": " + line);
                         }
                     });
                 } catch (IOException e) {
-
+                    // Ignore.
                 }
             });
         }
@@ -173,7 +169,7 @@ public class ToolFileProvider {
         Path p = resolve(path);
         Files.createDirectories(p.getParent() == null ? primaryRoot : p.getParent());
         Files.write(p, content == null ? new byte[0] : content.getBytes(StandardCharsets.UTF_8));
-        return "Wrote file: " + p.toString();
+        return "Wrote file: " + p;
     }
 
     /**

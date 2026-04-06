@@ -1,4 +1,4 @@
-package com.judepereira.jupiter.ai;
+package com.judepereira.jupiter.ai.tools;
 
 import com.judepereira.jupiter.db.entities.Todo;
 import com.judepereira.jupiter.db.repos.TodoService;

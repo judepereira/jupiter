@@ -1,7 +1,7 @@
 package com.judepereira.jupiter.ui;
 
 import com.judepereira.jupiter.ai.ChatClientService;
-import com.judepereira.jupiter.ai.TodoTool;
+import com.judepereira.jupiter.ai.tools.TodoTool;
 import com.judepereira.jupiter.db.entities.Task;
 import com.judepereira.jupiter.db.entities.Todo;
 import com.judepereira.jupiter.db.repos.TodoService;
