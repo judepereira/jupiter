@@ -1,6 +1,6 @@
 package com.judepereira.jupiter.ui.components;
 
-import com.judepereira.jupiter.ai.ChatClientService;
+import com.judepereira.jupiter.db.entities.Todo;
 import com.judepereira.jupiter.dtos.ChatMessage;
 import com.judepereira.jupiter.ui.TaskContext;
 import com.vaadin.flow.component.Key;
@@ -8,6 +8,7 @@ import com.vaadin.flow.component.KeyModifier;
 import com.vaadin.flow.component.accordion.Accordion;
 import com.vaadin.flow.component.accordion.AccordionPanel;
 import com.vaadin.flow.component.checkbox.Checkbox;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -28,19 +29,15 @@ public class ChatComposer extends VerticalLayout {
     private final ConversationView conversationView = new ConversationView();
     private final TextArea messageInput = new TextArea();
     private final Checkbox useCmdEnter = new Checkbox("Use ⌘ + Enter to send", true);
-    private final Accordion composerAccordion = new Accordion();
     private final AccordionPanel todoPanel;
     private final VerticalLayout todosContent = new VerticalLayout();
     private final TextField addTodoField = new TextField();
 
-    private final ChatClientService chatClientService;
     private final Consumer<ChatMessage> onMessageAdded;
     private final Supplier<TaskContext> activeTaskSupplier;
 
-    public ChatComposer(final ChatClientService chatClientService,
-                        final Consumer<ChatMessage> onMessageAdded,
+    public ChatComposer(final Consumer<ChatMessage> onMessageAdded,
                         final Supplier<TaskContext> activeTaskSupplier) {
-        this.chatClientService = chatClientService;
         this.onMessageAdded = onMessageAdded;
         this.activeTaskSupplier = activeTaskSupplier;
         setSizeFull();
@@ -50,7 +47,7 @@ public class ChatComposer extends VerticalLayout {
         messageInput.setWidthFull();
         messageInput.setPlaceholder("Let's build...");
         messageInput.setValueChangeMode(ValueChangeMode.EAGER);
-        // min/max heights already configured above
+
         messageInput.getStyle().set("resize", "none");
         messageInput.getStyle().set("overflow", "hidden");
 
@@ -67,7 +64,6 @@ public class ChatComposer extends VerticalLayout {
         messageInput.setMinHeight("100px");
         messageInput.setMaxHeight("300px");
 
-        // Build todos accordion panel
         var todosLayout = new VerticalLayout();
         todosLayout.setPadding(false);
         todosLayout.setSpacing(false);
@@ -75,7 +71,7 @@ public class ChatComposer extends VerticalLayout {
         addTodoField.setPlaceholder("Add todo...");
         addTodoField.setWidthFull();
 
-        var addBtn = new com.judepereira.jupiter.ui.components.IconButton(com.vaadin.flow.component.icon.VaadinIcon.PLUS.create());
+        var addBtn = new IconButton(VaadinIcon.PLUS.create());
         addBtn.setLightMode();
 
         var addRow = new FlexLayout(addTodoField, addBtn);
@@ -89,17 +85,12 @@ public class ChatComposer extends VerticalLayout {
 
         todosLayout.add(todosContent, addRow);
 
-        // Create an explicit AccordionPanel, set its content and add it to the Accordion.
-        // This avoids relying on the return type of Accordion.add(...) which may vary
-        // between Vaadin versions.
         AccordionPanel panel = new AccordionPanel();
-        panel.setContent(todosLayout);
+        panel.add(todosLayout);
+        Accordion composerAccordion = new Accordion();
         composerAccordion.add(panel);
         this.todoPanel = panel;
-        // collapsed by default
-        composerAccordion.close();
 
-        // wire add
         addBtn.addClickListener(ev -> {
             var txt = addTodoField.getValue();
             if (txt == null || txt.trim().isEmpty()) return;
@@ -110,13 +101,12 @@ public class ChatComposer extends VerticalLayout {
                 addTodoField.clear();
                 refreshTodosForActiveTask();
             } catch (Exception ex) {
-                com.judepereira.jupiter.ui.components.AppNotifications.showError("Failed to add todo: " + ex.getMessage());
+                AppNotifications.showError("Failed to add todo: " + ex.getMessage());
             }
         });
 
-        // refresh when accordion opened
         composerAccordion.addOpenedChangeListener(ev -> {
-            if (ev.getOpenedPanel() == todoPanel) {
+            if (ev.getOpenedPanel().isPresent() && ev.getOpenedPanel().get() == todoPanel) {
                 refreshTodosForActiveTask();
             }
         });
@@ -140,21 +130,21 @@ public class ChatComposer extends VerticalLayout {
      * after task switch.
      */
     public void refreshTodosFromTask() {
-        // ensure UI access
+
         getUI().ifPresent(ui -> ui.access(this::refreshTodosForActiveTask));
     }
 
-    // Refreshes the todo list and updates the panel summary. Separated so IDEView/task switches
-    // can call into ChatComposer (via activeTaskSupplier) without exposing internals.
+
+
     private void refreshTodosForActiveTask() {
         todosContent.removeAll();
         var taskContext = activeTaskSupplier.get();
         if (taskContext == null) return;
-        java.util.List<com.judepereira.jupiter.db.entities.Todo> todos;
+        List<Todo> todos;
         try {
             todos = taskContext.listTodos();
         } catch (Exception ex) {
-            com.judepereira.jupiter.ui.components.AppNotifications.showError("Failed to load todos: " + ex.getMessage());
+            AppNotifications.showError("Failed to load todos: " + ex.getMessage());
             return;
         }
 
@@ -174,10 +164,10 @@ public class ChatComposer extends VerticalLayout {
                     } else {
                         tc.reopenTodo(t.getId());
                     }
-                    // refresh after update
+
                     refreshTodosForActiveTask();
                 } catch (Exception ex) {
-                    com.judepereira.jupiter.ui.components.AppNotifications.showError("Failed to update todo: " + ex.getMessage());
+                    AppNotifications.showError("Failed to update todo: " + ex.getMessage());
                 }
             });
             todosContent.add(cb);
@@ -207,17 +197,17 @@ public class ChatComposer extends VerticalLayout {
             return;
         }
 
+
+        val taskContext = this.activeTaskSupplier.get();
+        if (taskContext == null) {
+            AppNotifications.showError("No active task selected. Open or create a task before sending messages.");
+            return;
+        }
+
         addEntry(new ChatMessage(new UserMessage(text)));
         messageInput.clear();
 
         var conversation = conversationView.getMessages().stream().map(ChatMessage::getMessage).toList();
-
-        // Get the active task context and ensure it's present before attempting to stream
-        val taskContext = this.activeTaskSupplier.get();
-        if (taskContext == null) {
-            com.judepereira.jupiter.ui.components.AppNotifications.showError("No active task selected. Open or create a task before sending messages.");
-            return;
-        }
 
         ChatMessage streamingEntry = new ChatMessage(new AssistantMessage(""));
         conversationView.getUI().ifPresent(ui -> ui.access(() -> conversationView.addMessage(streamingEntry)));
@@ -225,23 +215,8 @@ public class ChatComposer extends VerticalLayout {
         Thread.ofVirtual().start(() -> {
             StringBuilder content = new StringBuilder();
             var client = taskContext.getChatClientService();
-            if (client == null) {
-                // task exists but has no task-scoped client: show an error inline and notify
-                String current = "[Error: task-scoped chat client unavailable]";
-                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
-                    streamingEntry.setMessage(new AssistantMessage(current));
-                    if (taskContext.equals(this.activeTaskSupplier.get())) {
-                        conversationView.refreshMessage(streamingEntry);
-                    }
-                }));
-                com.judepereira.jupiter.ui.components.AppNotifications.showError("Task does not have an associated chat client.");
-                if (onMessageAdded != null) {
-                    onMessageAdded.accept(streamingEntry);
-                }
-                return;
-            }
 
-            client.streamResponse(conversation)
+            client.streamResponse(taskContext.getTools(), conversation)
                     .doOnNext(token -> {
                         if (token == null) {
                             return;

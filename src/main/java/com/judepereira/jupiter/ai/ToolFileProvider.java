@@ -33,9 +33,7 @@ public class ToolFileProvider {
         this.primaryRoot = this.allowedRoots.get(0);
     }
 
-    // package-visible constructor to allow tests to inject multiple allowed project roots
     ToolFileProvider(List<String> roots) {
-        // defensively handle null/empty roots by falling back to current working dir
         if (roots == null || roots.isEmpty()) {
             this.allowedRoots = List.of(Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize());
         } else {
@@ -44,7 +42,6 @@ public class ToolFileProvider {
         this.primaryRoot = this.allowedRoots.get(0);
     }
 
-    // legacy-package constructor used earlier
     ToolFileProvider(Path projectRoot) {
         this.allowedRoots = List.of(projectRoot.toAbsolutePath().normalize());
         this.primaryRoot = this.allowedRoots.get(0);
@@ -53,7 +50,7 @@ public class ToolFileProvider {
     private Path resolve(String path) {
         Path p = Paths.get(path);
         Path candidate = p.isAbsolute() ? p.normalize() : primaryRoot.resolve(p).normalize();
-        // verify candidate is within allowed roots
+
         for (Path root : allowedRoots) {
             if (candidate.startsWith(root)) return candidate;
         }
@@ -159,11 +156,11 @@ public class ToolFileProvider {
                                 results.add(rel.toString() + ":" + lineNo[0] + ": " + line);
                             }
                         } catch (Exception ex) {
-                            // if matching a particular line fails for some reason, skip it
+
                         }
                     });
                 } catch (IOException e) {
-                    // unreadable file - skip
+
                 }
             });
         }
@@ -190,7 +187,7 @@ public class ToolFileProvider {
         ProcessBuilder pb = new ProcessBuilder("git", "apply", "--whitespace=fix");
         pb.directory(primaryRoot.toFile());
         Process p = pb.start();
-        // write patch to stdin
+
         try (var os = p.getOutputStream()) {
             os.write(patchText.getBytes(StandardCharsets.UTF_8));
             os.flush();

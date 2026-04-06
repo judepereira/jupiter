@@ -5,14 +5,9 @@ import com.judepereira.jupiter.dtos.ChatMessage;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
+import java.util.*;
 
 @Service
 public class TaskConversationMemoryService {
@@ -41,45 +36,12 @@ public class TaskConversationMemoryService {
                         if ("user".equalsIgnoreCase(role)) {
                             out.add(new ChatMessage(new UserMessage(content)));
                         } else {
-                            // assistant (and unknown/default)
                             out.add(new ChatMessage(new AssistantMessage(content)));
                         }
                     }
                     return Collections.unmodifiableList(out);
                 })
                 .orElseGet(List::of);
-    }
-
-    public void saveConversation(String slug, List<ChatMessage> conversation) {
-        String key = normalize(slug);
-        taskRepository.findBySlugIgnoreCase(key).ifPresent(task -> {
-            // remove existing
-            conversationRepository.deleteByTask(task);
-
-            if (conversation == null || conversation.isEmpty()) {
-                return;
-            }
-
-            Instant base = Instant.now();
-            List<Conversation> toSave = new ArrayList<>(conversation.size());
-            for (int i = 0; i < conversation.size(); i++) {
-                ChatMessage cm = conversation.get(i);
-                if (cm == null || cm.getMessage() == null) continue;
-                String content = cm.getMessage().getText() == null ? "" : cm.getMessage().getText();
-                String role;
-                if (cm.getMessage() instanceof UserMessage) {
-                    role = "user";
-                } else if (cm.getMessage() instanceof AssistantMessage) {
-                    role = "assistant";
-                } else {
-                    // default to assistant for unknown message types
-                    role = "assistant";
-                }
-                Instant createdAt = base.plusNanos(i);
-                toSave.add(new Conversation(task, role, content, createdAt));
-            }
-            conversationRepository.saveAll(toSave);
-        });
     }
 
     public void appendMessage(String slug, ChatMessage message) {

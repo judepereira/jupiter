@@ -1,14 +1,14 @@
 package com.judepereira.jupiter.ui;
 
 import com.judepereira.jupiter.ai.ChatClientService;
-import com.judepereira.jupiter.db.repos.TodoService;
+import com.judepereira.jupiter.ai.TodoTool;
 import com.judepereira.jupiter.db.entities.Task;
-import com.judepereira.jupiter.dtos.ChatMessage;
-import com.judepereira.jupiter.ui.components.ChatComposer;
+import com.judepereira.jupiter.db.entities.Todo;
+import com.judepereira.jupiter.db.repos.TodoService;
 import lombok.Data;
 
-import java.util.function.Consumer;
-import java.util.function.BooleanSupplier;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Container for per-task UI and AI state.
@@ -18,27 +18,29 @@ public class TaskContext {
     private final Task task;
     private final ChatClientService chatClientService;
     private final TodoService todoService;
+    private final List<Object> tools = new ArrayList<>();
 
     public TaskContext(Task task, ChatClientService chatClientService, TodoService todoService) {
         this.task = task;
         this.chatClientService = chatClientService;
         this.todoService = todoService;
+        this.tools.add(new TodoTool(todoService, task.getSlug()));
     }
 
-    // Convenience helpers so UI can perform task-scoped todo operations without reaching into global state
-    public java.util.List<com.judepereira.jupiter.db.entities.Todo> listTodos() {
+
+    public List<Todo> listTodos() {
         return todoService.listTodos(task.getSlug());
     }
 
-    public com.judepereira.jupiter.db.entities.Todo addTodo(String text) {
+    public Todo addTodo(String text) {
         return todoService.addTodo(task.getSlug(), text);
     }
 
-    public com.judepereira.jupiter.db.entities.Todo completeTodo(Long id) {
+    public Todo completeTodo(Long id) {
         return todoService.completeTodo(task.getSlug(), id);
     }
 
-    public com.judepereira.jupiter.db.entities.Todo reopenTodo(Long id) {
+    public Todo reopenTodo(Long id) {
         return todoService.reopenTodo(task.getSlug(), id);
     }
 }
