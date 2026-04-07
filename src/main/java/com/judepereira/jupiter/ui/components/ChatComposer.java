@@ -217,7 +217,12 @@ public class ChatComposer extends VerticalLayout {
             StringBuilder content = new StringBuilder();
             var client = taskContext.getChatClientService();
 
-            client.streamResponse(taskContext.getTools(), conversation)
+            var projectRoot = taskContext.getTask().getProjects().stream()
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Active task has no associated project; cannot determine project root"))
+                    .getPath();
+
+            client.streamResponse(taskContext.getTools(), conversation, projectRoot)
                     .doOnNext(token -> {
                         if (token == null) {
                             return;
