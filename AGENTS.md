@@ -7,6 +7,7 @@
 3. Use Lombok's annotations extensively where possible.
 4. Do not write comments for code that is self-explanatory.
 5. Do not unnecessarily qualify class names. Avoid static imports for variables and methods, other than junit assertion methods.
+6. When delegating work to other agents and temporary files are required to be written, write them in /tmp.
 
 ## Build Instructions
 1. Source .env from the project root – this contains the necessary environment 

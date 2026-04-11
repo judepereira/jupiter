@@ -2,6 +2,7 @@ package com.judepereira.jupiter.db.repos;
 
 import com.judepereira.jupiter.db.entities.Conversation;
 import com.judepereira.jupiter.dtos.ChatMessage;
+import com.judepereira.jupiter.dtos.ToolCallTrace;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class TaskConversationMemoryService {
         String key = normalize(slug);
         return taskRepository.findBySlugIgnoreCase(key)
                 .map(task -> {
-                    List<Conversation> rows = conversationRepository.findByTaskOrderByCreatedAtAsc(task);
+                    List<Conversation> rows = conversationRepository.findByTaskOrderByCreatedAtAscIdAsc(task);
                     List<ChatMessage> out = new ArrayList<>(rows.size());
                     for (Conversation row : rows) {
                         String role = row.getRole();
@@ -36,7 +37,13 @@ public class TaskConversationMemoryService {
                         if ("user".equalsIgnoreCase(role)) {
                             out.add(new ChatMessage(new UserMessage(content)));
                         } else {
-                            out.add(new ChatMessage(new AssistantMessage(content)));
+                            if (row.getRole().equalsIgnoreCase("tool")) {
+                                out.add(new ChatMessage(new ToolCallTrace(
+                                        row.getToolName(), row.getToolArgsPayload(), row.getToolResultPayload(),
+                                        row.getToolErrorPayload(), row.getToolStartedAt(), row.getToolDurationMillis())));
+                            } else {
+                                out.add(new ChatMessage(new AssistantMessage(content)));
+                            }
                         }
                     }
                     return Collections.unmodifiableList(out);
@@ -45,19 +52,40 @@ public class TaskConversationMemoryService {
     }
 
     public void appendMessage(String slug, ChatMessage message) {
-        if (message == null || message.getMessage() == null) return;
+        if (message == null || (message.getMessage() == null && message.getToolTrace() == null)) {
+            return;
+        }
         String key = normalize(slug);
         taskRepository.findBySlugIgnoreCase(key).ifPresent(task -> {
-            String content = message.getMessage().getText() == null ? "" : message.getMessage().getText();
             String role;
-            if (message.getMessage() instanceof UserMessage) {
-                role = "user";
-            } else if (message.getMessage() instanceof AssistantMessage) {
-                role = "assistant";
+            String content = "";
+            if (message.getToolTrace() != null) {
+                role = "tool";
+                content = "";
             } else {
-                role = "assistant";
+                if (message.getMessage() != null) {
+                    content = message.getMessage().getText() == null ? "" : message.getMessage().getText();
+                }
+                if (message.getMessage() instanceof UserMessage) {
+                    role = "user";
+                } else if (message.getMessage() instanceof AssistantMessage) {
+                    role = "assistant";
+                } else {
+                    role = "assistant";
+                }
             }
-            Conversation conv = new Conversation(task, role, content, Instant.now());
+
+            Conversation conv;
+            if (message.getToolTrace() != null) {
+                var t = message.getToolTrace();
+                Instant ts = t.startedAt() == null ? Instant.now() : t.startedAt();
+                Long duration = t.durationMillis() == null ? null : t.durationMillis();
+                Instant createdAt = ts == null ? Instant.now() : ts;
+                conv = new Conversation(task, role, content, createdAt, t.toolName(), t.toolArgsPayload(),
+                        t.toolResultPayload(), t.toolErrorPayload(), ts, duration);
+            } else {
+                conv = new Conversation(task, role, content, Instant.now());
+            }
             conversationRepository.save(conv);
         });
     }

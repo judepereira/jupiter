@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
 
-    List<Conversation> findByTaskOrderByCreatedAtAsc(Task task);
+    List<Conversation> findByTaskOrderByCreatedAtAscIdAsc(Task task);
 
     void deleteByTask(Task task);
 }

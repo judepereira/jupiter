@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.ai;
 
+import com.judepereira.jupiter.ai.tools.ToolUtils;
+import com.judepereira.jupiter.dtos.ToolCallTrace;
 import com.judepereira.jupiter.shell.Shell;
 import com.judepereira.jupiter.shell.Shell.ExecutionResult;
 import org.springframework.ai.chat.client.ChatClient;
@@ -13,6 +15,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class ChatClientService {
 
@@ -26,7 +29,8 @@ public class ChatClientService {
         this.systemPrompt = loadSystemPrompt();
     }
 
-    public Flux<String> streamResponse(List<Object> tools, List<Message> chatHistory, String projectRoot) {
+    public Flux<String> streamResponse(List<Object> tools, List<Message> chatHistory, String projectRoot,
+                                       Consumer<ToolCallTrace> traceConsumer) {
         if (projectRoot == null || projectRoot.isBlank()) {
             throw new IllegalArgumentException("projectRoot must be provided");
         }
@@ -52,9 +56,8 @@ public class ChatClientService {
         var client = chatClientBuilder.build();
         var prompt = client.prompt()
                 .system(effectiveSystemPrompt)
-                .messages(chatHistory);
-
-        prompt.tools(tools.toArray(Object[]::new));
+                .messages(chatHistory)
+                .tools(ToolUtils.wrap(tools, traceConsumer));
 
         return prompt.stream().content();
     }

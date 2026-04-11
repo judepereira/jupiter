@@ -37,10 +37,43 @@ public class Conversation {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "tool_name", nullable = true)
+    private String toolName;
+
+    @Column(name = "tool_args_payload", columnDefinition = "TEXT", nullable = true)
+    private String toolArgsPayload;
+
+    @Column(name = "tool_result_payload", columnDefinition = "TEXT", nullable = true)
+    private String toolResultPayload;
+
+    @Column(name = "tool_error_payload", columnDefinition = "TEXT", nullable = true)
+    private String toolErrorPayload;
+
+    @Column(name = "tool_started_at", nullable = true)
+    private Instant toolStartedAt;
+
+    @Column(name = "tool_duration_millis", nullable = true)
+    private Long toolDurationMillis;
+
     public Conversation(Task task, String role, String content, Instant createdAt) {
         this.task = task;
         this.role = role;
         this.content = content;
         this.createdAt = createdAt;
+    }
+
+    public Conversation(Task task, String role, String content, Instant createdAt,
+                        String toolName, String toolArgsPayload, String toolResultPayload, String toolErrorPayload,
+                        Instant toolStartedAt, Long toolDurationMillis) {
+        this.task = task;
+        this.role = role;
+        this.content = content;
+        this.createdAt = createdAt;
+        this.toolName = toolName;
+        this.toolArgsPayload = toolArgsPayload;
+        this.toolResultPayload = toolResultPayload;
+        this.toolErrorPayload = toolErrorPayload;
+        this.toolStartedAt = toolStartedAt;
+        this.toolDurationMillis = toolDurationMillis;
     }
 }

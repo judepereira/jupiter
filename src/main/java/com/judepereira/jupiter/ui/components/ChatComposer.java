@@ -2,6 +2,7 @@ package com.judepereira.jupiter.ui.components;
 
 import com.judepereira.jupiter.db.entities.Todo;
 import com.judepereira.jupiter.dtos.ChatMessage;
+import com.judepereira.jupiter.dtos.ToolCallTrace;
 import com.judepereira.jupiter.ui.TaskContext;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.KeyModifier;
@@ -9,10 +10,10 @@ import com.vaadin.flow.component.accordion.Accordion;
 import com.vaadin.flow.component.accordion.AccordionPanel;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
+import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.value.ValueChangeMode;
 import lombok.extern.log4j.Log4j2;
 import lombok.val;
@@ -20,6 +21,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -208,10 +210,7 @@ public class ChatComposer extends VerticalLayout {
         addEntry(new ChatMessage(new UserMessage(text)));
         messageInput.clear();
 
-        var conversation = conversationView.getMessages().stream().map(ChatMessage::getMessage).toList();
-
-        ChatMessage streamingEntry = new ChatMessage(new AssistantMessage(""));
-        conversationView.getUI().ifPresent(ui -> ui.access(() -> conversationView.addMessage(streamingEntry)));
+        var conversation = conversationView.getMessages().stream().map(ChatMessage::getMessage).filter(Objects::nonNull).toList();
 
         Thread.ofVirtual().start(() -> {
             StringBuilder content = new StringBuilder();
@@ -222,36 +221,90 @@ public class ChatComposer extends VerticalLayout {
                     .orElseThrow(() -> new IllegalStateException("Active task has no associated project; cannot determine project root"))
                     .getPath();
 
-            client.streamResponse(taskContext.getTools(), conversation, projectRoot)
+            final Object assistantLock = new Object();
+            final ChatMessage[] streamingEntry = new ChatMessage[1];
+            client.streamResponse(taskContext.getTools(), conversation, projectRoot,
+                    (ToolCallTrace trace) -> {
+                        synchronized (assistantLock) {
+                            if (!taskContext.equals(this.activeTaskSupplier.get())) {
+                                return;
+                            }
+                            ChatMessage tm = new ChatMessage(trace);
+                            conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                                if (!taskContext.equals(this.activeTaskSupplier.get())) {
+                                    return;
+                                }
+                                if (streamingEntry[0] != null) {
+                                    var snapshot = conversationView.snapshot();
+                                    int idx = snapshot.indexOf(streamingEntry[0]);
+                                    if (idx >= 0) {
+                                        snapshot.add(idx, tm);
+                                    } else {
+                                        snapshot.add(tm);
+                                    }
+                                    conversationView.setMessages(snapshot);
+                                } else {
+                                    conversationView.addMessage(tm);
+                                }
+                                if (onMessageAdded != null) onMessageAdded.accept(tm);
+                            }));
+                        }
+                    })
                     .doOnNext(token -> {
                         if (token == null) {
                             return;
                         }
                         content.append(token);
                         String current = content.toString();
-                        if (taskContext.equals(this.activeTaskSupplier.get())) {
-                            conversationView.getUI().ifPresent(ui -> ui.access(() -> {
-                                streamingEntry.setMessage(new AssistantMessage(current));
-                                conversationView.refreshMessage(streamingEntry);
-                            }));
+
+                        synchronized (assistantLock) {
+                            if (streamingEntry[0] == null) {
+                                streamingEntry[0] = new ChatMessage(new AssistantMessage(current));
+                                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                                    if (!taskContext.equals(this.activeTaskSupplier.get())) {
+                                        return;
+                                    }
+                                    conversationView.addMessage(streamingEntry[0]);
+                                }));
+                            } else {
+                                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                                    if (!taskContext.equals(this.activeTaskSupplier.get())) {
+                                        return;
+                                    }
+                                    streamingEntry[0].setMessage(new AssistantMessage(current));
+                                    conversationView.refreshMessage(streamingEntry[0]);
+                                }));
+                            }
                         }
                     })
                     .doOnError(err -> {
                         String current = content + "\n\n[Error: " + err.getMessage() + "]";
 
-                        conversationView.getUI().ifPresent(ui -> ui.access(() -> {
-                            streamingEntry.setMessage(new AssistantMessage(current));
-                            if (taskContext.equals(this.activeTaskSupplier.get())) {
-                                conversationView.refreshMessage(streamingEntry);
+                        synchronized (assistantLock) {
+                            if (streamingEntry[0] == null) {
+                                streamingEntry[0] = new ChatMessage(new AssistantMessage(current));
+                                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                                    if (!taskContext.equals(this.activeTaskSupplier.get())) {
+                                        return;
+                                    }
+                                    conversationView.addMessage(streamingEntry[0]);
+                                }));
+                            } else {
+                                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                                    streamingEntry[0].setMessage(new AssistantMessage(current));
+                                    if (taskContext.equals(this.activeTaskSupplier.get())) {
+                                        conversationView.refreshMessage(streamingEntry[0]);
+                                    }
+                                }));
                             }
-                        }));
-                        if (onMessageAdded != null) {
-                            onMessageAdded.accept(streamingEntry);
+                        }
+                        if (onMessageAdded != null && taskContext.equals(this.activeTaskSupplier.get())) {
+                            onMessageAdded.accept(streamingEntry[0]);
                         }
                     })
                     .doOnComplete(() -> {
-                        if (onMessageAdded != null) {
-                            onMessageAdded.accept(streamingEntry);
+                        if (onMessageAdded != null && streamingEntry[0] != null && taskContext.equals(this.activeTaskSupplier.get())) {
+                            onMessageAdded.accept(streamingEntry[0]);
                         }
                     })
                     .blockLast();

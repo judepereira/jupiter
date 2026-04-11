@@ -29,10 +29,33 @@ public class ConversationView extends Grid<ChatMessage> {
         addColumn(new ComponentRenderer<Component, ChatMessage>(entry -> {
             val row = new VerticalLayout();
             row.setPadding(false);
-            MarkdownViewer md = new MarkdownViewer(Objects.requireNonNullElse(entry.getMessage().getText(), ""));
-            md.setWidthFull();
-            row.add(md);
-            return row;
+            if (entry.getToolTrace() != null) {
+                var t = entry.getToolTrace();
+                StringBuilder sb = new StringBuilder();
+                sb.append("**Tool:** ").append(t.toolName()).append("\n\n");
+                if (t.startedAt() != null) {
+                    sb.append("**Started At:** ").append(t.startedAt().toString()).append("\n\n");
+                }
+                if (t.durationMillis() != null) {
+                    sb.append("**Duration (ms):** ").append(t.durationMillis().toString()).append("\n\n");
+                }
+                sb.append("**Args:**\n```").append(t.toolArgsPayload() == null ? "" : t.toolArgsPayload()).append("```\n\n");
+                if (t.toolResultPayload() != null) {
+                    sb.append("**Result:**\n```").append(t.toolResultPayload()).append("```\n");
+                }
+                if (t.toolErrorPayload() != null) {
+                    sb.append("**Error:**\n```").append(t.toolErrorPayload()).append("```\n");
+                }
+                MarkdownViewer md = new MarkdownViewer(sb.toString());
+                md.setWidthFull();
+                row.add(md);
+                return row;
+            } else {
+                MarkdownViewer md = new MarkdownViewer(Objects.requireNonNullElse(entry.getMessage().getText(), ""));
+                md.setWidthFull();
+                row.add(md);
+                return row;
+            }
         }))
                 .setAutoWidth(true)
                 .setFlexGrow(1);
