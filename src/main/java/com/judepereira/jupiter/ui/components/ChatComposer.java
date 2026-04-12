@@ -264,6 +264,8 @@ public class ChatComposer extends VerticalLayout {
                                 } else {
                                     conversationView.addMessage(tm);
                                 }
+
+                                refreshTodosForActiveTask();
                                 if (onMessageAdded != null) onMessageAdded.accept(tm);
                             }));
                         }

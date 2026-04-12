@@ -1,15 +1,16 @@
 package com.judepereira.jupiter.ai.tools;
 
+import lombok.extern.log4j.Log4j2;
+import lombok.val;
 import org.apache.commons.lang3.StringUtils;
 import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,9 +21,11 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+@Log4j2
 public class FileTool {
 
     public static final String RG_NOT_FOUND = "rg not found. Please ask the user to install ripgrep.";
+    public static final int READ_FILE_MAX_LINES = 1000;
     private final Path primaryRoot;
 
     public FileTool(Path projectRoot) {
@@ -55,7 +58,12 @@ public class FileTool {
     }
 
     @Tool(description = "Read a file.")
-    public String readFile(String path) throws IOException {
+    public String readFile(
+            @ToolParam(description = "The path of the file to be read") String path,
+            @ToolParam(description = "Lines to skip (if empty, no lines are skipped)", required = false) Integer skip,
+            @ToolParam(description = "Maximum number of lines to return (default: "
+                    + READ_FILE_MAX_LINES + "; max: " + READ_FILE_MAX_LINES + ")", required = false) Integer limit)
+            throws IOException {
         Path p = resolve(path);
         if (!Files.exists(p)) {
             return "Path does not exist: " + p;
@@ -64,28 +72,11 @@ public class FileTool {
             return "Path is a directory: " + p;
         }
 
-        try (InputStream in = Files.newInputStream(p)) {
-            byte[] buf = new byte[1025];
-            int r = in.read(buf);
-            if (r == -1) {
-                return "Empty file";
-            }
-
-            int toDecode = Math.min(r, 1024);
-            var decoder = StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT);
-            String content;
-            try {
-                content = decoder.decode(ByteBuffer.wrap(buf, 0, toDecode)).toString();
-            } catch (CharacterCodingException e) {
-                return "File is not text: " + p;
-            }
-
-            if (r > 1024) {
-                content = content + "\n[TRUNCATED to 1024 bytes. Full length: " + p.toFile().length() + " bytes]";
-            }
-            return content;
+        try (val stream = new BufferedReader(Files.newBufferedReader(p, StandardCharsets.UTF_8))
+                .lines()
+                .skip(skip == null ? 0 : skip)
+                .limit(limit == null ? READ_FILE_MAX_LINES : Math.min(limit, READ_FILE_MAX_LINES))) {
+            return stream.collect(Collectors.joining("\n"));
         }
     }
 
@@ -93,7 +84,7 @@ public class FileTool {
     public String glob(String pattern, String path) throws IOException {
         Path base = resolve(path == null || path.isBlank() ? "." : path);
 
-        String err = valid(pattern, base);
+        String err = valid(pattern, base, true);
         if (err != null) {
             return err;
         }
@@ -104,20 +95,24 @@ public class FileTool {
         cmd.add("--iglob");
         cmd.add(pattern);
 
-        // todo: if glob returns more than 2 KB, truncate it, preferrably stdout and stderr individually (so 1024 on both sides max). Refactor runCommand to send stdout and stderr separately. do the same for grep too.
+        // todo: if glob returns more than 10 KB, truncate it, preferrably stdout and stderr individually (so 1024 on both sides max). Refactor runCommand to send stdout and stderr separately. do the same for grep too.
 
         try {
             return runCommand(cmd, base);
         } catch (IOException e) {
-            return "rg not found. Please ask the user to install ripgrep.";
+            log.error("glob failed", e);
+            return e.getMessage();
         }
     }
 
     @Tool(description = "Find content in text files")
-    public String grep(String pattern, String path, String include) {
+    public String grep(
+            @ToolParam(description = "The pattern (RE2-like) to grep for") String pattern,
+            @ToolParam(description = "The path in which to grep for. When empty, it defaults to the project's root directory") String path,
+            @ToolParam(description = "The file extension or pattern to include. When empty, all files are grepped", required = false) String include) {
         Path base = resolve(path == null || path.isBlank() ? "." : path);
 
-        String err = valid(pattern, base);
+        String err = valid(pattern, base, false);
         if (err != null) {
             return err;
         }
@@ -125,30 +120,31 @@ public class FileTool {
         List<String> cmd = new ArrayList<>();
         cmd.add("rg");
         cmd.add("-n");
-        cmd.add("--hidden");
         cmd.add("--with-filename");
         if (include != null && !include.isBlank()) {
             cmd.add("-g");
             cmd.add(include);
         }
+        cmd.add("-i");
         cmd.add(pattern);
         cmd.add(".");
 
         try {
             return runCommand(cmd, base);
         } catch (IOException e) {
-            return RG_NOT_FOUND;
+            log.error("grep failed", e);
+            return e.getMessage();
         }
     }
 
-    private static @Nullable String valid(String pattern, Path base) {
+    private static @Nullable String valid(String pattern, Path base, boolean dirExpected) {
         if (StringUtils.isBlank(pattern)) {
             return "Pattern is required";
         }
         if (!Files.exists(base)) {
             return "Path does not exist: " + base;
         }
-        if (!Files.isDirectory(base)) {
+        if (dirExpected && !Files.isDirectory(base)) {
             return "Not a directory: " + base;
         }
         return null;
@@ -184,7 +180,8 @@ public class FileTool {
             Files.createDirectories(p.getParent() == null ? primaryRoot : p.getParent());
             Files.write(p, content == null ? new byte[0] : content.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            return "Write failed: " + e.getMessage();
+            log.error("write failed", e);
+            return e.getMessage();
         }
         return "Wrote file: " + p;
     }
@@ -216,7 +213,8 @@ public class FileTool {
             int code = p.exitValue();
             return "exit=" + code + "\nSTDOUT:\n" + stdout + "\nSTDERR:\n" + stderr;
         } catch (Exception e) {
-            return "Failed to apply patch: " + e.getMessage();
+            log.error("patch failed", e);
+            return e.getMessage();
         }
     }
 

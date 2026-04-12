@@ -3,14 +3,22 @@ package com.judepereira.jupiter.ui.components;
 import com.flowingcode.vaadin.addons.markdown.MarkdownViewer;
 import com.judepereira.jupiter.dtos.ChatMessage;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Html;
+import com.vaadin.flow.component.accordion.Accordion;
+import com.vaadin.flow.component.accordion.AccordionPanel;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.grid.dataview.GridListDataView;
+import com.vaadin.flow.component.html.Pre;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.data.renderer.ComponentRenderer;
+import com.vaadin.flow.dom.Style;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import lombok.val;
+import org.apache.commons.lang3.StringUtils;
+import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,31 +39,38 @@ public class ConversationView extends Grid<ChatMessage> {
             row.setPadding(false);
             if (entry.getToolTrace() != null) {
                 var t = entry.getToolTrace();
-                StringBuilder sb = new StringBuilder();
-                sb.append("**Tool:** ").append(t.toolName()).append("\n\n");
-                if (t.startedAt() != null) {
-                    sb.append("**Started At:** ").append(t.startedAt().toString()).append("\n\n");
+
+                val title = new Span();
+                title.add(new Html("<strong>%s</strong>".formatted(t.toolName())));
+
+                val panel = new AccordionPanel(title);
+                panel.setWidthFull();
+
+                if (StringUtils.isNotBlank(t.toolArgsPayload())) {
+                    Html args = new Html(" <code>%s</code>".formatted(t.toolArgsPayload()));
+                    args.getStyle().setFont("monospace");
+                    title.add(new Span(": "), args);
                 }
-                if (t.durationMillis() != null) {
-                    sb.append("**Duration (ms):** ").append(t.durationMillis().toString()).append("\n\n");
+
+                if (StringUtils.isNotBlank(t.toolResultPayload())) {
+                    panel.add(pre(t.toolResultPayload()));
                 }
-                sb.append("**Args:**\n```").append(t.toolArgsPayload() == null ? "" : t.toolArgsPayload()).append("```\n\n");
-                if (t.toolResultPayload() != null) {
-                    sb.append("**Result:**\n```").append(t.toolResultPayload()).append("```\n");
+
+                if (StringUtils.isNotBlank(t.toolErrorPayload())) {
+                    panel.add(pre(t.toolErrorPayload()));
                 }
-                if (t.toolErrorPayload() != null) {
-                    sb.append("**Error:**\n```").append(t.toolErrorPayload()).append("```\n");
-                }
-                MarkdownViewer md = new MarkdownViewer(sb.toString());
-                md.setWidthFull();
-                row.add(md);
-                return row;
+
+                val accordion = new Accordion();
+                accordion.add(panel);
+                accordion.close();
+
+                row.add(accordion);
             } else {
                 MarkdownViewer md = new MarkdownViewer(Objects.requireNonNullElse(entry.getMessage().getText(), ""));
                 md.setWidthFull();
                 row.add(md);
-                return row;
             }
+            return row;
         }))
                 .setAutoWidth(true)
                 .setFlexGrow(1);
@@ -64,6 +79,16 @@ public class ConversationView extends Grid<ChatMessage> {
         setAllRowsVisible(true);
         addThemeName("no-border");
         this.messageGridListDataView = setItems(messages);
+    }
+
+    private static @NonNull Pre pre(String text) {
+        Pre pre = new Pre(text);
+        pre.setWidthFull();
+        pre.getStyle().setPadding("15px");
+        pre.getStyle().setBoxSizing(Style.BoxSizing.BORDER_BOX);
+        pre.getStyle().set("text-wrap", "wrap");
+        pre.setWidthFull();
+        return pre;
     }
 
     public synchronized void addMessage(ChatMessage message) {

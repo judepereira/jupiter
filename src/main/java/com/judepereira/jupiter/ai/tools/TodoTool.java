@@ -49,8 +49,8 @@ public class TodoTool {
     @Tool
     public String addTodo(String text) {
         try {
-            Todo created = todoService.addTodo(taskSlug, text);
-            return "Added todo: #" + created.getId() + " - " + created.getText();
+            todoService.addTodo(taskSlug, text);
+            return "Added";
         } catch (IllegalArgumentException ex) {
             return "Failed to add todo: " + ex.getMessage();
         }

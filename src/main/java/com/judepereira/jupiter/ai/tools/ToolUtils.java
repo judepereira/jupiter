@@ -7,6 +7,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.aop.framework.ProxyFactory;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.function.Consumer;
@@ -34,13 +35,14 @@ public class ToolUtils {
                 Instant startedAt = Instant.now();
                 String argsPayload = "";
                 Object[] argsArr = invocation.getArguments();
+
                 if (argsArr.length > 0) {
                     StringBuilder ap = new StringBuilder();
                     for (int i = 0; i < argsArr.length; i++) {
                         Object a = argsArr[i];
-                        ap.append("[").append(i).append("]:");
+                        ap.append(invocation.getMethod().getParameters()[i].getName()).append(": ");
                         ap.append(a == null ? "null" : a.toString());
-                        if (i < argsArr.length - 1) ap.append("; ");
+                        if (i < argsArr.length - 1) ap.append(", ");
                     }
                     argsPayload = ap.toString();
                 }
@@ -50,7 +52,7 @@ public class ToolUtils {
                 try {
                     Object res = invocation.proceed();
                     String resultPayload = res == null ? "null" : res.toString();
-                    long duration = java.time.Duration.between(startedAt, Instant.now()).toMillis();
+                    long duration = Duration.between(startedAt, Instant.now()).toMillis();
                     if (traceConsumer != null) {
                         var trace = new ToolCallTrace(toolName, argsPayload, resultPayload, null, startedAt, duration);
                         traceConsumer.accept(trace);
@@ -58,7 +60,7 @@ public class ToolUtils {
                     return res;
                 } catch (Throwable ex) {
                     String errPayload = ex.getMessage() == null ? ex.toString() : ex.getMessage();
-                    long duration = java.time.Duration.between(startedAt, Instant.now()).toMillis();
+                    long duration = Duration.between(startedAt, Instant.now()).toMillis();
                     if (traceConsumer != null) {
                         var trace = new ToolCallTrace(toolName, argsPayload, null, errPayload, startedAt, duration);
                         traceConsumer.accept(trace);
