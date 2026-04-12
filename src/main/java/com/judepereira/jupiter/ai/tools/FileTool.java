@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.ai.tools;
 
+import org.apache.commons.lang3.StringUtils;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
 
 import java.io.ByteArrayOutputStream;
@@ -65,7 +67,9 @@ public class FileTool {
         try (InputStream in = Files.newInputStream(p)) {
             byte[] buf = new byte[1025];
             int r = in.read(buf);
-            if (r == -1) return "Empty file";
+            if (r == -1) {
+                return "Empty file";
+            }
 
             int toDecode = Math.min(r, 1024);
             var decoder = StandardCharsets.UTF_8.newDecoder()
@@ -87,22 +91,20 @@ public class FileTool {
 
     @Tool(description = "Find file paths/names using wildcard patterns. eg: */src/**/*.java")
     public String glob(String pattern, String path) throws IOException {
-        if (pattern == null || pattern.isBlank()) {
-            return "Pattern is required";
-        }
         Path base = resolve(path == null || path.isBlank() ? "." : path);
-        if (!Files.exists(base)) {
-            return "Path does not exist: " + base;
-        }
-        if (!Files.isDirectory(base)) {
-            return "Not a directory: " + base;
+
+        String err = valid(pattern, base);
+        if (err != null) {
+            return err;
         }
 
         List<String> cmd = new ArrayList<>();
         cmd.add("rg");
         cmd.add("--files");
-        cmd.add("-g");
+        cmd.add("--iglob");
         cmd.add(pattern);
+
+        // todo: if glob returns more than 2 KB, truncate it, preferrably stdout and stderr individually (so 1024 on both sides max). Refactor runCommand to send stdout and stderr separately. do the same for grep too.
 
         try {
             return runCommand(cmd, base);
@@ -113,22 +115,17 @@ public class FileTool {
 
     @Tool(description = "Find content in text files")
     public String grep(String pattern, String path, String include) {
-        if (pattern == null || pattern.isBlank()) {
-            return "Pattern is required";
-        }
         Path base = resolve(path == null || path.isBlank() ? "." : path);
-        if (!Files.exists(base)) {
-            return "Path does not exist: " + base;
-        }
-        if (!Files.isDirectory(base)) {
-            return "Not a directory: " + base;
+
+        String err = valid(pattern, base);
+        if (err != null) {
+            return err;
         }
 
         List<String> cmd = new ArrayList<>();
         cmd.add("rg");
         cmd.add("-n");
         cmd.add("--hidden");
-        cmd.add("--no-ignore-vcs");
         cmd.add("--with-filename");
         if (include != null && !include.isBlank()) {
             cmd.add("-g");
@@ -142,6 +139,19 @@ public class FileTool {
         } catch (IOException e) {
             return RG_NOT_FOUND;
         }
+    }
+
+    private static @Nullable String valid(String pattern, Path base) {
+        if (StringUtils.isBlank(pattern)) {
+            return "Pattern is required";
+        }
+        if (!Files.exists(base)) {
+            return "Path does not exist: " + base;
+        }
+        if (!Files.isDirectory(base)) {
+            return "Not a directory: " + base;
+        }
+        return null;
     }
 
     private String runCommand(List<String> cmd, Path dir) throws IOException {
@@ -184,6 +194,8 @@ public class FileTool {
         if (patchText == null) {
             return "No patch provided";
         }
+
+        // todo: unify with runCommand.
         ProcessBuilder pb = new ProcessBuilder("git", "apply", "--whitespace=fix");
         pb.directory(primaryRoot.toFile());
         try {
@@ -213,6 +225,8 @@ public class FileTool {
         if (command == null) {
             return "No command provided";
         }
+
+        // todo: unify with runCommand.
         String shell = "/bin/bash";
         ProcessBuilder pb = new ProcessBuilder(shell, "-c", command);
         pb.directory(primaryRoot.toFile());
