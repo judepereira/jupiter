@@ -9,8 +9,8 @@ import com.vaadin.flow.component.KeyModifier;
 import com.vaadin.flow.component.accordion.Accordion;
 import com.vaadin.flow.component.accordion.AccordionPanel;
 import com.vaadin.flow.component.checkbox.Checkbox;
-import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexLayout;
+import com.vaadin.flow.component.orderedlayout.Scroller;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
@@ -70,13 +70,10 @@ public class ChatComposer extends VerticalLayout {
         todosLayout.setPadding(false);
         todosLayout.setSpacing(false);
 
-        addTodoField.setPlaceholder("Add todo...");
+        addTodoField.setPlaceholder("Add a TODO...");
         addTodoField.setWidthFull();
 
-        var addBtn = new IconButton(VaadinIcon.PLUS.create());
-        addBtn.setLightMode();
-
-        var addRow = new FlexLayout(addTodoField, addBtn);
+        var addRow = new FlexLayout(addTodoField);
         addRow.setWidthFull();
         addRow.setAlignItems(FlexLayout.Alignment.CENTER);
         addRow.getStyle().set("gap", "var(--lumo-space-s)");
@@ -90,10 +87,13 @@ public class ChatComposer extends VerticalLayout {
         AccordionPanel panel = new AccordionPanel();
         panel.add(todosLayout);
         Accordion composerAccordion = new Accordion();
+        composerAccordion.setWidthFull();
         composerAccordion.add(panel);
         this.todoPanel = panel;
 
-        addBtn.addClickListener(ev -> {
+        addTodoField.setValueChangeMode(ValueChangeMode.EAGER);
+
+        addTodoField.addKeyDownListener(Key.ENTER, ev -> {
             var txt = addTodoField.getValue();
             if (txt == null || txt.trim().isEmpty()) {
                 return;
@@ -117,6 +117,8 @@ public class ChatComposer extends VerticalLayout {
             }
         });
 
+        composerAccordion.close();
+
         VerticalLayout controlPanel = new VerticalLayout(composerAccordion, messageInput, useCmdEnter);
         controlPanel.setPadding(false);
 
@@ -132,13 +134,15 @@ public class ChatComposer extends VerticalLayout {
     }
 
     public void refreshTodosFromTask() {
-        getUI().ifPresent(ui -> ui.access(this::refreshTodosForActiveTask));
+        refreshTodosForActiveTask();
     }
 
     private void refreshTodosForActiveTask() {
+        log.info("Refreshing todos for active task");
         todosContent.removeAll();
         var taskContext = activeTaskSupplier.get();
         if (taskContext == null) {
+            log.warn("No active task found");
             return;
         }
         List<Todo> todos;
@@ -151,7 +155,15 @@ public class ChatComposer extends VerticalLayout {
 
         long completed = todos.stream().filter(t -> t.getCompletedAt() != null).count();
         long total = todos.size();
-        todoPanel.setSummaryText("Todos — " + completed + " out of " + total + " complete");
+        if (total == 0) {
+            todoPanel.setSummaryText("No TODOs :)");
+        } else {
+            todoPanel.setSummaryText("TODOs — " + completed + "/" + total + " complete");
+        }
+
+        val wrapper = new VerticalLayout();
+        wrapper.setWidthFull();
+        wrapper.setSpacing(false);
 
         for (var t : todos) {
             Checkbox cb = new Checkbox(t.getText(), t.getCompletedAt() != null);
@@ -173,8 +185,14 @@ public class ChatComposer extends VerticalLayout {
                     AppNotifications.showError("Failed to update todo: " + ex.getMessage());
                 }
             });
-            todosContent.add(cb);
+            wrapper.add(cb);
         }
+
+        val scroller = new Scroller(wrapper);
+        scroller.setWidthFull();
+        scroller.setMaxHeight("150px");
+
+        todosContent.add(scroller);
     }
 
     public void addEntry(ChatMessage entry) {
