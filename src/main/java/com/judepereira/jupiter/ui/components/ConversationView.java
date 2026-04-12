@@ -47,9 +47,11 @@ public class ConversationView extends Grid<ChatMessage> {
                 panel.setWidthFull();
 
                 if (StringUtils.isNotBlank(t.toolArgsPayload())) {
-                    Html args = new Html(" <code>%s</code>".formatted(t.toolArgsPayload()));
-                    args.getStyle().setFont("monospace");
-                    title.add(new Span(": "), args);
+                    var args = t.toolArgsPayload();
+                    args = args.length()> 200? args.substring(0, 200) + "..." : args;
+                    Html argsEl = new Html(" <code>%s</code>".formatted(args));
+                    argsEl.getStyle().setFont("monospace");
+                    title.add(new Span(": "), argsEl);
                 }
 
                 if (StringUtils.isNotBlank(t.toolResultPayload())) {
