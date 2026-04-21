@@ -124,7 +124,7 @@ public class ChatComposer extends VerticalLayout {
 
         var conversationWrapper = new FlexLayout();
         conversationWrapper.setSizeFull();
-        conversationWrapper.add(conversationView, controlPanel);
+        conversationWrapper.add(new Scroller(conversationView), controlPanel);
         conversationWrapper.setFlexDirection(FlexLayout.FlexDirection.COLUMN);
         conversationWrapper.setFlexGrow(1, conversationView);
         controlPanel.getStyle().setMarginTop("auto");
