@@ -57,10 +57,7 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
 
         chatComposer = new ChatComposer(
                 message -> {
-                    var tc = getCurrentTaskContext();
-                    if (tc != null) {
-                        memoryService.appendMessage(tc.getTask().getSlug(), message);
-                    }
+                    memoryService.appendMessage(message.getTaskContext().getTask().getSlug(), message);
                 },
                 this::getCurrentTaskContext);
         splitLayout = new SplitLayout(chatComposer, reviewView);
@@ -150,9 +147,9 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
     private void switchTask(Task next, boolean updateUrl) {
         this.currentTask = next;
 
-        contexts.computeIfAbsent(next, _ -> createTaskContext(next));
+        val taskContext = contexts.computeIfAbsent(next, _ -> createTaskContext(next));
 
-        var conv = memoryService.getConversation(next.getSlug());
+        var conv = memoryService.getConversation(taskContext);
         chatComposer.setConversation(conv);
         chatComposer.refreshTodosFromTask();
 

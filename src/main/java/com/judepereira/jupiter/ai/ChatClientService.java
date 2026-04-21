@@ -1,6 +1,5 @@
 package com.judepereira.jupiter.ai;
 
-import com.judepereira.jupiter.ai.tools.ToolUtils;
 import com.judepereira.jupiter.dtos.ToolCallTrace;
 import com.judepereira.jupiter.shell.Shell;
 import com.judepereira.jupiter.shell.Shell.ExecutionResult;
@@ -13,7 +12,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -31,35 +29,51 @@ public class ChatClientService {
 
     public Flux<String> streamResponse(List<Object> tools, List<Message> chatHistory, String projectRoot,
                                        Consumer<ToolCallTrace> traceConsumer) {
-        if (projectRoot == null || projectRoot.isBlank()) {
-            throw new IllegalArgumentException("projectRoot must be provided");
-        }
 
-        var projectDir = new File(projectRoot);
-        if (!projectDir.exists() || !projectDir.isDirectory()) {
-            throw new IllegalArgumentException("projectRoot must point to an existing directory: " + projectRoot);
-        }
+        return Flux.create(emitter -> {
+            Thread.ofVirtual().start(() -> {
+                for (int i = 0; i < 20; i++) {
+                    emitter.next("i" + i + "\n");
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
 
-        boolean gitRepo = isGitRepo(projectDir);
-
-        String runtimeInfo = """
-                Here's some useful information about the environment you are running in:
-                  Working directory: %s
-                  Git repo detected: %s
-                  Platform: %s
-                  Today's date: %s
-                """.formatted(projectRoot, gitRepo ? "yes" : "no",
-                System.getProperty("os.name"), LocalDateTime.now());
-
-        var effectiveSystemPrompt = systemPrompt + "\n\n" + runtimeInfo;
-
-        var client = chatClientBuilder.build();
-        var prompt = client.prompt()
-                .system(effectiveSystemPrompt)
-                .messages(chatHistory)
-                .tools(ToolUtils.wrap(tools, traceConsumer));
-
-        return prompt.stream().content();
+                emitter.complete();
+            });
+        });
+//        if (projectRoot == null || projectRoot.isBlank()) {
+//            throw new IllegalArgumentException("projectRoot must be provided");
+//        }
+//
+//        var projectDir = new File(projectRoot);
+//        if (!projectDir.exists() || !projectDir.isDirectory()) {
+//            throw new IllegalArgumentException("projectRoot must point to an existing directory: " + projectRoot);
+//        }
+//
+//        boolean gitRepo = isGitRepo(projectDir);
+//
+//        String runtimeInfo = """
+//                Here's some useful information about the environment you are running in:
+//                  Working directory: %s
+//                  Git repo detected: %s
+//                  Platform: %s
+//                  Today's date: %s
+//                """.formatted(projectRoot, gitRepo ? "yes" : "no",
+//                System.getProperty("os.name"), LocalDateTime.now());
+//
+//        var effectiveSystemPrompt = systemPrompt + "\n\n" + runtimeInfo;
+//
+//        var client = chatClientBuilder.build();
+//        var prompt = client.prompt()
+//                .system(effectiveSystemPrompt)
+//                .messages(chatHistory)
+//                .tools(ToolUtils.wrap(tools, traceConsumer));
+//
+//        return prompt.stream().content();
     }
 
     private String loadSystemPrompt() {

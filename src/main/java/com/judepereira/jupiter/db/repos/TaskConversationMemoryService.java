@@ -3,6 +3,7 @@ package com.judepereira.jupiter.db.repos;
 import com.judepereira.jupiter.db.entities.Conversation;
 import com.judepereira.jupiter.dtos.ChatMessage;
 import com.judepereira.jupiter.dtos.ToolCallTrace;
+import com.judepereira.jupiter.ui.TaskContext;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Service;
@@ -25,8 +26,8 @@ public class TaskConversationMemoryService {
         return Objects.requireNonNull(slug, "Slug cannot be null").trim().toLowerCase(Locale.ENGLISH);
     }
 
-    public List<ChatMessage> getConversation(String slug) {
-        String key = normalize(slug);
+    public List<ChatMessage> getConversation(TaskContext tc) {
+        String key = normalize(tc.getTask().getSlug());
         return taskRepository.findBySlugIgnoreCase(key)
                 .map(task -> {
                     List<Conversation> rows = conversationRepository.findByTaskOrderByCreatedAtAscIdAsc(task);
@@ -35,14 +36,14 @@ public class TaskConversationMemoryService {
                         String role = row.getRole();
                         String content = row.getContent();
                         if ("user".equalsIgnoreCase(role)) {
-                            out.add(new ChatMessage(new UserMessage(content)));
+                            out.add(new ChatMessage(new UserMessage(content), tc));
                         } else {
                             if (row.getRole().equalsIgnoreCase("tool")) {
                                 out.add(new ChatMessage(new ToolCallTrace(
                                         row.getToolName(), row.getToolArgsPayload(), row.getToolResultPayload(),
-                                        row.getToolErrorPayload(), row.getToolStartedAt(), row.getToolDurationMillis())));
+                                        row.getToolErrorPayload(), row.getToolStartedAt(), row.getToolDurationMillis()), tc));
                             } else {
-                                out.add(new ChatMessage(new AssistantMessage(content)));
+                                out.add(new ChatMessage(new AssistantMessage(content), tc));
                             }
                         }
                     }

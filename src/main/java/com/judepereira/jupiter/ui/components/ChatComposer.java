@@ -124,7 +124,7 @@ public class ChatComposer extends VerticalLayout {
 
         var conversationWrapper = new FlexLayout();
         conversationWrapper.setSizeFull();
-        conversationWrapper.add(new Scroller(conversationView), controlPanel);
+        conversationWrapper.add(conversationView, controlPanel);
         conversationWrapper.setFlexDirection(FlexLayout.FlexDirection.COLUMN);
         conversationWrapper.setFlexGrow(1, conversationView);
         controlPanel.getStyle().setMarginTop("auto");
@@ -225,7 +225,7 @@ public class ChatComposer extends VerticalLayout {
             return;
         }
 
-        addEntry(new ChatMessage(new UserMessage(text)));
+        addEntry(new ChatMessage(new UserMessage(text), taskContext));
         messageInput.clear();
 
         var conversation = conversationView.getMessages().stream().map(ChatMessage::getMessage).filter(Objects::nonNull).toList();
@@ -240,30 +240,18 @@ public class ChatComposer extends VerticalLayout {
                     .getPath();
 
             final Object assistantLock = new Object();
-            final ChatMessage[] streamingEntry = new ChatMessage[1];
-            client.streamResponse(taskContext.getTools(), conversation, projectRoot,
-                    (ToolCallTrace trace) -> {
+            final ChatMessage streamingEntry = new ChatMessage(new AssistantMessage(content.toString()), taskContext);
+            client.streamResponse(taskContext.getTools(), conversation, projectRoot, (ToolCallTrace trace) -> {
                         synchronized (assistantLock) {
                             if (!taskContext.equals(this.activeTaskSupplier.get())) {
                                 return;
                             }
-                            ChatMessage tm = new ChatMessage(trace);
+                            ChatMessage tm = new ChatMessage(trace, taskContext);
                             conversationView.getUI().ifPresent(ui -> ui.access(() -> {
                                 if (!taskContext.equals(this.activeTaskSupplier.get())) {
                                     return;
                                 }
-                                if (streamingEntry[0] != null) {
-                                    var snapshot = conversationView.snapshot();
-                                    int idx = snapshot.indexOf(streamingEntry[0]);
-                                    if (idx >= 0) {
-                                        snapshot.add(idx, tm);
-                                    } else {
-                                        snapshot.add(tm);
-                                    }
-                                    conversationView.setMessages(snapshot);
-                                } else {
-                                    conversationView.addMessage(tm);
-                                }
+                                conversationView.addMessage(tm);
 
                                 refreshTodosForActiveTask();
                                 if (onMessageAdded != null) onMessageAdded.accept(tm);
@@ -278,53 +266,39 @@ public class ChatComposer extends VerticalLayout {
                         String current = content.toString();
 
                         synchronized (assistantLock) {
-                            if (streamingEntry[0] == null) {
-                                streamingEntry[0] = new ChatMessage(new AssistantMessage(current));
-                                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
-                                    if (!taskContext.equals(this.activeTaskSupplier.get())) {
-                                        return;
-                                    }
-                                    conversationView.addMessage(streamingEntry[0]);
-                                }));
-                            } else {
-                                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
-                                    if (!taskContext.equals(this.activeTaskSupplier.get())) {
-                                        return;
-                                    }
-                                    streamingEntry[0].setMessage(new AssistantMessage(current));
-                                    conversationView.refreshMessage(streamingEntry[0]);
-                                }));
-                            }
+                            conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                                if (!taskContext.equals(this.activeTaskSupplier.get())) {
+                                    return;
+                                }
+
+                                conversationView.addMessage(streamingEntry);
+                                conversationView.appendText(token, streamingEntry);
+                                streamingEntry.setMessage(new AssistantMessage(current));
+                            }));
                         }
                     })
                     .doOnError(err -> {
-                        String current = content + "\n\n[Error: " + err.getMessage() + "]";
+                        String token = "\n\n[Error: " + err.getMessage() + "]";
+                        String current = content + token;
 
                         synchronized (assistantLock) {
-                            if (streamingEntry[0] == null) {
-                                streamingEntry[0] = new ChatMessage(new AssistantMessage(current));
-                                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
-                                    if (!taskContext.equals(this.activeTaskSupplier.get())) {
-                                        return;
-                                    }
-                                    conversationView.addMessage(streamingEntry[0]);
-                                }));
-                            } else {
-                                conversationView.getUI().ifPresent(ui -> ui.access(() -> {
-                                    streamingEntry[0].setMessage(new AssistantMessage(current));
-                                    if (taskContext.equals(this.activeTaskSupplier.get())) {
-                                        conversationView.refreshMessage(streamingEntry[0]);
-                                    }
-                                }));
-                            }
+                            conversationView.getUI().ifPresent(ui -> ui.access(() -> {
+                                if (!taskContext.equals(this.activeTaskSupplier.get())) {
+                                    return;
+                                }
+
+                                conversationView.addMessage(streamingEntry);
+                                conversationView.appendText(token, streamingEntry);
+                                streamingEntry.setMessage(new AssistantMessage(current));
+                            }));
                         }
-                        if (onMessageAdded != null && taskContext.equals(this.activeTaskSupplier.get())) {
-                            onMessageAdded.accept(streamingEntry[0]);
+                        if (onMessageAdded != null) {
+                            onMessageAdded.accept(streamingEntry);
                         }
                     })
                     .doOnComplete(() -> {
-                        if (onMessageAdded != null && streamingEntry[0] != null && taskContext.equals(this.activeTaskSupplier.get())) {
-                            onMessageAdded.accept(streamingEntry[0]);
+                        if (onMessageAdded != null) {
+                            onMessageAdded.accept(streamingEntry);
                         }
                     })
                     .blockLast();
