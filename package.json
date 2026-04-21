@@ -91,7 +91,7 @@
     },
     "hash": "b705e8e252cd9df774628e558b9d40ccc896e443ddaca1b8ac156c10a0acde53"
   },
-  "pnpm": { },
+  "pnpm": {},
   "overrides": {
     "@vaadin/bundles": "$@vaadin/bundles",
     "@vaadin/polymer-legacy-adapter": "$@vaadin/polymer-legacy-adapter",
