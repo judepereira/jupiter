@@ -3,6 +3,8 @@ package com.judepereira.jupiter.ui.components;
 import com.judepereira.jupiter.dtos.ChatMessage;
 import com.vaadin.flow.component.messages.MessageList;
 import com.vaadin.flow.component.messages.MessageListItem;
+import com.vaadin.flow.component.orderedlayout.Scroller;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import lombok.val;
@@ -11,23 +13,32 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.*;
 
 @Log4j2
-public class ConversationView extends MessageList {
+public class ConversationView extends VerticalLayout {
 
     @Getter
     private final List<ChatMessage> messages = Collections.synchronizedList(new ArrayList<>());
+    private final MessageList messageList = new MessageList();
+    private final Scroller scroller = new Scroller(messageList);
 
     public ConversationView() {
-        setMarkdown(true);
-        setItems(new LinkedList<>());
+        setPadding(false);
+        setWidthFull();
+        scroller.setWidthFull();
+        messageList.setMarkdown(true);
+        messageList.setItems(new LinkedList<>());
+        addAndExpand(scroller);
     }
 
     private final Map<ChatMessage, MessageListItem> messageToItem = new HashMap<>();
 
     private MessageListItem renderChatMessage(ChatMessage entry) {
         val md = new StringBuilder();
+        String username;
 
         if (entry.getToolTrace() != null) {
             var t = entry.getToolTrace();
+
+            username = "Jupiter";
 
             md.append("**%s**".formatted(t.toolName()));
 
@@ -47,23 +58,29 @@ public class ConversationView extends MessageList {
 
         } else {
             md.append(entry.getMessage().getText());
+            username = switch (entry.getMessage().getMessageType()) {
+                case USER -> "You";
+                default -> "Jupiter";
+            };
         }
         MessageListItem item = new MessageListItem(md.toString());
+        item.setUserName(username);
         return item;
     }
 
     public synchronized void addMessage(ChatMessage message) {
         messageToItem.computeIfAbsent(message, (_) -> {
             val item = renderChatMessage(message);
-            addItem(item);
+            messageList.addItem(item);
             messages.add(message);
             return item;
         });
     }
 
     public synchronized void setMessages(List<ChatMessage> newMessages) {
-        setItems(new LinkedList<>());
+        messageList.setItems(new LinkedList<>());
         newMessages.forEach(this::addMessage);
+        scroller.scrollToBottom();
     }
 
     public synchronized void appendText(final String text, ChatMessage message) {
@@ -72,7 +89,7 @@ public class ConversationView extends MessageList {
     }
 
     public synchronized void clearMessages() {
-        setItems(new LinkedList<>());
+        messageList.setItems(new LinkedList<>());
     }
 
     public synchronized List<ChatMessage> snapshot() {

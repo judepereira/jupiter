@@ -37,22 +37,22 @@ public class Conversation {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @Column(name = "tool_name", nullable = true)
+    @Column(name = "tool_name")
     private String toolName;
 
-    @Column(name = "tool_args_payload", columnDefinition = "TEXT", nullable = true)
+    @Column(name = "tool_args_payload", columnDefinition = "TEXT")
     private String toolArgsPayload;
 
-    @Column(name = "tool_result_payload", columnDefinition = "TEXT", nullable = true)
+    @Column(name = "tool_result_payload", columnDefinition = "TEXT")
     private String toolResultPayload;
 
-    @Column(name = "tool_error_payload", columnDefinition = "TEXT", nullable = true)
+    @Column(name = "tool_error_payload", columnDefinition = "TEXT")
     private String toolErrorPayload;
 
-    @Column(name = "tool_started_at", nullable = true)
+    @Column(name = "tool_started_at")
     private Instant toolStartedAt;
 
-    @Column(name = "tool_duration_millis", nullable = true)
+    @Column(name = "tool_duration_millis")
     private Long toolDurationMillis;
 
     public Conversation(Task task, String role, String content, Instant createdAt) {

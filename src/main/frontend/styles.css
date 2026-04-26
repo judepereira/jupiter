@@ -1,0 +1,20 @@
+/* Add your styles here */
+.vaadin-button-container > [part=label] {
+    cursor: pointer;
+}
+
+vaadin-message > vaadin-avatar {
+    display: none;
+}
+
+vaadin-scroller {
+    flex: 1;
+    scroll-snap-type: y proximity;
+}
+
+vaadin-scroller::after {
+    display: block;
+    content: '';
+    scroll-snap-align: end;
+    min-height: 1px;
+}
