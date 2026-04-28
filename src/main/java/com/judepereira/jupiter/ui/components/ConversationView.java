@@ -8,7 +8,6 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import lombok.val;
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
 
@@ -34,21 +33,21 @@ public class ConversationView extends VerticalLayout {
     private String toolTraceMarkdown(ChatMessage entry) {
         var t = entry.getToolTrace();
         val md = new StringBuilder();
-        md.append("**%s**".formatted(t.toolName()));
+        md.append("*%s*".formatted(t.toolName()));
 
-        if (StringUtils.isNotBlank(t.toolArgsPayload())) {
-            var args = t.toolArgsPayload();
-            args = args.length() > 200 ? args.substring(0, 200) + "..." : args;
-            md.append(": `%s`".formatted(args));
-        }
+//        if (StringUtils.isNotBlank(t.toolArgsPayload())) {
+//            var args = t.toolArgsPayload();
+//            args = args.length() > 200 ? args.substring(0, 200) + "..." : args;
+//            md.append(": `%s`".formatted(args));
+//        }
 
-        if (StringUtils.isNotBlank(t.toolResultPayload())) {
-            md.append("<details>%s</details>".formatted(t.toolResultPayload()));
-        }
-
-        if (StringUtils.isNotBlank(t.toolErrorPayload())) {
-            md.append("<details>%s</details>".formatted(t.toolErrorPayload()));
-        }
+//        if (StringUtils.isNotBlank(t.toolResultPayload())) {
+//            md.append("<details>%s</details>".formatted(t.toolResultPayload()));
+//        }
+//
+//        if (StringUtils.isNotBlank(t.toolErrorPayload())) {
+//            md.append("<details>%s</details>".formatted(t.toolErrorPayload()));
+//        }
 
         return md.toString();
     }
@@ -84,7 +83,7 @@ public class ConversationView extends VerticalLayout {
                 }
 
                 String md = toolTraceMarkdown(message);
-                existingItem.appendText("\n\n" + md);
+                existingItem.appendText(", " +md);
                 messages.add(message);
                 messageToItem.put(message, existingItem);
                 return;
