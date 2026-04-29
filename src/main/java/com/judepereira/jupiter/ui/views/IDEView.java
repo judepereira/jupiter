@@ -12,6 +12,11 @@ import com.judepereira.jupiter.ui.components.ChatComposer;
 import com.judepereira.jupiter.ui.components.CreateTaskDialog;
 import com.judepereira.jupiter.ui.components.IconButton;
 import com.judepereira.jupiter.ui.components.ReviewView;
+import com.judepereira.jupiter.ui.components.AppNotifications;
+import com.judepereira.jupiter.git.GitDiffService;
+import com.judepereira.jupiter.db.entities.Project;
+import com.judepereira.jupiter.ui.views.TaskProjectWatcher;
+import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.KeyModifier;
 import com.vaadin.flow.component.UI;
@@ -21,18 +26,20 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.splitlayout.SplitLayout;
 import com.vaadin.flow.router.*;
 import lombok.val;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.HashMap;
 import java.util.Map;
 
+@Log4j2
 @Route("ide/:task")
 @PageTitle("Jupiter")
 class IDEView extends BaseLayout implements BeforeEnterObserver {
     private final Map<Task, TaskContext> contexts = new HashMap<>();
 
     private final ChatComposer chatComposer;
-    private final ReviewView reviewView = new ReviewView();
+    private final ReviewView reviewView;
     private final ChatClientService chatClientService;
     private final TaskService taskService;
     private final ProjectService projectService;
@@ -46,7 +53,10 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
 
     private final SplitLayout splitLayout;
 
-    IDEView(TaskService taskService, ProjectService projectService,
+    private final GitDiffService gitDiffService;
+    private final Map<Task, TaskProjectWatcher> watchers = new HashMap<>();
+
+    IDEView(GitDiffService gitDiffService, TaskService taskService, ProjectService projectService,
             TaskConversationMemoryService memoryService, TaskRepository taskRepository,
             TodoService todoService, ChatClient.Builder chatClientBuilder) {
         setSizeFull();
@@ -54,12 +64,14 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
         this.taskService = taskService;
         this.projectService = projectService;
         this.memoryService = memoryService;
+        this.gitDiffService = gitDiffService;
 
         chatComposer = new ChatComposer(
                 message -> {
                     memoryService.appendMessage(message.getTaskContext().getTask().getSlug(), message);
                 },
                 this::getCurrentTaskContext);
+        reviewView = new ReviewView(gitDiffService);
         splitLayout = new SplitLayout(chatComposer, reviewView);
         splitLayout.setSizeFull();
         splitLayout.setSplitterPosition(62);
@@ -162,6 +174,44 @@ class IDEView extends BaseLayout implements BeforeEnterObserver {
 
         next.setLastAccessed(System.currentTimeMillis());
         taskRepository.save(next);
+        // ensure review updates for the selected task
+        reviewView.renderTask(next);
+
+        // ensure we have a filesystem watcher for this task's project
+        if (!watchers.containsKey(next)) {
+            try {
+                Project project = next.getProjects().stream().findFirst().orElse(null);
+                if (project == null || project.getPath() == null || project.getPath().isBlank()) {
+                    AppNotifications.showError("Task has no associated project path");
+                } else {
+                    var watcher = new TaskProjectWatcher(project.getPath(), changedPath -> {
+                        getUI().ifPresent(ui -> ui.access(() -> {
+                            if (currentTask != null) {
+                                reviewView.renderTask(currentTask);
+                            }
+                        }));
+                    });
+                    watcher.start();
+                    watchers.put(next, watcher);
+                }
+            } catch (Exception e) {
+                AppNotifications.showError("Failed to start project watcher: " + e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        watchers.values().forEach(w -> {
+            try {
+                w.stop();
+            } catch (Exception e) {
+                log.error("Error stopping watcher during detach", e);
+                AppNotifications.showError("Error stopping watcher: " + e.getMessage());
+            }
+        });
+        watchers.clear();
+        super.onDetach(detachEvent);
     }
 
     private void openCreateTaskDialog() {
