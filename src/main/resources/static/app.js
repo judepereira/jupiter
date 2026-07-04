@@ -142,6 +142,86 @@
     // Chat composer logic: kept outside the divider-guard so it runs even when
     // divider or shell are absent (HTMX swaps may only render chat fragments).
     (function(){
+        // Keep auto-scroll state in this closure so we can detect when the
+        // message count increases and only then scroll the history container.
+        // Initialized to -1 so the very first render will trigger a single
+        // scroll-to-bottom and then adopt the observed count.
+        let lastMessageCount = -1;
+        let chatAutoScrollBound = false;
+
+        function scrollChatToBottom(){
+            try{
+                const history = document.getElementById('chat-history');
+                const list = document.getElementById('chat-messages-list');
+                if(!history || !list) return;
+                // Use rAF to ensure layout is settled before manipulating scroll
+                requestAnimationFrame(()=>{
+                    // Defensive: only set when it actually would move
+                    const target = history.scrollHeight - history.clientHeight;
+                    if(Number.isFinite(target)) history.scrollTop = target;
+                });
+            }catch(_){ /* defensive */ }
+        }
+
+        function checkAndMaybeScroll(){
+            try{
+                const list = document.getElementById('chat-messages-list');
+                if(!list){
+                    // If list is absent, reset sentinel so future renders can
+                    // trigger the initial scroll.
+                    lastMessageCount = -1;
+                    return;
+                }
+                const count = list.children ? list.children.length : 0;
+                // On first observed render, always scroll once.
+                if(lastMessageCount === -1){
+                    lastMessageCount = count;
+                    scrollChatToBottom();
+                    return;
+                }
+                if(count > lastMessageCount){
+                    lastMessageCount = count;
+                    scrollChatToBottom();
+                } else {
+                    // Update tracked count even when messages are removed or
+                    // unchanged so future increases are measured correctly.
+                    lastMessageCount = count;
+                }
+            }catch(_){ /* defensive */ }
+        }
+
+        function bindAutoScrollListeners(){
+            if(chatAutoScrollBound) return;
+            chatAutoScrollBound = true;
+            // Integrate with HTMX lifecycle. Use a small async window so the
+            // swapped DOM is attached before we measure. We intentionally only
+            // trigger scroll when the message count increases (see check fn).
+            // Only react to HTMX swaps that actually touch the chat fragment.
+            // This avoids scheduling scroll work for unrelated swaps (eg: sidebars,
+            // lists) which could otherwise cause an initial or unexpected
+            // scroll-to-bottom.
+
+            function htmxChatListener(evt){
+                try{
+                    // Prefer HTMX-provided detail.target but fall back to the
+                    // event target — this improves compatibility with different
+                    // dispatching paths while still avoiding global reactions.
+                    const trg = (evt && evt.detail && evt.detail.target) || evt.target;
+                    if(!trg) return;
+
+                    // If the swap directly targeted the chat history/list or is
+                    // contained within it, run the check.
+                    if(trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
+                       (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))){
+                        Promise.resolve().then(checkAndMaybeScroll);
+                    }
+                }catch(_){ /* defensive */ }
+            }
+
+            document.body.addEventListener('htmx:afterSwap', htmxChatListener, true);
+            document.body.addEventListener('htmx:afterSettle', htmxChatListener, true);
+        }
+
         function initChatComposer(){
             try{
                 const form = document.getElementById('chat-send-form');
@@ -199,6 +279,10 @@
                 // Initial resize to match any prefilled content
                 // Use rAF to allow browser to compute styles if needed
                 requestAnimationFrame(autoResize);
+                // Bind auto-scroll listeners once chat composer exists on page
+                // and perform an initial check/scroll.
+                bindAutoScrollListeners();
+                checkAndMaybeScroll();
             }catch(_){ /* defensive - don't break other UI */ }
         }
 
