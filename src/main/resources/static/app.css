@@ -4,6 +4,8 @@
 
 :root {
     --rail-width: 40px;
+    /* width of the review panel (can be overridden by JS during drag) */
+    --review-width: 40%;
     --rail-bg: #0f1724; /* dark navy */
     --rail-fg: #cbd5e1; /* light */
     --panel-bg: #ffffff;
@@ -20,8 +22,8 @@ body {
 /* Shell grid: rails + two main panels */
 #shell.shell-root {
     display: grid;
-    /* allow the review column to shrink to zero when hidden by using auto instead of a fixed 40% */
-    grid-template-columns: var(--rail-width) 1fr auto var(--rail-width);
+    /* rails + left + divider + review + right rail */
+    grid-template-columns: var(--rail-width) 1fr 12px var(--review-width) var(--rail-width);
     grid-template-rows: 100vh;
     gap: 12px;
     align-items: stretch;
@@ -48,7 +50,7 @@ body {
 }
 
 .right-rail {
-    grid-column: 4;
+    grid-column: 5;
 }
 
 .rail .panel-placeholder {
@@ -99,11 +101,35 @@ body {
 }
 
 .review-panel {
-    grid-column: 3;
+    /* moved to the explicit review column (4th column) */
+    grid-column: 4;
     display: flex;
     flex-direction: column;
-    width: 40%;
+    width: var(--review-width);
     min-width: 220px;
+}
+
+/* Divider between left panel and review */
+.panel-divider {
+    grid-column: 3;
+    width: 12px;
+    background: transparent;
+    cursor: col-resize;
+    display: block;
+    align-self: stretch;
+    transition: background-color 120ms ease;
+}
+.panel-divider:hover {
+    background: rgba(0,0,0,0.03);
+}
+.panel-divider:active,
+.panel-divider.dragging {
+    background: rgba(0,0,0,0.06);
+}
+
+/* hide divider when review panel is closed or explicitly hidden by JS */
+.panel-divider.hidden {
+    display: none;
 }
 
 /* closed modifier: fully remove the review panel from layout and visual chrome */
@@ -274,6 +300,11 @@ body {
         width: 100%;
         min-width: 0;
         max-width: 100%;
+    }
+
+    /* hide divider on small screens where review stacks */
+    .panel-divider {
+        display: none;
     }
 
     /* collapse review by default on small screens to leave space for chat.

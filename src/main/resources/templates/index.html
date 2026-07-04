@@ -24,6 +24,9 @@
         <div id="chat-container" th:replace="fragments/chat :: chat">Loading chat...</div>
     </main>
 
+    <!-- draggable divider between left panel and review panel -->
+    <div id="panel-divider" class="panel-divider" role="separator" aria-label="Resize review panel" title="Resize review panel" aria-orientation="vertical" tabindex="0"></div>
+
     <!-- main right content: review/diff -->
     <aside id="review" class="main-panel review-panel" th:replace="fragments/review :: panel">Loading review...</aside>
 
@@ -38,5 +41,7 @@
     </aside>
 
 </div>
+
+<script src="/app.js"></script>
 </body>
 </html>
