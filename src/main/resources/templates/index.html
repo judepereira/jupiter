@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Jupiter UI Shell</title>
+    <!-- HTMX and other libs are expected to be included in real templates -->
+    <script src="https://unpkg.com/htmx.org@1.9.4"></script>
+    <link rel="stylesheet" href="/app.css">
+    <!-- tiny helper for swapping animations could be added later -->
+</head>
+<body>
+<div id="shell" class="shell-root">
+
+    <!-- extreme left rail -->
+    <aside id="left-rail" class="rail left-rail">
+        <div th:replace="fragments/panel :: panel(panelName='left-rail')">Left rail</div>
+        <div id="left-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
+    </aside>
+
+    <!-- main left content: chat composer + history -->
+    <main id="left-panel" class="main-panel left-panel">
+        <div id="chat-container" th:replace="fragments/chat :: chat">Loading chat...</div>
+    </main>
+
+    <!-- main right content: review/diff -->
+    <aside id="review" class="main-panel review-panel" th:replace="fragments/review :: panel">Loading review...</aside>
+
+    <!-- extreme right rail -->
+    <aside id="right-rail" class="rail right-rail">
+        <div th:replace="fragments/panel :: panel(panelName='right-rail')">Right rail</div>
+        <div id="right-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
+        <!-- control to toggle review panel for convenience -->
+        <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/review/toggle" hx-target="#review" hx-swap="outerHTML">Toggle Review</button>
+    </aside>
+
+</div>
+</body>
+</html>

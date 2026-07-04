@@ -1,0 +1,29 @@
+<!doctype html>
+<aside th:fragment="panel" id="review" class="main-panel review-panel">
+    <div id="review-panel" class="review-shell" th:attr="data-open=${reviewPanelOpen}">
+        <div class="review-header">
+            <h2>Review</h2>
+            <button id="review-toggle-btn" class="review-toggle" hx-post="/ui/review/toggle" hx-target="#review" hx-swap="outerHTML">Close</button>
+        </div>
+
+        <div th:if="${reviewPanelOpen}">
+            <nav id="changed-files-list" class="changed-files">
+                <h3>Changed files</h3>
+                <ul>
+                    <li th:each="f : ${changedFiles}" class="changed-file-item">
+                        <a th:href="@{/ui/review/file/{id}(id=${f.id})}"
+                           hx-get="@{/ui/review/file/{id}(id=${f.id})}"
+                           th:attr="hx-target='#file-diff'"
+                           hx-swap="outerHTML"
+                           th:text="${f.path}"></a>
+                    </li>
+                </ul>
+            </nav>
+
+            <section id="file-diff" class="file-diff-container" th:replace="fragments/file-diff :: diff">Loading diff...</section>
+        </div>
+
+        <div th:unless="${reviewPanelOpen}" id="review-collapsed" class="review-collapsed">
+            <p>Review panel closed.</p>
+        </div>
+    </aside>

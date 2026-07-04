@@ -1,0 +1,18 @@
+<!doctype html>
+<div th:fragment="chat" id="chat-container">
+    <section id="chat" class="chat-shell">
+        <div id="chat-history" class="messages" aria-live="polite">
+            <ul id="chat-messages-list">
+                <li th:each="m : ${chatMessages}">
+                    <strong th:text="${m.role}"></strong>: <span th:text="${m.text}"></span>
+                </li>
+            </ul>
+        </div>
+
+        <form id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-container" hx-swap="outerHTML">
+            <label for="chat-input" class="sr-only">Message</label>
+            <input id="chat-input" name="message" autocomplete="off" />
+            <button id="chat-send-btn" type="submit">Send</button>
+        </form>
+    </section>
+</div>

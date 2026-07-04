@@ -1,0 +1,125 @@
+/* Jupiter HTMX UI Shell - app.css
+   Simple, plain CSS for layout: left/right rails + left chat + right review panel
+*/
+
+:root{
+  --rail-width: 56px;
+  --rail-bg: #0f1724; /* dark navy */
+  --rail-fg: #cbd5e1; /* light */
+  --panel-bg: #ffffff;
+  --panel-border: #e6eef6;
+  --muted: #6b7280;
+  --accent: #2563eb;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Shell grid: rails + two main panels */
+#shell.shell-root{
+  display: grid;
+  grid-template-columns: var(--rail-width) 1fr 40% var(--rail-width);
+  grid-template-rows: 100vh;
+  gap: 12px;
+  align-items: stretch;
+  background: #f7fbff;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: 0;
+}
+
+/* Rails */
+.rail{
+  background: var(--rail-bg);
+  color: var(--rail-fg);
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06) inset;
+}
+.left-rail{ grid-column: 1; }
+.right-rail{ grid-column: 4; }
+
+.rail .panel-placeholder{ display:none; } /* hidden by default */
+.rail .rail-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rail-fg);
+  border: none;
+  cursor: pointer;
+}
+.rail .rail-btn:hover{ background: rgba(255,255,255,0.05); }
+
+/* Main panels */
+.main-panel{
+  background: var(--panel-bg);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+  border: 1px solid var(--panel-border);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.left-panel{ grid-column: 2; display:flex; flex-direction:column; gap:8px; }
+.review-panel{ grid-column: 3; display:flex; flex-direction:column; min-width: 220px; }
+
+/* Chat area: scroll history + pinned composer */
+.chat-shell{ display:flex; flex-direction:column; height:100%; }
+#chat-history.messages{ flex:1 1 auto; overflow:auto; padding:8px; border-radius:6px; background: #f3f7fb; border:1px solid #e8f0fb; }
+#chat-messages-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.chat-form{ display:flex; gap:8px; padding-top:8px; border-top:1px solid #f0f4f8; }
+.chat-form input{ flex:1 1 auto; padding:8px 10px; border-radius:6px; border:1px solid #dbeafe; }
+.chat-form button{ padding:8px 12px; background:var(--accent); color:white; border:none; border-radius:6px; cursor:pointer; }
+
+/* Review shell: header + split area */
+.review-shell{ display:flex; flex-direction:column; height:100%; }
+.review-header{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+.review-toggle{ background:transparent; border:1px solid var(--panel-border); padding:6px 8px; border-radius:6px; cursor:pointer; }
+
+/* When review closed/collapsed, show a compact rail-like stub */
+.review-shell[data-open="false"], .review-shell.closed{
+  width: var(--rail-width);
+  min-width: var(--rail-width);
+  max-width: var(--rail-width);
+  padding:6px;
+  overflow:visible;
+}
+.review-shell[data-open="false"] .changed-files,
+.review-shell[data-open="false"] .file-diff-container,
+.review-shell.closed .changed-files,
+.review-shell.closed .file-diff-container{
+  display:none;
+}
+.review-shell[data-open="false"] .review-header h2,
+.review-shell.closed .review-header h2{ display:none; }
+.review-collapsed{ writing-mode:vertical-rl; transform:rotate(180deg); font-size:12px; color:var(--muted); }
+
+/* Review internal split: files list + diff preview */
+.changed-files{ flex:0 0 35%; overflow:auto; border-right:1px dashed #e6eef6; padding-right:8px; }
+.file-diff-container{ flex:1 1 auto; overflow:auto; padding-left:8px; }
+.file-diff pre{ white-space:pre-wrap; word-break:break-word; font-family:monospace; font-size:13px; background:#fff; padding:8px; border-radius:6px; }
+
+/* file list styles */
+.changed-files ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.changed-file-item a{ display:block; padding:6px 8px; border-radius:6px; color:var(--accent); text-decoration:none; }
+.changed-file-item a:hover{ background:#f1f9ff; }
+
+/* Responsive: reduce columns on small screens but keep rails visible */
+@media (max-width: 900px){
+  #shell.shell-root{ grid-template-columns: var(--rail-width) 1fr var(--rail-width); grid-template-rows: 1fr; }
+  .review-panel{ position:relative; grid-column: 2 / span 1; order:3; width:100%; min-width:0; max-width:100%; }
+  /* collapse review by default on small screens to leave space for chat */
+  .review-shell[data-open="false"], .review-shell.closed{ display:block; width:48px; min-width:48px; max-width:48px; }
+}
+
+/* Accessibility helpers */
+.sr-only{ position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
