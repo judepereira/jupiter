@@ -11,7 +11,7 @@
 
         <form id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-container" hx-swap="outerHTML">
             <label for="chat-input" class="sr-only">Message</label>
-            <input id="chat-input" name="message" autocomplete="off" />
+            <textarea id="chat-input" name="message" rows="1" autocomplete="off"></textarea>
             <button id="chat-send-btn" type="submit">Send</button>
         </form>
     </section>

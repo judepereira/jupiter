@@ -233,11 +233,25 @@ body {
     border-top: 1px solid #f0f4f8;
 }
 
-.chat-form input {
+.chat-form input,
+.chat-form textarea,
+#chat-input {
     flex: 1 1 auto;
     padding: 8px 10px;
     border-radius: 6px;
     border: 1px solid #dbeafe;
+    font: inherit;
+}
+
+/* Textarea specific: prevent manual resize, keep single-line height and
+   grow visually up to a limit. Overflow will scroll when exceeding max-height. */
+.chat-form textarea,
+#chat-input {
+    resize: none;
+    overflow-y: hidden;
+    line-height: 1.4;
+    min-height: 1.4em; /* roughly single-line */
+    max-height: calc(1.4em * 10 + 16px); /* ~10 lines plus padding */
 }
 
 .chat-form button {
@@ -322,6 +336,12 @@ body {
     background: #fff;
     padding: 8px;
     border-radius: 6px;
+}
+
+/* Preserve newlines in chat message text */
+#chat-messages-list li span,
+.chat-message-text {
+    white-space: pre-wrap;
 }
 
 /* file list styles */
