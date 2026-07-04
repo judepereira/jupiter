@@ -42,12 +42,11 @@
         const gap = parseFloat(gapStr) || 12;
         // divider width from layout
         const dividerRect = divider.getBoundingClientRect();
-        const dividerW = Math.max(1, Math.floor(dividerRect.width)) || 12;
+        const dividerW = Math.max(1, Math.floor(dividerRect.width)) || 3;
 
         // review right edge sits left of the right rail by gap
         const reviewRight = shellRect.right - railWidth - gap;
-        // treat pointer X as the divider center; account for half divider and half gap between divider and review
-        const pointerCenter = e.clientX + (dividerW / 2) + (gap / 2);
+        const pointerCenter = e.clientX + (dividerW / 2) + (gap);
         const reviewPx = Math.floor(reviewRight - pointerCenter);
         setReviewWidthPx(reviewPx);
     }

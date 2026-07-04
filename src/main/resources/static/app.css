@@ -12,6 +12,7 @@
     --panel-border: #e6eef6;
     --muted: #6b7280;
     --accent: #2563eb;
+    --divider-background-hover: rgb(0 0 0 / 0.46);
 }
 
 body {
@@ -23,7 +24,7 @@ body {
 #shell.shell-root {
     display: grid;
     /* rails + left + divider + review + right rail */
-    grid-template-columns: var(--rail-width) 1fr 12px var(--review-width) var(--rail-width);
+    grid-template-columns: var(--rail-width) 1fr 3px var(--review-width) var(--rail-width);
     grid-template-rows: 100vh;
     gap: 12px;
     align-items: stretch;
@@ -112,19 +113,19 @@ body {
 /* Divider between left panel and review */
 .panel-divider {
     grid-column: 3;
-    width: 12px;
-    background: rgb(0 0 0 / 0.49);
+    width: 3px;
+    background: rgb(0 0 0 / 0.09);
     cursor: col-resize;
     display: block;
     align-self: stretch;
     transition: background-color 120ms ease;
 }
 .panel-divider:hover {
-    background: rgb(0 0 0 / 0.78);
+    background: var(--divider-background-hover);
 }
 .panel-divider:active,
 .panel-divider.dragging {
-    background: rgb(0 0 0 / 0.78);
+    background: var(--divider-background-hover);
 }
 
 /* hide divider when review panel is closed or explicitly hidden by JS */
