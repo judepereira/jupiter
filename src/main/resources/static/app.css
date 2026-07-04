@@ -21,17 +21,47 @@ body {
 }
 
 /* Shell grid: rails + two main panels */
+/* Base shell grid. The explicit open/closed variants below toggle the
+   review column footprint by adding a class to #shell (see app.js). On
+   small screens the media query overrides and the shell classes are
+   removed by JS so the stacked layout applies. */
+/* Default to the desktop 5-column layout as a safe fallback so elements
+   that assume explicit column indices (eg. .right-rail { grid-column: 5 })
+   never end up in an implicit row during transient states (HTMX swaps,
+   classes briefly missing, etc). The review-open/review-closed modifiers
+   still explicitly toggle behavior but the base guarantees a stable
+   desktop layout when no modifier class is present. */
 #shell.shell-root {
     display: grid;
-    /* rails + left + divider + review + right rail */
-    grid-template-columns: var(--rail-width) 1fr 3px var(--review-width) var(--rail-width);
     grid-template-rows: 100vh;
+    /* fallback desktop layout: rail | main | divider | review | rail */
+    grid-template-columns: var(--rail-width) 1fr 3px var(--review-width) var(--rail-width);
     gap: 12px;
     align-items: stretch;
     background: #f7fbff;
     height: 100vh;
     box-sizing: border-box;
     padding: 0;
+    /* Prevent transient horizontal overflow when grid columns are
+       programmatically collapsed. The shell handles layout of all
+       panels so hiding x-overflow here avoids scrollbars appearing
+       while preserving vertical scrolling in children. */
+    overflow-x: hidden;
+}
+
+/* open: include divider + review column */
+#shell.shell-root.review-open {
+    grid-template-columns: var(--rail-width) 1fr 3px var(--review-width) var(--rail-width);
+}
+
+/* closed: keep the 5-column desktop grid but collapse the divider
+   and review columns to 0 width so the right-rail remains in column 5.
+   This prevents transient layout reflow where the right-rail can be
+   placed into an implicit row (appearing at the bottom) when classes
+   toggle during HTMX swaps or rapid state changes. Visual chrome is
+   still removed via .panel-divider.hidden and .review-panel.closed. */
+#shell.shell-root.review-closed {
+    grid-template-columns: var(--rail-width) 1fr 0px 0px var(--rail-width);
 }
 
 /* Rails */
@@ -51,8 +81,13 @@ body {
 }
 
 .right-rail {
-    grid-column: 5;
+    grid-column: 5; /* default for desktop when review is present */
 }
+
+
+/* NOTE: do NOT move .right-rail on desktop when review is closed.
+   The right-rail must always remain in column 5 on desktop. Small
+   screens still override this via the media query below. */
 
 .rail .panel-placeholder {
     display: none;
@@ -106,8 +141,13 @@ body {
     grid-column: 4;
     display: flex;
     flex-direction: column;
-    width: var(--review-width);
-    min-width: 220px;
+    width: 100%;
+    /* allow the review column to fully collapse when the shell
+       requests it (review-closed). Some browsers will honor an
+       element's min-width even when grid column is 0 which can
+       produce off-canvas overflow; using 0 here + a stronger
+       min-width when open prevents that. */
+    min-width: 0;
 }
 
 /* Divider between left panel and review */
@@ -136,6 +176,25 @@ body {
 /* closed modifier: fully remove the review panel from layout and visual chrome */
 .review-panel.closed {
     display: none;
+}
+
+/* Defensive closed-state styling when shell has collapsed the review
+   column. This forces the review panel to produce no width/footprint
+   and prevents horizontal overflow during HTMX swaps or transient
+   states where the element might still be present in the DOM. */
+#shell.shell-root.review-closed .review-panel {
+    min-width: 0 !important;
+    max-width: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+}
+
+/* When review is explicitly open on desktop ensure a reasonable
+   minimum width is respected for usability. The JS drag clamp will
+   also enforce a pixel minimum, but adding this rule preserves the
+   previous visual behavior while avoiding overflow when closed. */
+#shell.shell-root.review-open .review-panel {
+    min-width: 220px;
 }
 
 /* Chat area: scroll history + pinned composer */
@@ -301,6 +360,15 @@ body {
         width: 100%;
         min-width: 0;
         max-width: 100%;
+    }
+
+    /* Ensure the right rail sits in the 3rd column on small screens
+       (the media-query reduces the shell to 3 columns). Without this
+       explicit rule a desktop-only grid-column:5 can cause the rail to
+       be placed into an implicit row and appear at the bottom. */
+    .right-rail {
+        grid-column: 3;
+        order: 4;
     }
 
     /* hide divider on small screens where review stacks */

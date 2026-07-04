@@ -68,37 +68,62 @@
     function updateDividerVisibility(){
         // hide divider when there's no review or it is closed
         review = document.getElementById('review');
-        // hide on small screens where layout stacks regardless of review presence
+        // On small screens we want the stacked layout. Ensure the divider
+        // is hidden, but also keep the shell in a neutral state: don't add
+        // review-closed/open classes which are desktop-specific (they
+        // change grid-template-columns). This prevents transient class
+        // toggles from placing elements into implicit rows.
         if(window.innerWidth <= 900){
             divider.classList.add('hidden');
+            shell.classList.remove('review-open');
+            shell.classList.remove('review-closed');
+            // ensure right-rail gets the small-screen placement handled
+            // by CSS media query (.right-rail { grid-column: 3 }). No JS
+            // changes to grid columns here.
             return;
         }
 
         if(!review || review.classList.contains('closed')){
             divider.classList.add('hidden');
+            // no review: mark shell closed so grid drops the columns on desktop
+            shell.classList.remove('review-open');
+            shell.classList.add('review-closed');
         } else {
             divider.classList.remove('hidden');
+            shell.classList.remove('review-closed');
+            shell.classList.add('review-open');
         }
     }
 
     // Run on load
+    // Ensure shell class reflects current state on load
     updateDividerVisibility();
 
     // If HTMX is used to swap review, listen for afterSwap events and update visibility
-    document.body.addEventListener('htmx:afterSwap', (evt)=>{
-        // if swap targeted #review or replaced part of it, re-query
-        if(!evt.detail || !evt.detail.target) {
-            updateDividerVisibility();
-            return;
-        }
-        const trg = evt.detail.target;
-        if(trg.id === 'review' || trg.closest && trg.closest('#review')){
-            // re-select review in case it's been replaced
-            const newReview = document.getElementById('review');
-            if(newReview) review = newReview; // update reference
-        }
-        updateDividerVisibility();
-    }, true);
+    // Use multiple lifecycle hooks and a small rAF delay to ensure DOM is stable
+    // when we read classes/measurements. This defends against transient states
+    // where the element is present but the shell class hasn't been synced yet.
+    function handleHtmxUpdate(evt){
+        // If swap targeted #review or contained it, refresh reference
+        try{
+            const trg = evt && evt.detail && evt.detail.target;
+            if(trg && (trg.id === 'review' || (trg.closest && trg.closest('#review')))){
+                const newReview = document.getElementById('review');
+                if(newReview) review = newReview;
+            }
+        }catch(_){ /* defensive */ }
+
+        // Run update in next microtask + rAF to ensure HTMX DOM operations
+        // and any synchronous JS mutations are finished before we measure.
+        Promise.resolve().then(()=>{
+            requestAnimationFrame(()=>{
+                updateDividerVisibility();
+            });
+        });
+    }
+
+    document.body.addEventListener('htmx:afterSwap', handleHtmxUpdate, true);
+    document.body.addEventListener('htmx:afterSettle', handleHtmxUpdate, true);
 
     // Also update on window resize to ensure clamp limits remain sensible
     window.addEventListener('resize', ()=>{

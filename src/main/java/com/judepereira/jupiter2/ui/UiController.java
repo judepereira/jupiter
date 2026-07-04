@@ -3,11 +3,13 @@ package com.judepereira.jupiter2.ui;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -23,7 +25,7 @@ public class UiController {
 
     public UiController() {
         // seed with a welcome message
-        chat.add(new ChatMessage("system", "Welcome to Jupiter UI shell", Instant.now().toEpochMilli()));
+        chat.add(new ChatMessage("system", "Welcome to Jupiter", Instant.now().toEpochMilli()));
     }
 
     @GetMapping("/")
