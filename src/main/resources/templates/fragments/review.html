@@ -3,7 +3,6 @@
     <div id="review-panel" class="review-shell" th:attr="data-open=${reviewPanelOpen}" th:if="${reviewPanelOpen}">
         <div class="review-header">
             <h2>Review</h2>
-            <button id="review-toggle-btn" class="review-toggle" hx-post="/ui/review/toggle" hx-target="#review" hx-swap="outerHTML">Close</button>
         </div>
 
         <div th:if="${reviewPanelOpen}">

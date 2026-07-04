@@ -69,6 +69,14 @@ body {
     cursor: pointer;
 }
 
+.rail .rail-btn i,
+.rail .rail-btn .bi {
+    /* ensure bootstrap icons render cleanly and sized for the 40x40 button */
+    font-size: 1.15rem; /* between 1.1rem and 1.2rem */
+    line-height: 1;
+    display: inline-block;
+}
+
 .rail .rail-btn:hover {
     background: rgba(255, 255, 255, 0.05);
 }
