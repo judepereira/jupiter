@@ -1,6 +1,6 @@
 <!doctype html>
-<aside th:fragment="panel" id="review" class="main-panel review-panel">
-    <div id="review-panel" class="review-shell" th:attr="data-open=${reviewPanelOpen}">
+<aside th:fragment="panel" id="review" class="main-panel review-panel" th:classappend="${!reviewPanelOpen} ? 'closed' : ''">
+    <div id="review-panel" class="review-shell" th:attr="data-open=${reviewPanelOpen}" th:if="${reviewPanelOpen}">
         <div class="review-header">
             <h2>Review</h2>
             <button id="review-toggle-btn" class="review-toggle" hx-post="/ui/review/toggle" hx-target="#review" hx-swap="outerHTML">Close</button>
@@ -23,7 +23,6 @@
             <section id="file-diff" class="file-diff-container" th:replace="fragments/file-diff :: diff">Loading diff...</section>
         </div>
 
-        <div th:unless="${reviewPanelOpen}" id="review-collapsed" class="review-collapsed">
-            <p>Review panel closed.</p>
-        </div>
+        
+    </div>
     </aside>
