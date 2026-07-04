@@ -21,6 +21,8 @@
 
     function onPointerDown(e){
         if(e.button && e.button !== 0) return; // only left
+        // don't allow dragging when review isn't present/open or on small screens
+        if(window.innerWidth <= 900) return;
         if(!review || review.classList.contains('closed')) return;
         dragging = true;
         document.body.classList.add('dragging-divider');
@@ -31,14 +33,22 @@
     function onPointerMove(e){
         if(!dragging) return;
         const shellRect = shell.getBoundingClientRect();
-        // review is on the right side; compute width as distance from divider to right edge
-        // pointer X relative to shell left
-        const x = e.clientX - shellRect.left;
-        // divider is between left content and review; review width = shell right - x - right rail width
-        // calculate right rail width from CSS variable --rail-width or fallback 40
+        // Calculate review width robustly using computed layout values (no magic constants)
+        // right rail width from CSS variable --rail-width (fallback 40)
         const railWidthStr = getComputedStyle(document.documentElement).getPropertyValue('--rail-width') || '40px';
-        const railWidth = parseFloat(railWidthStr);
-        const reviewPx = Math.floor(shellRect.width - x - railWidth - 12 /*gap accounting*/);
+        const railWidth = parseFloat(railWidthStr) || 40;
+        // gap between grid columns (shell gap)
+        const gapStr = getComputedStyle(shell).getPropertyValue('gap') || '12px';
+        const gap = parseFloat(gapStr) || 12;
+        // divider width from layout
+        const dividerRect = divider.getBoundingClientRect();
+        const dividerW = Math.max(1, Math.floor(dividerRect.width)) || 12;
+
+        // review right edge sits left of the right rail by gap
+        const reviewRight = shellRect.right - railWidth - gap;
+        // treat pointer X as the divider center; account for half divider and half gap between divider and review
+        const pointerCenter = e.clientX + (dividerW / 2) + (gap / 2);
+        const reviewPx = Math.floor(reviewRight - pointerCenter);
         setReviewWidthPx(reviewPx);
     }
 
@@ -59,6 +69,12 @@
     function updateDividerVisibility(){
         // hide divider when there's no review or it is closed
         review = document.getElementById('review');
+        // hide on small screens where layout stacks regardless of review presence
+        if(window.innerWidth <= 900){
+            divider.classList.add('hidden');
+            return;
+        }
+
         if(!review || review.classList.contains('closed')){
             divider.classList.add('hidden');
         } else {
@@ -87,6 +103,8 @@
 
     // Also update on window resize to ensure clamp limits remain sensible
     window.addEventListener('resize', ()=>{
+        // update divider visibility on breakpoint changes
+        updateDividerVisibility();
         // ensure current --review-width still within new bounds
         const current = getComputedStyle(shell).getPropertyValue('--review-width').trim();
         if(!current) return;
