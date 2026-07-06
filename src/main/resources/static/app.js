@@ -148,6 +148,12 @@
         // scroll-to-bottom and then adopt the observed count.
         let lastMessageCount = -1;
         let chatAutoScrollBound = false;
+        // Track whether the user was near the bottom before an upcoming swap
+        // so we can keep them pinned when pending->final replacements preserve
+        // message count but change heights. Cleared after a swap settles.
+        let wasNearBottomBeforeSwap = false;
+        // Ensure we add the textarea clear listener only once across re-inits
+        let htmxAfterOnLoadBound = false;
 
         function scrollChatToBottom(){
             try{
@@ -201,6 +207,30 @@
             // lists) which could otherwise cause an initial or unexpected
             // scroll-to-bottom.
 
+            function isHistoryNearBottom(){
+                try{
+                    const history = document.getElementById('chat-history');
+                    if(!history) return false;
+                    // Consider "near bottom" to be within 48px of the max scroll
+                    const max = history.scrollHeight - history.clientHeight;
+                    const cur = history.scrollTop;
+                    if(!Number.isFinite(max) || !Number.isFinite(cur)) return false;
+                    return (max - cur) <= 48;
+                }catch(_){ return false; }
+            }
+
+            // Before-swap listener records whether the user was near bottom.
+            function htmxBeforeSwapListener(evt){
+                try{
+                    const trg = (evt && evt.detail && evt.detail.target) || evt.target;
+                    if(!trg) return;
+                    if(trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
+                       (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))){
+                        wasNearBottomBeforeSwap = isHistoryNearBottom();
+                    }
+                }catch(_){ /* defensive */ }
+            }
+
             function htmxChatListener(evt){
                 try{
                     // Prefer HTMX-provided detail.target but fall back to the
@@ -213,11 +243,28 @@
                     // contained within it, run the check.
                     if(trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
                        (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))){
+                        // Run count-based auto-scroll logic as before
                         Promise.resolve().then(checkAndMaybeScroll);
+                        // If the user was near-bottom before the swap, ensure
+                        // we re-pin them to the bottom after the swap as well
+                        // (covers pending->final replacements that keep message
+                        // count unchanged but change element heights).
+                        if(wasNearBottomBeforeSwap){
+                            Promise.resolve().then(()=>{
+                                // Double-guard: only scroll if still near-bottom or
+                                // the flag was set; this avoids forcing scroll when
+                                // the user had scrolled up after the beforeSwap.
+                                scrollChatToBottom();
+                                wasNearBottomBeforeSwap = false;
+                            });
+                        }
                     }
                 }catch(_){ /* defensive */ }
             }
 
+            // Listen before swap to capture scroll position, then react
+            // after swap/settle to restore if needed.
+            document.body.addEventListener('htmx:beforeSwap', htmxBeforeSwapListener, true);
             document.body.addEventListener('htmx:afterSwap', htmxChatListener, true);
             document.body.addEventListener('htmx:afterSettle', htmxChatListener, true);
         }
@@ -275,6 +322,31 @@
 
                 textarea.addEventListener('input', autoResize);
                 textarea.addEventListener('keydown', onKeyDown);
+                // Clear textarea after successful htmx form submit when targeting messages list
+                if(!htmxAfterOnLoadBound){
+                    htmxAfterOnLoadBound = true;
+                    document.body.addEventListener('htmx:afterOnLoad', function(evt){
+                        try{
+                            const detail = evt && evt.detail;
+                            const target = detail && detail.target;
+                            // Only clear when the request was a form submit to /ui/chat/send
+                            if(!detail || !detail.xhr) return;
+                            // HTMX exposes the request path on detail.path in some builds; fallback to inspecting the request URL
+                            const path = (detail.path) || (detail.xhr && detail.xhr.responseURL) || '';
+                            if(!path) return;
+                            if(!path.includes('/ui/chat/send')) return;
+
+                            const textarea = document.getElementById('chat-input');
+                            if(!textarea) return;
+                            // Clear and reset height
+                            textarea.value = '';
+                            textarea.style.height = 'auto';
+                            // run autoResize logic
+                            const sh = textarea.scrollHeight;
+                            textarea.style.height = sh + 'px';
+                        }catch(_){ }
+                    }, true);
+                }
 
                 // Initial resize to match any prefilled content
                 // Use rAF to allow browser to compute styles if needed

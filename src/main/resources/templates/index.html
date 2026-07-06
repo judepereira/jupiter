@@ -21,14 +21,14 @@
 
     <!-- main left content: chat composer + history -->
     <main id="left-panel" class="main-panel left-panel">
-        <div id="chat-container" th:replace="fragments/chat :: chat">Loading chat...</div>
+        <div id="chat-container" th:replace="fragments/chat :: chat" th:with="hasPending=${false}, reviewOob=${false}">Loading chat...</div>
     </main>
 
     <!-- draggable divider between left panel and review panel -->
     <div id="panel-divider" class="panel-divider" role="separator" aria-label="Click and drag to resize" title="Click and drag to resize" aria-orientation="vertical" tabindex="0"></div>
 
     <!-- main right content: review/diff -->
-    <aside id="review" class="main-panel review-panel" th:replace="fragments/review :: panel">Loading review...</aside>
+    <aside id="review" class="main-panel review-panel" th:replace="fragments/review :: panel" th:with="reviewOob=${false}">Loading review...</aside>
 
     <!-- extreme right rail -->
     <aside id="right-rail" class="rail right-rail">
