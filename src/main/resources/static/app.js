@@ -361,14 +361,152 @@
         // Run once on load to bind any existing chat fragment
         initChatComposer();
 
-        // Re-run after HTMX swaps/settles so newly swapped chat fragment gets handlers
-        document.body.addEventListener('htmx:afterSwap', function(){
-            // small async window to allow swap to fully attach DOM
-            Promise.resolve().then(initChatComposer);
-        }, true);
-        document.body.addEventListener('htmx:afterSettle', function(){
-            Promise.resolve().then(initChatComposer);
-        }, true);
+        // Streaming SSE binding: open EventSource for pending assistant rows.
+        // We run after HTMX swaps/settles so newly swapped pending rows can start streaming.
+        function bindPendingStreams(){
+            try{
+                const list = document.getElementById('chat-messages-list');
+                if(!list) return;
+                const rows = list.querySelectorAll('li[data-pending="true"]');
+                rows.forEach(row => {
+                    if(row.dataset.streamBound === '1') return; // already bound
+                    const url = row.dataset.streamUrl;
+                    if(!url) return;
+                    row.dataset.streamBound = '1';
+
+                    // Buffer incoming deltas and batch DOM writes
+                    let buffer = '';
+                    let gotDelta = false;
+                    let rafPending = false;
+                    const textSpan = row.querySelector('.chat-message-text');
+
+                    function flushBuffer(){
+                        if(!textSpan) return;
+                        if(buffer.length === 0) return;
+                        // Append buffered text (keep existing content + buffer)
+                        textSpan.textContent = textSpan.textContent + buffer;
+                        buffer = '';
+                        rafPending = false;
+                    }
+
+                    // Throttle DOM updates to ~60-25fps by batching with rAF
+                    function scheduleFlush(){
+                        if(rafPending) return;
+                        rafPending = true;
+                        requestAnimationFrame(flushBuffer);
+                    }
+
+                    // Track if user was near bottom so we only auto-scroll when appropriate
+                    function wasNearBottom(){
+                        try{
+                            const history = document.getElementById('chat-history');
+                            if(!history) return false;
+                            const max = history.scrollHeight - history.clientHeight;
+                            const cur = history.scrollTop;
+                            if(!Number.isFinite(max) || !Number.isFinite(cur)) return false;
+                            return (max - cur) <= 48;
+                        }catch(_){ return false; }
+                    }
+
+                    const nearBefore = wasNearBottom();
+
+                    const es = new EventSource(url);
+                    row._es = es;
+
+                    // Helper to parse SSE payloads that may be JSON {text:...} or legacy raw strings
+                    function parseStreamPayload(e){
+                        const raw = (e && e.data) ? e.data : '';
+                        if(!raw) return { text: '' };
+                        // Try parse JSON first
+                        try{
+                            const parsed = JSON.parse(raw);
+                            if(parsed && typeof parsed === 'object') return parsed;
+                        }catch(_){ /* not JSON */ }
+                        // fallback: legacy plain string
+                        return { text: raw };
+                    }
+
+                    es.addEventListener('delta', (e) => {
+                        try{
+                            const payload = parseStreamPayload(e);
+                            if(payload && payload.text != null){
+                                // append exactly as provided, including spaces/newlines
+                                buffer += payload.text;
+                                gotDelta = true;
+                                scheduleFlush();
+                            }
+                        }catch(_){ }
+                    });
+
+                    es.addEventListener('status', (e) => {
+                        try{
+                            const payload = parseStreamPayload(e);
+                            const st = (payload && payload.status != null) ? payload.status : (e.data || '');
+                            if(st) row.title = st;
+                        }catch(_){ }
+                    });
+
+                    es.addEventListener('done', (e) => {
+                        try{
+                            const payload = parseStreamPayload(e);
+                            // If payload contains authoritative final text, use it
+                            if(payload && payload.text != null && textSpan){
+                                // replace final text to correct any missed/duplicated chunks
+                                textSpan.textContent = payload.text;
+                            } else if(!gotDelta){
+                                const data = e.data || '';
+                                if(data && textSpan){
+                                    textSpan.textContent = textSpan.textContent + data;
+                                }
+                                flushBuffer();
+                            }
+                            // mark non-pending
+                            row.classList.remove('pending');
+                            row.removeAttribute('data-pending');
+                            row.dataset.streamBound = '0';
+                        }catch(_){ }
+                        try{ es.close(); }catch(_){ }
+                    });
+
+                    es.addEventListener('error', (e) => {
+                        try{
+                            const payload = parseStreamPayload(e);
+                            const data = (payload && payload.message) ? payload.message : ((e && e.data) ? e.data : 'Stream error');
+                            if(textSpan){
+                                textSpan.textContent = textSpan.textContent + '\n[Error: ' + data + ']';
+                            }
+                            row.classList.remove('pending');
+                            row.removeAttribute('data-pending');
+                            row.dataset.streamBound = '0';
+                        }catch(_){ }
+                        try{ es.close(); }catch(_){ }
+                    });
+
+                    // Ensure we flush any remaining buffer when the connection closes
+                    es.addEventListener('close', () => {
+                        try{ flushBuffer(); }catch(_){ }
+                        try{ es.close(); }catch(_){ }
+                    });
+
+                    // If the user was near bottom before stream started, keep them pinned
+                    // after each flush by scheduling a scroll on rAF.
+                    const originalFlush = flushBuffer;
+                    flushBuffer = function(){
+                        originalFlush();
+                        if(nearBefore){
+                            requestAnimationFrame(()=>{
+                                try{ const history = document.getElementById('chat-history'); if(history) history.scrollTop = history.scrollHeight - history.clientHeight; }catch(_){ }
+                            });
+                        }
+                    };
+                });
+            }catch(_){ }
+        }
+
+        // Run binding after HTMX swaps/settles and on initial load
+        bindPendingStreams();
+        document.body.addEventListener('htmx:afterSwap', function(){ Promise.resolve().then(bindPendingStreams); }, true);
+        document.body.addEventListener('htmx:afterSettle', function(){ Promise.resolve().then(bindPendingStreams); }, true);
     })();
 
 })();

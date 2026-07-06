@@ -23,6 +23,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.function.Consumer;
 
 @Component
 public class OpenAiAgentModelClient implements AgentModelClient {
@@ -102,6 +103,189 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         }
 
         return new ModelResponse(assistantText, toolCall);
+    }
+
+    @Override
+    public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, Consumer<String> onDelta) {
+        // Implement true OpenAI streaming even when tools are provided.
+        // We'll send a Chat Completions request with stream=true and include
+        // OpenAI-compatible tools when available. We parse SSE frames and
+        // accumulate both text deltas and tool-call fragments.
+        String apiKey = openAiProperties.getApiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("OpenAI API key (openai.api-key) is required to call OpenAI provider");
+        }
+
+        String modelName = agentProperties.getModel();
+        if (modelName == null || modelName.isBlank()) modelName = "gpt-4o-mini";
+
+        // build messages array
+        try {
+            var url = new java.net.URL("https://api.openai.com/v1/chat/completions");
+            var conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "text/event-stream, application/json");
+
+            // build JSON body
+            var root = new java.util.HashMap<String, Object>();
+            root.put("model", modelName);
+            root.put("stream", true);
+            java.util.List<java.util.Map<String, Object>> msgs = new java.util.ArrayList<>();
+            for (Message m : conversation) {
+                String role = switch (m.getRole()) {
+                    case SYSTEM -> "system";
+                    case ASSISTANT -> "assistant";
+                    default -> "user";
+                };
+                msgs.add(java.util.Map.of("role", role, "content", m.getContent()));
+            }
+            root.put("messages", msgs);
+
+            // include tools as OpenAI-compatible "tools" array when present
+            if (tools != null && !tools.isEmpty()) {
+                java.util.List<java.util.Map<String, Object>> toolsList = new java.util.ArrayList<>();
+                for (ToolDefinition t : tools) {
+                    try {
+                        Map<String, Object> provided = t.getSchema() == null ? Map.of() : t.getSchema();
+                        Object parametersObj;
+                        if (provided.containsKey("type")) {
+                            parametersObj = provided;
+                        } else {
+                            parametersObj = Map.of("type", "object", "properties", provided);
+                        }
+                        java.util.Map<String, Object> functionObj = new java.util.HashMap<>();
+                        functionObj.put("name", t.getName());
+                        functionObj.put("description", t.getDescription() == null ? "" : t.getDescription());
+                        functionObj.put("parameters", parametersObj);
+
+                        java.util.Map<String, Object> toolObj = new java.util.HashMap<>();
+                        toolObj.put("type", "function");
+                        toolObj.put("function", functionObj);
+                        toolsList.add(toolObj);
+                    } catch (Exception e) {
+                        java.util.Map<String, Object> functionObj = new java.util.HashMap<>();
+                        functionObj.put("name", t.getName());
+                        functionObj.put("description", t.getDescription() == null ? "" : t.getDescription());
+                        java.util.Map<String, Object> toolObj = new java.util.HashMap<>();
+                        toolObj.put("type", "function");
+                        toolObj.put("function", functionObj);
+                        toolsList.add(toolObj);
+                    }
+                }
+                root.put("tools", toolsList);
+            }
+
+            String body = objectMapper.writeValueAsString(root);
+            try (var os = conn.getOutputStream()) {
+                os.write(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+
+            StringBuilder finalText = new StringBuilder();
+            java.util.Map<String, ToolPartial> partials = new java.util.LinkedHashMap<>();
+
+            try (var is = conn.getInputStream();
+                 var br = new java.io.BufferedReader(new java.io.InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    line = line.trim();
+                    if (line.isEmpty()) continue;
+                    // SSE frames are prefixed with "data: "
+                    if (line.startsWith("data:")) {
+                        String data = line.substring(5).trim();
+                        if (data.equals("[DONE]")) {
+                            break;
+                        }
+                        try {
+                            var node = objectMapper.readTree(data);
+                            var choices = node.get("choices");
+                            if (choices != null && choices.isArray() && choices.size() > 0) {
+                                var delta = choices.get(0).get("delta");
+                                if (delta != null) {
+                                    var content = delta.get("content");
+                                    if (content != null && !content.isNull()) {
+                                        String txt = content.asText();
+                                        finalText.append(txt);
+                                        try { onDelta.accept(txt); } catch (Exception ignored) {}
+                                    }
+
+                                    // support tool call fragments
+                                    var toolCalls = delta.get("tool_calls");
+                                    if (toolCalls != null && toolCalls.isArray()) {
+                                        for (int i = 0; i < toolCalls.size(); i++) {
+                                            var tc = toolCalls.get(i);
+                                            String id = tc.has("id") ? tc.get("id").asText() : String.valueOf(i);
+                                            ToolPartial p = partials.computeIfAbsent(id, k -> new ToolPartial());
+                                            if (tc.has("name")) p.name = tc.get("name").asText();
+                                            if (tc.has("arguments")) {
+                                                var argNode = tc.get("arguments");
+                                                if (argNode != null && !argNode.isNull()) {
+                                                    p.arguments.append(argNode.asText());
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    var func = delta.get("function_call");
+                                    if (func != null && !func.isNull()) {
+                                        String id = "__fn__";
+                                        ToolPartial p = partials.computeIfAbsent(id, k -> new ToolPartial());
+                                        if (func.has("name")) p.name = func.get("name").asText();
+                                        if (func.has("arguments")) {
+                                            var argNode = func.get("arguments");
+                                            if (argNode != null && !argNode.isNull()) {
+                                                p.arguments.append(argNode.asText());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            // ignore partial parse errors but allow caller to continue
+                        }
+                    }
+                }
+            } catch (java.io.IOException ioe) {
+                // try to read error stream for diagnostics
+                try (var es = conn.getErrorStream()) {
+                    if (es != null) {
+                        String err = new String(es.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                        throw new RuntimeException("OpenAI streaming error: " + err, ioe);
+                    }
+                } catch (Exception ignored) {}
+                throw ioe;
+            }
+
+            if (!partials.isEmpty()) {
+                ToolPartial first = partials.values().iterator().next();
+                Map<String, Object> argsMap = Map.of();
+                if (first.arguments.length() > 0) {
+                    try {
+                        argsMap = objectMapper.readValue(first.arguments.toString(), new TypeReference<Map<String, Object>>() {});
+                    } catch (Exception e) {
+                        // leave argsMap empty on parse failure
+                    }
+                }
+                return new ModelResponse(null, new ToolCall(first.name, argsMap));
+            }
+
+            return new ModelResponse(finalText.length() == 0 ? null : finalText.toString(), null);
+        } catch (Exception e) {
+            // On any streaming failure fall back to non-streaming chat to remain functional
+            ModelResponse r = chat(conversation, tools);
+            String text = r.getAssistantText();
+            // emit fallback text only when there's assistant text and no tool call
+            if (r.getToolCall() == null && text != null && !text.isBlank()) onDelta.accept(text);
+            return r;
+        }
+    }
+
+    // package-private helper for accumulating tool call fragments
+    static class ToolPartial {
+        String name = null;
+        StringBuilder arguments = new StringBuilder();
     }
 
     private void ensureModelInitialized() {

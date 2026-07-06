@@ -117,4 +117,81 @@ public class CodingAgentHarnessFakeModelTest {
         // traces should be equal to maxIterations
         assertEquals(2, res.getTraces().size());
     }
+
+    @Test
+    public void runTurnStreaming_emits_deltas_and_completes(@TempDir Path tmp) throws Exception {
+        // fake model that emits two deltas then final text via chatStreaming default impl
+        class StreamingModel implements com.judepereira.jupiter2.agent.llm.AgentModelClient {
+            @Override
+            public com.judepereira.jupiter2.agent.llm.dto.ModelResponse chat(java.util.List<com.judepereira.jupiter2.agent.llm.dto.Message> conversation, java.util.List<com.judepereira.jupiter2.agent.llm.dto.ToolDefinition> tools) {
+                return new com.judepereira.jupiter2.agent.llm.dto.ModelResponse("Done!", null);
+            }
+
+            @Override
+            public com.judepereira.jupiter2.agent.llm.dto.ModelResponse chatStreaming(java.util.List<com.judepereira.jupiter2.agent.llm.dto.Message> conversation, java.util.List<com.judepereira.jupiter2.agent.llm.dto.ToolDefinition> tools, java.util.function.Consumer<String> onDelta) {
+                onDelta.accept("Done");
+                onDelta.accept("!");
+                return new com.judepereira.jupiter2.agent.llm.dto.ModelResponse("Done!", null);
+            }
+        }
+
+        ToolRegistry reg = new ToolRegistry();
+        AgentProperties props = new AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        props.setMaxIterations(5);
+        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(new StreamingModel()), reg, props);
+
+        var req = new AgentTurnRequest("sys", "user");
+        // listener to capture deltas
+        StringBuilder acc = new StringBuilder();
+        com.judepereira.jupiter2.agent.llm.AgentStreamListener listener = new com.judepereira.jupiter2.agent.llm.AgentStreamListener() {
+            @Override
+            public void onTextDelta(String delta) {
+                acc.append(delta);
+            }
+        };
+
+        var res = harness.runTurnStreaming(req, listener);
+        assertEquals("Done!", res.getFinalText());
+        assertEquals("Done!", acc.toString());
+    }
+
+    @Test
+    public void runTurnStreaming_preserves_newline_only_deltas(@TempDir Path tmp) throws Exception {
+        // fake model that emits hello, then newline-only chunk, then world
+        class StreamingModel implements com.judepereira.jupiter2.agent.llm.AgentModelClient {
+            @Override
+            public com.judepereira.jupiter2.agent.llm.dto.ModelResponse chat(java.util.List<com.judepereira.jupiter2.agent.llm.dto.Message> conversation, java.util.List<com.judepereira.jupiter2.agent.llm.dto.ToolDefinition> tools) {
+                return new com.judepereira.jupiter2.agent.llm.dto.ModelResponse("hello\n\nworld", null);
+            }
+
+            @Override
+            public com.judepereira.jupiter2.agent.llm.dto.ModelResponse chatStreaming(java.util.List<com.judepereira.jupiter2.agent.llm.dto.Message> conversation, java.util.List<com.judepereira.jupiter2.agent.llm.dto.ToolDefinition> tools, java.util.function.Consumer<String> onDelta) {
+                onDelta.accept("hello");
+                onDelta.accept("\n\n");
+                onDelta.accept("world");
+                return new com.judepereira.jupiter2.agent.llm.dto.ModelResponse("hello\n\nworld", null);
+            }
+        }
+
+        ToolRegistry reg = new ToolRegistry();
+        AgentProperties props = new AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        props.setMaxIterations(5);
+        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(new StreamingModel()), reg, props);
+
+        var req = new AgentTurnRequest("sys", "user");
+        StringBuilder acc = new StringBuilder();
+        com.judepereira.jupiter2.agent.llm.AgentStreamListener listener = new com.judepereira.jupiter2.agent.llm.AgentStreamListener() {
+            @Override
+            public void onTextDelta(String delta) {
+                acc.append(delta);
+            }
+        };
+
+        var res = harness.runTurnStreaming(req, listener);
+        assertEquals("hello\n\nworld", res.getFinalText());
+        // Ensure captured deltas include the newline-only chunk
+        assertEquals("hello\n\nworld", acc.toString());
+    }
 }

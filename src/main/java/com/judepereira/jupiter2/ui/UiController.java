@@ -1,24 +1,27 @@
 package com.judepereira.jupiter2.ui;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
+import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -28,6 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Log4j2
 @Controller
 public class UiController {
 
@@ -40,6 +44,8 @@ public class UiController {
     private final AtomicBoolean reviewPanelOpen = new AtomicBoolean(false);
     private volatile ChangedFile selectedFile = null;
     private final java.util.concurrent.Executor agentExecutor;
+    // pending streaming jobs keyed by assistantId -> AgentTurnRequest
+    private final java.util.concurrent.ConcurrentMap<String, AgentTurnRequest> pendingStreams = new java.util.concurrent.ConcurrentHashMap<>();
 
     // Primary constructor used by Spring (agentTaskExecutor bean should be provided).
     @org.springframework.beans.factory.annotation.Autowired
@@ -50,6 +56,9 @@ public class UiController {
         // seed with a welcome message
         chat.add(new ChatMessage("system", "Welcome to Jupiter", Instant.now().toEpochMilli(), false, java.util.UUID.randomUUID().toString()));
     }
+
+    // Jackson mapper for safe JSON serialization of SSE payloads
+    private static final ObjectMapper SseJson = new ObjectMapper();
 
     // Convenience constructor for tests or simple instantiation. Uses a single-thread daemon executor to avoid
     // leaking non-daemon threads when tests finish.
@@ -85,86 +94,8 @@ public class UiController {
 
             // build concise system prompt for coding agent
             String systemPrompt = "You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.";
-
-            // run in background
-            Runnable task = () -> {
-                AgentTurnResult result = null;
-                Exception ex = null;
-                try {
-                    result = harness.runTurn(new AgentTurnRequest(systemPrompt, user));
-                } catch (Exception e) {
-                    ex = e;
-                }
-
-                // replace pending message
-                synchronized (chat) {
-                    for (int i = 0; i < chat.size(); i++) {
-                        ChatMessage m = chat.get(i);
-                        if (m.id.equals(assistantId)) {
-                            if (ex != null) {
-                                chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + ex.getMessage(), Instant.now().toEpochMilli(), false, assistantId));
-                            } else if (result != null && result.getFinalText() != null) {
-                                chat.set(i, new ChatMessage("assistant", result.getFinalText(), Instant.now().toEpochMilli(), false, assistantId));
-                            } else {
-                                String fallback = result == null ? "(no response)" : (result.getFinalText() == null ? "(no final text)" : result.getFinalText());
-                                chat.set(i, new ChatMessage("assistant", fallback, Instant.now().toEpochMilli(), false, assistantId));
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                // process changed files if any
-                if (result != null) {
-                    var mutatingTools = Set.of("write_file", "apply_patch");
-                    List<ToolCallTrace> traces = result.getTraces();
-                    Set<String> seen = new HashSet<>();
-                    String latestPath = null;
-                    List<String> addedPathsInOrder = new ArrayList<>();
-                    for (ToolCallTrace t : traces) {
-                        if (!mutatingTools.contains(t.getToolName())) continue;
-                        if (!t.isSuccess()) continue;
-                        Object mp = null;
-                        if (t.getMachineSummary() != null) mp = t.getMachineSummary().get("path");
-                        String path = null;
-                        if (mp instanceof String) path = (String) mp;
-                        if (path == null || path.isBlank()) continue;
-                        try {
-                            java.nio.file.Path workspaceRoot = java.nio.file.Path.of(agentProperties.getWorkspaceRoot());
-                            java.nio.file.Path resolved = com.judepereira.jupiter2.agent.tools.impl.FileUtils.resolveWorkspacePath(workspaceRoot, path);
-                            java.nio.file.Path rel = com.judepereira.jupiter2.agent.tools.impl.FileUtils.relativizeWorkspacePath(workspaceRoot, resolved);
-                            String relStr = rel.toString();
-                            if (!seen.contains(relStr)) {
-                                seen.add(relStr);
-                                addedPathsInOrder.add(relStr);
-                                latestPath = relStr;
-                            }
-                        } catch (Exception e) {
-                        }
-                    }
-
-                    for (String p : addedPathsInOrder) {
-                        String diff = safeComputeDiff(p);
-                        int id = nextFileId.getAndIncrement();
-                        ChangedFile cf = new ChangedFile(id, p, diff);
-                        changedFiles.add(0, cf);
-                    }
-
-                    if (!addedPathsInOrder.isEmpty()) {
-                        reviewPanelOpen.set(true);
-                        String sel = latestPath;
-                        if (sel != null) {
-                            ChangedFile found = changedFiles.stream().filter(f -> f.path().equals(sel)).findFirst().orElse(null);
-                            if (found != null) selectedFile = found;
-                        }
-                    }
-                }
-            };
-            if (agentExecutor instanceof java.util.concurrent.ExecutorService es) {
-                es.submit(task);
-            } else {
-                agentExecutor.execute(task);
-            }
+            // register a pending stream job; the front-end will connect to /ui/chat/stream/{assistantId}
+            pendingStreams.put(assistantId, new AgentTurnRequest(systemPrompt, user));
         }
 
         model.addAttribute("chatMessages", List.copyOf(chat));
@@ -192,6 +123,143 @@ public class UiController {
         model.addAttribute("selectedFile", selectedFile);
         model.addAttribute("reviewPanelOpen", reviewPanelOpen.get());
         return "fragments/file-diff :: diff";
+    }
+
+    @GetMapping("/ui/chat/stream/{assistantId}")
+    public SseEmitter streamChat(@PathVariable("assistantId") String assistantId) {
+        AgentTurnRequest req = pendingStreams.remove(assistantId);
+        if (req == null) {
+            // no such pending job; return closed emitter
+            SseEmitter e = new SseEmitter(0L);
+            try {
+                String json = SseJson.writeValueAsString(java.util.Map.of("message", "no_job"));
+                e.send(SseEmitter.event().name("error").data(json));
+            } catch (Exception ignored) {}
+            e.complete();
+            return e;
+        }
+
+        SseEmitter emitter = new SseEmitter(0L); // no timeout
+
+        // locate the pending assistant chat message and start updating it
+        Runnable task = () -> {
+            AtomicBoolean done = new AtomicBoolean(false);
+            StringBuilder accumulated = new StringBuilder();
+
+            AgentStreamListener listener = new AgentStreamListener() {
+                @Override
+                public void onTextDelta(String delta) {
+                    try {
+                        if (delta == null) return;
+                        accumulated.append(delta);
+                        try {
+                            String json = SseJson.writeValueAsString(java.util.Map.of("text", delta));
+                            emitter.send(SseEmitter.event().name("delta").data(json));
+                        } catch (JsonProcessingException e) {
+                            // fallback to raw string if serialization somehow fails
+                            emitter.send(SseEmitter.event().name("delta").data(delta));
+                        }
+                        // update in-memory chat message text
+                        synchronized (chat) {
+                            for (int i = 0; i < chat.size(); i++) {
+                                ChatMessage m = chat.get(i);
+                                if (m.id.equals(assistantId)) {
+                                    chat.set(i, new ChatMessage("assistant", accumulated.toString(), m.ts, true, assistantId));
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        onError(e);
+                    }
+                }
+
+                @Override
+                public void onStatus(String status) {
+                    try {
+                        try {
+                            String json = SseJson.writeValueAsString(java.util.Map.of("status", status));
+                            emitter.send(SseEmitter.event().name("status").data(json));
+                        } catch (JsonProcessingException e) {
+                            emitter.send(SseEmitter.event().name("status").data(status));
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                @Override
+                public void onComplete(AgentTurnResult result) {
+                    try {
+                        // mark pending false and set final text
+                        synchronized (chat) {
+                            for (int i = 0; i < chat.size(); i++) {
+                                ChatMessage m = chat.get(i);
+                                if (m.id.equals(assistantId)) {
+                                    chat.set(i, new ChatMessage("assistant", result.getFinalText(), Instant.now().toEpochMilli(), false, assistantId));
+                                    break;
+                                }
+                            }
+                        }
+
+                        try {
+                            String finalText = result.getFinalText() == null ? "" : result.getFinalText();
+                            String json = SseJson.writeValueAsString(java.util.Map.of("text", finalText));
+                            emitter.send(SseEmitter.event().name("done").data(json));
+                        } catch (JsonProcessingException e) {
+                            emitter.send(SseEmitter.event().name("done").data(result.getFinalText() == null ? "" : result.getFinalText()));
+                        }
+
+                        // process changed files same logic as original sendMessage; extract into helper
+                        processChangedFiles(result);
+
+                    } catch (Exception e) {
+                        onError(e);
+                    } finally {
+                        done.set(true);
+                        emitter.complete();
+                    }
+                }
+
+                @Override
+                public void onError(Exception e) {
+                    try {
+                        synchronized (chat) {
+                            for (int i = 0; i < chat.size(); i++) {
+                                ChatMessage m = chat.get(i);
+                                if (m.id.equals(assistantId)) {
+                                    chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + e.getMessage(), Instant.now().toEpochMilli(), false, assistantId));
+                                    log.error("Execution failure!", e);
+                                    break;
+                                }
+                            }
+                        }
+                        try {
+                            String msg = e.getMessage() == null ? "error" : e.getMessage();
+                            String json = SseJson.writeValueAsString(java.util.Map.of("message", msg));
+                            emitter.send(SseEmitter.event().name("error").data(json));
+                        } catch (JsonProcessingException ex) {
+                            emitter.send(SseEmitter.event().name("error").data(e.getMessage() == null ? "error" : e.getMessage()));
+                        }
+                    } catch (Exception ignored) {
+                    } finally {
+                        done.set(true);
+                        emitter.completeWithError(e);
+                    }
+                }
+            };
+
+            try {
+                AgentTurnResult result = harness.runTurnStreaming(req, listener);
+                if (!done.get()) {
+                    listener.onComplete(result);
+                }
+            } catch (Exception e) {
+                listener.onError(e);
+            }
+        };
+
+        if (agentExecutor instanceof java.util.concurrent.ExecutorService es) es.submit(task); else agentExecutor.execute(task);
+
+        return emitter;
     }
 
     @PostMapping("/ui/review/toggle")
@@ -262,27 +330,56 @@ public class UiController {
         }
     }
 
+    private void processChangedFiles(AgentTurnResult result) {
+        if (result == null) return;
+        var mutatingTools = Set.of("write_file", "apply_patch");
+        List<ToolCallTrace> traces = result.getTraces();
+        Set<String> seen = new HashSet<>();
+        String latestPath = null;
+        List<String> addedPathsInOrder = new ArrayList<>();
+        for (ToolCallTrace t : traces) {
+            if (!mutatingTools.contains(t.getToolName())) continue;
+            if (!t.isSuccess()) continue;
+            Object mp = null;
+            if (t.getMachineSummary() != null) mp = t.getMachineSummary().get("path");
+            String path = null;
+            if (mp instanceof String) path = (String) mp;
+            if (path == null || path.isBlank()) continue;
+            try {
+                java.nio.file.Path workspaceRoot = java.nio.file.Path.of(agentProperties.getWorkspaceRoot());
+                java.nio.file.Path resolved = com.judepereira.jupiter2.agent.tools.impl.FileUtils.resolveWorkspacePath(workspaceRoot, path);
+                java.nio.file.Path rel = com.judepereira.jupiter2.agent.tools.impl.FileUtils.relativizeWorkspacePath(workspaceRoot, resolved);
+                String relStr = rel.toString();
+                if (!seen.contains(relStr)) {
+                    seen.add(relStr);
+                    addedPathsInOrder.add(relStr);
+                    latestPath = relStr;
+                }
+            } catch (Exception e) {
+            }
+        }
+
+        for (String p : addedPathsInOrder) {
+            String diff = safeComputeDiff(p);
+            int id = nextFileId.getAndIncrement();
+            ChangedFile cf = new ChangedFile(id, p, diff);
+            changedFiles.add(0, cf);
+        }
+
+        if (!addedPathsInOrder.isEmpty()) {
+            reviewPanelOpen.set(true);
+            String sel = latestPath;
+            if (sel != null) {
+                ChangedFile found = changedFiles.stream().filter(f -> f.path().equals(sel)).findFirst().orElse(null);
+                if (found != null) selectedFile = found;
+            }
+        }
+    }
+
     // simple records for view models
     public static record ChatMessage(String role, String text, long ts, boolean pending, String id) {}
 
     public static record ChangedFile(int id, String path, String diff) {}
 
-    @GetMapping("/ui/chat/poll")
-    public String pollChat(Model model) {
-        model.addAttribute("chatMessages", List.copyOf(chat));
-        model.addAttribute("changedFiles", List.copyOf(changedFiles));
-        model.addAttribute("reviewPanelOpen", reviewPanelOpen.get());
-        model.addAttribute("selectedFile", selectedFile);
-        boolean hasPending = chat.stream().anyMatch(m -> m.pending);
-        model.addAttribute("hasPending", hasPending);
-
-        // When there is no pending work and the review panel is open, instruct the client
-        // to update the review panel out-of-band so it can appear/replace without disturbing
-        // the chat container swap. Otherwise no OOB update.
-        boolean reviewOob = !hasPending && reviewPanelOpen.get();
-        model.addAttribute("reviewOob", reviewOob);
-
-        // return the composite response fragment that contains the chat fragment and (optionally) an OOB review fragment
-        return "fragments/chat-response :: response";
-    }
+    // polling endpoint removed - streaming via SSE only
 }

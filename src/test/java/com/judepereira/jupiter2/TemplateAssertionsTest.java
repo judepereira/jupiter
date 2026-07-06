@@ -13,12 +13,13 @@ public class TemplateAssertionsTest {
     public void chatTemplateTargetsMessagesList_forPollingAndForm() throws Exception {
         Path p = Path.of("src/main/resources/templates/fragments/chat.html");
         String s = Files.readString(p);
+        // Ensure no polling attributes remain (streaming-only)
+        assertThat(s).doesNotContain("/ui/chat/poll", "every 1s", "hx-get")
+                .contains("id=\"chat-messages-list\"");
 
-        // Ensure the messages list has the polling HTMX attributes when hasPending is true (static template contains the attributes)
-        assertThat(s).contains("id=\"chat-messages-list\"", "hx-get=${hasPending} ? '/ui/chat/poll'", "hx-target=${hasPending} ? '#chat-messages-list'");
-
-        // Ensure the form now targets the messages list rather than the container
-        assertThat(s).contains("id=\"chat-send-form\"", "hx-post=\"/ui/chat/send\"", "hx-target=\"#chat-messages-list\"");
+        // Ensure streaming attributes and pending markers are present and form still posts to send
+        assertThat(s).contains("data-stream-url", "data-pending", "class=\"chat-message-text\"")
+                .contains("id=\"chat-send-form\"", "hx-post=\"/ui/chat/send\"", "hx-target=\"#chat-messages-list\"");
     }
 
     @Test
@@ -27,6 +28,6 @@ public class TemplateAssertionsTest {
         String s = Files.readString(p);
 
         // Ensure we added a guard to avoid binding the htmx afterOnLoad listener repeatedly
-        assertThat(s).contains("htmxAfterOnLoadBound", "htmx:beforeSwap", "wasNearBottomBeforeSwap");
+        assertThat(s).contains("EventSource", "bindPendingStreams", "requestAnimationFrame", "streamBound", "htmx:beforeSwap");
     }
 }

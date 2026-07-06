@@ -19,33 +19,64 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class UiControllerPollReviewOobTests {
 
     @Test
-    public void pollSetsReviewOobAfterSuccessfulWriteFile() throws Exception {
-        // prepare a harness that returns a write_file trace
+    public void streamingCompletion_setsReviewAndChangedFiles() throws Exception {
+        // prepare a harness that emits a write_file trace on completion
         CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
             @Override
-            public AgentTurnResult runTurn(AgentTurnRequest request) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter2.agent.llm.AgentStreamListener listener) {
+                // simulate some streaming deltas
+                listener.onTextDelta("do");
+                listener.onTextDelta("ne");
                 ToolCallTrace t = new ToolCallTrace("write_file", Map.of("path", "out.txt"), true, "wrote", Map.of("path", "out.txt"));
-                return new AgentTurnResult("done", List.of(t));
+                AgentTurnResult res = new AgentTurnResult("done", List.of(t));
+                listener.onComplete(res);
+                return res;
             }
         };
 
         var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
         Path tmp = Files.createTempDirectory("jup-test-ws");
         props.setWorkspaceRoot(tmp.toString());
-        UiController ctrl = new UiController(fake, props);
+        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
 
-        // send a message to kick off background run
+        // send a message to register pending
         Model m1 = new ConcurrentModel();
         ctrl.sendMessage("do it", m1, null);
 
-        // wait for background to finish
-        Thread.sleep(300);
+        // find assistant id from model
+        List<?> msgs = (List<?>) ((ConcurrentModel)m1).getAttribute("chatMessages");
+        Object last = msgs.get(msgs.size()-1);
+        String assistantId = null;
+        // attempt to extract id via toString or reflection
+        try {
+            var cls = last.getClass();
+            var f = cls.getDeclaredField("id");
+            f.setAccessible(true);
+            assistantId = (String) f.get(last);
+        } catch (Exception e) {
+            // fallback to toString parsing
+            String s = last.toString();
+            int i = s.indexOf("id=");
+            if (i >= 0) {
+                // hyphen placed at the end of the character class doesn't need escaping
+                assistantId = s.substring(i+3).replaceAll("[^a-zA-Z0-9-]", "");
+            }
+        }
+        assertThat(assistantId).isNotNull();
 
-        Model pollModel = new ConcurrentModel();
-        String out = ctrl.pollChat(pollModel);
-        // should be composite
-        assertThat(out).contains("fragments/chat-response :: response");
-        Boolean reviewOob = (Boolean) ((ConcurrentModel)pollModel).getAttribute("reviewOob");
-        assertThat(reviewOob).isTrue();
+        // call stream endpoint which will run same-thread executor in test constructor
+        var emitter = ctrl.streamChat(assistantId);
+        assertThat(emitter).isNotNull();
+
+        // after streaming completes, index should reflect changed files and review open
+        Model m2 = new ConcurrentModel();
+        ctrl.index(m2);
+        Boolean reviewOpen = (Boolean) ((ConcurrentModel)m2).getAttribute("reviewPanelOpen");
+        assertThat(reviewOpen).isTrue();
+        List<?> changed = (List<?>) ((ConcurrentModel)m2).getAttribute("changedFiles");
+        assertThat(changed).isNotEmpty();
+        // selected file should be set
+        Object sel = ((ConcurrentModel)m2).getAttribute("selectedFile");
+        assertThat(sel).isNotNull();
     }
 }

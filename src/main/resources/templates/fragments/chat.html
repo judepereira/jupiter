@@ -3,9 +3,12 @@
     <!-- HTMX polling attributes are applied to the messages list when hasPending is true -->
     <section id="chat" class="chat-shell">
         <div id="chat-history" class="messages" aria-live="polite">
-            <ul id="chat-messages-list" th:fragment="messages" th:attr="hx-get=${hasPending} ? '/ui/chat/poll' : null, hx-trigger=${hasPending} ? 'every 1s' : null, hx-target=${hasPending} ? '#chat-messages-list' : null, hx-swap=${hasPending} ? 'outerHTML' : null">
-                <li th:each="m : ${chatMessages}" th:attr="data-id=${m.id}" th:classappend="${m.pending} ? 'pending' : ''">
-                    <strong th:text="${m.role}"></strong>: <span th:text="${m.text}"></span>
+            <!-- Message list fragment: do not use polling; SSE binds to pending assistant rows -->
+            <ul id="chat-messages-list" th:fragment="messages">
+                <li th:each="m : ${chatMessages}"
+                    th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
+                    th:classappend="${m.pending} ? 'pending' : ''">
+                    <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
                 </li>
             </ul>
         </div>

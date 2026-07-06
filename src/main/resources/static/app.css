@@ -215,6 +215,8 @@ body {
     border-radius: 6px;
     background: #f3f7fb;
     border: 1px solid #e8f0fb;
+    /* Prevent browser auto-adjusting scroll during incremental streaming updates */
+    overflow-anchor: none;
 }
 
 #chat-messages-list {
@@ -224,6 +226,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    /* avoid layout shifts from user scroll + incremental text updates */
+    overflow-anchor: none;
 }
 
 .chat-form {
