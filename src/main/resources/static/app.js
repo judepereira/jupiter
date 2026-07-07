@@ -1,17 +1,17 @@
 // Simple draggable divider for resizing the review panel.
-(function(){
+(function () {
     const divider = document.getElementById('panel-divider');
     const shell = document.getElementById('shell');
     let review = document.getElementById('review');
 
     // Only initialize divider behavior if both elements are present.
-    if(divider && shell){
+    if (divider && shell) {
         const MIN_PX = 220; // min review width
         const MAX_RATIO = 0.7; // max as % of shell width
 
         let dragging = false;
 
-        function setReviewWidthPx(px){
+        function setReviewWidthPx(px) {
             // clamp
             const shellRect = shell.getBoundingClientRect();
             const maxPx = Math.floor(shellRect.width * MAX_RATIO);
@@ -20,19 +20,19 @@
             shell.style.setProperty('--review-width', clamped + 'px');
         }
 
-        function onPointerDown(e){
-            if(e.button && e.button !== 0) return; // only left
+        function onPointerDown(e) {
+            if (e.button && e.button !== 0) return; // only left
             // don't allow dragging when review isn't present/open or on small screens
-            if(window.innerWidth <= 900) return;
-            if(!review || review.classList.contains('closed')) return;
+            if (window.innerWidth <= 900) return;
+            if (!review || review.classList.contains('closed')) return;
             dragging = true;
             document.body.classList.add('dragging-divider');
             divider.classList.add('dragging');
             divider.setPointerCapture(e.pointerId);
         }
 
-        function onPointerMove(e){
-            if(!dragging) return;
+        function onPointerMove(e) {
+            if (!dragging) return;
             const shellRect = shell.getBoundingClientRect();
             // Calculate review width robustly using computed layout values (no magic constants)
             // right rail width from CSS variable --rail-width (fallback 40)
@@ -52,12 +52,15 @@
             setReviewWidthPx(reviewPx);
         }
 
-        function endDrag(e){
-            if(!dragging) return;
+        function endDrag(e) {
+            if (!dragging) return;
             dragging = false;
             document.body.classList.remove('dragging-divider');
             divider.classList.remove('dragging');
-            try{ divider.releasePointerCapture(e && e.pointerId); }catch(_){ }
+            try {
+                divider.releasePointerCapture(e && e.pointerId);
+            } catch (_) {
+            }
         }
 
         divider.addEventListener('pointerdown', onPointerDown);
@@ -66,7 +69,7 @@
         window.addEventListener('pointercancel', endDrag);
 
         // Utility to update divider visibility based on whether review is closed
-        function updateDividerVisibility(){
+        function updateDividerVisibility() {
             // hide divider when there's no review or it is closed
             review = document.getElementById('review');
             // On small screens we want the stacked layout. Ensure the divider
@@ -74,7 +77,7 @@
             // review-closed/open classes which are desktop-specific (they
             // change grid-template-columns). This prevents transient class
             // toggles from placing elements into implicit rows.
-            if(window.innerWidth <= 900){
+            if (window.innerWidth <= 900) {
                 divider.classList.add('hidden');
                 shell.classList.remove('review-open');
                 shell.classList.remove('review-closed');
@@ -84,7 +87,7 @@
                 return;
             }
 
-            if(!review || review.classList.contains('closed')){
+            if (!review || review.classList.contains('closed')) {
                 divider.classList.add('hidden');
                 // no review: mark shell closed so grid drops the columns on desktop
                 shell.classList.remove('review-open');
@@ -104,20 +107,21 @@
         // Use multiple lifecycle hooks and a small rAF delay to ensure DOM is stable
         // when we read classes/measurements. This defends against transient states
         // where the element is present but the shell class hasn't been synced yet.
-        function handleHtmxUpdate(evt){
+        function handleHtmxUpdate(evt) {
             // If swap targeted #review or contained it, refresh reference
-            try{
+            try {
                 const trg = evt && evt.detail && evt.detail.target;
-                if(trg && (trg.id === 'review' || (trg.closest && trg.closest('#review')))){
+                if (trg && (trg.id === 'review' || (trg.closest && trg.closest('#review')))) {
                     const newReview = document.getElementById('review');
-                    if(newReview) review = newReview;
+                    if (newReview) review = newReview;
                 }
-            }catch(_){ /* defensive */ }
+            } catch (_) { /* defensive */
+            }
 
             // Run update in next microtask + rAF to ensure HTMX DOM operations
             // and any synchronous JS mutations are finished before we measure.
-            Promise.resolve().then(()=>{
-                requestAnimationFrame(()=>{
+            Promise.resolve().then(() => {
+                requestAnimationFrame(() => {
                     updateDividerVisibility();
                 });
             });
@@ -127,21 +131,21 @@
         document.body.addEventListener('htmx:afterSettle', handleHtmxUpdate, true);
 
         // Also update on window resize to ensure clamp limits remain sensible
-        window.addEventListener('resize', ()=>{
+        window.addEventListener('resize', () => {
             // update divider visibility on breakpoint changes
             updateDividerVisibility();
             // ensure current --review-width still within new bounds
             const current = getComputedStyle(shell).getPropertyValue('--review-width').trim();
-            if(!current) return;
-            if(current.endsWith('%')) return; // percentage is okay
+            if (!current) return;
+            if (current.endsWith('%')) return; // percentage is okay
             const px = parseFloat(current);
-            if(Number.isFinite(px)) setReviewWidthPx(px);
+            if (Number.isFinite(px)) setReviewWidthPx(px);
         });
     }
 
     // Chat composer logic: kept outside the divider-guard so it runs even when
     // divider or shell are absent (HTMX swaps may only render chat fragments).
-    (function(){
+    (function () {
         // Keep auto-scroll state in this closure so we can detect when the
         // message count increases and only then scroll the history container.
         // Initialized to -1 so the very first render will trigger a single
@@ -155,24 +159,25 @@
         // Ensure we add the textarea clear listener only once across re-inits
         let htmxAfterOnLoadBound = false;
 
-        function scrollChatToBottom(){
-            try{
+        function scrollChatToBottom() {
+            try {
                 const history = document.getElementById('chat-history');
                 const list = document.getElementById('chat-messages-list');
-                if(!history || !list) return;
+                if (!history || !list) return;
                 // Use rAF to ensure layout is settled before manipulating scroll
-                requestAnimationFrame(()=>{
+                requestAnimationFrame(() => {
                     // Defensive: only set when it actually would move
                     const target = history.scrollHeight - history.clientHeight;
-                    if(Number.isFinite(target)) history.scrollTop = target;
+                    if (Number.isFinite(target)) history.scrollTop = target;
                 });
-            }catch(_){ /* defensive */ }
+            } catch (_) { /* defensive */
+            }
         }
 
-        function checkAndMaybeScroll(){
-            try{
+        function checkAndMaybeScroll() {
+            try {
                 const list = document.getElementById('chat-messages-list');
-                if(!list){
+                if (!list) {
                     // If list is absent, reset sentinel so future renders can
                     // trigger the initial scroll.
                     lastMessageCount = -1;
@@ -180,12 +185,12 @@
                 }
                 const count = list.children ? list.children.length : 0;
                 // On first observed render, always scroll once.
-                if(lastMessageCount === -1){
+                if (lastMessageCount === -1) {
                     lastMessageCount = count;
                     scrollChatToBottom();
                     return;
                 }
-                if(count > lastMessageCount){
+                if (count > lastMessageCount) {
                     lastMessageCount = count;
                     scrollChatToBottom();
                 } else {
@@ -193,11 +198,12 @@
                     // unchanged so future increases are measured correctly.
                     lastMessageCount = count;
                 }
-            }catch(_){ /* defensive */ }
+            } catch (_) { /* defensive */
+            }
         }
 
-        function bindAutoScrollListeners(){
-            if(chatAutoScrollBound) return;
+        function bindAutoScrollListeners() {
+            if (chatAutoScrollBound) return;
             chatAutoScrollBound = true;
             // Integrate with HTMX lifecycle. Use a small async window so the
             // swapped DOM is attached before we measure. We intentionally only
@@ -207,50 +213,53 @@
             // lists) which could otherwise cause an initial or unexpected
             // scroll-to-bottom.
 
-            function isHistoryNearBottom(){
-                try{
+            function isHistoryNearBottom() {
+                try {
                     const history = document.getElementById('chat-history');
-                    if(!history) return false;
+                    if (!history) return false;
                     // Consider "near bottom" to be within 48px of the max scroll
                     const max = history.scrollHeight - history.clientHeight;
                     const cur = history.scrollTop;
-                    if(!Number.isFinite(max) || !Number.isFinite(cur)) return false;
+                    if (!Number.isFinite(max) || !Number.isFinite(cur)) return false;
                     return (max - cur) <= 48;
-                }catch(_){ return false; }
+                } catch (_) {
+                    return false;
+                }
             }
 
             // Before-swap listener records whether the user was near bottom.
-            function htmxBeforeSwapListener(evt){
-                try{
+            function htmxBeforeSwapListener(evt) {
+                try {
                     const trg = (evt && evt.detail && evt.detail.target) || evt.target;
-                    if(!trg) return;
-                    if(trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
-                       (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))){
+                    if (!trg) return;
+                    if (trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
+                        (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))) {
                         wasNearBottomBeforeSwap = isHistoryNearBottom();
                     }
-                }catch(_){ /* defensive */ }
+                } catch (_) { /* defensive */
+                }
             }
 
-            function htmxChatListener(evt){
-                try{
+            function htmxChatListener(evt) {
+                try {
                     // Prefer HTMX-provided detail.target but fall back to the
                     // event target — this improves compatibility with different
                     // dispatching paths while still avoiding global reactions.
                     const trg = (evt && evt.detail && evt.detail.target) || evt.target;
-                    if(!trg) return;
+                    if (!trg) return;
 
                     // If the swap directly targeted the chat history/list or is
                     // contained within it, run the check.
-                    if(trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
-                       (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))){
+                    if (trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
+                        (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))) {
                         // Run count-based auto-scroll logic as before
                         Promise.resolve().then(checkAndMaybeScroll);
                         // If the user was near-bottom before the swap, ensure
                         // we re-pin them to the bottom after the swap as well
                         // (covers pending->final replacements that keep message
                         // count unchanged but change element heights).
-                        if(wasNearBottomBeforeSwap){
-                            Promise.resolve().then(()=>{
+                        if (wasNearBottomBeforeSwap) {
+                            Promise.resolve().then(() => {
                                 // Double-guard: only scroll if still near-bottom or
                                 // the flag was set; this avoids forcing scroll when
                                 // the user had scrolled up after the beforeSwap.
@@ -259,7 +268,8 @@
                             });
                         }
                     }
-                }catch(_){ /* defensive */ }
+                } catch (_) { /* defensive */
+                }
             }
 
             // Listen before swap to capture scroll position, then react
@@ -269,17 +279,17 @@
             document.body.addEventListener('htmx:afterSettle', htmxChatListener, true);
         }
 
-        function initChatComposer(){
-            try{
+        function initChatComposer() {
+            try {
                 const form = document.getElementById('chat-send-form');
                 const textarea = document.getElementById('chat-input');
-                if(!form || !textarea) return;
+                if (!form || !textarea) return;
 
                 // Avoid double-binding when initializer is rerun for HTMX swaps.
-                if(textarea.dataset.chatBound === '1') return;
+                if (textarea.dataset.chatBound === '1') return;
                 textarea.dataset.chatBound = '1';
 
-                function autoResize(){
+                function autoResize() {
                     // Reset to natural height then apply scrollHeight
                     textarea.style.height = 'auto';
                     const sh = textarea.scrollHeight;
@@ -288,9 +298,9 @@
                     // Toggle overflow only when content exceeds computed max-height
                     const cs = getComputedStyle(textarea);
                     const maxH = cs.maxHeight;
-                    if(maxH && maxH !== 'none'){
+                    if (maxH && maxH !== 'none') {
                         const maxVal = parseFloat(maxH);
-                        if(!isNaN(maxVal) && sh > maxVal){
+                        if (!isNaN(maxVal) && sh > maxVal) {
                             textarea.style.overflowY = 'auto';
                         } else {
                             textarea.style.overflowY = 'hidden';
@@ -303,17 +313,17 @@
 
                 // Handle keyboard: default textarea Enter/Shift+Enter behaviour (newline).
                 // Submit only when Enter is pressed with the Meta/Command key. Respect IME composition.
-                function onKeyDown(e){
+                function onKeyDown(e) {
                     const isEnter = e.key === 'Enter' || e.keyCode === 13;
-                    if(!isEnter) return;
-                    if(e.isComposing) return; // IME in progress
+                    if (!isEnter) return;
+                    if (e.isComposing) return; // IME in progress
                     // Only intercept Command/Meta+Enter. Leave plain Enter and Shift+Enter alone.
-                    if(!e.metaKey) return;
-                    if(e.shiftKey) return; // allow Command+Shift+Enter to behave like newline as well
+                    if (!e.metaKey) return;
+                    if (e.shiftKey) return; // allow Command+Shift+Enter to behave like newline as well
 
                     // Submit
                     e.preventDefault();
-                    if(typeof form.requestSubmit === 'function'){
+                    if (typeof form.requestSubmit === 'function') {
                         form.requestSubmit();
                     } else {
                         form.submit();
@@ -323,28 +333,29 @@
                 textarea.addEventListener('input', autoResize);
                 textarea.addEventListener('keydown', onKeyDown);
                 // Clear textarea after successful htmx form submit when targeting messages list
-                if(!htmxAfterOnLoadBound){
+                if (!htmxAfterOnLoadBound) {
                     htmxAfterOnLoadBound = true;
-                    document.body.addEventListener('htmx:afterOnLoad', function(evt){
-                        try{
+                    document.body.addEventListener('htmx:afterOnLoad', function (evt) {
+                        try {
                             const detail = evt && evt.detail;
                             const target = detail && detail.target;
                             // Only clear when the request was a form submit to /ui/chat/send
-                            if(!detail || !detail.xhr) return;
+                            if (!detail || !detail.xhr) return;
                             // HTMX exposes the request path on detail.path in some builds; fallback to inspecting the request URL
                             const path = (detail.path) || (detail.xhr && detail.xhr.responseURL) || '';
-                            if(!path) return;
-                            if(!path.includes('/ui/chat/send')) return;
+                            if (!path) return;
+                            if (!path.includes('/ui/chat/send')) return;
 
                             const textarea = document.getElementById('chat-input');
-                            if(!textarea) return;
+                            if (!textarea) return;
                             // Clear and reset height
                             textarea.value = '';
                             textarea.style.height = 'auto';
                             // run autoResize logic
                             const sh = textarea.scrollHeight;
                             textarea.style.height = sh + 'px';
-                        }catch(_){ }
+                        } catch (_) {
+                        }
                     }, true);
                 }
 
@@ -355,23 +366,92 @@
                 // and perform an initial check/scroll.
                 bindAutoScrollListeners();
                 checkAndMaybeScroll();
-            }catch(_){ /* defensive - don't break other UI */ }
+            } catch (_) { /* defensive - don't break other UI */
+            }
         }
 
         // Run once on load to bind any existing chat fragment
         initChatComposer();
+        // Initial render of any server-rendered messages into markdown
+        try {
+            renderAllChatMarkdown();
+        } catch (_) {
+        }
+
+        // Helper functions: render chat message text as sanitized markdown while
+        // preserving a raw-source copy on the element to support streaming updates.
+        // Inserted before streaming binding so stream code can use them.
+        function getRawChatMarkdown(el) {
+            try {
+                if (!el) return '';
+                return (el.dataset && el.dataset.rawMarkdown != null && el.dataset.rawMarkdown !== '') ? el.dataset.rawMarkdown : (el.textContent || '');
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function renderChatMarkdown(el, rawText) {
+            try {
+                if (!el) return;
+                // store raw source for future diffs/appends
+                if (!el.dataset) el.dataset = {};
+                el.dataset.rawMarkdown = rawText != null ? String(rawText) : '';
+
+                // If marked + DOMPurify exist, parse then sanitize
+                if (window.marked && window.DOMPurify) {
+                    try {
+                        var html = null;
+                        if (typeof window.marked.parse === 'function') {
+                            html = window.marked.parse(el.dataset.rawMarkdown, {breaks: true});
+                        } else if (typeof window.marked === 'function') {
+                            // older marked may be callable
+                            html = window.marked(el.dataset.rawMarkdown, {breaks: true});
+                        } else if (window.marked && typeof window.marked.parse === 'undefined') {
+                            // guarded fallback
+                            html = String(el.dataset.rawMarkdown);
+                        }
+                        // sanitize; DOMPurify.sanitize is expected
+                        if (html != null && window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+                            el.innerHTML = window.DOMPurify.sanitize(html);
+                            return;
+                        }
+                    } catch (_) { /* fall through to safe text fallback */
+                    }
+                }
+
+                // Fallback: set textContent to raw markdown so it remains escaped
+                el.textContent = el.dataset.rawMarkdown;
+            } catch (_) { /* defensive */
+            }
+        }
+
+        function renderAllChatMarkdown(root) {
+            try {
+                const base = root || document;
+                const msgs = base.querySelectorAll && base.querySelectorAll('.chat-message-text');
+                if (!msgs) return;
+                msgs.forEach(el => {
+                    try {
+                        const raw = getRawChatMarkdown(el);
+                        renderChatMarkdown(el, raw);
+                    } catch (_) {
+                    }
+                });
+            } catch (_) {
+            }
+        }
 
         // Streaming SSE binding: open EventSource for pending assistant rows.
         // We run after HTMX swaps/settles so newly swapped pending rows can start streaming.
-        function bindPendingStreams(){
-            try{
+        function bindPendingStreams() {
+            try {
                 const list = document.getElementById('chat-messages-list');
-                if(!list) return;
+                if (!list) return;
                 const rows = list.querySelectorAll('li[data-pending="true"]');
                 rows.forEach(row => {
-                    if(row.dataset.streamBound === '1') return; // already bound
+                    if (row.dataset.streamBound === '1') return; // already bound
                     const url = row.dataset.streamUrl;
-                    if(!url) return;
+                    if (!url) return;
                     row.dataset.streamBound = '1';
 
                     // Buffer incoming deltas and batch DOM writes
@@ -383,40 +463,56 @@
                     let lastFlushTime = 0;
                     const textSpan = row.querySelector('.chat-message-text');
 
-                    function flushBuffer(){
-                        if(!textSpan) return;
+                    function flushBuffer() {
+                        if (!textSpan) return;
                         // If nothing to flush, clear any pending timers/state and return
-                        if(buffer.length === 0){
+                        if (buffer.length === 0) {
                             rafPending = false;
-                            if(flushTimer){ clearTimeout(flushTimer); flushTimer = null; }
+                            if (flushTimer) {
+                                clearTimeout(flushTimer);
+                                flushTimer = null;
+                            }
                             return;
                         }
-                        // Append buffered text (keep existing content + buffer)
-                        textSpan.textContent = textSpan.textContent + buffer;
+                        // Append buffered text to the raw markdown source then render
+                        try {
+                            const prevRaw = getRawChatMarkdown(textSpan);
+                            const newRaw = prevRaw + buffer;
+                            renderChatMarkdown(textSpan, newRaw);
+                        } catch (_) {
+                            // fallback to textContent append if something goes wrong
+                            try {
+                                textSpan.textContent = textSpan.textContent + buffer;
+                            } catch (_) {
+                            }
+                        }
                         buffer = '';
                         rafPending = false;
                         lastFlushTime = Date.now();
-                        if(flushTimer){ clearTimeout(flushTimer); flushTimer = null; }
+                        if (flushTimer) {
+                            clearTimeout(flushTimer);
+                            flushTimer = null;
+                        }
                     }
 
                     // Bounded flush cadence: first delta shows immediately, subsequent
                     // updates are throttled to at most ~FLUSH_INTERVAL_MS using setTimeout
                     // plus rAF for layout.
-                    function scheduleFlush(){
+                    function scheduleFlush() {
                         // If a flush is already scheduled via timer or rAF, nothing to do
-                        if(rafPending || flushTimer) return;
+                        if (rafPending || flushTimer) return;
 
                         const now = Date.now();
 
                         // If we've never flushed before, show first content immediately
-                        if(lastFlushTime === 0){
+                        if (lastFlushTime === 0) {
                             // perform same-task flush so first characters appear quickly
                             flushBuffer();
                             return;
                         }
 
                         const elapsed = now - lastFlushTime;
-                        if(elapsed >= FLUSH_INTERVAL_MS){
+                        if (elapsed >= FLUSH_INTERVAL_MS) {
                             // Enough time has passed — schedule a rAF flush
                             rafPending = true;
                             requestAnimationFrame(flushBuffer);
@@ -427,7 +523,7 @@
                         // then use rAF to perform the DOM write for better layout timing.
                         flushTimer = setTimeout(() => {
                             flushTimer = null;
-                            if(rafPending) return;
+                            if (rafPending) return;
                             rafPending = true;
                             requestAnimationFrame(flushBuffer);
                         }, FLUSH_INTERVAL_MS - elapsed);
@@ -437,22 +533,26 @@
                     // Use a larger threshold for streaming so small incoming deltas don't
                     // immediately unstick the view while the user is effectively at the end.
                     const STREAM_BOTTOM_THRESHOLD_PX = 96;
-                    function wasNearBottom(){
-                        try{
+
+                    function wasNearBottom() {
+                        try {
                             const history = document.getElementById('chat-history');
-                            if(!history) return false;
+                            if (!history) return false;
                             const max = history.scrollHeight - history.clientHeight;
                             const cur = history.scrollTop;
-                            if(!Number.isFinite(max) || !Number.isFinite(cur)) return false;
+                            if (!Number.isFinite(max) || !Number.isFinite(cur)) return false;
                             return (max - cur) <= STREAM_BOTTOM_THRESHOLD_PX;
-                        }catch(_){ return false; }
+                        } catch (_) {
+                            return false;
+                        }
                     }
 
                     // Live, mutable flag indicating whether the stream should stick to bottom.
                     // Initialized from current position and updated by a stream-local scroll listener.
                     let shouldStickToBottom = wasNearBottom();
                     let streamHistoryEl = null;
-                    function streamScrollListener(){
+
+                    function streamScrollListener() {
                         shouldStickToBottom = wasNearBottom();
                     }
 
@@ -460,47 +560,53 @@
                     row._es = es;
 
                     // Helper to parse SSE payloads that may be JSON {text:...} or legacy raw strings
-                    function parseStreamPayload(e){
+                    function parseStreamPayload(e) {
                         const raw = (e && e.data) ? e.data : '';
-                        if(!raw) return { text: '' };
+                        if (!raw) return {text: ''};
                         // Try parse JSON first
-                        try{
+                        try {
                             const parsed = JSON.parse(raw);
-                            if(parsed && typeof parsed === 'object') return parsed;
-                        }catch(_){ /* not JSON */ }
+                            if (parsed && typeof parsed === 'object') return parsed;
+                        } catch (_) { /* not JSON */
+                        }
                         // fallback: legacy plain string
-                        return { text: raw };
+                        return {text: raw};
                     }
 
                     es.addEventListener('delta', (e) => {
-                        try{
+                        try {
                             const payload = parseStreamPayload(e);
-                            if(payload && payload.text != null){
+                            if (payload && payload.text != null) {
                                 // append exactly as provided, including spaces/newlines
                                 buffer += payload.text;
                                 gotDelta = true;
                                 scheduleFlush();
                             }
-                        }catch(_){ }
+                        } catch (_) {
+                        }
                     });
 
                     es.addEventListener('status', (e) => {
-                        try{
+                        try {
                             const payload = parseStreamPayload(e);
                             const st = (payload && payload.status != null) ? payload.status : (e.data || '');
-                            if(st) row.title = st;
-                        }catch(_){ }
+                            if (st) row.title = st;
+                        } catch (_) {
+                        }
                     });
 
                     es.addEventListener('done', (e) => {
-                        try{
+                        try {
                             const payload = parseStreamPayload(e);
                             // Ensure any pending buffered text is flushed first so
                             // streamed content is visible before final replacement.
-                            if(flushTimer){ clearTimeout(flushTimer); flushTimer = null; }
+                            if (flushTimer) {
+                                clearTimeout(flushTimer);
+                                flushTimer = null;
+                            }
                             // If a rAF flush is pending, perform a synchronous flush to
                             // avoid waiting for paint so the finalization sees latest text.
-                            if(rafPending){
+                            if (rafPending) {
                                 // clear the flag then flush synchronously
                                 rafPending = false;
                                 flushBuffer();
@@ -512,15 +618,35 @@
                             // If payload contains authoritative final text, use it to
                             // correct any missed/duplicated chunks. Only replace if
                             // it actually differs to avoid unnecessary reflows.
-                            if(payload && payload.text != null && textSpan){
-                                if(textSpan.textContent !== payload.text){
-                                    textSpan.textContent = payload.text;
+                            if (payload && payload.text != null && textSpan) {
+                                try {
+                                    const currentRaw = getRawChatMarkdown(textSpan);
+                                    if (String(payload.text) !== String(currentRaw)) {
+                                        renderChatMarkdown(textSpan, payload.text);
+                                    }
+                                    buffer = '';
+                                } catch (_) {
+                                    // fallback to direct assignment
+                                    if (textSpan.textContent !== payload.text) {
+                                        try {
+                                            textSpan.textContent = payload.text;
+                                        } catch (_) {
+                                        }
+                                    }
+                                    buffer = '';
                                 }
-                                buffer = '';
-                            } else if(!gotDelta){
+                            } else if (!gotDelta) {
                                 const data = e.data || '';
-                                if(data && textSpan){
-                                    textSpan.textContent = textSpan.textContent + data;
+                                if (data && textSpan) {
+                                    try {
+                                        const prevRaw = getRawChatMarkdown(textSpan);
+                                        renderChatMarkdown(textSpan, prevRaw + data);
+                                    } catch (_) {
+                                        try {
+                                            textSpan.textContent = textSpan.textContent + data;
+                                        } catch (_) {
+                                        }
+                                    }
                                 }
                                 flushBuffer();
                             }
@@ -529,84 +655,136 @@
                             row.classList.remove('pending');
                             row.removeAttribute('data-pending');
                             row.dataset.streamBound = '0';
-                        }catch(_){ }
-                        try{ es.close(); }catch(_){ }
+                        } catch (_) {
+                        }
+                        try {
+                            es.close();
+                        } catch (_) {
+                        }
                         // remove stream-local listener when stream completes
                         removeStreamScrollListener();
                     });
 
                     es.addEventListener('error', (e) => {
-                        try{
+                        try {
                             const payload = parseStreamPayload(e);
                             const data = (payload && payload.message) ? payload.message : ((e && e.data) ? e.data : 'Stream error');
-                            if(textSpan){
-                                textSpan.textContent = textSpan.textContent + '\n[Error: ' + data + ']';
+                            if (textSpan) {
+                                try {
+                                    const prevRaw = getRawChatMarkdown(textSpan);
+                                    renderChatMarkdown(textSpan, prevRaw + '\n[Error: ' + data + ']');
+                                } catch (_) {
+                                    try {
+                                        textSpan.textContent = textSpan.textContent + '\n[Error: ' + data + ']';
+                                    } catch (_) {
+                                    }
+                                }
                             }
                             row.classList.remove('pending');
                             row.removeAttribute('data-pending');
                             row.dataset.streamBound = '0';
-                        }catch(_){ }
-                        try{ es.close(); }catch(_){ }
+                        } catch (_) {
+                        }
+                        try {
+                            es.close();
+                        } catch (_) {
+                        }
                         // remove stream-local listener on error as well
                         removeStreamScrollListener();
                     });
 
                     // Ensure we flush any remaining buffer when the connection closes
                     es.addEventListener('close', () => {
-                        try{ flushBuffer(); }catch(_){ }
-                        try{ es.close(); }catch(_){ }
+                        try {
+                            flushBuffer();
+                        } catch (_) {
+                        }
+                        try {
+                            es.close();
+                        } catch (_) {
+                        }
                         // remove stream-local listener on close as well
-                        try{ removeStreamScrollListener(); }catch(_){ }
+                        try {
+                            removeStreamScrollListener();
+                        } catch (_) {
+                        }
                     });
 
                     // Install a stream-local scroll listener so we can track live user intent
                     // (they may scroll after the stream starts). Bind when stream is active
                     // and remove on done/error/close to avoid leaks.
-                    try{
+                    try {
                         streamHistoryEl = document.getElementById('chat-history');
-                        if(streamHistoryEl && streamHistoryEl.addEventListener){
-                            streamHistoryEl.addEventListener('scroll', streamScrollListener, { passive: true });
+                        if (streamHistoryEl && streamHistoryEl.addEventListener) {
+                            streamHistoryEl.addEventListener('scroll', streamScrollListener, {passive: true});
                         }
-                    }catch(_){ streamHistoryEl = null; }
+                    } catch (_) {
+                        streamHistoryEl = null;
+                    }
 
                     // Wrap flush to respect live shouldStickToBottom state.
                     const originalFlush = flushBuffer;
-                    flushBuffer = function(){
+                    flushBuffer = function () {
                         // Before DOM append, capture whether we should stick. The
                         // current content height may change after append, so also
                         // consider immediate wasNearBottom() as a fallback.
                         const stickBeforeFlush = shouldStickToBottom || wasNearBottom();
                         originalFlush();
-                        if(stickBeforeFlush){
+                        if (stickBeforeFlush) {
                             // schedule scroll after paint, then ensure the flag
                             // remains set so subsequent flushes stay sticky.
-                            requestAnimationFrame(()=>{
-                                try{
+                            requestAnimationFrame(() => {
+                                try {
                                     const history = document.getElementById('chat-history');
-                                    if(history) history.scrollTop = history.scrollHeight - history.clientHeight;
+                                    if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
                                     // re-affirm stick state after performing the scroll
                                     shouldStickToBottom = true;
-                                }catch(_){ }
+                                } catch (_) {
+                                }
                             });
                         }
                     };
 
                     // Teardown helper to remove listener and avoid leaks
-                    function removeStreamScrollListener(){
-                        try{
-                            if(streamHistoryEl && streamHistoryEl.removeEventListener){
-                                streamHistoryEl.removeEventListener('scroll', streamScrollListener, { passive: true });
+                    function removeStreamScrollListener() {
+                        try {
+                            if (streamHistoryEl && streamHistoryEl.removeEventListener) {
+                                streamHistoryEl.removeEventListener('scroll', streamScrollListener, {passive: true});
                             }
-                        }catch(_){ }
+                        } catch (_) {
+                        }
                     }
                 });
-            }catch(_){ }
+            } catch (_) {
+            }
         }
 
         // Run binding after HTMX swaps/settles and on initial load
         bindPendingStreams();
-        document.body.addEventListener('htmx:afterSwap', function(){ Promise.resolve().then(bindPendingStreams); }, true);
-        document.body.addEventListener('htmx:afterSettle', function(){ Promise.resolve().then(bindPendingStreams); }, true);
+        document.body.addEventListener('htmx:afterSwap', function (evt) {
+            Promise.resolve().then(bindPendingStreams);
+        }, true);
+        document.body.addEventListener('htmx:afterSettle', function (evt) {
+            Promise.resolve().then(bindPendingStreams);
+        }, true);
+
+        // Re-render markdown after HTMX swaps so server-rendered escaped text
+        // becomes parsed markdown. Use the swap target when available to limit
+        // the work and avoid unnecessary re-renders.
+        document.body.addEventListener('htmx:afterSwap', function (evt) {
+            try {
+                const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
+                Promise.resolve().then(() => renderAllChatMarkdown(target));
+            } catch (_) {
+            }
+        }, true);
+        document.body.addEventListener('htmx:afterSettle', function (evt) {
+            try {
+                const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
+                Promise.resolve().then(() => renderAllChatMarkdown(target));
+            } catch (_) {
+            }
+        }, true);
     })();
 
 })();

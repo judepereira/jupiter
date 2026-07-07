@@ -342,10 +342,89 @@ body {
     border-radius: 6px;
 }
 
-/* Preserve newlines in chat message text */
-#chat-messages-list li span,
-.chat-message-text {
+/* Preserve newlines for raw/plain text spans (keep markdown rendering intact)
+   Do NOT apply pre-wrap to .chat-message-text globally to avoid breaking
+   rendered markdown block layout (paragraphs, lists, code blocks). */
+#chat-messages-list li span {
     white-space: pre-wrap;
+}
+
+/* Scoped styles for rendered markdown inside chat messages. These rules
+   keep plain text readable while ensuring markdown blocks (p, ul, ol,
+   blockquote, pre, code, headings) render with correct spacing and
+   code blocks are visually distinct and scroll when needed. */
+.chat-message-text {
+    /* fallback for long words/plain text */
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.45;
+    min-width: 0; /* prevent overflow in flex/grid children */
+}
+
+.chat-message-text p {
+    margin: 0 0 0.75em 0;
+}
+
+.chat-message-text h1,
+.chat-message-text h2,
+.chat-message-text h3,
+.chat-message-text h4,
+.chat-message-text h5,
+.chat-message-text h6 {
+    margin: 0 0 0.5em 0;
+    line-height: 1.2;
+    font-weight: 600;
+}
+
+.chat-message-text ul,
+.chat-message-text ol {
+    margin: 0 0 0.75em 1.25em;
+    padding-left: 0;
+}
+
+.chat-message-text li {
+    margin-bottom: 0.25em;
+}
+
+.chat-message-text blockquote {
+    margin: 0 0 0.75em 0;
+    padding: 8px 12px;
+    border-left: 3px solid #e6eef6;
+    background: rgba(0,0,0,0.02);
+    color: var(--muted);
+    border-radius: 6px;
+}
+
+/* Code blocks: visually distinct, preserve formatting, scroll horizontally
+   when too wide but never overflow the chat panel. */
+.chat-message-text pre {
+    background: #0b1220;
+    color: #e6eef6;
+    padding: 10px;
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Liberation Mono", monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: pre; /* preserve exact formatting */
+    overflow: auto; /* allow scrolling instead of overflowing */
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Inline code: subtle background and allow wrapping if needed */
+.chat-message-text code {
+    background: #f3f7fb;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    font-size: 0.95em;
+    white-space: pre-wrap;
+}
+
+.chat-message-text a {
+    color: var(--accent);
+    text-decoration: underline;
+    word-break: break-word;
 }
 
 /* file list styles */

@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <head>
-    <meta charset="utf-8" />
+    <meta charset="utf-8"/>
     <title>Jupiter</title>
     <!-- HTMX and other libs are expected to be included in real templates -->
     <script src="https://unpkg.com/htmx.org@1.9.4"></script>
@@ -21,27 +21,36 @@
 
     <!-- main left content: chat composer + history -->
     <main id="left-panel" class="main-panel left-panel">
-        <div id="chat-container" th:replace="fragments/chat :: chat" th:with="hasPending=${false}, reviewOob=${false}">Loading chat...</div>
+        <div id="chat-container" th:replace="fragments/chat :: chat" th:with="hasPending=${false}, reviewOob=${false}">
+            Loading chat...
+        </div>
     </main>
 
     <!-- draggable divider between left panel and review panel -->
-    <div id="panel-divider" class="panel-divider" role="separator" aria-label="Click and drag to resize" title="Click and drag to resize" aria-orientation="vertical" tabindex="0"></div>
+    <div id="panel-divider" class="panel-divider" role="separator" aria-label="Click and drag to resize"
+         title="Click and drag to resize" aria-orientation="vertical" tabindex="0"></div>
 
     <!-- main right content: review/diff -->
-    <aside id="review" class="main-panel review-panel" th:replace="fragments/review :: panel" th:with="reviewOob=${false}">Loading review...</aside>
+    <aside id="review" class="main-panel review-panel" th:replace="fragments/review :: panel"
+           th:with="reviewOob=${false}">Loading review...
+    </aside>
 
     <!-- extreme right rail -->
     <aside id="right-rail" class="rail right-rail">
         <div th:replace="fragments/panel :: panel(panelName='right-rail')">Right rail</div>
         <div id="right-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
         <!-- control to toggle review panel for convenience -->
-        <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/review/toggle" hx-target="#review" hx-swap="outerHTML">
-            <i class="bi bi-layout-sidebar-inset-reverse" aria-label="Toggle review panel" title="Toggle review panel"></i>
+        <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/review/toggle" hx-target="#review"
+                hx-swap="outerHTML">
+            <i class="bi bi-layout-sidebar-inset-reverse" aria-label="Toggle review panel"
+               title="Toggle review panel"></i>
         </button>
     </aside>
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.11/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.umd.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
