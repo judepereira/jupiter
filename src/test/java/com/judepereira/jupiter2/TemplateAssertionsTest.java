@@ -17,6 +17,9 @@ public class TemplateAssertionsTest {
         assertThat(s).doesNotContain("/ui/chat/poll", "every 1s", "hx-get")
                 .contains("id=\"chat-messages-list\"");
 
+        // Ensure the standalone row fragment was removed to avoid evaluation when m is null
+        assertThat(s).doesNotContain("th:fragment=\"row\"");
+
         // Ensure streaming attributes and pending markers are present and form still posts to send
         // New behavior: form appends to the messages list (hx-swap="beforeend") targeting #chat-messages-list
         assertThat(s).contains("data-stream-url", "data-pending", "class=\"chat-message-text\"")
@@ -80,6 +83,7 @@ public class TemplateAssertionsTest {
         // Ensure we do not emit a wrapper <div> or nested <ul> for appended rows
         assertThat(s).doesNotContain("<div>", "chat-messages-list-new", "<ul")
                 // ensure outdated fragment invocation syntax is not present
-                .doesNotContain("row(m=${m})");
+                .doesNotContain("row(m=${m})")
+                .doesNotContain("fragments/chat :: row");
     }
 }

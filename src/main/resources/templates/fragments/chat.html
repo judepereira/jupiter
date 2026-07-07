@@ -5,8 +5,12 @@
         <div id="chat-history" class="messages" aria-live="polite">
             <!-- Message list fragment: do not use polling; SSE binds to pending assistant rows -->
             <ul id="chat-messages-list" th:fragment="messages">
-                <!-- iterate and reuse the single-row fragment to avoid duplicated markup -->
-                <li th:each="m : ${chatMessages}" th:replace="~{fragments/chat :: row(${m})}"></li>
+                <!-- iterate and inline the single-row markup so Thymeleaf doesn't evaluate a standalone fragment -->
+                <li th:each="m : ${chatMessages}"
+                    th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
+                    th:classappend="${m.pending} ? 'pending' : ''">
+                    <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
+                </li>
             </ul>
         </div>
 
@@ -18,9 +22,4 @@
     </section>
 </div>
 
-<!-- reusable single message row fragment -->
-<li th:fragment="row(m)"
-    th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
-    th:classappend="${m.pending} ? 'pending' : ''">
-    <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
-</li>
+<!-- row fragment removed: markup inlined in list to avoid standalone evaluation when m is null -->
