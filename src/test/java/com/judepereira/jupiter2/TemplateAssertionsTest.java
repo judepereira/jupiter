@@ -28,6 +28,14 @@ public class TemplateAssertionsTest {
         String s = Files.readString(p);
 
         // Ensure we added a guard to avoid binding the htmx afterOnLoad listener repeatedly
-        assertThat(s).contains("EventSource", "bindPendingStreams", "requestAnimationFrame", "streamBound", "htmx:beforeSwap");
+        // Key behaviors to prevent streaming regressions:
+        // - JSON.parse is used for payloads
+        // - payload.text != null checks preserve whitespace-only deltas
+        // - a bounded flush interval (setTimeout) exists
+        // - flushBuffer is invoked before final replacement on done
+        assertThat(s).contains("EventSource", "bindPendingStreams", "requestAnimationFrame", "streamBound", "htmx:beforeSwap",
+                "JSON.parse", "payload.text != null", "setTimeout", "flushBuffer",
+                // Streaming auto-scroll: live state and listener lifecycle
+                "shouldStickToBottom", "STREAM_BOTTOM_THRESHOLD_PX", "addEventListener('scroll'", "removeEventListener('scroll'", "stickBeforeFlush");
     }
 }

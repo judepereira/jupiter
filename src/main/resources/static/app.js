@@ -375,28 +375,68 @@
                     row.dataset.streamBound = '1';
 
                     // Buffer incoming deltas and batch DOM writes
+                    const FLUSH_INTERVAL_MS = 40; // throttle cadence for visible progressive updates
                     let buffer = '';
                     let gotDelta = false;
                     let rafPending = false;
+                    let flushTimer = null;
+                    let lastFlushTime = 0;
                     const textSpan = row.querySelector('.chat-message-text');
 
                     function flushBuffer(){
                         if(!textSpan) return;
-                        if(buffer.length === 0) return;
+                        // If nothing to flush, clear any pending timers/state and return
+                        if(buffer.length === 0){
+                            rafPending = false;
+                            if(flushTimer){ clearTimeout(flushTimer); flushTimer = null; }
+                            return;
+                        }
                         // Append buffered text (keep existing content + buffer)
                         textSpan.textContent = textSpan.textContent + buffer;
                         buffer = '';
                         rafPending = false;
+                        lastFlushTime = Date.now();
+                        if(flushTimer){ clearTimeout(flushTimer); flushTimer = null; }
                     }
 
-                    // Throttle DOM updates to ~60-25fps by batching with rAF
+                    // Bounded flush cadence: first delta shows immediately, subsequent
+                    // updates are throttled to at most ~FLUSH_INTERVAL_MS using setTimeout
+                    // plus rAF for layout.
                     function scheduleFlush(){
-                        if(rafPending) return;
-                        rafPending = true;
-                        requestAnimationFrame(flushBuffer);
+                        // If a flush is already scheduled via timer or rAF, nothing to do
+                        if(rafPending || flushTimer) return;
+
+                        const now = Date.now();
+
+                        // If we've never flushed before, show first content immediately
+                        if(lastFlushTime === 0){
+                            // perform same-task flush so first characters appear quickly
+                            flushBuffer();
+                            return;
+                        }
+
+                        const elapsed = now - lastFlushTime;
+                        if(elapsed >= FLUSH_INTERVAL_MS){
+                            // Enough time has passed — schedule a rAF flush
+                            rafPending = true;
+                            requestAnimationFrame(flushBuffer);
+                            return;
+                        }
+
+                        // Otherwise schedule a timer to fire after remaining interval,
+                        // then use rAF to perform the DOM write for better layout timing.
+                        flushTimer = setTimeout(() => {
+                            flushTimer = null;
+                            if(rafPending) return;
+                            rafPending = true;
+                            requestAnimationFrame(flushBuffer);
+                        }, FLUSH_INTERVAL_MS - elapsed);
                     }
 
-                    // Track if user was near bottom so we only auto-scroll when appropriate
+                    // Track if user is near bottom so we only auto-scroll when appropriate
+                    // Use a larger threshold for streaming so small incoming deltas don't
+                    // immediately unstick the view while the user is effectively at the end.
+                    const STREAM_BOTTOM_THRESHOLD_PX = 96;
                     function wasNearBottom(){
                         try{
                             const history = document.getElementById('chat-history');
@@ -404,11 +444,17 @@
                             const max = history.scrollHeight - history.clientHeight;
                             const cur = history.scrollTop;
                             if(!Number.isFinite(max) || !Number.isFinite(cur)) return false;
-                            return (max - cur) <= 48;
+                            return (max - cur) <= STREAM_BOTTOM_THRESHOLD_PX;
                         }catch(_){ return false; }
                     }
 
-                    const nearBefore = wasNearBottom();
+                    // Live, mutable flag indicating whether the stream should stick to bottom.
+                    // Initialized from current position and updated by a stream-local scroll listener.
+                    let shouldStickToBottom = wasNearBottom();
+                    let streamHistoryEl = null;
+                    function streamScrollListener(){
+                        shouldStickToBottom = wasNearBottom();
+                    }
 
                     const es = new EventSource(url);
                     row._es = es;
@@ -449,10 +495,28 @@
                     es.addEventListener('done', (e) => {
                         try{
                             const payload = parseStreamPayload(e);
-                            // If payload contains authoritative final text, use it
+                            // Ensure any pending buffered text is flushed first so
+                            // streamed content is visible before final replacement.
+                            if(flushTimer){ clearTimeout(flushTimer); flushTimer = null; }
+                            // If a rAF flush is pending, perform a synchronous flush to
+                            // avoid waiting for paint so the finalization sees latest text.
+                            if(rafPending){
+                                // clear the flag then flush synchronously
+                                rafPending = false;
+                                flushBuffer();
+                            } else {
+                                // ensure any buffered text is applied
+                                flushBuffer();
+                            }
+
+                            // If payload contains authoritative final text, use it to
+                            // correct any missed/duplicated chunks. Only replace if
+                            // it actually differs to avoid unnecessary reflows.
                             if(payload && payload.text != null && textSpan){
-                                // replace final text to correct any missed/duplicated chunks
-                                textSpan.textContent = payload.text;
+                                if(textSpan.textContent !== payload.text){
+                                    textSpan.textContent = payload.text;
+                                }
+                                buffer = '';
                             } else if(!gotDelta){
                                 const data = e.data || '';
                                 if(data && textSpan){
@@ -460,12 +524,15 @@
                                 }
                                 flushBuffer();
                             }
+
                             // mark non-pending
                             row.classList.remove('pending');
                             row.removeAttribute('data-pending');
                             row.dataset.streamBound = '0';
                         }catch(_){ }
                         try{ es.close(); }catch(_){ }
+                        // remove stream-local listener when stream completes
+                        removeStreamScrollListener();
                     });
 
                     es.addEventListener('error', (e) => {
@@ -480,25 +547,58 @@
                             row.dataset.streamBound = '0';
                         }catch(_){ }
                         try{ es.close(); }catch(_){ }
+                        // remove stream-local listener on error as well
+                        removeStreamScrollListener();
                     });
 
                     // Ensure we flush any remaining buffer when the connection closes
                     es.addEventListener('close', () => {
                         try{ flushBuffer(); }catch(_){ }
                         try{ es.close(); }catch(_){ }
+                        // remove stream-local listener on close as well
+                        try{ removeStreamScrollListener(); }catch(_){ }
                     });
 
-                    // If the user was near bottom before stream started, keep them pinned
-                    // after each flush by scheduling a scroll on rAF.
+                    // Install a stream-local scroll listener so we can track live user intent
+                    // (they may scroll after the stream starts). Bind when stream is active
+                    // and remove on done/error/close to avoid leaks.
+                    try{
+                        streamHistoryEl = document.getElementById('chat-history');
+                        if(streamHistoryEl && streamHistoryEl.addEventListener){
+                            streamHistoryEl.addEventListener('scroll', streamScrollListener, { passive: true });
+                        }
+                    }catch(_){ streamHistoryEl = null; }
+
+                    // Wrap flush to respect live shouldStickToBottom state.
                     const originalFlush = flushBuffer;
                     flushBuffer = function(){
+                        // Before DOM append, capture whether we should stick. The
+                        // current content height may change after append, so also
+                        // consider immediate wasNearBottom() as a fallback.
+                        const stickBeforeFlush = shouldStickToBottom || wasNearBottom();
                         originalFlush();
-                        if(nearBefore){
+                        if(stickBeforeFlush){
+                            // schedule scroll after paint, then ensure the flag
+                            // remains set so subsequent flushes stay sticky.
                             requestAnimationFrame(()=>{
-                                try{ const history = document.getElementById('chat-history'); if(history) history.scrollTop = history.scrollHeight - history.clientHeight; }catch(_){ }
+                                try{
+                                    const history = document.getElementById('chat-history');
+                                    if(history) history.scrollTop = history.scrollHeight - history.clientHeight;
+                                    // re-affirm stick state after performing the scroll
+                                    shouldStickToBottom = true;
+                                }catch(_){ }
                             });
                         }
                     };
+
+                    // Teardown helper to remove listener and avoid leaks
+                    function removeStreamScrollListener(){
+                        try{
+                            if(streamHistoryEl && streamHistoryEl.removeEventListener){
+                                streamHistoryEl.removeEventListener('scroll', streamScrollListener, { passive: true });
+                            }
+                        }catch(_){ }
+                    }
                 });
             }catch(_){ }
         }
