@@ -40,7 +40,7 @@
         <div th:replace="fragments/panel :: panel(panelName='right-rail')">Right rail</div>
         <div id="right-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
         <!-- control to toggle review panel for convenience -->
-        <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/review/toggle" hx-target="#review"
+        <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/review/toggle" hx-target="#shell > #review"
                 hx-swap="outerHTML">
             <i class="bi bi-layout-sidebar-inset-reverse" aria-label="Toggle review panel"
                title="Toggle review panel"></i>

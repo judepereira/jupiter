@@ -2,7 +2,11 @@
 (function () {
     const divider = document.getElementById('panel-divider');
     const shell = document.getElementById('shell');
-    let review = document.getElementById('review');
+    // Prefer the shell-level review panel (avoid nested duplicate ids)
+    function getShellReviewPanel() {
+        return document.querySelector('#shell > #review') || document.getElementById('review');
+    }
+    let review = getShellReviewPanel();
 
     // Only initialize divider behavior if both elements are present.
     if (divider && shell) {
@@ -71,7 +75,7 @@
         // Utility to update divider visibility based on whether review is closed
         function updateDividerVisibility() {
             // hide divider when there's no review or it is closed
-            review = document.getElementById('review');
+            review = getShellReviewPanel();
             // On small screens we want the stacked layout. Ensure the divider
             // is hidden, but also keep the shell in a neutral state: don't add
             // review-closed/open classes which are desktop-specific (they
@@ -112,7 +116,7 @@
             try {
                 const trg = evt && evt.detail && evt.detail.target;
                 if (trg && (trg.id === 'review' || (trg.closest && trg.closest('#review')))) {
-                    const newReview = document.getElementById('review');
+                    const newReview = getShellReviewPanel();
                     if (newReview) review = newReview;
                 }
             } catch (_) { /* defensive */

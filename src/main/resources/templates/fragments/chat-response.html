@@ -17,6 +17,6 @@
         </li>
     </th:block>
 
-    <!-- conditionally include OOB review panel replacement when reviewOob is true -->
-    <div th:if="${reviewOob}" th:replace="fragments/review :: panel"></div>
+    <!-- Out-of-band review replacement is handled at the shell level; do not include review panel here when appending rows. -->
+    <!-- Previously we included the review fragment here which could result in nested ids when appending chat rows. -->
 </th:block>

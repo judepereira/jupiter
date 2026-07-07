@@ -59,6 +59,9 @@ public class TemplateAssertionsTest {
         assertThat(iDom).isLessThan(iApp);
         assertThat(iMarked).isLessThan(iApp);
 
+        // index toggle should target the shell-level review panel
+        assertThat(index).contains("hx-target=\"#shell > #review\"");
+
         // app.js should expose markdown helpers and use DOMPurify/marked and dataset.rawMarkdown
         Path app = Path.of("src/main/resources/static/app.js");
         String appJs = Files.readString(app);
@@ -85,5 +88,7 @@ public class TemplateAssertionsTest {
                 // ensure outdated fragment invocation syntax is not present
                 .doesNotContain("row(m=${m})")
                 .doesNotContain("fragments/chat :: row");
+        // Ensure we no longer include the review fragment or OOB swap markers in the chat-response
+        assertThat(s).doesNotContain("fragments/review :: panel", "hx-swap-oob", "id=\"review\"");
     }
 }
