@@ -413,6 +413,11 @@
                         // sanitize; DOMPurify.sanitize is expected
                         if (html != null && window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
                             el.innerHTML = window.DOMPurify.sanitize(html);
+                            try {
+                                if (el.classList) el.classList.add('markdown-rendered');
+                                if (el.dataset) el.dataset.markdownRendered = 'true';
+                            } catch (_) {
+                            }
                             return;
                         }
                     } catch (_) { /* fall through to safe text fallback */
@@ -420,6 +425,12 @@
                 }
 
                 // Fallback: set textContent to raw markdown so it remains escaped
+                try {
+                    // remove any rendered marker — this is plain/escaped text
+                    if (el.classList) el.classList.remove('markdown-rendered');
+                    if (el.dataset) delete el.dataset.markdownRendered;
+                } catch (_) {
+                }
                 el.textContent = el.dataset.rawMarkdown;
             } catch (_) { /* defensive */
             }
@@ -774,14 +785,19 @@
         document.body.addEventListener('htmx:afterSwap', function (evt) {
             try {
                 const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
-                Promise.resolve().then(() => renderAllChatMarkdown(target));
+                // Prefer the live chat list if present (handles beforeend appends)
+                const liveList = document.getElementById('chat-messages-list');
+                const base = liveList ? liveList : (target && target.querySelector && target.querySelector('.chat-message-text') ? target : document);
+                Promise.resolve().then(() => renderAllChatMarkdown(base));
             } catch (_) {
             }
         }, true);
         document.body.addEventListener('htmx:afterSettle', function (evt) {
             try {
                 const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
-                Promise.resolve().then(() => renderAllChatMarkdown(target));
+                const liveList = document.getElementById('chat-messages-list');
+                const base = liveList ? liveList : (target && target.querySelector && target.querySelector('.chat-message-text') ? target : document);
+                Promise.resolve().then(() => renderAllChatMarkdown(base));
             } catch (_) {
             }
         }, true);

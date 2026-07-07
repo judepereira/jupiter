@@ -343,9 +343,9 @@ body {
 }
 
 /* Preserve newlines for raw/plain text spans (keep markdown rendering intact)
-   Do NOT apply pre-wrap to .chat-message-text globally to avoid breaking
-   rendered markdown block layout (paragraphs, lists, code blocks). */
-#chat-messages-list li span {
+   Only apply pre-wrap to chat message text that has NOT been rendered as
+   markdown. Rendered markdown should control its own whitespace/blocks. */
+.chat-message-text:not(.markdown-rendered) {
     white-space: pre-wrap;
 }
 

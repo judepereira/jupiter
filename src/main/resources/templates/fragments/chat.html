@@ -5,18 +5,22 @@
         <div id="chat-history" class="messages" aria-live="polite">
             <!-- Message list fragment: do not use polling; SSE binds to pending assistant rows -->
             <ul id="chat-messages-list" th:fragment="messages">
-                <li th:each="m : ${chatMessages}"
-                    th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
-                    th:classappend="${m.pending} ? 'pending' : ''">
-                    <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
-                </li>
+                <!-- iterate and reuse the single-row fragment to avoid duplicated markup -->
+                <li th:each="m : ${chatMessages}" th:replace="~{fragments/chat :: row(${m})}"></li>
             </ul>
         </div>
 
-        <form id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="outerHTML">
+        <form id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend">
             <label for="chat-input" class="sr-only">Message</label>
             <textarea id="chat-input" name="message" rows="1" autocomplete="off"></textarea>
             <button id="chat-send-btn" type="submit">Send</button>
         </form>
     </section>
 </div>
+
+<!-- reusable single message row fragment -->
+<li th:fragment="row(m)"
+    th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
+    th:classappend="${m.pending} ? 'pending' : ''">
+    <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
+</li>

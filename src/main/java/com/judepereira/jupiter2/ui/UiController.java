@@ -96,13 +96,19 @@ public class UiController {
 
     @PostMapping("/ui/chat/send")
     public String sendMessage(@RequestParam("message") String message, Model model, HttpServletRequest request) {
+        // collect only newly created chat messages for append response
+        List<ChatMessage> newChatMessages = new ArrayList<>();
         if (message != null && !message.isBlank()) {
             String user = message.trim();
-            chat.add(new ChatMessage("user", user, Instant.now().toEpochMilli(), false, UUID.randomUUID().toString()));
+            ChatMessage userMsg = new ChatMessage("user", user, Instant.now().toEpochMilli(), false, UUID.randomUUID().toString());
+            chat.add(userMsg);
+            newChatMessages.add(userMsg);
 
             String assistantId = UUID.randomUUID().toString();
             // add pending assistant message
-            chat.add(new ChatMessage("assistant", "Thinking…", Instant.now().toEpochMilli(), true, assistantId));
+            ChatMessage pendingAssistant = new ChatMessage("assistant", "Thinking…", Instant.now().toEpochMilli(), true, assistantId);
+            chat.add(pendingAssistant);
+            newChatMessages.add(pendingAssistant);
 
             // build concise system prompt for coding agent
             String systemPrompt = "You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.";
@@ -110,7 +116,10 @@ public class UiController {
             pendingStreams.put(assistantId, new AgentTurnRequest(systemPrompt, user));
         }
 
+        // keep full chatMessages model for initial page render / other flows
         model.addAttribute("chatMessages", List.copyOf(chat));
+        // supply only newly created rows for the append response
+        model.addAttribute("newChatMessages", List.copyOf(newChatMessages));
         model.addAttribute("changedFiles", List.copyOf(changedFiles));
         model.addAttribute("reviewPanelOpen", reviewPanelOpen.get());
         model.addAttribute("selectedFile", selectedFile);
@@ -122,7 +131,7 @@ public class UiController {
         boolean reviewOob = !hasPending && reviewPanelOpen.get();
         model.addAttribute("reviewOob", reviewOob);
 
-        // return a composite response fragment that contains the chat fragment and (optionally) an OOB review fragment
+        // return a composite response fragment that renders only the new rows and optional OOB review fragment
         return "fragments/chat-response :: response";
     }
 

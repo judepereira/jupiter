@@ -18,8 +18,10 @@ public class TemplateAssertionsTest {
                 .contains("id=\"chat-messages-list\"");
 
         // Ensure streaming attributes and pending markers are present and form still posts to send
+        // New behavior: form appends to the messages list (hx-swap="beforeend") targeting #chat-messages-list
         assertThat(s).contains("data-stream-url", "data-pending", "class=\"chat-message-text\"")
-                .contains("id=\"chat-send-form\"", "hx-post=\"/ui/chat/send\"", "hx-target=\"#chat-messages-list\"");
+                .contains("id=\"chat-send-form\"", "hx-post=\"/ui/chat/send\"", "hx-target=\"#chat-messages-list\"")
+                .contains("hx-swap=\"beforeend\"");
     }
 
     @Test
@@ -59,10 +61,25 @@ public class TemplateAssertionsTest {
         String appJs = Files.readString(app);
         assertThat(appJs).contains("renderChatMarkdown", "renderAllChatMarkdown", "getRawChatMarkdown",
                 "DOMPurify.sanitize", "marked.parse", "dataset.rawMarkdown");
+        // additional runtime marker and live-list re-render after HTMX swaps
+        assertThat(appJs).contains("markdown-rendered", "renderAllChatMarkdown(base)", "liveList");
 
         // CSS should include markdown styling for chat messages (lightweight check)
         Path css = Path.of("src/main/resources/static/app.css");
         String cssS = Files.readString(css);
-        assertThat(cssS).contains(".chat-message-text", ".chat-message-text p", ".chat-message-text pre");
+        // Ensure we only apply pre-wrap to non-markdown-rendered spans and avoid the old broad selector
+        assertThat(cssS).contains(".chat-message-text:not(.markdown-rendered)")
+                .doesNotContain("#chat-messages-list li span");
+    }
+
+    @Test
+    public void chatResponse_emits_only_rows_and_uses_fragment_param_syntax() throws Exception {
+        Path p = Path.of("src/main/resources/templates/fragments/chat-response.html");
+        String s = Files.readString(p);
+
+        // Ensure we do not emit a wrapper <div> or nested <ul> for appended rows
+        assertThat(s).doesNotContain("<div>", "chat-messages-list-new", "<ul")
+                // ensure outdated fragment invocation syntax is not present
+                .doesNotContain("row(m=${m})");
     }
 }

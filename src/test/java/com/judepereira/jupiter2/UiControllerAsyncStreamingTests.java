@@ -54,6 +54,10 @@ public class UiControllerAsyncStreamingTests {
 
         // fragment should be the chat response composite
         assertThat(frag).contains("fragments/chat-response :: response");
+        // model should include only the newly created rows for append responses
+        List<?> newRows = (List<?>) ((ConcurrentModel)model).getAttribute("newChatMessages");
+        assertThat(newRows).isNotNull();
+        assertThat(newRows.stream().anyMatch(o -> o.toString().contains("Thinking"))).isTrue();
         Boolean hasPending = (Boolean) ((ConcurrentModel)model).getAttribute("hasPending");
         assertThat(hasPending).isTrue();
     }
@@ -86,7 +90,11 @@ public class UiControllerAsyncStreamingTests {
 
         // register pending assistant
         Model m1 = new ConcurrentModel();
-        ctrl.sendMessage("go", m1, null);
+        String respFrag = ctrl.sendMessage("go", m1, null);
+        assertThat(respFrag).contains("fragments/chat-response :: response");
+        List<?> newRows1 = (List<?>) ((ConcurrentModel)m1).getAttribute("newChatMessages");
+        assertThat(newRows1).isNotNull();
+        assertThat(newRows1.size()).isGreaterThanOrEqualTo(1);
 
         List<?> msgs = (List<?>) ((ConcurrentModel)m1).getAttribute("chatMessages");
         Object last = msgs.get(msgs.size()-1);

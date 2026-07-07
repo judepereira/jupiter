@@ -6,8 +6,11 @@
   Use a th:block as the fragment host so it doesn't render an extra wrapper.
 -->
 <th:block th:fragment="response">
-    <!-- in-band: only replace the messages list so chat-history stays stable -->
-    <div th:replace="fragments/chat :: messages"></div>
+    <!-- in-band: only append the new rows to the existing messages list -->
+    <!-- emit only the <li> rows so HTMX can append directly into #chat-messages-list -->
+    <th:block th:if="${newChatMessages != null}" th:fragment="newRows">
+        <li th:each="m : ${newChatMessages}" th:replace="~{fragments/chat :: row(${m})}"></li>
+    </th:block>
 
     <!-- conditionally include OOB review panel replacement when reviewOob is true -->
     <div th:if="${reviewOob}" th:replace="fragments/review :: panel"></div>
