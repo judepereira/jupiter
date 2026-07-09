@@ -14,6 +14,32 @@
             th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
             th:classappend="${m.pending} ? 'pending' : ''">
             <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
+
+            <div th:if="${m.toolCalls != null and !#lists.isEmpty(m.toolCalls)}" class="tool-calls">
+                <details th:each="call : ${m.toolCalls}" class="tool-call">
+                    <summary class="tool-call-summary">
+                        <span class="tool-call-name" th:text="${call.toolName}"></span>
+                        <span class="tool-call-status" th:classappend="${call.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
+                              th:text="${call.success} ? 'success' : 'failure'"></span>
+                    </summary>
+
+                    <div class="tool-call-detail">
+                        <section class="tool-call-section">
+                            <div class="tool-call-label">Input
+                                <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
+                            </div>
+                            <pre class="tool-call-pre" th:text="${call.inputPreview}"></pre>
+                        </section>
+
+                        <section class="tool-call-section">
+                            <div class="tool-call-label">Output
+                                <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
+                            </div>
+                            <pre class="tool-call-pre" th:text="${call.outputPreview}"></pre>
+                        </section>
+                    </div>
+                </details>
+            </div>
         </li>
     </th:block>
 

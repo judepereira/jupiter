@@ -1,6 +1,7 @@
 package com.judepereira.jupiter2.agent.llm;
 
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
+import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
 
 /**
  * Simple callback interface for streaming model responses.
@@ -15,4 +16,6 @@ public interface AgentStreamListener {
     default void onComplete(AgentTurnResult result) {}
 
     default void onError(Exception e) {}
+
+    default void onToolCallTrace(ToolCallTrace trace) {}
 }

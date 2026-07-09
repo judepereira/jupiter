@@ -149,11 +149,55 @@ public class CodingAgentHarnessFakeModelTest {
             public void onTextDelta(String delta) {
                 acc.append(delta);
             }
+            @Override
+            public void onToolCallTrace(com.judepereira.jupiter2.agent.harness.ToolCallTrace trace) {
+                // capture tool traces if any (not used in this scenario)
+            }
         };
 
         var res = harness.runTurnStreaming(req, listener);
         assertEquals("Done!", res.getFinalText());
         assertEquals("Done!", acc.toString());
+    }
+
+    @Test
+    public void runTurnStreaming_invokes_onToolCallTrace_for_successful_tool(@TempDir Path tmp) throws Exception {
+        // model: requests write_file, then final text. Use existing WriteFileTool to succeed.
+        ToolCall call = new ToolCall("write_file", Map.of("path", "y.txt", "content", "hello"));
+        ModelResponse r1 = new ModelResponse(null, call);
+        ModelResponse r2 = new ModelResponse("done", null);
+        SequenceModel model = new SequenceModel(List.of(r1, r2));
+
+        AgentProperties props = new AgentProperties();
+        props.setMaxIterations(5);
+        props.setWorkspaceRoot(tmp.toString());
+        props.getTooling().setAllowWrite(true);
+
+        ToolRegistry reg = new ToolRegistry();
+        reg.register(new WriteFileTool());
+
+        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(model), reg, props);
+
+        var req = new AgentTurnRequest("sys", "user");
+        final boolean[] saw = new boolean[1];
+        final ToolCallTrace[] captured = new ToolCallTrace[1];
+
+        com.judepereira.jupiter2.agent.llm.AgentStreamListener listener = new com.judepereira.jupiter2.agent.llm.AgentStreamListener() {
+            @Override
+            public void onToolCallTrace(ToolCallTrace trace) {
+                saw[0] = true;
+                captured[0] = trace;
+            }
+        };
+
+        var res = harness.runTurnStreaming(req, listener);
+        assertEquals("done", res.getFinalText());
+        assertTrue(saw[0]);
+        assertNotNull(captured[0]);
+        assertEquals("write_file", captured[0].getToolName());
+        assertTrue(captured[0].isSuccess());
+        // file created in workspace
+        assertTrue(Files.exists(tmp.resolve("y.txt")));
     }
 
     @Test
@@ -193,5 +237,26 @@ public class CodingAgentHarnessFakeModelTest {
         assertEquals("hello\n\nworld", res.getFinalText());
         // Ensure captured deltas include the newline-only chunk
         assertEquals("hello\n\nworld", acc.toString());
+    }
+
+    @Test
+    public void scenarioD_nameless_tool_call_is_handled_and_recovers(@TempDir Path tmp) {
+        ToolCall call = new ToolCall(null, Map.of("path", "x"));
+        ModelResponse r1 = new ModelResponse(null, call);
+        ModelResponse r2 = new ModelResponse("Final recovered text", null);
+        SequenceModel model = new SequenceModel(List.of(r1, r2));
+
+        AgentProperties props = new AgentProperties();
+        props.setMaxIterations(5);
+        props.setWorkspaceRoot(tmp.toString());
+
+        ToolRegistry reg = new ToolRegistry();
+
+        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(model), reg, props);
+        var res = harness.runTurn(new AgentTurnRequest("sys", "user"));
+        assertEquals("Final recovered text", res.getFinalText());
+        assertEquals(1, res.getTraces().size());
+        assertEquals("(missing_tool_name)", res.getTraces().get(0).getToolName());
+        assertFalse(res.getTraces().get(0).isSuccess());
     }
 }

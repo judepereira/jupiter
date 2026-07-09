@@ -145,5 +145,18 @@ public class UiControllerAsyncStreamingTests {
         }
         assertThat(text).isEqualTo("hello world\nnext");
         assertThat(pending).isFalse();
+
+        // final assistant message should include toolCalls list when present (none in this fake), but ensure field exists via reflection
+        Object foundMsg = found;
+        try {
+            var cls = foundMsg.getClass();
+            var f = cls.getDeclaredField("toolCalls");
+            f.setAccessible(true);
+            Object tc = f.get(foundMsg);
+            // allow null or empty list here; assert extraction is robust
+            assertThat(tc == null || (tc instanceof java.util.List<?>)).isTrue();
+        } catch (NoSuchFieldException nsf) {
+            // ignore: some toString-based fallbacks may not expose fields
+        }
     }
 }

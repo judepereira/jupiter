@@ -8,6 +8,7 @@ import com.judepereira.jupiter2.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter2.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -41,12 +42,10 @@ public class OpenAiAgentModelClient implements AgentModelClient {
 
     @Override
     public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
-        List<ChatMessage> msgs = conversation.stream().map(m -> {
-            return switch (m.getRole()) {
-                case SYSTEM -> SystemMessage.systemMessage(m.getContent());
-                case ASSISTANT -> AiMessage.aiMessage(m.getContent());
-                default -> UserMessage.userMessage(m.getContent());
-            };
+        List<ChatMessage> msgs = conversation.stream().map(m -> switch (m.getRole()) {
+            case SYSTEM -> SystemMessage.systemMessage(m.getContent());
+            case ASSISTANT -> AiMessage.aiMessage(m.getContent());
+            default -> UserMessage.userMessage(m.getContent());
         }).collect(Collectors.toList());
 
         ensureModelInitialized();
@@ -211,20 +210,17 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                                         try { onDelta.accept(txt); } catch (Exception ignored) {}
                                     }
 
-                                    // support tool call fragments
+    // support tool call fragments (modern and legacy shapes)
                                     var toolCalls = delta.get("tool_calls");
                                     if (toolCalls != null && toolCalls.isArray()) {
                                         for (int i = 0; i < toolCalls.size(); i++) {
                                             var tc = toolCalls.get(i);
-                                            String id = tc.has("id") ? tc.get("id").asText() : String.valueOf(i);
-                                            ToolPartial p = partials.computeIfAbsent(id, k -> new ToolPartial());
-                                            if (tc.has("name")) p.name = tc.get("name").asText();
-                                            if (tc.has("arguments")) {
-                                                var argNode = tc.get("arguments");
-                                                if (argNode != null && !argNode.isNull()) {
-                                                    p.arguments.append(argNode.asText());
-                                                }
-                                            }
+                                            String key = stableToolKey(tc, i);
+                                            ToolPartial p = partials.computeIfAbsent(key, k -> new ToolPartial());
+                                            String name = extractNameFromToolCallNode(tc);
+                                            if (name != null && !name.isBlank()) p.name = name;
+                                            String argsText = extractArgumentsTextFromToolCallNode(tc);
+                                            if (argsText != null && !argsText.isBlank()) p.arguments.append(argsText);
                                         }
                                     }
 
@@ -236,7 +232,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                                         if (func.has("arguments")) {
                                             var argNode = func.get("arguments");
                                             if (argNode != null && !argNode.isNull()) {
-                                                p.arguments.append(argNode.asText());
+                                                if (argNode.isTextual()) p.arguments.append(argNode.asText());
+                                                else p.arguments.append(argNode.toString());
                                             }
                                         }
                                     }
@@ -259,16 +256,23 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             }
 
             if (!partials.isEmpty()) {
-                ToolPartial first = partials.values().iterator().next();
-                Map<String, Object> argsMap = Map.of();
-                if (first.arguments.length() > 0) {
-                    try {
-                        argsMap = objectMapper.readValue(first.arguments.toString(), new TypeReference<Map<String, Object>>() {});
-                    } catch (Exception e) {
-                        // leave argsMap empty on parse failure
-                    }
+                // find first partial that has a non-blank name
+                ToolPartial chosen = null;
+                for (ToolPartial p : partials.values()) {
+                    if (p.name != null && !p.name.isBlank()) { chosen = p; break; }
                 }
-                return new ModelResponse(null, new ToolCall(first.name, argsMap));
+                if (chosen != null) {
+                    Map<String, Object> argsMap = Map.of();
+                    if (chosen.arguments.length() > 0) {
+                        try {
+                            argsMap = objectMapper.readValue(chosen.arguments.toString(), new TypeReference<Map<String, Object>>() {});
+                        } catch (Exception e) {
+                            // leave argsMap empty on parse failure
+                        }
+                    }
+                    return new ModelResponse(null, new ToolCall(chosen.name, argsMap));
+                }
+                // no partial contained a name, fall through to return finalText or null
             }
 
             return new ModelResponse(finalText.length() == 0 ? null : finalText.toString(), null);
@@ -286,6 +290,77 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     static class ToolPartial {
         String name = null;
         StringBuilder arguments = new StringBuilder();
+    }
+
+    // package-private helper to accumulate tool-call fragments from a delta node
+    static void accumulateToolPartials(JsonNode delta, java.util.Map<String, ToolPartial> partials) {
+        if (delta == null || partials == null) return;
+        var toolCalls = delta.get("tool_calls");
+        if (toolCalls != null && toolCalls.isArray()) {
+            for (int i = 0; i < toolCalls.size(); i++) {
+                var tc = toolCalls.get(i);
+                String key = stableToolKey(tc, i);
+                ToolPartial p = partials.computeIfAbsent(key, k -> new ToolPartial());
+                String name = extractNameFromToolCallNode(tc);
+                if (name != null && !name.isBlank()) p.name = name;
+                String argsText = extractArgumentsTextFromToolCallNode(tc);
+                if (argsText != null && !argsText.isBlank()) p.arguments.append(argsText);
+            }
+        }
+
+        var func = delta.get("function_call");
+        if (func != null && !func.isNull()) {
+            String id = "__fn__";
+            ToolPartial p = partials.computeIfAbsent(id, k -> new ToolPartial());
+            if (func.has("name")) p.name = func.get("name").asText();
+            if (func.has("arguments")) {
+                var argNode = func.get("arguments");
+                if (argNode != null && !argNode.isNull()) {
+                    if (argNode.isTextual()) p.arguments.append(argNode.asText());
+                    else p.arguments.append(argNode.toString());
+                }
+            }
+        }
+    }
+
+    // package-private helper to choose the first partial that contains a name
+    static ToolPartial chooseNamedPartial(java.util.Map<String, ToolPartial> partials) {
+        if (partials == null || partials.isEmpty()) return null;
+        for (ToolPartial p : partials.values()) {
+            if (p.name != null && !p.name.isBlank()) return p;
+        }
+        return null;
+    }
+
+    // stable grouping key for tool call partials: prefer index, then id, then loop index
+    private static String stableToolKey(JsonNode tc, int loopIndex) {
+        if (tc == null) return String.valueOf(loopIndex);
+        if (tc.has("index") && !tc.get("index").isNull()) return tc.get("index").asText();
+        if (tc.has("id") && !tc.get("id").isNull()) return tc.get("id").asText();
+        return String.valueOf(loopIndex);
+    }
+
+    // extract name supporting modern shape (function.name) and legacy (name)
+    private static String extractNameFromToolCallNode(JsonNode tc) {
+        if (tc == null) return null;
+        var fn = tc.get("function");
+        if (fn != null && !fn.isNull() && fn.has("name") && !fn.get("name").isNull()) {
+            return fn.get("name").asText();
+        }
+        if (tc.has("name") && !tc.get("name").isNull()) return tc.get("name").asText();
+        return null;
+    }
+
+    // extract arguments text supporting modern shape (function.arguments) and legacy (arguments)
+    private static String extractArgumentsTextFromToolCallNode(JsonNode tc) {
+        if (tc == null) return null;
+        var fn = tc.get("function");
+        JsonNode argNode = null;
+        if (fn != null && !fn.isNull() && fn.has("arguments")) argNode = fn.get("arguments");
+        else if (tc.has("arguments")) argNode = tc.get("arguments");
+        if (argNode == null || argNode.isNull()) return null;
+        if (argNode.isTextual()) return argNode.asText();
+        return argNode.toString();
     }
 
     private void ensureModelInitialized() {

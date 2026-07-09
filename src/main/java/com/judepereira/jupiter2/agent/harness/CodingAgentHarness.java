@@ -69,27 +69,47 @@ public class CodingAgentHarness {
                 String assistantText = resp.getAssistantText();
 
                 if (call != null) {
-                    listener.onStatus("calling_tool:" + call.getToolName());
-                    // execute tool
+                    // guard: ensure tool name is present
                     String toolName = call.getToolName();
                     Map<String, Object> args = call.getArguments();
+                    if (toolName == null || toolName.isBlank()) {
+                        String safeName = "(missing_tool_name)";
+                        String toolMsg = "[tool_error] Tool call missing tool name";
+                        // inform model / assistant convo
+                        convo.add(new Message(Message.Role.ASSISTANT, toolMsg));
+                        ToolCallTrace trace = new ToolCallTrace(safeName, args == null ? Map.of() : args, false, toolMsg,
+                                Map.of("error", "tool name missing"));
+                        traces.add(trace);
+                        listener.onToolCallTrace(trace);
+                        listener.onStatus("tool_error:missing_tool_name");
+                        // let model recover
+                        continue;
+                    }
+                    listener.onStatus("calling_tool:" + toolName);
+                    // execute tool
                     try {
                         ToolExecutionResult result = registry.executeByName(toolName, args, execCtx);
                         // append tool result as assistant message for model
                         String toolMsg = "[tool_result] " + toolName + "\n" + (result.getText() == null ? "" : result.getText());
                         convo.add(new Message(Message.Role.ASSISTANT, toolMsg));
-                        traces.add(new ToolCallTrace(toolName, args, result.isSuccess(), result.getText(), result.getMachine()));
+                        ToolCallTrace trace = new ToolCallTrace(toolName, args, result.isSuccess(), result.getText(), result.getMachine());
+                        traces.add(trace);
+                        listener.onToolCallTrace(trace);
                         listener.onStatus("tool_result:" + toolName);
                     } catch (IllegalArgumentException e) {
                         // unknown tool
                         String toolMsg = "[tool_error] Unknown tool: " + toolName;
                         convo.add(new Message(Message.Role.ASSISTANT, toolMsg));
-                        traces.add(new ToolCallTrace(toolName, args, false, toolMsg, Map.of("error", e.getMessage())));
+                        ToolCallTrace trace = new ToolCallTrace(toolName, args, false, toolMsg, Map.of("error", e.getMessage()));
+                        traces.add(trace);
+                        listener.onToolCallTrace(trace);
                         listener.onStatus("tool_error:" + toolName);
                     } catch (Exception e) {
                         String toolMsg = "[tool_error] " + e.getMessage();
                         convo.add(new Message(Message.Role.ASSISTANT, toolMsg));
-                        traces.add(new ToolCallTrace(toolName, args, false, toolMsg, Map.of("exception", e.toString())));
+                        ToolCallTrace trace = new ToolCallTrace(toolName, args, false, toolMsg, Map.of("exception", e.toString()));
+                        traces.add(trace);
+                        listener.onToolCallTrace(trace);
                         listener.onStatus("tool_exception:" + toolName);
                     }
                     // continue loop

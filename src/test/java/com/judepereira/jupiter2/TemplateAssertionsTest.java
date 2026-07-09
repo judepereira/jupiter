@@ -24,7 +24,9 @@ public class TemplateAssertionsTest {
         // New behavior: form appends to the messages list (hx-swap="beforeend") targeting #chat-messages-list
         assertThat(s).contains("data-stream-url", "data-pending", "class=\"chat-message-text\"")
                 .contains("id=\"chat-send-form\"", "hx-post=\"/ui/chat/send\"", "hx-target=\"#chat-messages-list\"")
-                .contains("hx-swap=\"beforeend\"");
+                .contains("hx-swap=\"beforeend\"")
+                // tool-call markup should be present and use Thymeleaf text bindings
+                .contains("class=\"tool-calls\"", "class=\"tool-call-name\"", "th:text=\"${call.toolName}\"", "th:text=\"${call.success} ? 'success' : 'failure'\"");
     }
 
     @Test
@@ -41,7 +43,9 @@ public class TemplateAssertionsTest {
         assertThat(s).contains("EventSource", "bindPendingStreams", "requestAnimationFrame", "streamBound", "htmx:beforeSwap",
                 "JSON.parse", "payload.text != null", "setTimeout", "flushBuffer",
                 // Streaming auto-scroll: live state and listener lifecycle
-                "shouldStickToBottom", "STREAM_BOTTOM_THRESHOLD_PX", "addEventListener('scroll'", "removeEventListener('scroll'", "stickBeforeFlush");
+                "shouldStickToBottom", "STREAM_BOTTOM_THRESHOLD_PX", "addEventListener('scroll'", "removeEventListener('scroll'", "stickBeforeFlush",
+                // tool-call SSE event and status/classes
+                "tool_call", "tool-call-status-success", "tool-call-pre", "tool-call-name");
     }
 
     @Test
@@ -75,7 +79,9 @@ public class TemplateAssertionsTest {
         String cssS = Files.readString(css);
         // Ensure we only apply pre-wrap to non-markdown-rendered spans and avoid the old broad selector
         assertThat(cssS).contains(".chat-message-text:not(.markdown-rendered)")
-                .doesNotContain("#chat-messages-list li span");
+                .doesNotContain("#chat-messages-list li span")
+                // tool-call css selectors
+                .contains(".tool-calls", ".tool-call-pre", ".tool-call-status-success");
     }
 
     @Test

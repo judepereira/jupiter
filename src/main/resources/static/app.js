@@ -708,6 +708,110 @@
                         removeStreamScrollListener();
                     });
 
+                    // Tool call events: render compact tool-call details under the pending row
+                    es.addEventListener('tool_call', (e) => {
+                        try {
+                            const payload = parseStreamPayload(e) || {};
+                            // payload expected: {toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated}
+                            const toolName = payload.toolName != null ? String(payload.toolName) : '';
+                            const success = Boolean(payload.success);
+                            const inputPreview = payload.inputPreview != null ? String(payload.inputPreview) : '';
+                            const outputPreview = payload.outputPreview != null ? String(payload.outputPreview) : '';
+                            const inputTruncated = Boolean(payload.inputTruncated);
+                            const outputTruncated = Boolean(payload.outputTruncated);
+
+                            // ensure container exists on the row
+                            let callsContainer = row.querySelector('.tool-calls');
+                            if (!callsContainer) {
+                                callsContainer = document.createElement('div');
+                                callsContainer.className = 'tool-calls';
+                                row.appendChild(callsContainer);
+                            }
+
+                            // build details block
+                            const details = document.createElement('details');
+                            details.className = 'tool-call';
+
+                            const summary = document.createElement('summary');
+                            summary.className = 'tool-call-summary';
+
+                            const nameSpan = document.createElement('span');
+                            nameSpan.className = 'tool-call-name';
+                            nameSpan.textContent = toolName || 'tool';
+
+                            const statusSpan = document.createElement('span');
+                            statusSpan.className = 'tool-call-status';
+                            if (success) statusSpan.classList.add('tool-call-status-success'); else statusSpan.classList.add('tool-call-status-failure');
+                            statusSpan.textContent = success ? ' success' : ' failure';
+
+                            summary.appendChild(nameSpan);
+                            summary.appendChild(statusSpan);
+                            details.appendChild(summary);
+
+                            const detailDiv = document.createElement('div');
+                            detailDiv.className = 'tool-call-detail';
+
+                            // Input section
+                            const inSection = document.createElement('div');
+                            inSection.className = 'tool-call-section';
+                            const inLabel = document.createElement('span');
+                            inLabel.className = 'tool-call-label';
+                            inLabel.textContent = 'Input:';
+                            const inPre = document.createElement('pre');
+                            inPre.className = 'tool-call-pre';
+                            inPre.textContent = inputPreview;
+                            inSection.appendChild(inLabel);
+                            inSection.appendChild(inPre);
+                            if (inputTruncated) {
+                                const tr = document.createElement('span');
+                                tr.className = 'tool-call-truncated';
+                                tr.textContent = ' (truncated)';
+                                inSection.appendChild(tr);
+                            }
+
+                            // Output section
+                            const outSection = document.createElement('div');
+                            outSection.className = 'tool-call-section';
+                            const outLabel = document.createElement('span');
+                            outLabel.className = 'tool-call-label';
+                            outLabel.textContent = 'Output:';
+                            const outPre = document.createElement('pre');
+                            outPre.className = 'tool-call-pre';
+                            outPre.textContent = outputPreview;
+                            outSection.appendChild(outLabel);
+                            outSection.appendChild(outPre);
+                            if (outputTruncated) {
+                                const tr2 = document.createElement('span');
+                                tr2.className = 'tool-call-truncated';
+                                tr2.textContent = ' (truncated)';
+                                outSection.appendChild(tr2);
+                            }
+
+                            detailDiv.appendChild(inSection);
+                            detailDiv.appendChild(outSection);
+                            details.appendChild(detailDiv);
+
+                            // Append to container
+                            callsContainer.appendChild(details);
+
+                            // Preserve streaming scroll behavior: if this stream was sticking
+                            // to bottom, ensure we remain pinned after appending.
+                            const stick = shouldStickToBottom || wasNearBottom();
+                            if (stick) {
+                                requestAnimationFrame(() => {
+                                    try {
+                                        const history = document.getElementById('chat-history');
+                                        if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
+                                        // re-affirm stick state
+                                        shouldStickToBottom = true;
+                                    } catch (_) {
+                                    }
+                                });
+                            }
+                        } catch (_) {
+                        }
+                    });
+
                     // Ensure we flush any remaining buffer when the connection closes
                     es.addEventListener('close', () => {
                         try {

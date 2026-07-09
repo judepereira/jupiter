@@ -28,18 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -188,7 +178,7 @@ public class UiController {
                             for (int i = 0; i < chat.size(); i++) {
                                 ChatMessage m = chat.get(i);
                                 if (m.id.equals(assistantId)) {
-                                    chat.set(i, new ChatMessage("assistant", accumulated.toString(), m.ts, true, assistantId));
+                                    chat.set(i, new ChatMessage("assistant", accumulated.toString(), m.ts, true, assistantId, m.toolCalls));
                                     break;
                                 }
                             }
@@ -212,6 +202,36 @@ public class UiController {
                 }
 
                 @Override
+                public void onToolCallTrace(ToolCallTrace trace) {
+                    try {
+                        ToolCallView v = traceToView(trace);
+                        // append to in-memory pending assistant message's toolCalls
+                        synchronized (chat) {
+                            for (int i = 0; i < chat.size(); i++) {
+                                ChatMessage m = chat.get(i);
+                                if (m.id.equals(assistantId)) {
+                                    List<ToolCallView> existing = m.toolCalls == null ? List.of() : m.toolCalls;
+                                    List<ToolCallView> updated = new ArrayList<>(existing.size() + 1);
+                                    updated.addAll(existing);
+                                    updated.add(v);
+                                    chat.set(i, new ChatMessage("assistant", m.text, m.ts, m.pending, assistantId, List.copyOf(updated)));
+                                    break;
+                                }
+                            }
+                        }
+
+                        try {
+                            String json = SseJson.writeValueAsString(v);
+                            emitter.send(SseEmitter.event().name("tool_call").data(json));
+                        } catch (JsonProcessingException e) {
+                            emitter.send(SseEmitter.event().name("tool_call").data(v.toString()));
+                        }
+                    } catch (Exception e) {
+                        onError(e);
+                    }
+                }
+
+                @Override
                 public void onComplete(AgentTurnResult result) {
                     try {
                         // mark pending false and set final text
@@ -219,7 +239,12 @@ public class UiController {
                             for (int i = 0; i < chat.size(); i++) {
                                 ChatMessage m = chat.get(i);
                                 if (m.id.equals(assistantId)) {
-                                    chat.set(i, new ChatMessage("assistant", result.getFinalText(), Instant.now().toEpochMilli(), false, assistantId));
+                                    // convert traces to views for final message
+                                    List<ToolCallView> views = List.of();
+                                    if (result.getTraces() != null) {
+                                        views = result.getTraces().stream().map(t -> traceToView(t)).toList();
+                                    }
+                                    chat.set(i, new ChatMessage("assistant", result.getFinalText(), Instant.now().toEpochMilli(), false, assistantId, views));
                                     break;
                                 }
                             }
@@ -251,7 +276,7 @@ public class UiController {
                             for (int i = 0; i < chat.size(); i++) {
                                 ChatMessage m = chat.get(i);
                                 if (m.id.equals(assistantId)) {
-                                    chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + e.getMessage(), Instant.now().toEpochMilli(), false, assistantId));
+                                    chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + e.getMessage(), Instant.now().toEpochMilli(), false, assistantId, m.toolCalls));
                                     log.error("Execution failure!", e);
                                     break;
                                 }
@@ -375,6 +400,9 @@ public class UiController {
         String latestPath = null;
         List<String> addedPathsInOrder = new ArrayList<>();
         for (ToolCallTrace t : traces) {
+            if (t.getToolName() == null) {
+                continue;
+            }
             if (!mutatingTools.contains(t.getToolName())) {
                 continue;
             }
@@ -425,7 +453,43 @@ public class UiController {
         }
     }
 
-    public record ChatMessage(String role, String text, long ts, boolean pending, String id) {
+    public static record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated) {}
+
+    private static final int TOOL_PREVIEW_MAX = 2000;
+
+    private static String previewAndTruncate(String s, int max, boolean[] truncatedFlag) {
+        if (s == null) {
+            truncatedFlag[0] = false;
+            return "";
+        }
+        if (s.length() <= max) {
+            truncatedFlag[0] = false;
+            return s;
+        }
+        truncatedFlag[0] = true;
+        return s.substring(0, max);
+    }
+
+    private static ToolCallView traceToView(ToolCallTrace t) {
+        // try to serialize args nicely
+        String input;
+        try {
+            input = SseJson.writerWithDefaultPrettyPrinter().writeValueAsString(t.getArgs());
+        } catch (Exception e) {
+            input = String.valueOf(t.getArgs());
+        }
+        String output = t.getTextSummary();
+        boolean[] inTr = new boolean[1];
+        boolean[] outTr = new boolean[1];
+        String inPrev = previewAndTruncate(input, TOOL_PREVIEW_MAX, inTr);
+        String outPrev = previewAndTruncate(output, TOOL_PREVIEW_MAX, outTr);
+        return new ToolCallView(t.getToolName(), t.isSuccess(), inPrev, outPrev, inTr[0], outTr[0]);
+    }
+
+    public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls) {
+        public ChatMessage(String role, String text, long ts, boolean pending, String id) {
+            this(role, text, ts, pending, id, List.of());
+        }
     }
 
     public record ChangedFile(int id, String path, String diff) {
