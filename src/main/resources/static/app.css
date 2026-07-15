@@ -398,8 +398,7 @@ body {
 /* Code blocks: visually distinct, preserve formatting, scroll horizontally
    when too wide but never overflow the chat panel. */
 .chat-message-text pre {
-    background: #0b1220;
-    color: #e6eef6;
+    background: #e7eaee;
     padding: 10px;
     border-radius: 6px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Liberation Mono", monospace;
@@ -413,7 +412,6 @@ body {
 
 /* Inline code: subtle background and allow wrapping if needed */
 .chat-message-text code {
-    background: #f3f7fb;
     padding: 2px 6px;
     border-radius: 4px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;

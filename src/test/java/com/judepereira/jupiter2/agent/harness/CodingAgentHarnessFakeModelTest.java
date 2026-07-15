@@ -80,6 +80,53 @@ public class CodingAgentHarnessFakeModelTest {
     }
 
     @Test
+    public void scenarioA_next_model_call_receives_structured_tool_history(@TempDir Path tmp) {
+        List<List<Message>> captured = new ArrayList<>();
+        SequenceModel model = new SequenceModel(List.of(
+                new ModelResponse(null, new ToolCall("write_file", Map.of("path", "x.txt", "content", "hello"))),
+                new ModelResponse("Done! final text.", null)
+        )) {
+            @Override
+            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, java.util.function.Consumer<String> onDelta) {
+                captured.add(List.copyOf(conversation));
+                return chat(conversation, tools);
+            }
+        };
+
+        AgentProperties props = new AgentProperties();
+        props.setMaxIterations(5);
+        props.setWorkspaceRoot(tmp.toString());
+        props.getTooling().setAllowWrite(true);
+
+        ToolRegistry reg = new ToolRegistry();
+        reg.register(new WriteFileTool());
+
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props);
+
+        var res = harness.runTurn(new AgentTurnRequest("sys", "user"));
+
+        assertEquals("Done! final text.", res.getFinalText());
+        assertEquals(1, res.getTraces().size());
+        assertEquals("write_file", res.getTraces().get(0).getToolName());
+        assertTrue(Files.exists(tmp.resolve("x.txt")));
+
+        assertEquals(2, captured.size());
+        var second = captured.get(1);
+        assertEquals("SYSTEM:sys", second.get(0).getRole() + ":" + second.get(0).getContent());
+        assertEquals("USER:user", second.get(1).getRole() + ":" + second.get(1).getContent());
+        assertEquals(Message.Role.ASSISTANT, second.get(2).getRole());
+        assertNull(second.get(2).getContent());
+        assertNotNull(second.get(2).getToolCalls());
+        assertEquals(1, second.get(2).getToolCalls().size());
+        assertEquals("write_file", second.get(2).getToolCalls().get(0).getToolName());
+        assertNotNull(second.get(2).getToolCalls().get(0).getToolCallId());
+        assertEquals(Message.Role.TOOL, second.get(3).getRole());
+        assertEquals(second.get(2).getToolCalls().get(0).getToolCallId(), second.get(3).getToolCallId());
+        assertTrue(second.stream().noneMatch(m -> m.getRole() == Message.Role.ASSISTANT
+                && m.getContent() != null && m.getContent().startsWith("[tool_result]")));
+    }
+
+    @Test
     public void scenarioA_model_requests_write_then_final_text(@TempDir Path tmp) throws Exception {
         // model: call write_file, then final assistant text
         ToolCall call = new ToolCall("write_file", Map.of("path", "x.txt", "content", "hello"));

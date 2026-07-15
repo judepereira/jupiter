@@ -15,6 +15,7 @@ import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -23,6 +24,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.function.Consumer;
@@ -38,11 +42,44 @@ public class OpenAiAgentModelClient implements AgentModelClient {
 
     @Override
     public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
-        List<ChatMessage> msgs = conversation.stream().map(m -> switch (m.getRole()) {
-            case SYSTEM -> SystemMessage.systemMessage(m.getContent());
-            case ASSISTANT -> AiMessage.aiMessage(m.getContent());
-            default -> UserMessage.userMessage(m.getContent());
-        }).collect(Collectors.toList());
+        Map<String, String> toolNamesById = new HashMap<>();
+        List<ChatMessage> msgs = new ArrayList<>(conversation.size());
+
+        for (int i = 0; i < conversation.size(); i++) {
+            Message m = conversation.get(i);
+            switch (m.getRole()) {
+                case SYSTEM -> msgs.add(SystemMessage.systemMessage(m.getContent()));
+                case USER -> msgs.add(UserMessage.userMessage(m.getContent()));
+                case ASSISTANT -> {
+                    var toolCalls = m.getToolCalls();
+                    if (toolCalls != null && !toolCalls.isEmpty()) {
+                        List<ToolExecutionRequest> reqs = new ArrayList<>(toolCalls.size());
+                        for (int j = 0; j < toolCalls.size(); j++) {
+                            ToolCall tc = toolCalls.get(j);
+                            String toolCallId = normalizeToolCallId(tc.getToolCallId(), i, j);
+                            String toolName = requireToolName(tc.getToolName());
+                            toolNamesById.put(toolCallId, toolName);
+                            reqs.add(ToolExecutionRequest.builder()
+                                    .id(toolCallId)
+                                    .name(toolName)
+                                    .arguments(toJsonArguments(tc.getArguments()))
+                                    .build());
+                        }
+                        msgs.add(AiMessage.aiMessage(m.getContent() == null ? "" : m.getContent(), reqs));
+                    } else {
+                        msgs.add(AiMessage.aiMessage(m.getContent()));
+                    }
+                }
+                case TOOL -> {
+                    String toolCallId = requireToolCallId(m.getToolCallId());
+                    String toolName = toolNamesById.get(toolCallId);
+                    if (toolName == null || toolName.isBlank()) {
+                        throw new IllegalStateException("Missing tool name for tool call id: " + toolCallId);
+                    }
+                    msgs.add(ToolExecutionResultMessage.from(toolCallId, toolName, m.getContent()));
+                }
+            }
+        }
 
         ensureModelInitialized();
 
@@ -93,7 +130,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                     // ignore parse errors, leave argsMap null
                 }
                 if (argsMap == null) argsMap = Map.of();
-                toolCall = new ToolCall(first.name(), argsMap);
+                toolCall = new ToolCall(first.id(), first.name(), argsMap);
             }
         }
 
@@ -128,16 +165,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             var root = new java.util.HashMap<String, Object>();
             root.put("model", modelName);
             root.put("stream", true);
-            java.util.List<java.util.Map<String, Object>> msgs = new java.util.ArrayList<>();
-            for (Message m : conversation) {
-                String role = switch (m.getRole()) {
-                    case SYSTEM -> "system";
-                    case ASSISTANT -> "assistant";
-                    default -> "user";
-                };
-                msgs.add(java.util.Map.of("role", role, "content", m.getContent()));
-            }
-            root.put("messages", msgs);
+            root.put("messages", buildRawMessages(conversation));
 
             // include tools as OpenAI-compatible "tools" array when present
             if (tools != null && !tools.isEmpty()) {
@@ -213,6 +241,9 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                                             var tc = toolCalls.get(i);
                                             String key = stableToolKey(tc, i);
                                             ToolPartial p = partials.computeIfAbsent(key, k -> new ToolPartial());
+                                            String toolCallId = extractToolCallIdFromToolCallNode(tc);
+                                            if (toolCallId != null && !toolCallId.isBlank()) p.toolCallId = toolCallId;
+                                            if (p.toolCallId == null || p.toolCallId.isBlank()) p.toolCallId = key;
                                             String name = extractNameFromToolCallNode(tc);
                                             if (name != null && !name.isBlank()) p.name = name;
                                             String argsText = extractArgumentsTextFromToolCallNode(tc);
@@ -266,7 +297,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                             // leave argsMap empty on parse failure
                         }
                     }
-                    return new ModelResponse(null, new ToolCall(chosen.name, argsMap));
+                    return new ModelResponse(null, new ToolCall(chosen.toolCallId, chosen.name, argsMap));
                 }
                 // no partial contained a name, fall through to return finalText or null
             }
@@ -284,6 +315,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
 
     // package-private helper for accumulating tool call fragments
     static class ToolPartial {
+        String toolCallId = null;
         String name = null;
         StringBuilder arguments = new StringBuilder();
     }
@@ -297,6 +329,9 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 var tc = toolCalls.get(i);
                 String key = stableToolKey(tc, i);
                 ToolPartial p = partials.computeIfAbsent(key, k -> new ToolPartial());
+                String toolCallId = extractToolCallIdFromToolCallNode(tc);
+                if (toolCallId != null && !toolCallId.isBlank()) p.toolCallId = toolCallId;
+                if (p.toolCallId == null || p.toolCallId.isBlank()) p.toolCallId = key;
                 String name = extractNameFromToolCallNode(tc);
                 if (name != null && !name.isBlank()) p.name = name;
                 String argsText = extractArgumentsTextFromToolCallNode(tc);
@@ -347,6 +382,12 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         return null;
     }
 
+    private static String extractToolCallIdFromToolCallNode(JsonNode tc) {
+        if (tc == null) return null;
+        if (tc.has("id") && !tc.get("id").isNull()) return tc.get("id").asText();
+        return null;
+    }
+
     // extract arguments text supporting modern shape (function.arguments) and legacy (arguments)
     private static String extractArgumentsTextFromToolCallNode(JsonNode tc) {
         if (tc == null) return null;
@@ -357,6 +398,86 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         if (argNode == null || argNode.isNull()) return null;
         if (argNode.isTextual()) return argNode.asText();
         return argNode.toString();
+    }
+
+    private List<Map<String, Object>> buildRawMessages(List<Message> conversation) {
+        List<Map<String, Object>> msgs = new ArrayList<>(conversation.size());
+        for (int i = 0; i < conversation.size(); i++) {
+            Message m = conversation.get(i);
+            Map<String, Object> msg = new LinkedHashMap<>();
+            switch (m.getRole()) {
+                case SYSTEM -> {
+                    msg.put("role", "system");
+                    msg.put("content", m.getContent());
+                }
+                case USER -> {
+                    msg.put("role", "user");
+                    msg.put("content", m.getContent());
+                }
+                case ASSISTANT -> {
+                    msg.put("role", "assistant");
+                    var toolCalls = m.getToolCalls();
+                    if (toolCalls != null && !toolCalls.isEmpty()) {
+                        msg.put("content", m.getContent() == null ? "" : m.getContent());
+                        msg.put("tool_calls", buildRawToolCalls(toolCalls, i));
+                    } else {
+                        msg.put("content", m.getContent());
+                    }
+                }
+                case TOOL -> {
+                    msg.put("role", "tool");
+                    msg.put("tool_call_id", requireToolCallId(m.getToolCallId()));
+                    msg.put("content", m.getContent());
+                }
+            }
+            msgs.add(msg);
+        }
+        return msgs;
+    }
+
+    private List<Map<String, Object>> buildRawToolCalls(List<ToolCall> toolCalls, int messageIndex) {
+        List<Map<String, Object>> rawToolCalls = new ArrayList<>(toolCalls.size());
+        for (int i = 0; i < toolCalls.size(); i++) {
+            ToolCall toolCall = toolCalls.get(i);
+            String toolCallId = normalizeToolCallId(toolCall.getToolCallId(), messageIndex, i);
+            Map<String, Object> function = new LinkedHashMap<>();
+            function.put("name", requireToolName(toolCall.getToolName()));
+            function.put("arguments", toJsonArguments(toolCall.getArguments()));
+
+            Map<String, Object> rawToolCall = new LinkedHashMap<>();
+            rawToolCall.put("id", toolCallId);
+            rawToolCall.put("type", "function");
+            rawToolCall.put("function", function);
+            rawToolCalls.add(rawToolCall);
+        }
+        return rawToolCalls;
+    }
+
+    private String toJsonArguments(Map<String, Object> arguments) {
+        try {
+            return objectMapper.writeValueAsString(arguments == null ? Map.of() : arguments);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize tool call arguments", e);
+        }
+    }
+
+    private static String normalizeToolCallId(String toolCallId, int messageIndex, int toolIndex) {
+        if (toolCallId != null && !toolCallId.isBlank()) return toolCallId;
+        return "tool-" + messageIndex + "-" + toolIndex;
+    }
+
+    private static String requireToolCallId(String toolCallId) {
+        if (toolCallId == null || toolCallId.isBlank()) {
+            throw new IllegalStateException("toolCallId is required for TOOL messages");
+        }
+        return toolCallId;
+    }
+
+    private static String requireToolName(String toolName) {
+        if (toolName == null || toolName.isBlank()) {
+            throw new IllegalStateException("toolName is required for tool calls");
+        }
+        return toolName;
     }
 
     private void ensureModelInitialized() {

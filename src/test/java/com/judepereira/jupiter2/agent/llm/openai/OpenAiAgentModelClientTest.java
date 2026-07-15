@@ -2,9 +2,16 @@ package com.judepereira.jupiter2.agent.llm.openai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter2.agent.config.AgentProperties;
+import com.judepereira.jupiter2.agent.config.OpenAiProperties;
+import com.judepereira.jupiter2.agent.llm.dto.Message;
+import com.judepereira.jupiter2.agent.llm.dto.ToolCall;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -49,5 +56,29 @@ public class OpenAiAgentModelClientTest {
         assertFalse(partials.isEmpty());
         var chosen = OpenAiAgentModelClient.chooseNamedPartial(partials);
         assertNull(chosen);
+    }
+
+    @Test
+    public void buildRawMessages_serializes_tool_message_and_preserves_tool_call_id() throws Exception {
+        var client = new OpenAiAgentModelClient(new OpenAiProperties(), new AgentProperties());
+        var conversation = List.of(
+                new Message(Message.Role.SYSTEM, "sys"),
+                new Message(Message.Role.USER, "user"),
+                new Message(Message.Role.ASSISTANT, null, List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt")))),
+                new Message(Message.Role.TOOL, "written", "call-123")
+        );
+
+        Method m = OpenAiAgentModelClient.class.getDeclaredMethod("buildRawMessages", List.class);
+        m.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> raw = (List<Map<String, Object>>) m.invoke(client, conversation);
+
+        assertEquals("system", raw.get(0).get("role"));
+        assertEquals("user", raw.get(1).get("role"));
+        assertEquals("assistant", raw.get(2).get("role"));
+        assertEquals("call-123", ((List<Map<String, Object>>) raw.get(2).get("tool_calls")).get(0).get("id"));
+        assertEquals("tool", raw.get(3).get("role"));
+        assertEquals("call-123", raw.get(3).get("tool_call_id"));
+        assertEquals("written", raw.get(3).get("content"));
     }
 }
