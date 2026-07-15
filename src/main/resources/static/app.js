@@ -315,17 +315,15 @@
                     }
                 }
 
-                // Handle keyboard: default textarea Enter/Shift+Enter behaviour (newline).
-                // Submit only when Enter is pressed with the Meta/Command key. Respect IME composition.
+                // Handle keyboard: Enter submits, Option+Enter inserts a newline.
+                // Respect IME composition.
                 function onKeyDown(e) {
                     const isEnter = e.key === 'Enter' || e.keyCode === 13;
                     if (!isEnter) return;
                     if (e.isComposing) return; // IME in progress
-                    // Only intercept Command/Meta+Enter. Leave plain Enter and Shift+Enter alone.
-                    if (!e.metaKey) return;
-                    if (e.shiftKey) return; // allow Command+Shift+Enter to behave like newline as well
+                    if (e.altKey) return; // Option+Enter should keep the textarea newline behavior
 
-                    // Submit
+                    // Submit on plain Enter.
                     e.preventDefault();
                     if (typeof form.requestSubmit === 'function') {
                         form.requestSubmit();

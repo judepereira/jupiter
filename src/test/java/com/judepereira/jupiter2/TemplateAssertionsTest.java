@@ -36,16 +36,21 @@ public class TemplateAssertionsTest {
 
         // Ensure we added a guard to avoid binding the htmx afterOnLoad listener repeatedly
         // Key behaviors to prevent streaming regressions:
+        // - chat composer uses plain Enter to submit
+        // - Option+Enter (altKey) keeps the newline behavior
+        // - Meta/Command is no longer required for submit
         // - JSON.parse is used for payloads
         // - payload.text != null checks preserve whitespace-only deltas
         // - a bounded flush interval (setTimeout) exists
         // - flushBuffer is invoked before final replacement on done
         assertThat(s).contains("EventSource", "bindPendingStreams", "requestAnimationFrame", "streamBound", "htmx:beforeSwap",
+                "Option+Enter", "altKey", "Submit on plain Enter.",
                 "JSON.parse", "payload.text != null", "setTimeout", "flushBuffer",
                 // Streaming auto-scroll: live state and listener lifecycle
                 "shouldStickToBottom", "STREAM_BOTTOM_THRESHOLD_PX", "addEventListener('scroll'", "removeEventListener('scroll'", "stickBeforeFlush",
                 // tool-call SSE event and status/classes
                 "tool_call", "tool-call-status-success", "tool-call-pre", "tool-call-name");
+        assertThat(s).doesNotContain("metaKey");
     }
 
     @Test
