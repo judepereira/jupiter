@@ -11,22 +11,21 @@ import java.util.Map;
  * Simple patch tool: replace first occurrence of oldText with newText in file.
  */
 public class ApplyPatchTool implements AgentTool {
-    private final ToolDefinition def;
-
-    public ApplyPatchTool() {
-        Map<String, Object> schema = Map.of(
-                "path", Map.of("type", "string", "description", "relative file path to patch"),
-                "oldText", Map.of("type", "string", "description", "text to replace (required)"),
-                "newText", Map.of("type", "string", "description", "replacement text (required)")
-        );
-        this.def = new ToolDefinition(name(), "Apply a simple text replace patch to a file", schema);
-    }
+    private static final ToolDefinition DEF = new ToolDefinition(
+            "apply_patch",
+            "Apply a simple text replace patch to a file",
+            Map.of(
+                    "path", Map.of("type", "string", "description", "relative file path to patch"),
+                    "oldText", Map.of("type", "string", "description", "text to replace (required)"),
+                    "newText", Map.of("type", "string", "description", "replacement text (required)")
+            )
+    );
 
     @Override
     public String name() { return "apply_patch"; }
 
     @Override
-    public ToolDefinition definition() { return def; }
+    public ToolDefinition definition() { return DEF; }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {

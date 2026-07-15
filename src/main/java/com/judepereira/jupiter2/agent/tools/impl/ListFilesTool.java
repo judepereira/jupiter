@@ -10,15 +10,14 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class ListFilesTool implements AgentTool {
-    private final ToolDefinition def;
-
-    public ListFilesTool() {
-        Map<String, Object> schema = Map.of(
-                "path", Map.of("type", "string", "description", "relative path to list"),
-                "include", Map.of("type", "string", "description", "optional glob filter, e.g. **/*.java")
-        );
-        this.def = new ToolDefinition(name(), "List files under a relative path", schema);
-    }
+    private static final ToolDefinition DEF = new ToolDefinition(
+            "list_files",
+            "List files under a relative path",
+            Map.of(
+                    "path", Map.of("type", "string", "description", "relative path to list"),
+                    "include", Map.of("type", "string", "description", "optional glob filter, e.g. **/*.java")
+            )
+    );
 
     @Override
     public String name() {
@@ -26,9 +25,7 @@ public class ListFilesTool implements AgentTool {
     }
 
     @Override
-    public ToolDefinition definition() {
-        return def;
-    }
+    public ToolDefinition definition() { return DEF; }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {

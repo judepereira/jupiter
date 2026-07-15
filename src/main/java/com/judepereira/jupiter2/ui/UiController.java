@@ -12,8 +12,8 @@ import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,43 +36,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Log4j2
 @Controller
+@RequiredArgsConstructor
 public class UiController {
 
     private final CodingAgentHarness harness;
     private final AgentProperties agentProperties;
 
-    private final List<ChatMessage> chat = new CopyOnWriteArrayList<>();
+    private final List<ChatMessage> chat = new CopyOnWriteArrayList<>(List.of(new ChatMessage("system", "Welcome to Jupiter", Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of())));
     private final List<ChangedFile> changedFiles = new CopyOnWriteArrayList<>();
     private final AtomicInteger nextFileId = new AtomicInteger(1);
     private final AtomicBoolean reviewPanelOpen = new AtomicBoolean(false);
     private volatile ChangedFile selectedFile = null;
+    @Qualifier("agentTaskExecutor")
     private final Executor agentExecutor;
     // pending streaming jobs keyed by assistantId -> AgentTurnRequest
     private final ConcurrentMap<String, AgentTurnRequest> pendingStreams = new ConcurrentHashMap<>();
 
-    // Primary constructor used by Spring (agentTaskExecutor bean should be provided).
-    @Autowired
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, @Qualifier("agentTaskExecutor") Executor agentExecutor) {
-        this.harness = harness;
-        this.agentProperties = agentProperties;
-        this.agentExecutor = agentExecutor;
-        // seed with a welcome message
-        chat.add(new ChatMessage("system", "Welcome to Jupiter", Instant.now().toEpochMilli(), false, UUID.randomUUID().toString()));
-    }
-
     // Jackson mapper for safe JSON serialization of SSE payloads
     private static final ObjectMapper SseJson = new ObjectMapper();
-
-    // Convenience constructor for tests or simple instantiation. Uses a single-thread daemon executor to avoid
-    // leaking non-daemon threads when tests finish.
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties) {
-        this(harness, agentProperties, Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r);
-            t.setDaemon(true);
-            t.setName("ui-controller-test-exec");
-            return t;
-        }));
-    }
 
     @GetMapping("/")
     public String index(Model model) {
@@ -91,13 +72,13 @@ public class UiController {
         List<ChatMessage> newChatMessages = new ArrayList<>();
         if (message != null && !message.isBlank()) {
             String user = message.trim();
-            ChatMessage userMsg = new ChatMessage("user", user, Instant.now().toEpochMilli(), false, UUID.randomUUID().toString());
+            ChatMessage userMsg = new ChatMessage("user", user, Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of());
             chat.add(userMsg);
             newChatMessages.add(userMsg);
 
             String assistantId = UUID.randomUUID().toString();
             // add pending assistant message
-            ChatMessage pendingAssistant = new ChatMessage("assistant", "Thinking…", Instant.now().toEpochMilli(), true, assistantId);
+            ChatMessage pendingAssistant = new ChatMessage("assistant", "Thinking…", Instant.now().toEpochMilli(), true, assistantId, List.of());
             chat.add(pendingAssistant);
             newChatMessages.add(pendingAssistant);
 
@@ -527,9 +508,6 @@ public class UiController {
     }
 
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls) {
-        public ChatMessage(String role, String text, long ts, boolean pending, String id) {
-            this(role, text, ts, pending, id, List.of());
-        }
     }
 
     public record ChangedFile(int id, String path, String diff) {

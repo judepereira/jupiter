@@ -10,6 +10,7 @@ import com.judepereira.jupiter2.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter2.agent.tools.ToolRegistry;
 import com.judepereira.jupiter2.agent.tools.impl.WriteFileTool;
+import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,27 +23,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class CodingAgentHarnessFakeModelTest {
 
-    static class FakeFactory extends AgentModelClientFactory {
-        private final AgentModelClient client;
-
-        public FakeFactory(AgentModelClient client) {
-            super(null, new AgentProperties());
-            this.client = client;
-        }
-
-        @Override
-        public AgentModelClient getClient() {
-            return client;
-        }
+    private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
+        return new AgentModelClientFactory(null, new AgentProperties()) {
+            @Override
+            public AgentModelClient getClient() {
+                return client;
+            }
+        };
     }
 
+    @RequiredArgsConstructor
     static class SequenceModel implements AgentModelClient {
         private final List<ModelResponse> seq;
         private int idx = 0;
-
-        public SequenceModel(List<ModelResponse> seq) {
-            this.seq = seq;
-        }
 
         @Override
         public ModelResponse chat(List<com.judepereira.jupiter2.agent.llm.dto.Message> conversation, List<ToolDefinition> tools) {
@@ -67,7 +60,7 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(model), reg, props);
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props);
         var req = new AgentTurnRequest("sys", "user");
         var res = harness.runTurn(req);
         assertEquals("Done! final text.", res.getFinalText());
@@ -91,7 +84,7 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(model), reg, props);
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props);
         var res = harness.runTurn(new AgentTurnRequest("s", "u"));
         assertEquals("Recovered final.", res.getFinalText());
         assertEquals(1, res.getTraces().size());
@@ -111,7 +104,7 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(model), reg, props);
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props);
         var res = harness.runTurn(new AgentTurnRequest("s", "u"));
         assertTrue(res.getFinalText().toLowerCase().contains("max iterations"));
         // traces should be equal to maxIterations
@@ -139,7 +132,7 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         props.setMaxIterations(5);
-        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(new StreamingModel()), reg, props);
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props);
 
         var req = new AgentTurnRequest("sys", "user");
         // listener to capture deltas
@@ -176,7 +169,7 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(model), reg, props);
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props);
 
         var req = new AgentTurnRequest("sys", "user");
         final boolean[] saw = new boolean[1];
@@ -222,7 +215,7 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         props.setMaxIterations(5);
-        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(new StreamingModel()), reg, props);
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props);
 
         var req = new AgentTurnRequest("sys", "user");
         StringBuilder acc = new StringBuilder();
@@ -252,7 +245,7 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(new FakeFactory(model), reg, props);
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props);
         var res = harness.runTurn(new AgentTurnRequest("sys", "user"));
         assertEquals("Final recovered text", res.getFinalText());
         assertEquals(1, res.getTraces().size());

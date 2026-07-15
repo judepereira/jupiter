@@ -19,6 +19,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -27,18 +28,13 @@ import java.util.stream.Collectors;
 import java.util.function.Consumer;
 
 @Component
+@RequiredArgsConstructor
 public class OpenAiAgentModelClient implements AgentModelClient {
 
     private final OpenAiProperties openAiProperties;
     private final AgentProperties agentProperties;
     private volatile ChatModel model;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    public OpenAiAgentModelClient(OpenAiProperties openAiProperties, AgentProperties agentProperties) {
-        this.openAiProperties = openAiProperties;
-        this.agentProperties = agentProperties;
-        this.model = null; // build lazily when chat(...) is invoked
-    }
 
     @Override
     public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {

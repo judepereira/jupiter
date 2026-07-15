@@ -10,16 +10,15 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class RunCommandTool implements AgentTool {
-    private final ToolDefinition def;
     private final List<String> forbidden = List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
-
-    public RunCommandTool() {
-        Map<String, Object> schema = Map.of(
-                "command", Map.of("type", "string", "description", "shell command to run"),
-                "workingDir", Map.of("type", "string", "description", "optional relative working directory")
-        );
-        this.def = new ToolDefinition(name(), "Run a shell command in workspace (restricted)", schema);
-    }
+    private static final ToolDefinition DEF = new ToolDefinition(
+            "run_command",
+            "Run a shell command in workspace (restricted)",
+            Map.of(
+                    "command", Map.of("type", "string", "description", "shell command to run"),
+                    "workingDir", Map.of("type", "string", "description", "optional relative working directory")
+            )
+    );
 
     @Override
     public String name() {
@@ -27,9 +26,7 @@ public class RunCommandTool implements AgentTool {
     }
 
     @Override
-    public ToolDefinition definition() {
-        return def;
-    }
+    public ToolDefinition definition() { return DEF; }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {

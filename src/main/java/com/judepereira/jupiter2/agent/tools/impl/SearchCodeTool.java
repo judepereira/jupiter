@@ -12,22 +12,21 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class SearchCodeTool implements AgentTool {
-    private final ToolDefinition def;
-
-    public SearchCodeTool() {
-        Map<String, Object> schema = Map.of(
-                "path", Map.of("type", "string", "description", "relative path root to search"),
-                "pattern", Map.of("type", "string", "description", "regex pattern to search (required)"),
-                "include", Map.of("type", "string", "description", "optional glob include e.g. **/*.java")
-        );
-        this.def = new ToolDefinition(name(), "Search regex across files in workspace", schema);
-    }
+    private static final ToolDefinition DEF = new ToolDefinition(
+            "search_code",
+            "Search regex across files in workspace",
+            Map.of(
+                    "path", Map.of("type", "string", "description", "relative path root to search"),
+                    "pattern", Map.of("type", "string", "description", "regex pattern to search (required)"),
+                    "include", Map.of("type", "string", "description", "optional glob include e.g. **/*.java")
+            )
+    );
 
     @Override
     public String name() { return "search_code"; }
 
     @Override
-    public ToolDefinition definition() { return def; }
+    public ToolDefinition definition() { return DEF; }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {

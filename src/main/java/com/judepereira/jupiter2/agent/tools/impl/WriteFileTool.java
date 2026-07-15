@@ -9,21 +9,20 @@ import java.nio.file.Path;
 import java.util.Map;
 
 public class WriteFileTool implements AgentTool {
-    private final ToolDefinition def;
-
-    public WriteFileTool() {
-        Map<String, Object> schema = Map.of(
-                "path", Map.of("type", "string", "description", "relative file path to write"),
-                "content", Map.of("type", "string", "description", "full content to write")
-        );
-        this.def = new ToolDefinition(name(), "Write full content to a file (overwrites)", schema);
-    }
+    private static final ToolDefinition DEF = new ToolDefinition(
+            "write_file",
+            "Write full content to a file (overwrites)",
+            Map.of(
+                    "path", Map.of("type", "string", "description", "relative file path to write"),
+                    "content", Map.of("type", "string", "description", "full content to write")
+            )
+    );
 
     @Override
     public String name() { return "write_file"; }
 
     @Override
-    public ToolDefinition definition() { return def; }
+    public ToolDefinition definition() { return DEF; }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {

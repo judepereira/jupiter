@@ -2,19 +2,16 @@ package com.judepereira.jupiter2.agent.llm;
 
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.llm.openai.OpenAiAgentModelClient;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class AgentModelClientFactory {
 
     private final ApplicationContext ctx;
     private final AgentProperties props;
-
-    public AgentModelClientFactory(ApplicationContext ctx, AgentProperties props) {
-        this.ctx = ctx;
-        this.props = props;
-    }
 
     public AgentModelClient getClient() {
         String provider = props.getProvider();

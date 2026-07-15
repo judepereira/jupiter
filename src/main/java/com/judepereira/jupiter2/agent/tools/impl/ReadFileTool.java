@@ -8,23 +8,22 @@ import java.nio.file.Path;
 import java.util.Map;
 
 public class ReadFileTool implements AgentTool {
-    private final ToolDefinition def;
+    private static final ToolDefinition DEF = new ToolDefinition(
+            "read_file",
+            "Read a file from the workspace (utf-8) with optional line range",
+            Map.of(
+                    "path", Map.of("type", "string", "description", "relative file path to read"),
+                    "startLine", Map.of("type", "integer", "description", "optional 1-based start line"),
+                    "endLine", Map.of("type", "integer", "description", "optional 1-based end line")
+            )
+    );
     private final int MAX_CHARS = 50_000;
-
-    public ReadFileTool() {
-        Map<String, Object> schema = Map.of(
-                "path", Map.of("type", "string", "description", "relative file path to read"),
-                "startLine", Map.of("type", "integer", "description", "optional 1-based start line"),
-                "endLine", Map.of("type", "integer", "description", "optional 1-based end line")
-        );
-        this.def = new ToolDefinition(name(), "Read a file from the workspace (utf-8) with optional line range", schema);
-    }
 
     @Override
     public String name() { return "read_file"; }
 
     @Override
-    public ToolDefinition definition() { return def; }
+    public ToolDefinition definition() { return DEF; }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {

@@ -11,6 +11,7 @@ import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter2.agent.tools.ToolRegistry;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
@@ -20,17 +21,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class CodingAgentHarness {
 
     private final AgentModelClientFactory modelFactory;
     private final ToolRegistry registry;
     private final AgentProperties props;
-
-    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props) {
-        this.modelFactory = modelFactory;
-        this.registry = registry;
-        this.props = props;
-    }
 
     public AgentTurnResult runTurn(AgentTurnRequest request) {
         return runTurnStreaming(request, new AgentStreamListener() {});
