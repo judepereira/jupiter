@@ -37,7 +37,7 @@ public class CodingAgentHarness {
 
         List<Message> convo = new ArrayList<>();
         convo.add(new Message(Message.Role.SYSTEM, request.getSystemPrompt()));
-        convo.add(new Message(Message.Role.USER, request.getUserPrompt()));
+        convo.addAll(request.getConversationHistory());
 
         List<ToolCallTrace> traces = new ArrayList<>();
 

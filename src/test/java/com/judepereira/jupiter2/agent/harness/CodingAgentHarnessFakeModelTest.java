@@ -3,11 +3,10 @@ package com.judepereira.jupiter2.agent.harness;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.llm.AgentModelClient;
 import com.judepereira.jupiter2.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter2.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
-import com.judepereira.jupiter2.agent.tools.ToolExecutionContext;
-import com.judepereira.jupiter2.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter2.agent.tools.ToolRegistry;
 import com.judepereira.jupiter2.agent.tools.impl.WriteFileTool;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -42,6 +42,41 @@ public class CodingAgentHarnessFakeModelTest {
             if (idx >= seq.size()) return new ModelResponse("", null);
             return seq.get(idx++);
         }
+    }
+
+    @Test
+    public void runTurn_usesStructuredHistoryInOrder(@TempDir Path tmp) {
+        List<List<Message>> captured = new ArrayList<>();
+        AgentModelClient model = new AgentModelClient() {
+            @Override
+            public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
+                return new ModelResponse("ok", null);
+            }
+
+            @Override
+            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, java.util.function.Consumer<String> onDelta) {
+                captured.add(List.copyOf(conversation));
+                return new ModelResponse("ok", null);
+            }
+        };
+
+        AgentProperties props = new AgentProperties();
+        props.setMaxIterations(1);
+        props.setWorkspaceRoot(tmp.toString());
+
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), new ToolRegistry(), props);
+        var req = new AgentTurnRequest("sys", List.of(
+                new Message(Message.Role.USER, "u1"),
+                new Message(Message.Role.ASSISTANT, "a1"),
+                new Message(Message.Role.USER, "u2")
+        ));
+
+        var res = harness.runTurn(req);
+
+        assertEquals("ok", res.getFinalText());
+        assertEquals(1, captured.size());
+        assertEquals(List.of("SYSTEM:sys", "USER:u1", "ASSISTANT:a1", "USER:u2"),
+                captured.get(0).stream().map(m -> m.getRole() + ":" + m.getContent()).toList());
     }
 
     @Test

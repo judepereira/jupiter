@@ -3,18 +3,25 @@ package com.judepereira.jupiter2;
 import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.ui.UiController;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.Model;
 import org.springframework.ui.ConcurrentModel;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class UiControllerAsyncStreamingTests {
+
+    private static List<String> render(List<Message> messages) {
+        return messages.stream().map(m -> m.getRole() + ":" + m.getContent()).toList();
+    }
 
     @Test
     public void sendReturnsQuickly_withPending_andDoesNotRunHarnessSynchronously() throws Exception {
@@ -60,6 +67,44 @@ public class UiControllerAsyncStreamingTests {
         assertThat(newRows.stream().anyMatch(o -> o.toString().contains("Thinking"))).isTrue();
         Boolean hasPending = (Boolean) ((ConcurrentModel)model).getAttribute("hasPending");
         assertThat(hasPending).isTrue();
+    }
+
+    @Test
+    public void multiTurnRequestHistory_excludesSystemAndPendingPlaceholder_butKeepsPriorTurns(@TempDir java.nio.file.Path tmp) throws Exception {
+        class RecordingHarness extends CodingAgentHarness {
+            final List<AgentTurnRequest> requests = new ArrayList<>();
+
+            RecordingHarness() {
+                super(null, null, null);
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter2.agent.llm.AgentStreamListener listener) {
+                requests.add(request);
+                AgentTurnResult result = new AgentTurnResult("reply-" + requests.size(), List.of());
+                listener.onComplete(result);
+                return result;
+            }
+        }
+
+        RecordingHarness fake = new RecordingHarness();
+
+        var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+
+        Model m1 = new ConcurrentModel();
+        ctrl.sendMessage("first", m1, null);
+        ctrl.streamChat(assistantId((ConcurrentModel) m1));
+
+        Model m2 = new ConcurrentModel();
+        ctrl.sendMessage("second", m2, null);
+        ctrl.streamChat(assistantId((ConcurrentModel) m2));
+
+        assertThat(fake.requests).hasSize(2);
+        assertThat(render(fake.requests.get(0).getConversationHistory())).containsExactly("USER:first");
+        assertThat(render(fake.requests.get(1).getConversationHistory()))
+                .containsExactly("USER:first", "ASSISTANT:reply-1", "USER:second");
     }
 
     @Test
@@ -232,5 +277,21 @@ public class UiControllerAsyncStreamingTests {
         assertThat(text).contains("You exceeded your current quota, please check your plan and billing details.");
         assertThat(text).doesNotContain("insufficient_quota");
         assertThat(text).doesNotContain("\"error\"");
+    }
+
+    private static String assistantId(ConcurrentModel model) throws Exception {
+        List<?> msgs = (List<?>) model.getAttribute("chatMessages");
+        Object last = msgs.get(msgs.size() - 1);
+        try {
+            var cls = last.getClass();
+            var f = cls.getDeclaredField("id");
+            f.setAccessible(true);
+            return (String) f.get(last);
+        } catch (Exception e) {
+            String s = last.toString();
+            int i = s.indexOf("id=");
+            if (i >= 0) return s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
+            throw e;
+        }
     }
 }

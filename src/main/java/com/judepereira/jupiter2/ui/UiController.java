@@ -9,6 +9,7 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
@@ -85,7 +86,7 @@ public class UiController {
             // build concise system prompt for coding agent
             String systemPrompt = "You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.";
             // register a pending stream job; the front-end will connect to /ui/chat/stream/{assistantId}
-            pendingStreams.put(assistantId, new AgentTurnRequest(systemPrompt, user));
+            pendingStreams.put(assistantId, new AgentTurnRequest(systemPrompt, buildConversationHistory()));
         }
 
         // keep full chatMessages model for initial page render / other flows
@@ -434,6 +435,18 @@ public class UiController {
                 }
             }
         }
+    }
+
+    private List<Message> buildConversationHistory() {
+        return chat.stream()
+                .filter(m -> !m.pending && !"system".equals(m.role))
+                .map(this::toMessage)
+                .toList();
+    }
+
+    private Message toMessage(ChatMessage chatMessage) {
+        Message.Role role = "assistant".equals(chatMessage.role) ? Message.Role.ASSISTANT : Message.Role.USER;
+        return new Message(role, chatMessage.text);
     }
 
     private String normalizeProviderErrorMessage(Exception e) {
