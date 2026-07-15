@@ -159,4 +159,78 @@ public class UiControllerAsyncStreamingTests {
             // ignore: some toString-based fallbacks may not expose fields
         }
     }
+
+    @Test
+    public void streaming_error_normalizes_openai_json_message() throws Exception {
+        String quotaJson = "{\"error\":{\"message\":\"You exceeded your current quota, please check your plan and billing details.\",\"type\":\"insufficient_quota\",\"param\":null,\"code\":\"insufficient_quota\"}}";
+
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+            @Override
+            public AgentTurnResult runTurn(AgentTurnRequest request) {
+                return new AgentTurnResult("", List.of());
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter2.agent.llm.AgentStreamListener listener) {
+                throw new RuntimeException("provider error: " + quotaJson);
+            }
+        };
+
+        var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
+        props.setWorkspaceRoot(".");
+        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+
+        Model model = new ConcurrentModel();
+        ctrl.sendMessage("go", model, null);
+        List<?> msgs = (List<?>) ((ConcurrentModel) model).getAttribute("chatMessages");
+        Object last = msgs.get(msgs.size() - 1);
+
+        String assistantId = null;
+        try {
+            var cls = last.getClass();
+            var f = cls.getDeclaredField("id");
+            f.setAccessible(true);
+            assistantId = (String) f.get(last);
+        } catch (Exception e) {
+            String s = last.toString();
+            int i = s.indexOf("id=");
+            if (i >= 0) assistantId = s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
+        }
+        assertThat(assistantId).isNotNull();
+        final String finalAssistantId = assistantId;
+
+        ctrl.streamChat(assistantId);
+
+        Model afterModel = new ConcurrentModel();
+        ctrl.index(afterModel);
+        List<?> after = (List<?>) ((ConcurrentModel) afterModel).getAttribute("chatMessages");
+        Object found = after.stream().filter(o -> {
+            try {
+                var cls = o.getClass();
+                var f = cls.getDeclaredField("id");
+                f.setAccessible(true);
+                return finalAssistantId.equals((String) f.get(o));
+            } catch (Exception e) {
+                return o.toString().contains(finalAssistantId);
+            }
+        }).findFirst().orElse(null);
+
+        assertThat(found).isNotNull();
+
+        String text = null;
+        try {
+            var cls = found.getClass();
+            var f = cls.getDeclaredField("text");
+            f.setAccessible(true);
+            text = (String) f.get(found);
+        } catch (Exception e) {
+            String s = found.toString();
+            int i = s.indexOf("text=");
+            if (i >= 0) text = s.substring(i + 5).replaceAll(",.*$", "");
+        }
+
+        assertThat(text).contains("You exceeded your current quota, please check your plan and billing details.");
+        assertThat(text).doesNotContain("insufficient_quota");
+        assertThat(text).doesNotContain("\"error\"");
+    }
 }

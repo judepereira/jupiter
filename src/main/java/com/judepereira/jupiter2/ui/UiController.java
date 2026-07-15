@@ -1,6 +1,7 @@
 package com.judepereira.jupiter2.ui;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
@@ -272,22 +273,23 @@ public class UiController {
                 @Override
                 public void onError(Exception e) {
                     try {
+                        String normalizedMessage = normalizeProviderErrorMessage(e);
                         synchronized (chat) {
                             for (int i = 0; i < chat.size(); i++) {
                                 ChatMessage m = chat.get(i);
                                 if (m.id.equals(assistantId)) {
-                                    chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + e.getMessage(), Instant.now().toEpochMilli(), false, assistantId, m.toolCalls));
+                                    chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + normalizedMessage, Instant.now().toEpochMilli(), false, assistantId, m.toolCalls));
                                     log.error("Execution failure!", e);
                                     break;
                                 }
                             }
                         }
                         try {
-                            String msg = e.getMessage() == null ? "error" : e.getMessage();
+                            String msg = normalizedMessage;
                             String json = SseJson.writeValueAsString(Map.of("message", msg));
                             emitter.send(SseEmitter.event().name("error").data(json));
                         } catch (JsonProcessingException ex) {
-                            emitter.send(SseEmitter.event().name("error").data(e.getMessage() == null ? "error" : e.getMessage()));
+                            emitter.send(SseEmitter.event().name("error").data(normalizedMessage));
                         }
                     } catch (Exception ignored) {
                     } finally {
@@ -452,6 +454,44 @@ public class UiController {
             }
         }
     }
+
+    private String normalizeProviderErrorMessage(Exception e) {
+        String message = e == null ? null : e.getMessage();
+        if (message == null || message.isBlank()) {
+            return "error";
+        }
+
+        String rawJson = extractJsonObject(message);
+        if (rawJson != null) {
+            try {
+                ProviderErrorPayload payload = SseJson.readValue(rawJson, ProviderErrorPayload.class);
+                String errorMessage = payload.error() == null ? null : payload.error().message();
+                if (errorMessage != null && !errorMessage.isBlank()) {
+                    log.warn("Provider error payload: {}", rawJson);
+                    return errorMessage;
+                }
+            } catch (Exception ignored) {
+                // fall back to the original message below
+            }
+        }
+
+        return message;
+    }
+
+    private String extractJsonObject(String message) {
+        int start = message.indexOf('{');
+        int end = message.lastIndexOf('}');
+        if (start < 0 || end <= start) {
+            return null;
+        }
+        return message.substring(start, end + 1);
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ProviderErrorPayload(ProviderError error) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ProviderError(String message) {}
 
     public static record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated) {}
 

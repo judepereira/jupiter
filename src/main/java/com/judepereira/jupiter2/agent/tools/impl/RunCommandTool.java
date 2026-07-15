@@ -22,18 +22,30 @@ public class RunCommandTool implements AgentTool {
     }
 
     @Override
-    public String name() { return "run_command"; }
+    public String name() {
+        return "run_command";
+    }
 
     @Override
-    public ToolDefinition definition() { return def; }
+    public ToolDefinition definition() {
+        return def;
+    }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {
-        if (!context.isAllowCommand()) return new ToolExecutionResult(false, "command execution disabled by configuration", Map.of());
+        if (!context.isAllowCommand()) {
+            return new ToolExecutionResult(false, "command execution disabled by configuration", Map.of());
+        }
         String cmd = (String) args.get("command");
         String working = (String) args.getOrDefault("workingDir", "");
-        if (cmd == null) return new ToolExecutionResult(false, "missing command", Map.of());
-        for (String f : forbidden) if (cmd.contains(f)) return new ToolExecutionResult(false, "command denied by safety policy", Map.of());
+        if (cmd == null) {
+            return new ToolExecutionResult(false, "missing command", Map.of());
+        }
+        for (String f : forbidden) {
+            if (cmd.contains(f)) {
+                return new ToolExecutionResult(false, "command denied by safety policy", Map.of());
+            }
+        }
         Path wd = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), working);
         ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", cmd);
         pb.directory(wd.toFile());
@@ -63,13 +75,25 @@ public class RunCommandTool implements AgentTool {
         if (!finished) {
             p.destroyForcibly();
             // ensure threads finish
-            try { tOut.join(200); } catch (InterruptedException ignored) {}
-            try { tErr.join(200); } catch (InterruptedException ignored) {}
+            try {
+                tOut.join(200);
+            } catch (InterruptedException ignored) {
+            }
+            try {
+                tErr.join(200);
+            } catch (InterruptedException ignored) {
+            }
             return new ToolExecutionResult(false, "command timed out", Map.of());
         }
         // wait for drain threads to complete
-        try { tOut.join(1000); } catch (InterruptedException ignored) {}
-        try { tErr.join(1000); } catch (InterruptedException ignored) {}
+        try {
+            tOut.join(1000);
+        } catch (InterruptedException ignored) {
+        }
+        try {
+            tErr.join(1000);
+        } catch (InterruptedException ignored) {
+        }
         int code = p.exitValue();
         Map<String, Object> machine = Map.of("exitCode", code, "stdout", out.toString(), "stderr", err.toString());
         String text = "exitCode=" + code + "\n" + out.toString() + err.toString();
