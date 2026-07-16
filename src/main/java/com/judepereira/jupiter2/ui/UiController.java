@@ -283,6 +283,7 @@ public class UiController {
             } while (!session.reviewPanelOpen.compareAndSet(prev, !prev));
         }
         populateSessionModel(model, session);
+        model.addAttribute("reviewOob", false);
         return "fragments/review :: panel";
     }
 

@@ -1,9 +1,16 @@
 package com.judepereira.jupiter2;
 
+import com.judepereira.jupiter2.ui.UiController;
 import org.junit.jupiter.api.Test;
+import org.thymeleaf.context.Context;
+import org.thymeleaf.spring6.SpringTemplateEngine;
+import org.thymeleaf.templatemode.TemplateMode;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -99,11 +106,39 @@ public class TemplateAssertionsTest {
                 // ensure outdated fragment invocation syntax is not present
                 .doesNotContain("row(m=${m})")
                 .doesNotContain("fragments/chat :: row");
-        // Ensure we no longer include the review fragment or OOB swap markers in the chat-response
+        // Ensure chat-response only emits the review fragment when it is explicitly marked OOB
         assertThat(s).contains("fragments/projects :: shellUpdates")
                 .contains("<th:block th:if=\"${shellRefresh}\">")
-                .contains("reviewOob and !shellRefresh")
+                .contains("th:if=\"${reviewOob}\"")
                 .doesNotContain("fragments/chat :: row", "chat-messages-list-new");
+    }
+
+    @Test
+    public void reviewFragment_toggleIsInBandWhileChatResponseMarksReviewOob() {
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+
+        Context toggleContext = new Context();
+        toggleContext.setVariable("reviewPanelOpen", true);
+        toggleContext.setVariable("reviewOob", false);
+        toggleContext.setVariable("changedFiles", List.of());
+        String toggleHtml = engine.process("fragments/review", toggleContext);
+        assertThat(toggleHtml).contains("id=\"review\"").doesNotContain("hx-swap-oob");
+
+        Context chatContext = new Context();
+        chatContext.setVariable("shellRefresh", false);
+        chatContext.setVariable("reviewOob", true);
+        chatContext.setVariable("reviewPanelOpen", true);
+        chatContext.setVariable("changedFiles", List.of());
+        chatContext.setVariable("newChatMessages", List.of(new UiController.ChatMessage("user", "hi", 1L, false, "m1", List.of())));
+        String chatHtml = engine.process("fragments/chat-response", chatContext);
+        assertThat(chatHtml).contains("hx-swap-oob=\"outerHTML\"").contains("id=\"review\"");
     }
 
     @Test

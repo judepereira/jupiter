@@ -9,7 +9,7 @@
     <th:block th:if="${shellRefresh}">
         <th:block th:replace="~{fragments/projects :: shellUpdates}"></th:block>
     </th:block>
-    <th:block th:if="${reviewOob and !shellRefresh}" th:replace="~{fragments/review :: panel}"></th:block>
+    <th:block th:if="${reviewOob}" th:replace="~{fragments/review :: panel}"></th:block>
 
     <!-- in-band: only append the new rows to the existing messages list -->
     <!-- emit only the <li> rows so HTMX can append directly into #chat-messages-list -->

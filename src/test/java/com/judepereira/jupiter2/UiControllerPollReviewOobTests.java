@@ -79,4 +79,26 @@ public class UiControllerPollReviewOobTests {
         Object sel = ((ConcurrentModel)m2).getAttribute("selectedFile");
         assertThat(sel).isNotNull();
     }
+
+    @Test
+    public void toggleReviewKeepsResponseInBand() throws Exception {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter2.agent.llm.AgentStreamListener listener) {
+                return new AgentTurnResult("done", List.of());
+            }
+        };
+
+        var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
+        props.setWorkspaceRoot(".");
+        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+
+        ctrl.addProject("p", Files.createTempDirectory("jup-toggle").toString(), new ConcurrentModel());
+
+        Model model = new ConcurrentModel();
+        String view = ctrl.toggleReview(model);
+
+        assertThat(view).isEqualTo("fragments/review :: panel");
+        assertThat(model.getAttribute("reviewOob")).isEqualTo(false);
+    }
 }
