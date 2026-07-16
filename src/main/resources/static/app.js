@@ -907,6 +907,13 @@
             } catch (_) {
             }
         }, true);
+
+        document.body.addEventListener('htmx:afterSwap', function () {
+            Promise.resolve().then(initChatComposer);
+        }, true);
+        document.body.addEventListener('htmx:afterSettle', function () {
+            Promise.resolve().then(initChatComposer);
+        }, true);
     })();
 
 })();

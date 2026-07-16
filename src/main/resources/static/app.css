@@ -4,6 +4,7 @@
 
 :root {
     --rail-width: 40px;
+    --topbar-height: 56px;
     /* width of the review panel (can be overridden by JS during drag) */
     --review-width: 40%;
     --rail-bg: #0f1724; /* dark navy */
@@ -18,6 +19,71 @@
 body {
     margin: 0;
     padding: 0;
+    height: 100vh;
+    overflow: hidden;
+    background: #f7fbff;
+}
+
+.top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--topbar-height);
+    z-index: 1500;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px;
+    box-sizing: border-box;
+    background: rgba(15, 23, 36, 0.98);
+    color: var(--rail-fg);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+}
+
+.project-tabs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    overflow-x: auto;
+    flex: 1 1 auto;
+}
+
+.project-tab,
+.project-add-button {
+    border: 1px solid rgba(203, 213, 225, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rail-fg);
+    border-radius: 999px;
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.project-tab.active {
+    background: #ffffff;
+    color: #0f1724;
+    border-color: #ffffff;
+}
+
+.project-tab-empty {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.project-add-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.project-add-button:hover,
+.project-tab:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 /* Shell grid: rails + two main panels */
@@ -33,15 +99,16 @@ body {
    desktop layout when no modifier class is present. */
 #shell.shell-root {
     display: grid;
-    grid-template-rows: 100vh;
+    grid-template-rows: 1fr;
     /* fallback desktop layout: rail | main | divider | review | rail */
     grid-template-columns: var(--rail-width) 1fr 3px var(--review-width) var(--rail-width);
     gap: 12px;
     align-items: stretch;
     background: #f7fbff;
-    height: 100vh;
+    height: calc(100vh - var(--topbar-height));
     box-sizing: border-box;
-    padding: 0;
+    padding: 12px;
+    margin-top: var(--topbar-height);
     /* Prevent transient horizontal overflow when grid columns are
        programmatically collapsed. The shell handles layout of all
        panels so hiding x-overflow here avoids scrollbars appearing
@@ -127,6 +194,7 @@ body {
     border: 1px solid var(--panel-border);
     padding: 12px;
     overflow: hidden;
+    min-height: 0;
 }
 
 .left-panel {
@@ -134,6 +202,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 0;
 }
 
 .review-panel {
@@ -205,7 +274,84 @@ body {
 }
 
 #chat-container {
-    overflow: scroll;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+}
+
+.workspace-session-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    background: #f8fbff;
+    color: #0b1220;
+}
+
+.workspace-session-empty {
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.workspace-session-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.workspace-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #e6eef6;
+}
+
+.workspace-group.active {
+    border-color: rgba(37, 99, 235, 0.35);
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.1) inset;
+}
+
+.workspace-item,
+.session-item {
+    width: 100%;
+    text-align: left;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #0b1220;
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.workspace-item.active,
+.session-item.active {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+    font-weight: 600;
+}
+
+.session-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 10px;
+}
+
+.session-item {
+    padding-left: 12px;
+    background: #f8fbff;
+}
+
+.session-item:hover,
+.workspace-item:hover {
+    background: #eff6ff;
 }
 
 #chat-history.messages {
@@ -486,6 +632,171 @@ body {
 
 .review-panel {
     overflow: scroll;
+}
+
+.project-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.project-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 36, 0.48);
+}
+
+.project-modal-card {
+    position: relative;
+    z-index: 1;
+    width: min(880px, 100%);
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 24px 80px rgba(15, 23, 36, 0.26);
+    border: 1px solid #e6eef6;
+    padding: 18px;
+    box-sizing: border-box;
+}
+
+.project-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.project-modal-close,
+.project-form-cancel {
+    border: 1px solid #dbeafe;
+    background: #f8fbff;
+    color: #0b1220;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.project-modal-close {
+    width: 36px;
+    height: 36px;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.project-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.project-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #0b1220;
+}
+
+.project-form-field input,
+.project-path-input {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    padding: 10px 12px;
+    font: inherit;
+}
+
+.directory-browser {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #e6eef6;
+    background: #f8fbff;
+}
+
+.directory-browser-path {
+    font-size: 0.9rem;
+    color: var(--muted);
+    word-break: break-all;
+}
+
+.directory-tree {
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.directory-tree-child {
+    padding-left: 18px;
+    margin-top: 6px;
+}
+
+.directory-node {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.directory-node-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.directory-toggle,
+.directory-select,
+.project-form-submit {
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    background: #ffffff;
+    color: #0b1220;
+    cursor: pointer;
+}
+
+.directory-toggle {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.directory-node-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.directory-select {
+    padding: 6px 10px;
+}
+
+.project-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.project-form-cancel,
+.project-form-submit {
+    padding: 10px 14px;
+}
+
+.project-form-submit {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
 }
 
 /* Accessibility helpers */

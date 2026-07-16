@@ -11,17 +11,20 @@
     <!-- tiny helper for swapping animations could be added later -->
 </head>
 <body>
+<header id="top-bar" th:replace="~{fragments/projects :: topbar}" th:with="shellRefresh=${false}">Top bar</header>
+
 <div id="shell" class="shell-root">
 
     <!-- extreme left rail -->
     <aside id="left-rail" class="rail left-rail">
-        <div th:replace="fragments/panel :: panel(panelName='left-rail')">Left rail</div>
+        <div th:replace="~{fragments/panel :: panel(panelName='left-rail')}">Left rail</div>
         <div id="left-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
     </aside>
 
     <!-- main left content: chat composer + history -->
     <main id="left-panel" class="main-panel left-panel">
-        <div id="chat-container" th:replace="fragments/chat :: chat" th:with="hasPending=${false}, reviewOob=${false}">
+        <section id="workspace-session-rail" th:replace="~{fragments/projects :: workspaceRail}" th:with="shellRefresh=${false}">Workspace rail</section>
+        <div id="chat-container" th:replace="~{fragments/chat :: chat}" th:with="hasPending=${false}, reviewOob=${false}, shellRefresh=${false}">
             Loading chat...
         </div>
     </main>
@@ -31,13 +34,13 @@
          title="Click and drag to resize" aria-orientation="vertical" tabindex="0"></div>
 
     <!-- main right content: review/diff -->
-    <aside id="review" class="main-panel review-panel" th:replace="fragments/review :: panel"
-           th:with="reviewOob=${false}">Loading review...
+    <aside id="review" class="main-panel review-panel" th:replace="~{fragments/review :: panel}"
+            th:with="reviewOob=${false}">Loading review...
     </aside>
 
     <!-- extreme right rail -->
     <aside id="right-rail" class="rail right-rail">
-        <div th:replace="fragments/panel :: panel(panelName='right-rail')">Right rail</div>
+        <div th:replace="~{fragments/panel :: panel(panelName='right-rail')}">Right rail</div>
         <div id="right-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
         <!-- control to toggle review panel for convenience -->
         <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/review/toggle" hx-target="#shell > #review"
@@ -48,6 +51,8 @@
     </aside>
 
 </div>
+
+<div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.11/dist/purify.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.umd.js"></script>

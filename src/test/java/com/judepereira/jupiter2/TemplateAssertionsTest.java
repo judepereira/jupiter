@@ -100,6 +100,32 @@ public class TemplateAssertionsTest {
                 .doesNotContain("row(m=${m})")
                 .doesNotContain("fragments/chat :: row");
         // Ensure we no longer include the review fragment or OOB swap markers in the chat-response
-        assertThat(s).doesNotContain("fragments/review :: panel", "hx-swap-oob", "id=\"review\"");
+        assertThat(s).contains("fragments/projects :: shellUpdates")
+                .contains("<th:block th:if=\"${shellRefresh}\">")
+                .contains("reviewOob and !shellRefresh")
+                .doesNotContain("fragments/chat :: row", "chat-messages-list-new");
+    }
+
+    @Test
+    public void projectFragments_cover_tabs_modal_and_directoryTree() throws Exception {
+        Path p = Path.of("src/main/resources/templates/fragments/projects.html");
+        String s = Files.readString(p);
+        assertThat(s).contains("id=\"top-bar\"", "class=\"project-tabs\"", "Add project")
+                .contains("projectList=${projects ?: T(java.util.List).of()}", "activeProjectView=${activeProject}")
+                .contains("hx-get=\"/ui/projects/new\"", "hx-target=\"#modal-root\"", "hx-swap=\"innerHTML\"")
+                .contains("id=\"workspace-session-rail\"", "No project selected")
+                .contains("workspaceList=${workspaces ?: T(java.util.List).of()}", "sessionList=${sessions ?: T(java.util.List).of()}")
+                .contains("hx-post=@{/ui/workspaces/{id}/activate", "hx-post=@{/ui/sessions/{id}/activate")
+                .contains("id=\"project-modal\"", "directory-browser-tree")
+                .contains("hx-post=\"/ui/projects/add\"", "hx-target=\"#shell\"", "hx-swap=\"none\"")
+                .contains("fragments/directory-list :: tree", "th:fragment=\"shellUpdates\"");
+    }
+
+    @Test
+    public void directoryFragment_uses_lazy_path_loading_hooks() throws Exception {
+        Path p = Path.of("src/main/resources/templates/fragments/directory-list.html");
+        String s = Files.readString(p);
+        assertThat(s).contains("hx-get=@{/ui/projects/directory(path=${path})}", "hx-target='closest .directory-node'", "hx-swap='outerHTML'")
+                .contains("hx-get=@{/ui/projects/directory/select(path=${path})}", "class=\"directory-tree\"");
     }
 }

@@ -9,13 +9,19 @@ import java.util.List;
 public class AgentTurnRequest {
     private final String systemPrompt;
     private final List<Message> conversationHistory;
+    private final String workspaceRoot;
 
     public AgentTurnRequest(String systemPrompt, String userPrompt) {
-        this(systemPrompt, List.of(new Message(Message.Role.USER, userPrompt)));
+        this(systemPrompt, List.of(new Message(Message.Role.USER, userPrompt)), null);
     }
 
     public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory) {
+        this(systemPrompt, conversationHistory, null);
+    }
+
+    public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot) {
         this.systemPrompt = systemPrompt;
         this.conversationHistory = List.copyOf(conversationHistory);
+        this.workspaceRoot = workspaceRoot;
     }
 }

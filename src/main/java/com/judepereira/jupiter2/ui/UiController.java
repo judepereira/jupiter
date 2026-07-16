@@ -1,7 +1,7 @@
 package com.judepereira.jupiter2.ui;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
@@ -14,7 +14,6 @@ import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Qualifier;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,113 +29,105 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Log4j2
 @Controller
-@RequiredArgsConstructor
+@lombok.RequiredArgsConstructor
 public class UiController {
+
+    private static final ObjectMapper SseJson = new ObjectMapper();
 
     private final CodingAgentHarness harness;
     private final AgentProperties agentProperties;
 
-    private final List<ChatMessage> chat = new CopyOnWriteArrayList<>(List.of(new ChatMessage("system", "Welcome to Jupiter", Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of())));
-    private final List<ChangedFile> changedFiles = new CopyOnWriteArrayList<>();
-    private final AtomicInteger nextFileId = new AtomicInteger(1);
-    private final AtomicBoolean reviewPanelOpen = new AtomicBoolean(false);
-    private volatile ChangedFile selectedFile = null;
     @Qualifier("agentTaskExecutor")
     private final Executor agentExecutor;
-    // pending streaming jobs keyed by assistantId -> AgentTurnRequest
-    private final ConcurrentMap<String, AgentTurnRequest> pendingStreams = new ConcurrentHashMap<>();
 
-    // Jackson mapper for safe JSON serialization of SSE payloads
-    private static final ObjectMapper SseJson = new ObjectMapper();
+    private final AppState appState = new AppState();
+    private final ConcurrentMap<String, PendingStream> pendingStreams = new ConcurrentHashMap<>();
 
     @GetMapping("/")
     public String index(Model model) {
-        model.addAttribute("chatMessages", List.copyOf(chat));
-        model.addAttribute("changedFiles", List.copyOf(changedFiles));
-        model.addAttribute("reviewPanelOpen", reviewPanelOpen.get());
-        model.addAttribute("selectedFile", selectedFile);
-        model.addAttribute("hasPending", false);
-        model.addAttribute("reviewOob", false);
+        populateSessionModel(model, appState.activeSession());
         return "index";
     }
 
     @PostMapping("/ui/chat/send")
     public String sendMessage(@RequestParam("message") String message, Model model, HttpServletRequest request) {
-        // collect only newly created chat messages for append response
         List<ChatMessage> newChatMessages = new ArrayList<>();
+        SessionState session = null;
+        boolean shellRefresh = false;
+
         if (message != null && !message.isBlank()) {
+            shellRefresh = appState.activeSession() == null;
+            session = appState.ensureChatSession(agentProperties.getWorkspaceRoot());
             String user = message.trim();
             ChatMessage userMsg = new ChatMessage("user", user, Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of());
-            chat.add(userMsg);
+            session.chat.add(userMsg);
             newChatMessages.add(userMsg);
 
             String assistantId = UUID.randomUUID().toString();
-            // add pending assistant message
             ChatMessage pendingAssistant = new ChatMessage("assistant", "Thinking…", Instant.now().toEpochMilli(), true, assistantId, List.of());
-            chat.add(pendingAssistant);
+            session.chat.add(pendingAssistant);
             newChatMessages.add(pendingAssistant);
 
-            // build concise system prompt for coding agent
             String systemPrompt = "You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.";
-            // register a pending stream job; the front-end will connect to /ui/chat/stream/{assistantId}
-            pendingStreams.put(assistantId, new AgentTurnRequest(systemPrompt, buildConversationHistory()));
+            pendingStreams.put(assistantId, new PendingStream(session.session.id(), session.workspacePath, new AgentTurnRequest(systemPrompt, buildConversationHistory(session), session.workspacePath)));
         }
 
-        // keep full chatMessages model for initial page render / other flows
-        model.addAttribute("chatMessages", List.copyOf(chat));
-        // supply only newly created rows for the append response
+        populateSessionModel(model, session != null ? session : appState.activeSession());
         model.addAttribute("newChatMessages", List.copyOf(newChatMessages));
-        model.addAttribute("changedFiles", List.copyOf(changedFiles));
-        model.addAttribute("reviewPanelOpen", reviewPanelOpen.get());
-        model.addAttribute("selectedFile", selectedFile);
-        boolean hasPending = chat.stream().anyMatch(m -> m.pending);
-        model.addAttribute("hasPending", hasPending);
-
-        // include an OOB update for the review panel when changed files or review open state may have changed
-        // We control via a model flag so the review fragment will render with hx-swap-oob when appropriate.
-        boolean reviewOob = !hasPending && reviewPanelOpen.get();
-        model.addAttribute("reviewOob", reviewOob);
-
-        // return a composite response fragment that renders only the new rows and optional OOB review fragment
+        model.addAttribute("hasPending", session != null && session.chat.stream().anyMatch(m -> m.pending()));
+        model.addAttribute("shellRefresh", shellRefresh);
+        model.addAttribute("includeChatContainer", false);
+        model.addAttribute("reviewOob", shellRefresh || (session != null && !session.chat.stream().anyMatch(m -> m.pending()) && session.reviewPanelOpen.get()));
         return "fragments/chat-response :: response";
     }
 
     @GetMapping("/ui/review/file/{id}")
     public String loadFile(@PathVariable("id") int id, Model model) {
-        ChangedFile found = changedFiles.stream().filter(f -> f.id() == id).findFirst().orElse(null);
-        if (found != null) {
-            selectedFile = found;
+        SessionState session = appState.activeSession();
+        if (session != null) {
+            ChangedFile found = session.changedFiles.stream().filter(f -> f.id() == id).findFirst().orElse(null);
+            if (found != null) {
+                session.selectedFile = found;
+            }
         }
-        model.addAttribute("selectedFile", selectedFile);
-        model.addAttribute("reviewPanelOpen", reviewPanelOpen.get());
+        populateSessionModel(model, session);
         return "fragments/file-diff :: diff";
     }
 
     @GetMapping("/ui/chat/stream/{assistantId}")
     public SseEmitter streamChat(@PathVariable("assistantId") String assistantId) {
-        AgentTurnRequest req = pendingStreams.remove(assistantId);
-        if (req == null) {
-            // no such pending job; return closed emitter
-            SseEmitter e = new SseEmitter(0L);
+        PendingStream pending = pendingStreams.remove(assistantId);
+        if (pending == null) {
+            SseEmitter emitter = new SseEmitter(0L);
             try {
-                String json = SseJson.writeValueAsString(Map.of("message", "no_job"));
-                e.send(SseEmitter.event().name("error").data(json));
+                emitter.send(SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
             } catch (Exception ignored) {
             }
-            e.complete();
-            return e;
+            emitter.complete();
+            return emitter;
         }
 
-        SseEmitter emitter = new SseEmitter(0L); // no timeout
+        SessionState session = appState.session(pending.sessionId());
+        SseEmitter emitter = new SseEmitter(0L);
 
-        // locate the pending assistant chat message and start updating it
         Runnable task = () -> {
             AtomicBoolean done = new AtomicBoolean(false);
             StringBuilder accumulated = new StringBuilder();
@@ -150,18 +141,15 @@ public class UiController {
                         }
                         accumulated.append(delta);
                         try {
-                            String json = SseJson.writeValueAsString(Map.of("text", delta));
-                            emitter.send(SseEmitter.event().name("delta").data(json));
+                            emitter.send(SseEmitter.event().name("delta").data(SseJson.writeValueAsString(Map.of("text", delta))));
                         } catch (JsonProcessingException e) {
-                            // fallback to raw string if serialization somehow fails
                             emitter.send(SseEmitter.event().name("delta").data(delta));
                         }
-                        // update in-memory chat message text
-                        synchronized (chat) {
-                            for (int i = 0; i < chat.size(); i++) {
-                                ChatMessage m = chat.get(i);
+                        synchronized (session.chat) {
+                            for (int i = 0; i < session.chat.size(); i++) {
+                                ChatMessage m = session.chat.get(i);
                                 if (m.id.equals(assistantId)) {
-                                    chat.set(i, new ChatMessage("assistant", accumulated.toString(), m.ts, true, assistantId, m.toolCalls));
+                                    session.chat.set(i, new ChatMessage("assistant", accumulated.toString(), m.ts, true, assistantId, m.toolCalls));
                                     break;
                                 }
                             }
@@ -175,8 +163,7 @@ public class UiController {
                 public void onStatus(String status) {
                     try {
                         try {
-                            String json = SseJson.writeValueAsString(Map.of("status", status));
-                            emitter.send(SseEmitter.event().name("status").data(json));
+                            emitter.send(SseEmitter.event().name("status").data(SseJson.writeValueAsString(Map.of("status", status))));
                         } catch (JsonProcessingException e) {
                             emitter.send(SseEmitter.event().name("status").data(status));
                         }
@@ -188,24 +175,20 @@ public class UiController {
                 public void onToolCallTrace(ToolCallTrace trace) {
                     try {
                         ToolCallView v = traceToView(trace);
-                        // append to in-memory pending assistant message's toolCalls
-                        synchronized (chat) {
-                            for (int i = 0; i < chat.size(); i++) {
-                                ChatMessage m = chat.get(i);
+                        synchronized (session.chat) {
+                            for (int i = 0; i < session.chat.size(); i++) {
+                                ChatMessage m = session.chat.get(i);
                                 if (m.id.equals(assistantId)) {
-                                    List<ToolCallView> existing = m.toolCalls == null ? List.of() : m.toolCalls;
-                                    List<ToolCallView> updated = new ArrayList<>(existing.size() + 1);
-                                    updated.addAll(existing);
+                                    List<ToolCallView> updated = new ArrayList<>(m.toolCalls == null ? List.of() : m.toolCalls);
                                     updated.add(v);
-                                    chat.set(i, new ChatMessage("assistant", m.text, m.ts, m.pending, assistantId, List.copyOf(updated)));
+                                    session.chat.set(i, new ChatMessage("assistant", m.text, m.ts, m.pending, assistantId, List.copyOf(updated)));
                                     break;
                                 }
                             }
                         }
 
                         try {
-                            String json = SseJson.writeValueAsString(v);
-                            emitter.send(SseEmitter.event().name("tool_call").data(json));
+                            emitter.send(SseEmitter.event().name("tool_call").data(SseJson.writeValueAsString(v)));
                         } catch (JsonProcessingException e) {
                             emitter.send(SseEmitter.event().name("tool_call").data(v.toString()));
                         }
@@ -217,17 +200,12 @@ public class UiController {
                 @Override
                 public void onComplete(AgentTurnResult result) {
                     try {
-                        // mark pending false and set final text
-                        synchronized (chat) {
-                            for (int i = 0; i < chat.size(); i++) {
-                                ChatMessage m = chat.get(i);
+                        synchronized (session.chat) {
+                            for (int i = 0; i < session.chat.size(); i++) {
+                                ChatMessage m = session.chat.get(i);
                                 if (m.id.equals(assistantId)) {
-                                    // convert traces to views for final message
-                                    List<ToolCallView> views = List.of();
-                                    if (result.getTraces() != null) {
-                                        views = result.getTraces().stream().map(t -> traceToView(t)).toList();
-                                    }
-                                    chat.set(i, new ChatMessage("assistant", result.getFinalText(), Instant.now().toEpochMilli(), false, assistantId, views));
+                                    List<ToolCallView> views = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController::traceToView).toList();
+                                    session.chat.set(i, new ChatMessage("assistant", result.getFinalText(), Instant.now().toEpochMilli(), false, assistantId, views));
                                     break;
                                 }
                             }
@@ -235,15 +213,12 @@ public class UiController {
 
                         try {
                             String finalText = result.getFinalText() == null ? "" : result.getFinalText();
-                            String json = SseJson.writeValueAsString(Map.of("text", finalText));
-                            emitter.send(SseEmitter.event().name("done").data(json));
+                            emitter.send(SseEmitter.event().name("done").data(SseJson.writeValueAsString(Map.of("text", finalText))));
                         } catch (JsonProcessingException e) {
                             emitter.send(SseEmitter.event().name("done").data(result.getFinalText() == null ? "" : result.getFinalText()));
                         }
 
-                        // process changed files same logic as original sendMessage; extract into helper
-                        processChangedFiles(result);
-
+                        processChangedFiles(result, session, pending.workspaceRoot());
                     } catch (Exception e) {
                         onError(e);
                     } finally {
@@ -256,20 +231,18 @@ public class UiController {
                 public void onError(Exception e) {
                     try {
                         String normalizedMessage = normalizeProviderErrorMessage(e);
-                        synchronized (chat) {
-                            for (int i = 0; i < chat.size(); i++) {
-                                ChatMessage m = chat.get(i);
+                        synchronized (session.chat) {
+                            for (int i = 0; i < session.chat.size(); i++) {
+                                ChatMessage m = session.chat.get(i);
                                 if (m.id.equals(assistantId)) {
-                                    chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + normalizedMessage, Instant.now().toEpochMilli(), false, assistantId, m.toolCalls));
+                                    session.chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + normalizedMessage, Instant.now().toEpochMilli(), false, assistantId, m.toolCalls));
                                     log.error("Execution failure!", e);
                                     break;
                                 }
                             }
                         }
                         try {
-                            String msg = normalizedMessage;
-                            String json = SseJson.writeValueAsString(Map.of("message", msg));
-                            emitter.send(SseEmitter.event().name("error").data(json));
+                            emitter.send(SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", normalizedMessage))));
                         } catch (JsonProcessingException ex) {
                             emitter.send(SseEmitter.event().name("error").data(normalizedMessage));
                         }
@@ -282,7 +255,7 @@ public class UiController {
             };
 
             try {
-                AgentTurnResult result = harness.runTurnStreaming(req, listener);
+                AgentTurnResult result = harness.runTurnStreaming(pending.request(), listener);
                 if (!done.get()) {
                     listener.onComplete(result);
                 }
@@ -291,8 +264,8 @@ public class UiController {
             }
         };
 
-        if (agentExecutor instanceof ExecutorService es) {
-            es.submit(task);
+        if (agentExecutor instanceof ExecutorService service) {
+            service.submit(task);
         } else {
             agentExecutor.execute(task);
         }
@@ -302,17 +275,14 @@ public class UiController {
 
     @PostMapping("/ui/review/toggle")
     public String toggleReview(Model model) {
-        // AtomicBoolean.updateAndGet may not be available on older compilers/JDKs.
-        // Use a CAS loop to toggle the boolean and obtain the new value atomically.
-        boolean now;
-        boolean prev;
-        do {
-            prev = reviewPanelOpen.get();
-        } while (!reviewPanelOpen.compareAndSet(prev, !prev));
-        now = !prev;
-        model.addAttribute("reviewPanelOpen", now);
-        model.addAttribute("changedFiles", List.copyOf(changedFiles));
-        model.addAttribute("selectedFile", selectedFile);
+        SessionState session = appState.activeSession();
+        if (session != null) {
+            boolean prev;
+            do {
+                prev = session.reviewPanelOpen.get();
+            } while (!session.reviewPanelOpen.compareAndSet(prev, !prev));
+        }
+        populateSessionModel(model, session);
         return "fragments/review :: panel";
     }
 
@@ -322,23 +292,141 @@ public class UiController {
         return "fragments/panel :: panel";
     }
 
-    private String safeComputeDiff(String relativePath) {
-        final int MAX_CHARS = 16_000; // bound diff size
-        // validate path against configured workspace root
-        Path workspaceRoot = Path.of(agentProperties.getWorkspaceRoot());
+    @GetMapping("/ui/projects/new")
+    public String newProjectModal(Model model) {
+        Path home = Path.of(System.getProperty("user.home"));
+        model.addAttribute("currentPath", home.toString());
+        model.addAttribute("selectedPath", home.toString());
+        model.addAttribute("startPath", home.toString());
+        model.addAttribute("directoryEntries", listDirectoryEntries(home));
+        populateProjectModel(model);
+        return "fragments/projects :: modal";
+    }
+
+    @GetMapping("/ui/projects/directory")
+    public String listDirectory(@RequestParam("path") String path, Model model) {
+        Path current = Path.of(path);
+        model.addAttribute("directoryEntries", listDirectoryEntries(current));
+        model.addAttribute("name", current.getFileName() == null ? current.toString() : current.getFileName().toString());
+        model.addAttribute("path", current.toString());
+        model.addAttribute("expanded", true);
+        return "fragments/directory-list :: node";
+    }
+
+    @GetMapping("/ui/projects/directory/select")
+    public String selectDirectory(@RequestParam("path") String path, Model model) {
+        model.addAttribute("selectedPath", Path.of(path).toAbsolutePath().normalize().toString());
+        return "fragments/projects :: selectedPathField";
+    }
+
+    @GetMapping("/ui/projects/modal/close")
+    public String closeProjectModal() {
+        return "fragments/projects :: modalClose";
+    }
+
+    @PostMapping("/ui/projects/add")
+    public String addProject(@RequestParam("name") String name, @RequestParam("path") String path, Model model) {
+        appState.addProject(name, Path.of(path).toAbsolutePath().normalize().toString());
+        populateProjectModel(model);
+        populateSessionModel(model, appState.activeSession());
+        model.addAttribute("shellRefresh", true);
+        model.addAttribute("includeChatContainer", true);
+        model.addAttribute("reviewOob", true);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/projects/{projectId}/activate")
+    public String activateProject(@PathVariable long projectId, Model model) {
+        appState.activateProject(projectId);
+        populateProjectModel(model);
+        populateSessionModel(model, appState.activeSession());
+        model.addAttribute("shellRefresh", true);
+        model.addAttribute("includeChatContainer", true);
+        model.addAttribute("reviewOob", true);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/workspaces/{workspaceId}/activate")
+    public String activateWorkspace(@PathVariable long workspaceId, Model model) {
+        appState.activateWorkspace(workspaceId);
+        populateProjectModel(model);
+        populateSessionModel(model, appState.activeSession());
+        model.addAttribute("shellRefresh", true);
+        model.addAttribute("includeChatContainer", true);
+        model.addAttribute("reviewOob", true);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/sessions/{sessionId}/activate")
+    public String activateSession(@PathVariable long sessionId, Model model) {
+        appState.activateSession(sessionId);
+        populateProjectModel(model);
+        populateSessionModel(model, appState.activeSession());
+        model.addAttribute("shellRefresh", true);
+        model.addAttribute("includeChatContainer", true);
+        model.addAttribute("reviewOob", true);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    private void populateSessionModel(Model model, SessionState session) {
+        populateProjectModel(model);
+        if (session == null) {
+            model.addAttribute("chatMessages", List.of());
+            model.addAttribute("changedFiles", List.of());
+            model.addAttribute("reviewPanelOpen", false);
+            model.addAttribute("selectedFile", null);
+            model.addAttribute("hasPending", false);
+            model.addAttribute("reviewOob", false);
+            model.addAttribute("workspaceRoot", null);
+            return;
+        }
+
+        model.addAttribute("chatMessages", List.copyOf(session.chat));
+        model.addAttribute("changedFiles", List.copyOf(session.changedFiles));
+        model.addAttribute("reviewPanelOpen", session.reviewPanelOpen.get());
+        model.addAttribute("selectedFile", session.selectedFile);
+        model.addAttribute("hasPending", session.chat.stream().anyMatch(m -> m.pending()));
+        model.addAttribute("reviewOob", !session.chat.stream().anyMatch(m -> m.pending()) && session.reviewPanelOpen.get());
+        model.addAttribute("workspaceRoot", session.workspacePath);
+    }
+
+    private void populateProjectModel(Model model) {
+        model.addAttribute("projects", appState.projectsView());
+        model.addAttribute("activeProject", appState.activeProjectView());
+        model.addAttribute("workspaces", appState.activeProjectWorkspaces());
+        model.addAttribute("activeWorkspace", appState.activeWorkspaceView());
+        model.addAttribute("sessions", appState.activeWorkspaceSessions());
+        model.addAttribute("activeSession", appState.activeSessionView());
+        model.addAttribute("shellRefresh", false);
+        model.addAttribute("includeChatContainer", false);
+    }
+
+    private List<DirectoryEntry> listDirectoryEntries(Path path) {
+        try (var stream = Files.list(path)) {
+            return stream
+                    .filter(Files::isDirectory)
+                    .map(entry -> new DirectoryEntry(entry.getFileName().toString(), entry.toString(), Files.isDirectory(entry)))
+                    .sorted(Comparator.comparing(DirectoryEntry::directory).reversed().thenComparing(DirectoryEntry::name))
+                    .toList();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String safeComputeDiff(String workspaceRoot, String relativePath) {
+        final int MAX_CHARS = 16_000;
+        Path root = Path.of(workspaceRoot);
         Path resolved;
         try {
-            resolved = FileUtils.resolveWorkspacePath(workspaceRoot, relativePath);
+            resolved = FileUtils.resolveWorkspacePath(root, relativePath);
         } catch (Exception e) {
             return "(invalid path: " + relativePath + ")";
         }
 
-        // try git diff -- <path>
         try {
-            Path relForGit = FileUtils.relativizeWorkspacePath(workspaceRoot, resolved);
+            Path relForGit = FileUtils.relativizeWorkspacePath(root, resolved);
             ProcessBuilder pb = new ProcessBuilder("git", "diff", "--", relForGit.toString());
-            // use configured workspace root as working dir
-            pb.directory(new File(workspaceRoot.toAbsolutePath().normalize().toString()));
+            pb.directory(new File(root.toAbsolutePath().normalize().toString()));
             Process p = pb.start();
             StringBuilder out = new StringBuilder();
             try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
@@ -356,10 +444,8 @@ public class UiController {
                 return gitDiff.length() > MAX_CHARS ? gitDiff.substring(0, MAX_CHARS) : gitDiff;
             }
         } catch (Exception ignored) {
-            // fall back
         }
 
-        // fallback: show file contents snippet or note if missing
         try {
             if (!Files.exists(resolved)) {
                 return "(no diff available)";
@@ -374,71 +460,57 @@ public class UiController {
         }
     }
 
-    private void processChangedFiles(AgentTurnResult result) {
-        if (result == null) {
-            return;
-        }
+    private void processChangedFiles(AgentTurnResult result, SessionState session, String workspaceRoot) {
         var mutatingTools = Set.of("write_file", "apply_patch");
         List<ToolCallTrace> traces = result.getTraces();
         Set<String> seen = new HashSet<>();
         String latestPath = null;
         List<String> addedPathsInOrder = new ArrayList<>();
+
         for (ToolCallTrace t : traces) {
-            if (t.getToolName() == null) {
+            if (t.getToolName() == null || !mutatingTools.contains(t.getToolName()) || !t.isSuccess()) {
                 continue;
             }
-            if (!mutatingTools.contains(t.getToolName())) {
-                continue;
-            }
-            if (!t.isSuccess()) {
-                continue;
-            }
-            Object mp = null;
-            if (t.getMachineSummary() != null) {
-                mp = t.getMachineSummary().get("path");
-            }
-            String path = null;
-            if (mp instanceof String) {
-                path = (String) mp;
-            }
+
+            Object mp = t.getMachineSummary() == null ? null : t.getMachineSummary().get("path");
+            String path = mp instanceof String ? (String) mp : null;
             if (path == null || path.isBlank()) {
                 continue;
             }
+
             try {
-                Path workspaceRoot = Path.of(agentProperties.getWorkspaceRoot());
-                Path resolved = FileUtils.resolveWorkspacePath(workspaceRoot, path);
-                Path rel = FileUtils.relativizeWorkspacePath(workspaceRoot, resolved);
+                Path root = Path.of(workspaceRoot);
+                Path resolved = FileUtils.resolveWorkspacePath(root, path);
+                Path rel = FileUtils.relativizeWorkspacePath(root, resolved);
                 String relStr = rel.toString();
-                if (!seen.contains(relStr)) {
-                    seen.add(relStr);
+                if (seen.add(relStr)) {
                     addedPathsInOrder.add(relStr);
                     latestPath = relStr;
                 }
-            } catch (Exception e) {
+            } catch (Exception ignored) {
             }
         }
 
         for (String p : addedPathsInOrder) {
-            String diff = safeComputeDiff(p);
-            int id = nextFileId.getAndIncrement();
-            ChangedFile cf = new ChangedFile(id, p, diff);
-            changedFiles.add(0, cf);
+            String diff = safeComputeDiff(workspaceRoot, p);
+            int id = session.nextFileId.getAndIncrement();
+            session.changedFiles.add(0, new ChangedFile(id, p, diff));
         }
 
         if (!addedPathsInOrder.isEmpty()) {
-            reviewPanelOpen.set(true);
-            String sel = latestPath;
-            if (sel != null) {
-                ChangedFile found = changedFiles.stream().filter(f -> f.path().equals(sel)).findFirst().orElse(null);
+            session.reviewPanelOpen.set(true);
+            String selectedPath = latestPath;
+            if (selectedPath != null) {
+                ChangedFile found = session.changedFiles.stream().filter(f -> f.path().equals(selectedPath)).findFirst().orElse(null);
                 if (found != null) {
-                    selectedFile = found;
+                    session.selectedFile = found;
                 }
             }
         }
     }
 
-    private List<Message> buildConversationHistory() {
-        return chat.stream()
+    private List<Message> buildConversationHistory(SessionState session) {
+        return session.chat.stream()
                 .filter(m -> !m.pending && !"system".equals(m.role))
                 .map(this::toMessage)
                 .toList();
@@ -465,7 +537,6 @@ public class UiController {
                     return errorMessage;
                 }
             } catch (Exception ignored) {
-                // fall back to the original message below
             }
         }
 
@@ -481,13 +552,20 @@ public class UiController {
         return message.substring(start, end + 1);
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderErrorPayload(ProviderError error) {}
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderError(String message) {}
-
-    public static record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated) {}
+    private static ToolCallView traceToView(ToolCallTrace t) {
+        String input;
+        try {
+            input = SseJson.writerWithDefaultPrettyPrinter().writeValueAsString(t.getArgs());
+        } catch (Exception e) {
+            input = String.valueOf(t.getArgs());
+        }
+        String output = t.getTextSummary();
+        boolean[] inTr = new boolean[1];
+        boolean[] outTr = new boolean[1];
+        String inPrev = previewAndTruncate(input, TOOL_PREVIEW_MAX, inTr);
+        String outPrev = previewAndTruncate(output, TOOL_PREVIEW_MAX, outTr);
+        return new ToolCallView(t.getToolName(), t.isSuccess(), inPrev, outPrev, inTr[0], outTr[0]);
+    }
 
     private static final int TOOL_PREVIEW_MAX = 2000;
 
@@ -504,25 +582,179 @@ public class UiController {
         return s.substring(0, max);
     }
 
-    private static ToolCallView traceToView(ToolCallTrace t) {
-        // try to serialize args nicely
-        String input;
-        try {
-            input = SseJson.writerWithDefaultPrettyPrinter().writeValueAsString(t.getArgs());
-        } catch (Exception e) {
-            input = String.valueOf(t.getArgs());
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ProviderErrorPayload(ProviderError error) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ProviderError(String message) {}
+
+    public record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated) {}
+
+    public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls) {}
+
+    public record ChangedFile(int id, String path, String diff) {}
+
+    public record Project(long id, String name, String path) {}
+
+    public record Workspace(long id, String name, String path) {}
+
+    public record Session(long id, String name) {}
+
+    public record DirectoryEntry(String name, String path, boolean directory) {}
+
+    private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {}
+
+    private static final class AppState {
+        private final AtomicLong projectIds = new AtomicLong(1);
+        private final AtomicLong workspaceIds = new AtomicLong(1);
+        private final AtomicLong sessionIds = new AtomicLong(1);
+        private final ConcurrentMap<Long, ProjectState> projects = new ConcurrentHashMap<>();
+        private final ConcurrentMap<Long, WorkspaceState> workspaces = new ConcurrentHashMap<>();
+        private final ConcurrentMap<Long, SessionState> sessions = new ConcurrentHashMap<>();
+        private volatile Long activeProjectId;
+        private volatile Long activeWorkspaceId;
+        private volatile Long activeSessionId;
+
+        synchronized SessionState ensureChatSession(String workspaceRoot) {
+            SessionState session = activeSession();
+            if (session != null) {
+                return session;
+            }
+            addProject("Project #1", workspaceRoot);
+            return activeSession();
         }
-        String output = t.getTextSummary();
-        boolean[] inTr = new boolean[1];
-        boolean[] outTr = new boolean[1];
-        String inPrev = previewAndTruncate(input, TOOL_PREVIEW_MAX, inTr);
-        String outPrev = previewAndTruncate(output, TOOL_PREVIEW_MAX, outTr);
-        return new ToolCallView(t.getToolName(), t.isSuccess(), inPrev, outPrev, inTr[0], outTr[0]);
+
+        synchronized ProjectState addProject(String name, String path) {
+            long projectId = projectIds.getAndIncrement();
+            Project project = new Project(projectId, name, path);
+            ProjectState projectState = new ProjectState(project);
+            projects.put(projectId, projectState);
+
+            long workspaceId = workspaceIds.getAndIncrement();
+            Workspace workspace = new Workspace(workspaceId, "Workspace #1", path);
+            WorkspaceState workspaceState = new WorkspaceState(workspace, projectId);
+            workspaces.put(workspaceId, workspaceState);
+            projectState.workspaceIds.add(workspaceId);
+            projectState.activeWorkspaceId = workspaceId;
+
+            long sessionId = sessionIds.getAndIncrement();
+            Session session = new Session(sessionId, "Session #1");
+            SessionState sessionState = new SessionState(session, workspaceId, path);
+            sessions.put(sessionId, sessionState);
+            workspaceState.sessionIds.add(sessionId);
+            workspaceState.activeSessionId = sessionId;
+
+            activeProjectId = projectId;
+            activeWorkspaceId = workspaceId;
+            activeSessionId = sessionId;
+            return projectState;
+        }
+
+        synchronized void activateProject(long projectId) {
+            ProjectState project = projects.get(projectId);
+            activeProjectId = projectId;
+            activateWorkspace(project.activeWorkspaceId);
+        }
+
+        synchronized void activateWorkspace(long workspaceId) {
+            WorkspaceState workspace = workspaces.get(workspaceId);
+            activeWorkspaceId = workspaceId;
+            activeProjectId = workspace.projectId;
+            if (workspace.activeSessionId == null) {
+                workspace.activeSessionId = workspace.sessionIds.getFirst();
+            }
+            activateSession(workspace.activeSessionId);
+        }
+
+        synchronized void activateSession(long sessionId) {
+            SessionState session = sessions.get(sessionId);
+            WorkspaceState workspace = workspaces.get(session.workspaceId);
+            activeSessionId = sessionId;
+            activeWorkspaceId = session.workspaceId;
+            activeProjectId = workspace.projectId;
+            workspace.activeSessionId = sessionId;
+        }
+
+        SessionState activeSession() {
+            return activeSessionId == null ? null : sessions.get(activeSessionId);
+        }
+
+        Project activeProjectView() {
+            ProjectState project = activeProjectId == null ? null : projects.get(activeProjectId);
+            return project == null ? null : project.project;
+        }
+
+        Workspace activeWorkspaceView() {
+            WorkspaceState workspace = activeWorkspaceId == null ? null : workspaces.get(activeWorkspaceId);
+            return workspace == null ? null : workspace.workspace;
+        }
+
+        Session activeSessionView() {
+            SessionState session = activeSession();
+            return session == null ? null : session.session;
+        }
+
+        List<Project> projectsView() {
+            return projects.values().stream().map(state -> state.project).sorted(Comparator.comparingLong(Project::id)).toList();
+        }
+
+        List<Workspace> activeProjectWorkspaces() {
+            ProjectState project = activeProjectId == null ? null : projects.get(activeProjectId);
+            if (project == null) {
+                return List.of();
+            }
+            return project.workspaceIds.stream().map(workspaces::get).map(state -> state.workspace).sorted(Comparator.comparingLong(Workspace::id)).toList();
+        }
+
+        List<Session> activeWorkspaceSessions() {
+            WorkspaceState workspace = activeWorkspaceId == null ? null : workspaces.get(activeWorkspaceId);
+            if (workspace == null) {
+                return List.of();
+            }
+            return workspace.sessionIds.stream().map(sessions::get).map(state -> state.session).sorted(Comparator.comparingLong(Session::id)).toList();
+        }
+
+        SessionState session(long id) {
+            return sessions.get(id);
+        }
     }
 
-    public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls) {
+    private static final class ProjectState {
+        private final Project project;
+        private final List<Long> workspaceIds = new CopyOnWriteArrayList<>();
+        private volatile Long activeWorkspaceId;
+
+        private ProjectState(Project project) {
+            this.project = project;
+        }
     }
 
-    public record ChangedFile(int id, String path, String diff) {
+    private static final class WorkspaceState {
+        private final Workspace workspace;
+        private final long projectId;
+        private final List<Long> sessionIds = new CopyOnWriteArrayList<>();
+        private volatile Long activeSessionId;
+
+        private WorkspaceState(Workspace workspace, long projectId) {
+            this.workspace = workspace;
+            this.projectId = projectId;
+        }
+    }
+
+    private static final class SessionState {
+        private final Session session;
+        private final long workspaceId;
+        private final String workspacePath;
+        private final List<ChatMessage> chat = new CopyOnWriteArrayList<>(List.of(new ChatMessage("system", "Welcome to Jupiter", Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of())));
+        private final List<ChangedFile> changedFiles = new CopyOnWriteArrayList<>();
+        private final AtomicInteger nextFileId = new AtomicInteger(1);
+        private final AtomicBoolean reviewPanelOpen = new AtomicBoolean(false);
+        private volatile ChangedFile selectedFile;
+
+        private SessionState(Session session, long workspaceId, String workspacePath) {
+            this.session = session;
+            this.workspaceId = workspaceId;
+            this.workspacePath = workspacePath;
+        }
     }
 }

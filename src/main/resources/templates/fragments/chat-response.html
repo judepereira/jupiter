@@ -6,6 +6,11 @@
   Use a th:block as the fragment host so it doesn't render an extra wrapper.
 -->
 <th:block th:fragment="response">
+    <th:block th:if="${shellRefresh}">
+        <th:block th:replace="~{fragments/projects :: shellUpdates}"></th:block>
+    </th:block>
+    <th:block th:if="${reviewOob and !shellRefresh}" th:replace="~{fragments/review :: panel}"></th:block>
+
     <!-- in-band: only append the new rows to the existing messages list -->
     <!-- emit only the <li> rows so HTMX can append directly into #chat-messages-list -->
     <th:block th:if="${newChatMessages != null}" th:fragment="newRows">
@@ -42,7 +47,4 @@
             </div>
         </li>
     </th:block>
-
-    <!-- Out-of-band review replacement is handled at the shell level; do not include review panel here when appending rows. -->
-    <!-- Previously we included the review fragment here which could result in nested ids when appending chat rows. -->
 </th:block>

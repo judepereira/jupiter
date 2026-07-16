@@ -1,0 +1,116 @@
+<!doctype html>
+<th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}">
+    <header id="top-bar" class="top-bar" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
+        <nav class="project-tabs" aria-label="Projects">
+            <button th:if="${#lists.isEmpty(projectList)}" type="button" class="project-tab project-tab-empty" disabled>
+                No projects
+            </button>
+            <button th:each="project : ${projectList}"
+                    type="button"
+                    class="project-tab"
+                    th:classappend="${activeProjectView != null and project.id == activeProjectView.id} ? ' active' : ''"
+                    th:text="${project.name}"
+                    th:attr="hx-post=@{/ui/projects/{id}/activate(id=${project.id})}, hx-swap='none'">
+            </button>
+        </nav>
+
+        <button id="add-project-btn"
+                type="button"
+                class="project-add-button"
+                hx-get="/ui/projects/new"
+                hx-target="#modal-root"
+                hx-swap="innerHTML">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>
+            <span>Add project</span>
+        </button>
+    </header>
+</th:block>
+
+<th:block th:fragment="workspaceRail" th:with="shellRefreshFlag=${shellRefresh ?: false}, workspaceList=${workspaces ?: T(java.util.List).of()}, sessionList=${sessions ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, activeSessionView=${activeSession}">
+    <section id="workspace-session-rail" class="workspace-session-rail" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
+        <div th:if="${activeProjectView == null}" class="workspace-session-empty">
+            No project selected
+        </div>
+
+        <div th:if="${activeProjectView != null}" class="workspace-session-groups">
+            <div th:each="workspace : ${workspaceList}" class="workspace-group" th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''">
+                <button type="button"
+                        class="workspace-item"
+                        th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''"
+                        th:text="${workspace.name}"
+                        th:attr="hx-post=@{/ui/workspaces/{id}/activate(id=${workspace.id})}, hx-swap='none'">
+                </button>
+
+                <div th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="session-list">
+                    <button th:each="s : ${sessionList}"
+                            type="button"
+                            class="session-item"
+                            th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''"
+                            th:text="${s.name}"
+                            th:attr="hx-post=@{/ui/sessions/{id}/activate(id=${s.id})}, hx-swap='none'">
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+</th:block>
+
+<th:block th:fragment="selectedPathField" th:with="selectedPathValue=${selectedPath ?: ''}">
+    <input id="project-path-input"
+           class="project-path-input"
+           type="text"
+           name="path"
+           readonly
+           th:value="${selectedPathValue}"
+           th:attr="hx-swap-oob='outerHTML'">
+</th:block>
+
+<th:block th:fragment="modalClose">
+    <div id="modal-root" hx-swap-oob="innerHTML"></div>
+</th:block>
+
+<th:block th:fragment="modal" th:with="selectedPathValue=${selectedPath ?: ''}, currentPathValue=${currentPath ?: ''}, directoryEntries=${directoryEntries ?: T(java.util.List).of()}">
+    <div id="project-modal" class="project-modal">
+        <div class="project-modal-backdrop"
+             hx-get="/ui/projects/modal/close"
+             hx-target="#modal-root"
+             hx-swap="innerHTML"></div>
+
+        <div class="project-modal-card" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
+            <div class="project-modal-header">
+                <h2 id="project-modal-title">Add project</h2>
+                <button type="button" class="project-modal-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">×</button>
+            </div>
+
+            <form class="project-form" hx-post="/ui/projects/add" hx-target="#shell" hx-swap="none">
+                <label class="project-form-field">
+                    <span>Project name</span>
+                    <input type="text" name="name" autocomplete="off" required>
+                </label>
+
+                <label class="project-form-field">
+                    <span>Selected path</span>
+                    <input id="project-path-input" class="project-path-input" type="text" name="path" readonly th:value="${selectedPathValue}">
+                </label>
+
+                <section class="directory-browser">
+                    <div class="directory-browser-path" th:text="${currentPathValue}"></div>
+                    <div class="directory-browser-tree" th:replace="fragments/directory-list :: tree"></div>
+                </section>
+
+                <div class="project-form-actions">
+                    <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                    <button type="submit" class="project-form-submit">Add project</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="shellUpdates">
+    <th:block th:replace="fragments/projects :: topbar"></th:block>
+    <th:block th:replace="fragments/projects :: workspaceRail"></th:block>
+    <th:block th:if="${includeChatContainer}" th:replace="fragments/chat :: chat"></th:block>
+    <th:block th:replace="fragments/review :: panel"></th:block>
+    <div id="modal-root" hx-swap-oob="innerHTML"></div>
+</th:block>

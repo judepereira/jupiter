@@ -42,7 +42,10 @@ public class CodingAgentHarness {
         List<ToolCallTrace> traces = new ArrayList<>();
 
         int max = props.getMaxIterations();
-        ToolExecutionContext execCtx = new ToolExecutionContext(Path.of(props.getWorkspaceRoot()),
+        String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
+                ? props.getWorkspaceRoot()
+                : request.getWorkspaceRoot();
+        ToolExecutionContext execCtx = new ToolExecutionContext(Path.of(workspaceRoot),
                 props.getTooling().isAllowWrite(), props.getTooling().isAllowCommand(), props.getCommandTimeoutSeconds());
 
         StringBuilder accumulated = new StringBuilder();
