@@ -97,11 +97,11 @@ input:focus, textarea:focus {
     align-items: center;
     justify-content: space-between;
     gap: 11px;
-    color: #f2f6ff;
+    color: #f2f6ffe0;
 }
 
 .project-tab.active {
-    background: rgba(255, 255, 255, 0.07);
+    background: #0d2254bd;
     color: #ffffff;
     border-color: rgba(157, 183, 224, 0.58);
 }
@@ -803,7 +803,7 @@ input:focus, textarea:focus {
     max-height: calc(100vh - 48px);
     overflow: auto;
     background: #ffffff;
-    border-radius: 14px;
+    border-radius: 8px;
     box-shadow: 0 24px 80px rgba(15, 23, 36, 0.26);
     border: 1px solid #e6eef6;
     padding: 18px;
@@ -818,19 +818,12 @@ input:focus, textarea:focus {
     margin-bottom: 16px;
 }
 
-.project-modal-close,
 .project-form-cancel {
     border: 1px solid #dbeafe;
     background: #f8fbff;
     color: #0b1220;
     border-radius: 8px;
     cursor: pointer;
-}
-
-.project-modal-close {
-    width: 36px;
-    height: 36px;
-    line-height: 1;
 }
 
 .project-form {
@@ -850,9 +843,9 @@ input:focus, textarea:focus {
 .project-path-input {
     width: 100%;
     box-sizing: border-box;
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid #dbeafe;
-    padding: 10px 12px;
+    padding: 6px 12px;
     font: inherit;
 }
 
@@ -864,6 +857,8 @@ input:focus, textarea:focus {
     border-radius: 10px;
     border: 1px solid #e6eef6;
     background: #f8fbff;
+    max-height: 200px;
+    overflow: scroll;
 }
 
 .directory-browser-path {

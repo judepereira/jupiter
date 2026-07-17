@@ -98,18 +98,18 @@
 
         <div class="project-modal-card" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
             <div class="project-modal-header">
-                <h2 id="project-modal-title">Add project</h2>
-                <button type="button" class="project-modal-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">×</button>
+                <h4 id="project-modal-title">New Project</h4>
+                <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
             </div>
 
             <form class="project-form" hx-post="/ui/projects/add" hx-target="#shell" hx-swap="none">
                 <label class="project-form-field">
-                    <span>Project name</span>
+                    <span>Name</span>
                     <input type="text" name="name" autocomplete="off" required>
                 </label>
 
                 <label class="project-form-field">
-                    <span>Selected path</span>
+                    <span>Path</span>
                     <input id="project-path-input" class="project-path-input" type="text" name="path" readonly th:value="${selectedPathValue}">
                 </label>
 
