@@ -746,7 +746,8 @@ public class UiController {
         private final Session session;
         private final long workspaceId;
         private final String workspacePath;
-        private final List<ChatMessage> chat = new CopyOnWriteArrayList<>(List.of(new ChatMessage("system", "Welcome to Jupiter", Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of())));
+        private final List<ChatMessage> chat = new CopyOnWriteArrayList<>(List.of(new ChatMessage("system",
+                "Welcome to Jupiter. Let's get started - what's on your mind?", Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of())));
         private final List<ChangedFile> changedFiles = new CopyOnWriteArrayList<>();
         private final AtomicInteger nextFileId = new AtomicInteger(1);
         private final AtomicBoolean reviewPanelOpen = new AtomicBoolean(false);
