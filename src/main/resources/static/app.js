@@ -10,7 +10,7 @@
 
     // Only initialize divider behavior if both elements are present.
     if (divider && shell) {
-        const MIN_PX = 220; // min review width
+        const MIN_PX = 138; // min review width
         const MAX_RATIO = 0.7; // max as % of shell width
 
         let dragging = false;
@@ -39,9 +39,6 @@
             if (!dragging) return;
             const shellRect = shell.getBoundingClientRect();
             // Calculate review width robustly using computed layout values (no magic constants)
-            // right rail width from CSS variable --rail-width (fallback 40)
-            const railWidthStr = getComputedStyle(document.documentElement).getPropertyValue('--rail-width') || '40px';
-            const railWidth = parseFloat(railWidthStr) || 40;
             // gap between grid columns (shell gap)
             const gapStr = getComputedStyle(shell).getPropertyValue('gap') || '12px';
             const gap = parseFloat(gapStr) || 12;
@@ -49,8 +46,8 @@
             const dividerRect = divider.getBoundingClientRect();
             const dividerW = Math.max(1, Math.floor(dividerRect.width)) || 3;
 
-            // review right edge sits left of the right rail by gap
-            const reviewRight = shellRect.right - railWidth - gap;
+            // review right edge is the shell edge; the terminal control is fixed chrome.
+            const reviewRight = shellRect.right;
             const pointerCenter = e.clientX + (dividerW / 2) + (gap);
             const reviewPx = Math.floor(reviewRight - pointerCenter);
             setReviewWidthPx(reviewPx);

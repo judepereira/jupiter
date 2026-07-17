@@ -3,17 +3,21 @@
 */
 
 :root {
-    --rail-width: 40px;
-    --topbar-height: 56px;
+    --rail-width: 216px;
+    --topbar-height: 46px;
+    --bottom-nav-height: 35px;
     /* width of the review panel (can be overridden by JS during drag) */
     --review-width: 40%;
-    --rail-bg: #0f1724; /* dark navy */
-    --rail-fg: #cbd5e1; /* light */
+    --rail-bg: #f8fafc;
+    --rail-fg: #15233f;
     --panel-bg: #ffffff;
-    --panel-border: #e6eef6;
-    --muted: #6b7280;
-    --accent: #2563eb;
+    --panel-border: #dfe7f3;
+    --muted: #657492;
+    --accent: #1f6fff;
     --divider-background-hover: rgb(0 0 0 / 0.46);
+    --topbar-bg: #061733;
+    --topbar-border: rgba(135, 163, 205, 0.22);
+    --shell-bg: #f7faff;
 }
 
 body {
@@ -21,7 +25,9 @@ body {
     padding: 0;
     height: 100vh;
     overflow: hidden;
-    background: #f7fbff;
+    background: var(--topbar-bg);
+    color: #111b31;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .top-bar {
@@ -34,39 +40,83 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 0 16px;
+    gap: 8px;
+    padding: 0 15px;
     box-sizing: border-box;
-    background: rgba(15, 23, 36, 0.98);
+    background: linear-gradient(180deg, #061a3a 0%, var(--topbar-bg) 100%);
     color: var(--rail-fg);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--topbar-border);
+    box-shadow: 0 6px 19px rgba(2, 12, 32, 0.22);
+}
+
+.app-switcher {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    color: #ffffff;
+    border-radius: 5px;
+    border: 1px solid rgba(226, 236, 255, 0.82);
+    font-size: 11px;
 }
 
 .project-tabs {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
     min-width: 0;
     overflow-x: auto;
     flex: 1 1 auto;
+    margin-left: 13px;
+    scrollbar-width: none;
+}
+
+.project-tabs::-webkit-scrollbar {
+    display: none;
 }
 
 .project-tab,
-.project-add-button {
-    border: 1px solid rgba(203, 213, 225, 0.18);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--rail-fg);
-    border-radius: 999px;
-    padding: 8px 12px;
+.project-tab-add {
+    height: 30px;
+    border: 1px solid rgba(137, 165, 210, 0.38);
+    background: rgba(11, 30, 64, 0.72);
+    color: #dce7fb;
+    border-radius: 5px;
     cursor: pointer;
     white-space: nowrap;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.project-tab {
+    min-width: 73px;
+    max-width: 131px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 11px;
+    font-weight: 700;
+    font-size: 10px;
+    color: #f2f6ff;
 }
 
 .project-tab.active {
-    background: #ffffff;
-    color: #0f1724;
-    border-color: #ffffff;
+    background: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+    border-color: rgba(157, 183, 224, 0.58);
+}
+
+.project-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.project-tab-close {
+    color: #d8e3f7;
+    font-size: 10px;
+    flex: 0 0 auto;
 }
 
 .project-tab-empty {
@@ -74,73 +124,98 @@ body {
     cursor: default;
 }
 
+.project-tab-add {
+    width: 31px;
+    min-width: 31px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+}
+
+.top-bar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 13px;
+    flex: 0 0 auto;
+}
+
+.project-add-button {
+    border: 0;
+    background: #1269ff;
+    color: #ffffff;
+    border-radius: 5px;
+    height: 29px;
+    padding: 0 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: 10px;
+    box-shadow: 0 6px 14px rgba(18, 105, 255, 0.32);
+}
+
 .project-add-button {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 0 0 auto;
 }
 
 .project-add-button:hover,
 .project-tab:hover {
-    background: rgba(255, 255, 255, 0.08);
+    filter: brightness(1.08);
 }
 
-/* Shell grid: rails + two main panels */
-/* Base shell grid. The explicit open/closed variants below toggle the
-   review column footprint by adding a class to #shell (see app.js). On
-   small screens the media query overrides and the shell classes are
-   removed by JS so the stacked layout applies. */
-/* Default to the desktop 5-column layout as a safe fallback so elements
-   that assume explicit column indices (eg. .right-rail { grid-column: 5 })
-   never end up in an implicit row during transient states (HTMX swaps,
-   classes briefly missing, etc). The review-open/review-closed modifiers
-   still explicitly toggle behavior but the base guarantees a stable
-   desktop layout when no modifier class is present. */
+.user-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #244d88, #193761);
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 10px;
+    letter-spacing: 0;
+}
+
+/* Shell grid: left navigation + chat + review. */
 #shell.shell-root {
     display: grid;
     grid-template-rows: 1fr;
-    /* fallback desktop layout: rail | main | divider | review | rail */
-    grid-template-columns: var(--rail-width) 1fr 3px var(--review-width) var(--rail-width);
-    gap: 12px;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 var(--review-width);
+    gap: 6px;
     align-items: stretch;
-    background: #f7fbff;
-    height: calc(100vh - var(--topbar-height));
+    background: var(--shell-bg);
+    height: calc(100vh - var(--topbar-height) - var(--bottom-nav-height));
     box-sizing: border-box;
-    padding: 12px;
+    padding: 0;
     margin-top: var(--topbar-height);
-    /* Prevent transient horizontal overflow when grid columns are
-       programmatically collapsed. The shell handles layout of all
-       panels so hiding x-overflow here avoids scrollbars appearing
-       while preserving vertical scrolling in children. */
     overflow-x: hidden;
 }
 
 /* open: include divider + review column */
 #shell.shell-root.review-open {
-    grid-template-columns: var(--rail-width) 1fr 3px var(--review-width) var(--rail-width);
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 var(--review-width);
 }
 
-/* closed: keep the 5-column desktop grid but collapse the divider
-   and review columns to 0 width so the right-rail remains in column 5.
-   This prevents transient layout reflow where the right-rail can be
-   placed into an implicit row (appearing at the bottom) when classes
-   toggle during HTMX swaps or rapid state changes. Visual chrome is
-   still removed via .panel-divider.hidden and .review-panel.closed. */
+/* closed: collapse the review column while preserving the left nav and chat. */
 #shell.shell-root.review-closed {
-    grid-template-columns: var(--rail-width) 1fr 0px 0px var(--rail-width);
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 0;
 }
 
 /* Rails */
 .rail {
     background: var(--rail-bg);
     color: var(--rail-fg);
-    padding: 8px 6px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06) inset;
+    align-items: stretch;
+    gap: 0;
+    border-right: 1px solid #dce5f2;
+    box-shadow: 1px 0 0 rgba(15, 38, 78, 0.03);
 }
 
 .left-rail {
@@ -148,13 +223,26 @@ body {
 }
 
 .right-rail {
-    grid-column: 5; /* default for desktop when review is present */
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1600;
+    width: 100%;
+    height: var(--bottom-nav-height);
+    padding: 0 15px;
+    background: var(--topbar-bg);
+    border: 0;
+    border-top: 1px solid rgba(135, 163, 205, 0.18);
+    box-shadow: none;
+    color: #ffffff;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
 }
 
-
-/* NOTE: do NOT move .right-rail on desktop when review is closed.
-   The right-rail must always remain in column 5 on desktop. Small
-   screens still override this via the media query below. */
 
 .rail .panel-placeholder {
     display: none;
@@ -165,34 +253,34 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 33px;
+    height: 29px;
     border-radius: 6px;
-    background: transparent;
-    color: var(--rail-fg);
-    border: none;
+    background: #0b1931;
+    color: #ffffff;
+    border: 1px solid rgba(181, 202, 237, 0.24);
     cursor: pointer;
+    box-shadow: none;
 }
 
 .rail .rail-btn i,
 .rail .rail-btn .bi {
-    /* ensure bootstrap icons render cleanly and sized for the 40x40 button */
-    font-size: 1.15rem; /* between 1.1rem and 1.2rem */
+    font-size: 14px;
     line-height: 1;
     display: inline-block;
 }
 
 .rail .rail-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: #10213e;
 }
 
 /* Main panels */
 .main-panel {
     background: var(--panel-bg);
-    border-radius: 8px;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
     border: 1px solid var(--panel-border);
-    padding: 12px;
+    padding: 8px;
     overflow: hidden;
     min-height: 0;
 }
@@ -201,12 +289,12 @@ body {
     grid-column: 2;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
     min-height: 0;
+    margin: 8px 0 8px 0;
 }
 
 .review-panel {
-    /* moved to the explicit review column (4th column) */
     grid-column: 4;
     display: flex;
     flex-direction: column;
@@ -217,13 +305,14 @@ body {
        produce off-canvas overflow; using 0 here + a stronger
        min-width when open prevents that. */
     min-width: 0;
+    margin: 8px 8px 8px 0;
 }
 
 /* Divider between left panel and review */
 .panel-divider {
     grid-column: 3;
-    width: 3px;
-    background: rgb(0 0 0 / 0.09);
+    width: 0;
+    background: transparent;
     cursor: col-resize;
     display: block;
     align-self: stretch;
@@ -263,7 +352,7 @@ body {
    also enforce a pixel minimum, but adding this rule preserves the
    previous visual behavior while avoiding overflow when closed. */
 #shell.shell-root.review-open .review-panel {
-    min-width: 220px;
+    min-width: 138px;
 }
 
 /* Chat area: scroll history + pinned composer */
@@ -271,6 +360,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
+    width: 100%;
 }
 
 #chat-container {
@@ -283,38 +373,42 @@ body {
 .workspace-session-rail {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #dbeafe;
-    background: #f8fbff;
-    color: #0b1220;
+    gap: 0;
+    width: 100%;
+    min-height: 100%;
+    padding: 18px 10px 13px 14px;
+    border-radius: 0;
+    border: 0;
+    background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%);
+    color: #131d32;
+    box-sizing: border-box;
 }
 
 .workspace-session-empty {
     color: var(--muted);
-    font-size: 0.95rem;
+    font-size: 10px;
 }
 
 .workspace-session-groups {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 18px;
 }
 
 .workspace-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 8px;
-    border-radius: 8px;
-    background: #ffffff;
-    border: 1px solid #e6eef6;
+    gap: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    position: relative;
 }
 
 .workspace-group.active {
-    border-color: rgba(37, 99, 235, 0.35);
-    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.1) inset;
+    border-color: transparent;
+    box-shadow: none;
 }
 
 .workspace-item,
@@ -323,35 +417,112 @@ body {
     text-align: left;
     border: 1px solid transparent;
     background: transparent;
-    color: #0b1220;
-    border-radius: 6px;
-    padding: 8px 10px;
+    color: #131d32;
+    border-radius: 0;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    font-size: 10px;
+}
+
+.workspace-item {
+    gap: 8px;
+    min-height: 24px;
+    padding: 0 4px 0 0;
+    font-weight: 800;
 }
 
 .workspace-item.active,
 .session-item.active {
-    background: #dbeafe;
-    color: #1d4ed8;
-    border-color: #bfdbfe;
+    background: transparent;
+    color: #131d32;
+    border-color: transparent;
     font-weight: 600;
 }
 
 .session-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding-left: 10px;
+    gap: 0;
+    padding-left: 23px;
+    margin-top: 8px;
+    position: relative;
+}
+
+.session-list::before {
+    content: "";
+    position: absolute;
+    top: -5px;
+    bottom: 9px;
+    left: 9px;
+    width: 1px;
+    background: #d6deeb;
 }
 
 .session-item {
-    padding-left: 12px;
-    background: #f8fbff;
+    gap: 8px;
+    min-height: 29px;
+    padding: 0 9px;
+    background: transparent;
+    border-left: 1px solid #d6deeb;
+    border-radius: 0 5px 5px 0;
+    font-weight: 500;
+    position: relative;
+}
+
+.session-item::before {
+    content: "";
+    position: absolute;
+    left: -1px;
+    top: 50%;
+    width: 14px;
+    height: 1px;
+    background: #d6deeb;
+}
+
+.session-item.active {
+    background: #eaf1fb;
+    box-shadow: inset -3px 0 0 #1f6fff;
+}
+
+.workspace-disclosure,
+.workspace-menu {
+    color: #263c64;
+    font-size: 10px;
+    flex: 0 0 auto;
+}
+
+.workspace-icon,
+.session-icon {
+    color: #1c3762;
+    font-size: 14px;
+    flex: 0 0 auto;
+}
+
+.session-icon {
+    font-size: 11px;
+}
+
+.workspace-label,
+.session-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace-label {
+    flex: 1 1 auto;
+}
+
+.workspace-menu {
+    margin-left: auto;
 }
 
 .session-item:hover,
 .workspace-item:hover {
-    background: #eff6ff;
+    background: #eef4fc;
 }
 
 #chat-history.messages {
@@ -593,10 +764,10 @@ body {
     background: #f1f9ff;
 }
 
-/* Responsive: reduce columns on small screens but keep rails visible */
+/* Responsive: keep the nav usable without recreating the old side-rail grid. */
 @media (max-width: 900px) {
     #shell.shell-root {
-        grid-template-columns: var(--rail-width) 1fr var(--rail-width);
+        grid-template-columns: minmax(150px, 38vw) minmax(0, 1fr);
         grid-template-rows: 1fr;
     }
 
@@ -609,13 +780,8 @@ body {
         max-width: 100%;
     }
 
-    /* Ensure the right rail sits in the 3rd column on small screens
-       (the media-query reduces the shell to 3 columns). Without this
-       explicit rule a desktop-only grid-column:5 can cause the rail to
-       be placed into an implicit row and appear at the bottom. */
     .right-rail {
-        grid-column: 3;
-        order: 4;
+        position: fixed;
     }
 
     /* hide divider on small screens where review stacks */

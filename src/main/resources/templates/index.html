@@ -15,15 +15,14 @@
 
 <div id="shell" class="shell-root">
 
-    <!-- extreme left rail -->
+    <!-- left workspace/session navigation -->
     <aside id="left-rail" class="rail left-rail">
-        <div th:replace="~{fragments/panel :: panel(panelName='left-rail')}">Left rail</div>
+        <section id="workspace-session-rail" th:replace="~{fragments/projects :: workspaceRail}" th:with="shellRefresh=${false}">Workspace rail</section>
         <div id="left-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
     </aside>
 
     <!-- main left content: chat composer + history -->
     <main id="left-panel" class="main-panel left-panel">
-        <section id="workspace-session-rail" th:replace="~{fragments/projects :: workspaceRail}" th:with="shellRefresh=${false}">Workspace rail</section>
         <div id="chat-container" th:replace="~{fragments/chat :: chat}" th:with="hasPending=${false}, reviewOob=${false}, shellRefresh=${false}">
             Loading chat...
         </div>
@@ -45,7 +44,7 @@
         <!-- control to toggle review panel for convenience -->
         <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/review/toggle" hx-target="#shell > #review"
                 hx-swap="outerHTML">
-            <i class="bi bi-layout-sidebar-inset-reverse" aria-label="Toggle review panel"
+            <i class="bi bi-terminal" aria-label="Toggle review panel"
                title="Toggle review panel"></i>
         </button>
     </aside>
