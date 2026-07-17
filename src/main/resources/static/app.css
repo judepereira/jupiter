@@ -1,11 +1,7 @@
-/* Jupiter HTMX UI Shell - app.css
-   Simple, plain CSS for layout: left/right rails + left chat + right review panel
-*/
-
 :root {
     --rail-width: 216px;
-    --topbar-height: 46px;
-    --bottom-nav-height: 35px;
+    --topbar-height: 42px;
+    --bottom-nav-height: 42px;
     /* width of the review panel (can be overridden by JS during drag) */
     --review-width: 40%;
     --rail-bg: #f8fafc;
@@ -49,6 +45,15 @@ body {
     box-shadow: 0 6px 19px rgba(2, 12, 32, 0.22);
 }
 
+button {
+    font-size: 14px;
+}
+
+input:focus, textarea:focus {
+    border: 1px solid var(--accent) !important;
+    outline: none;
+}
+
 .app-switcher {
     width: 20px;
     height: 20px;
@@ -57,9 +62,6 @@ body {
     justify-content: center;
     flex: 0 0 auto;
     color: #ffffff;
-    border-radius: 5px;
-    border: 1px solid rgba(226, 236, 255, 0.82);
-    font-size: 11px;
 }
 
 .project-tabs {
@@ -90,15 +92,11 @@ body {
 }
 
 .project-tab {
-    min-width: 73px;
-    max-width: 131px;
     padding: 0 10px;
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
     gap: 11px;
-    font-weight: 700;
-    font-size: 10px;
     color: #f2f6ff;
 }
 
@@ -115,7 +113,6 @@ body {
 
 .project-tab-close {
     color: #d8e3f7;
-    font-size: 10px;
     flex: 0 0 auto;
 }
 
@@ -125,12 +122,11 @@ body {
 }
 
 .project-tab-add {
-    width: 31px;
-    min-width: 31px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    border: none;
+    font-size: 17px;
 }
 
 .top-bar-actions {
@@ -149,12 +145,7 @@ body {
     padding: 0 13px;
     cursor: pointer;
     white-space: nowrap;
-    font-weight: 700;
-    font-size: 10px;
     box-shadow: 0 6px 14px rgba(18, 105, 255, 0.32);
-}
-
-.project-add-button {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -176,7 +167,6 @@ body {
     background: linear-gradient(180deg, #244d88, #193761);
     color: #ffffff;
     font-weight: 800;
-    font-size: 10px;
     letter-spacing: 0;
 }
 
@@ -265,7 +255,6 @@ body {
 
 .rail .rail-btn i,
 .rail .rail-btn .bi {
-    font-size: 14px;
     line-height: 1;
     display: inline-block;
 }
@@ -386,7 +375,6 @@ body {
 
 .workspace-session-empty {
     color: var(--muted);
-    font-size: 10px;
 }
 
 .workspace-session-groups {
@@ -423,7 +411,6 @@ body {
     display: flex;
     align-items: center;
     min-width: 0;
-    font-size: 10px;
 }
 
 .workspace-item {
@@ -489,19 +476,16 @@ body {
 .workspace-disclosure,
 .workspace-menu {
     color: #263c64;
-    font-size: 10px;
     flex: 0 0 auto;
 }
 
 .workspace-icon,
 .session-icon {
     color: #1c3762;
-    font-size: 14px;
     flex: 0 0 auto;
 }
 
 .session-icon {
-    font-size: 11px;
 }
 
 .workspace-label,
@@ -624,7 +608,6 @@ body {
 .review-collapsed {
     writing-mode: vertical-rl;
     transform: rotate(180deg);
-    font-size: 12px;
     color: var(--muted);
 }
 
@@ -653,7 +636,6 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
     font-family: monospace;
-    font-size: 13px;
     background: #fff;
     padding: 8px;
     border-radius: 6px;
@@ -719,7 +701,6 @@ body {
     padding: 10px;
     border-radius: 6px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Liberation Mono", monospace;
-    font-size: 13px;
     line-height: 1.4;
     white-space: pre; /* preserve exact formatting */
     overflow: auto; /* allow scrolling instead of overflowing */
@@ -732,7 +713,6 @@ body {
     padding: 2px 6px;
     border-radius: 4px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-    font-size: 0.95em;
     white-space: pre-wrap;
 }
 
@@ -850,7 +830,6 @@ body {
 .project-modal-close {
     width: 36px;
     height: 36px;
-    font-size: 1.25rem;
     line-height: 1;
 }
 
@@ -888,7 +867,6 @@ body {
 }
 
 .directory-browser-path {
-    font-size: 0.9rem;
     color: var(--muted);
     word-break: break-all;
 }
@@ -987,7 +965,6 @@ body {
 }
 
 .tool-call {
-    font-size: 13px;
     border-radius: 6px;
     border: 1px solid #e6eef6;
     background: transparent;
@@ -1003,10 +980,10 @@ body {
     gap: 8px;
     padding: 6px 8px;
     font-weight: 600;
-    font-size: 0.9rem;
     color: #0b1220;
     background: rgba(11,18,32,0.03);
     border-radius: 6px;
+    font-size: 14px;
 }
 
 .tool-call-name {
@@ -1015,7 +992,6 @@ body {
 
 .tool-call-status {
     font-weight: 600;
-    font-size: 0.8rem;
     padding: 2px 6px;
     border-radius: 999px;
     display: inline-block;
@@ -1045,7 +1021,6 @@ body {
 }
 
 .tool-call-label {
-    font-size: 0.75rem;
     color: var(--muted);
 }
 
@@ -1053,7 +1028,6 @@ body {
     white-space: pre-wrap; /* allow wrapping inside details */
     word-break: break-word;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-    font-size: 12px;
     background: #f5f7fa;
     color: #0b1220;
     padding: 6px;
@@ -1064,7 +1038,6 @@ body {
 }
 
 .tool-call-truncated {
-    font-size: 0.78rem;
     color: var(--muted);
     margin-left: 6px;
 }
