@@ -82,8 +82,8 @@
                 divider.classList.add('hidden');
                 shell.classList.remove('review-open');
                 shell.classList.remove('review-closed');
-                // ensure right-rail gets the small-screen placement handled
-                // by CSS media query (.right-rail { grid-column: 3 }). No JS
+                // ensure bottom-rail gets the small-screen placement handled
+                // by CSS media query (.bottom-rail { grid-column: 3 }). No JS
                 // changes to grid columns here.
                 return;
             }

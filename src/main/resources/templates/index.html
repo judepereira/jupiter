@@ -42,16 +42,10 @@
         </aside>
     </th:block>
 
-    <!-- extreme right rail -->
-    <aside id="right-rail" class="rail right-rail">
-        <div th:replace="~{fragments/panel :: panel(panelName='right-rail')}">Right rail</div>
-        <div id="right-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
-        <!-- controls to toggle the right panel -->
-        <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/panel/review" hx-target="#shell > #review"
-                hx-swap="outerHTML">
-            <i class="bi bi-journal-text" aria-label="Open review panel"
-               title="Open review panel"></i>
-        </button>
+    <!-- bottom rail -->
+    <aside id="bottom-rail" class="rail bottom-rail">
+        <div th:replace="~{fragments/panel :: panel(panelName='bottom-rail')}">Bottom rail</div>
+        <div id="bottom-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
         <button id="toggle-terminal-rail-btn" class="rail-btn" hx-post="/ui/panel/terminal" hx-target="#shell > #review"
                 hx-swap="outerHTML">
             <i class="bi bi-terminal" aria-label="Open terminal panel"

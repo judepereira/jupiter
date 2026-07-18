@@ -35,6 +35,15 @@
         </nav>
 
         <div class="top-bar-actions">
+            <button id="toggle-review-rail-btn"
+                    type="button"
+                    class="rail-btn topbar-rail-btn"
+                    hx-post="/ui/panel/review"
+                    hx-target="#shell > #review"
+                    hx-swap="outerHTML">
+                <i class="bi bi-journal-text" aria-label="Open review panel"
+                   title="Open review panel"></i>
+            </button>
 <!--            <button id="add-project-btn"-->
 <!--                    type="button"-->
 <!--                    class="project-add-button"-->
