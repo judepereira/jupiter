@@ -59,7 +59,7 @@ class ProjectCreationE2ETest {
                 assertThat(page.locator("#project-path-input")).hasValue(projectDir.toAbsolutePath().normalize().toString());
                 captureScreenshot(page, screenshotsDir, "03-directory-selected.png");
                 page.locator(".project-form-field input[name='name']").fill("Alpha");
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Open")).click();
+                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Open").setExact(true)).click();
 
                 assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText("Alpha");
                 captureScreenshot(page, screenshotsDir, "04-project-opened.png");

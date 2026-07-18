@@ -149,6 +149,9 @@
     <th:block th:replace="~{fragments/projects :: topbar}"></th:block>
     <th:block th:replace="~{fragments/projects :: workspaceRail}"></th:block>
     <th:block th:if="${includeChatContainer}" th:replace="~{fragments/chat :: chat}"></th:block>
-    <th:block th:replace="~{fragments/review :: panel}"></th:block>
+    <th:block th:switch="${panelMode}">
+        <th:block th:case="'terminal'" th:replace="~{fragments/terminal :: panel}"></th:block>
+        <th:block th:case="*" th:replace="~{fragments/review :: panel}"></th:block>
+    </th:block>
     <div id="modal-root" hx-swap-oob="innerHTML"></div>
 </th:block>

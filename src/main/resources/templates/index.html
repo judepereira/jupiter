@@ -6,6 +6,7 @@
     <script src="/webjars/htmx.org/1.9.4/dist/htmx.min.js"></script>
     <link href="/webjars/bootstrap/5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/webjars/bootstrap-icons/1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.5.0/css/xterm.css">
     <link rel="stylesheet" href="/app.css">
     <!-- tiny helper for swapping animations could be added later -->
 </head>
@@ -31,20 +32,30 @@
     <div id="panel-divider" class="panel-divider" role="separator" aria-label="Click and drag to resize"
          title="Click and drag to resize" aria-orientation="vertical" tabindex="0"></div>
 
-    <!-- main right content: review/diff -->
-    <aside id="review" class="main-panel review-panel" th:replace="~{fragments/review :: panel}"
-            th:with="reviewOob=${false}">Loading review...
-    </aside>
+    <!-- main right content: review/diff or terminal -->
+    <th:block th:switch="${panelMode}">
+        <aside id="review" class="main-panel terminal-panel" th:case="'terminal'"
+               th:replace="~{fragments/terminal :: panel}">Loading terminal...
+        </aside>
+        <aside id="review" class="main-panel review-panel" th:case="*"
+               th:replace="~{fragments/review :: panel}" th:with="reviewOob=${false}">Loading review...
+        </aside>
+    </th:block>
 
     <!-- extreme right rail -->
     <aside id="right-rail" class="rail right-rail">
         <div th:replace="~{fragments/panel :: panel(panelName='right-rail')}">Right rail</div>
         <div id="right-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
-        <!-- control to toggle review panel for convenience -->
-        <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/review/toggle" hx-target="#shell > #review"
+        <!-- controls to toggle the right panel -->
+        <button id="toggle-review-rail-btn" class="rail-btn" hx-post="/ui/panel/review" hx-target="#shell > #review"
                 hx-swap="outerHTML">
-            <i class="bi bi-terminal" aria-label="Toggle review panel"
-               title="Toggle review panel"></i>
+            <i class="bi bi-journal-text" aria-label="Open review panel"
+               title="Open review panel"></i>
+        </button>
+        <button id="toggle-terminal-rail-btn" class="rail-btn" hx-post="/ui/panel/terminal" hx-target="#shell > #review"
+                hx-swap="outerHTML">
+            <i class="bi bi-terminal" aria-label="Open terminal panel"
+               title="Open terminal panel"></i>
         </button>
     </aside>
 
@@ -54,6 +65,8 @@
 
 <script src="/webjars/dompurify/3.4.11/dist/purify.min.js"></script>
 <script src="/webjars/marked/18.0.5/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

@@ -913,4 +913,151 @@
         }, true);
     })();
 
+    // Terminal pane: bind xterm.js mounts and keep them resized after HTMX swaps.
+    (function () {
+        const mounts = new Map();
+        let syncQueued = false;
+
+        function toWebSocketUrl(rawUrl) {
+            if (!rawUrl) return '';
+            try {
+                const url = new URL(rawUrl, window.location.href);
+                if (url.protocol === 'http:') url.protocol = 'ws:';
+                else if (url.protocol === 'https:') url.protocol = 'wss:';
+                return url.toString();
+            } catch (_) {
+                return rawUrl;
+            }
+        }
+
+        function disposeMount(mount) {
+            const entry = mounts.get(mount);
+            if (!entry) return;
+            mounts.delete(mount);
+            try {
+                entry.socket.close();
+            } catch (_) {
+            }
+            try {
+                entry.terminal.dispose();
+            } catch (_) {
+            }
+        }
+
+        function fitEntry(entry) {
+            if (!entry || !document.contains(entry.mount)) return;
+            try {
+                entry.fitAddon.fit();
+                const cols = entry.terminal.cols;
+                const rows = entry.terminal.rows;
+                if (entry.socket.readyState === WebSocket.OPEN) {
+                    entry.socket.send(JSON.stringify({type: 'resize', cols, rows}));
+                }
+            } catch (_) {
+            }
+        }
+
+        function syncTerminals() {
+            syncQueued = false;
+
+            for (const mount of mounts.keys()) {
+                if (!document.contains(mount)) {
+                    disposeMount(mount);
+                }
+            }
+
+            const terminalMounts = document.querySelectorAll('.terminal-mount[data-terminal-id][data-ws-url]');
+            terminalMounts.forEach(mount => {
+                if (!mounts.has(mount)) {
+                    initMount(mount);
+                }
+                fitEntry(mounts.get(mount));
+            });
+        }
+
+        function queueSync() {
+            if (syncQueued) return;
+            syncQueued = true;
+            Promise.resolve().then(() => requestAnimationFrame(syncTerminals));
+        }
+
+        function initMount(mount) {
+            if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) return;
+
+            const terminalId = mount.dataset.terminalId;
+            const wsUrl = toWebSocketUrl(mount.dataset.wsUrl);
+            if (!terminalId || !wsUrl) return;
+
+            const terminal = new window.Terminal({
+                cursorBlink: true,
+                convertEol: true,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+                fontSize: 13,
+                theme: {
+                    background: '#050816',
+                    foreground: '#dbe7ff',
+                    cursor: '#dbe7ff',
+                    selectionBackground: '#25406f'
+                }
+            });
+            const fitAddon = new window.FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            terminal.open(mount);
+
+            const socket = new WebSocket(wsUrl);
+            const entry = {mount, terminal, fitAddon, socket};
+            mounts.set(mount, entry);
+
+            function sendResize() {
+                try {
+                    fitEntry(entry);
+                } catch (_) {
+                }
+            }
+
+            terminal.onData(data => {
+                try {
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({type: 'input', data}));
+                    }
+                } catch (_) {
+                }
+            });
+
+            socket.addEventListener('open', sendResize);
+            socket.addEventListener('message', evt => {
+                try {
+                    const payload = JSON.parse(evt.data);
+                    if (!payload || typeof payload !== 'object') return;
+                    if (payload.type === 'output' && payload.data != null) {
+                        terminal.write(String(payload.data));
+                    } else if (payload.type === 'exit') {
+                        terminal.writeln('');
+                        terminal.writeln(`[terminal exited with code ${payload.code ?? 'unknown'}]`);
+                        socket.close();
+                    } else if (payload.type === 'error') {
+                        terminal.writeln('');
+                        terminal.writeln(`[terminal error] ${payload.message ?? 'Terminal error'}`);
+                        socket.close();
+                    }
+                } catch (_) {
+                }
+            });
+            socket.addEventListener('close', () => {
+            });
+            socket.addEventListener('error', () => {
+                try {
+                    terminal.writeln('');
+                    terminal.writeln('[terminal connection error]');
+                } catch (_) {
+                }
+            });
+        }
+
+        queueSync();
+        window.addEventListener('resize', queueSync);
+        document.body.addEventListener('htmx:afterSwap', queueSync, true);
+        document.body.addEventListener('htmx:afterSettle', queueSync, true);
+    })();
+
 })();

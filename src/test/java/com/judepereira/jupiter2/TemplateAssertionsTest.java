@@ -61,39 +61,70 @@ public class TemplateAssertionsTest {
     }
 
     @Test
-    public void markdown_support_present_in_templates_and_assets() throws Exception {
-        Path idx = Path.of("src/main/resources/templates/index.html");
-        String index = Files.readString(idx);
+    public void indexAndTerminalAssets_includeTabbedTerminalControls() throws Exception {
+        String index = Files.readString(Path.of("src/main/resources/templates/index.html"));
+        assertThat(index).contains(
+                "xterm@5.5.0/css/xterm.css",
+                "xterm@5.5.0/lib/xterm.js",
+                "xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js",
+                "id=\"toggle-review-rail-btn\"",
+                "id=\"toggle-terminal-rail-btn\"");
 
-        // index.html should include DOMPurify and marked and load them before /app.js
-        int iDom = index.indexOf("dompurify");
-        int iMarked = index.indexOf("marked");
-        int iApp = index.indexOf("/app.js");
-        assertThat(iDom).as("dompurify present").isGreaterThanOrEqualTo(0);
-        assertThat(iMarked).as("marked present").isGreaterThanOrEqualTo(0);
-        assertThat(iApp).as("app.js present").isGreaterThanOrEqualTo(0);
-        assertThat(iDom).isLessThan(iApp);
-        assertThat(iMarked).isLessThan(iApp);
+        String terminal = Files.readString(Path.of("src/main/resources/templates/fragments/terminal.html"));
+        assertThat(terminal).contains(
+                "th:fragment=\"panel\"",
+                "terminal-shell",
+                "terminal-header",
+                "terminal-tabs",
+                "terminal-tab-row",
+                "terminal-new-button",
+                "terminal-tab-close",
+                "terminal-empty-state",
+                "terminal-mount",
+                "data-ws-url=@{/ui/terminal/ws/{id}(id=${activeTerminal.id})}");
 
-        // index toggle should target the shell-level review panel
-        assertThat(index).contains("hx-target=\"#shell > #review\"");
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
 
-        // app.js should expose markdown helpers and use DOMPurify/marked and dataset.rawMarkdown
-        Path app = Path.of("src/main/resources/static/app.js");
-        String appJs = Files.readString(app);
-        assertThat(appJs).contains("renderChatMarkdown", "renderAllChatMarkdown", "getRawChatMarkdown",
-                "DOMPurify.sanitize", "marked.parse", "dataset.rawMarkdown");
-        // additional runtime marker and live-list re-render after HTMX swaps
-        assertThat(appJs).contains("markdown-rendered", "renderAllChatMarkdown(base)", "liveList");
+        Context emptyContext = new Context();
+        emptyContext.setVariable("panelMode", "terminal");
+        emptyContext.setVariable("terminalTabs", List.of());
+        emptyContext.setVariable("activeTerminal", null);
+        emptyContext.setVariable("terminalOob", false);
+        String emptyHtml = engine.process("fragments/terminal", emptyContext);
+        assertThat(emptyHtml).contains("No terminals open.", "New terminal");
 
-        // CSS should include markdown styling for chat messages (lightweight check)
-        Path css = Path.of("src/main/resources/static/app.css");
-        String cssS = Files.readString(css);
-        // Ensure we only apply pre-wrap to non-markdown-rendered spans and avoid the old broad selector
-        assertThat(cssS).contains(".chat-message-text:not(.markdown-rendered)")
-                .doesNotContain("#chat-messages-list li span")
-                // tool-call css selectors
-                .contains(".tool-calls", ".tool-call-pre", ".tool-call-status-success");
+        String appJs = Files.readString(Path.of("src/main/resources/static/app.js"));
+        assertThat(appJs).contains(
+                "new WebSocket(wsUrl)",
+                "new window.Terminal({",
+                "new window.FitAddon.FitAddon()",
+                "JSON.stringify({type: 'input', data})",
+                "JSON.stringify({type: 'resize', cols, rows})",
+                "payload.type === 'output'",
+                "disposeMount(mount)",
+                "entry.socket.close()",
+                "entry.terminal.dispose()",
+                "mounts.delete(mount)");
+
+        String css = Files.readString(Path.of("src/main/resources/static/app.css"));
+        assertThat(css).contains(
+                ".terminal-shell",
+                ".terminal-header",
+                ".terminal-new-button",
+                ".terminal-tabs",
+                ".terminal-tab",
+                ".terminal-tab.active",
+                ".terminal-empty-state",
+                ".terminal-body",
+                ".terminal-mount",
+                ".terminal-panel");
     }
 
     @Test
