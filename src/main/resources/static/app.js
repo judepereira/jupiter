@@ -2,9 +2,13 @@
 (function () {
     const divider = document.getElementById('panel-divider');
     const shell = document.getElementById('shell');
-    // Prefer the shell-level review panel (avoid nested duplicate ids)
+    // Prefer the shell-level review panel only.
     function getShellReviewPanel() {
-        return document.querySelector('#shell > #review') || document.getElementById('review');
+        if (!shell) return null;
+        for (const child of shell.children) {
+            if (child.id === 'review') return child;
+        }
+        return null;
     }
     let review = getShellReviewPanel();
 
@@ -109,10 +113,10 @@
         // when we read classes/measurements. This defends against transient states
         // where the element is present but the shell class hasn't been synced yet.
         function handleHtmxUpdate(evt) {
-            // If swap targeted #review or contained it, refresh reference
+            // If swap targeted the shell-level review panel, refresh reference.
             try {
                 const trg = evt && evt.detail && evt.detail.target;
-                if (trg && (trg.id === 'review' || (trg.closest && trg.closest('#review')))) {
+                if (trg && (trg.id === 'review' || (review && review.contains && review.contains(trg)))) {
                     const newReview = getShellReviewPanel();
                     if (newReview) review = newReview;
                 }

@@ -40,7 +40,8 @@ public class UiControllerTerminalTests {
         assertThat(terminalTabs(model)).extracting(TerminalTab::title, TerminalTab::active)
                 .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-1");
-        assertThat(panelMode(model)).isEqualTo("terminal");
+        assertThat(bottomPanelMode(model)).isEqualTo("terminal");
+        assertThat(bottomPanelOpen(model)).isTrue();
         verify(context.terminalManager()).createTerminal(workspaceRoot.toAbsolutePath().normalize().toString());
     }
 
@@ -61,7 +62,8 @@ public class UiControllerTerminalTests {
                         org.assertj.core.api.Assertions.tuple("Terminal 1", false),
                         org.assertj.core.api.Assertions.tuple("Terminal 2", true));
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-2");
-        assertThat(panelMode(model)).isEqualTo("terminal");
+        assertThat(bottomPanelMode(model)).isEqualTo("terminal");
+        assertThat(bottomPanelOpen(model)).isTrue();
         verify(context.terminalManager(), times(2)).createTerminal(workspaceRoot.toAbsolutePath().normalize().toString());
     }
 
@@ -82,7 +84,8 @@ public class UiControllerTerminalTests {
                 .containsExactly(
                         org.assertj.core.api.Assertions.tuple("terminal-1", true),
                         org.assertj.core.api.Assertions.tuple("terminal-2", false));
-        assertThat(panelMode(model)).isEqualTo("terminal");
+        assertThat(bottomPanelMode(model)).isEqualTo("terminal");
+        assertThat(bottomPanelOpen(model)).isTrue();
     }
 
     @Test
@@ -101,8 +104,8 @@ public class UiControllerTerminalTests {
         assertThat(terminalTabs(model)).extracting(TerminalTab::id, TerminalTab::active)
                 .containsExactly(org.assertj.core.api.Assertions.tuple("terminal-1", true));
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-1");
-        assertThat(panelMode(model)).isEqualTo("terminal");
-        assertThat(terminalPanelOpen(model)).isTrue();
+        assertThat(bottomPanelMode(model)).isEqualTo("terminal");
+        assertThat(bottomPanelOpen(model)).isTrue();
         verify(context.terminalManager()).closeTerminal("terminal-2");
     }
 
@@ -120,8 +123,8 @@ public class UiControllerTerminalTests {
         assertThat(view).isEqualTo("fragments/terminal :: panel");
         assertThat(terminalTabs(model)).isEmpty();
         assertThat(activeTerminal(model)).isNull();
-        assertThat(panelMode(model)).isEqualTo("none");
-        assertThat(terminalPanelOpen(model)).isFalse();
+        assertThat(bottomPanelMode(model)).isEqualTo("none");
+        assertThat(bottomPanelOpen(model)).isFalse();
         verify(context.terminalManager()).closeTerminal("terminal-1");
     }
 
@@ -153,12 +156,12 @@ public class UiControllerTerminalTests {
         return (TerminalTab) model.getAttribute("activeTerminal");
     }
 
-    private static String panelMode(ConcurrentModel model) {
-        return (String) model.getAttribute("panelMode");
+    private static String bottomPanelMode(ConcurrentModel model) {
+        return (String) model.getAttribute("bottomPanelMode");
     }
 
-    private static boolean terminalPanelOpen(ConcurrentModel model) {
-        return Boolean.TRUE.equals(model.getAttribute("terminalPanelOpen"));
+    private static boolean bottomPanelOpen(ConcurrentModel model) {
+        return Boolean.TRUE.equals(model.getAttribute("bottomPanelOpen"));
     }
 
     private record TestContext(

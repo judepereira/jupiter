@@ -22,16 +22,8 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
         return state == null ? SessionState.emptySnapshot() : state.snapshot();
     }
 
-    public TerminalPanelState openReviewPane(long sessionId) {
-        return state(sessionId).openReviewPane();
-    }
-
     public TerminalPanelState openTerminalPane(long sessionId) {
         return state(sessionId).openTerminalPane();
-    }
-
-    public TerminalPanelState setPanelMode(long sessionId, String panelMode) {
-        return state(sessionId).setPanelMode(panelMode);
     }
 
     public TerminalPanelState registerTerminal(long sessionId, TerminalHandle terminal) {
@@ -67,7 +59,7 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
     }
 
     private static final class SessionState {
-        private String panelMode = "none";
+        private String bottomPanelMode = "none";
         private String activeTerminalId;
         private int terminalSequence = 1;
         private final Map<String, String> terminals = new LinkedHashMap<>();
@@ -82,17 +74,12 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
                 tabs.add(new TerminalTab(entry.getKey(), entry.getValue(), entry.getKey().equals(activeTerminalId)));
             }
             TerminalTab active = activeTerminalId == null ? null : new TerminalTab(activeTerminalId, terminals.get(activeTerminalId), true);
-            return new TerminalPanelState(panelMode, List.copyOf(tabs), active, "terminal".equals(panelMode) && !terminals.isEmpty());
-        }
-
-        private synchronized TerminalPanelState openReviewPane() {
-            panelMode = "review";
-            return snapshot();
+            return new TerminalPanelState(bottomPanelMode, List.copyOf(tabs), active, "terminal".equals(bottomPanelMode) && active != null);
         }
 
         private synchronized TerminalPanelState openTerminalPane() {
             if (!terminals.isEmpty()) {
-                panelMode = "terminal";
+                bottomPanelMode = "terminal";
                 if (activeTerminalId == null) {
                     activeTerminalId = terminals.keySet().iterator().next();
                 }
@@ -100,21 +87,10 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
             return snapshot();
         }
 
-        private synchronized TerminalPanelState setPanelMode(String mode) {
-            panelMode = mode == null || mode.isBlank() ? "none" : mode;
-            if (!"terminal".equals(panelMode)) {
-                return snapshot();
-            }
-            if (!terminals.isEmpty() && activeTerminalId == null) {
-                activeTerminalId = terminals.keySet().iterator().next();
-            }
-            return snapshot();
-        }
-
         private synchronized TerminalPanelState registerTerminal(TerminalHandle terminal) {
             terminals.put(terminal.id(), terminal.title() == null || terminal.title().isBlank() ? nextTerminalTitle() : terminal.title());
             activeTerminalId = terminal.id();
-            panelMode = "terminal";
+            bottomPanelMode = "terminal";
             return snapshot();
         }
 
@@ -123,7 +99,7 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
                 throw new IllegalStateException("Unknown terminal: " + terminalId);
             }
             activeTerminalId = terminalId;
-            panelMode = "terminal";
+            bottomPanelMode = "terminal";
             return snapshot();
         }
 
@@ -147,9 +123,7 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
             terminals.remove(terminalId);
             if (terminals.isEmpty()) {
                 activeTerminalId = null;
-                if ("terminal".equals(panelMode)) {
-                    panelMode = "none";
-                }
+                bottomPanelMode = "none";
                 return;
             }
             if (removingActive || activeTerminalId == null) {

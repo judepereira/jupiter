@@ -260,8 +260,7 @@ public class UiController {
     public String toggleReview(Model model) {
         AppStateView view = appStateService.loadViewData();
         if (view.activeSession() != null) {
-            boolean open = appStateService.toggleReviewPanel(view.activeSession().id());
-            terminalStateService.setPanelMode(view.activeSession().id(), open ? "review" : "none");
+            appStateService.toggleReviewPanel(view.activeSession().id());
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
@@ -276,9 +275,6 @@ public class UiController {
         if (view.activeSession() != null && (view.activeSessionDetail() == null || !view.activeSessionDetail().reviewPanelOpen())) {
             appStateService.toggleReviewPanel(view.activeSession().id());
             view = appStateService.loadViewData();
-        }
-        if (view.activeSession() != null) {
-            terminalStateService.openReviewPane(view.activeSession().id());
         }
         populateProjectModel(model, view);
         populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
@@ -470,8 +466,10 @@ public class UiController {
             model.addAttribute("workspaceRoot", null);
             model.addAttribute("terminalTabs", terminalState.terminalTabs());
             model.addAttribute("activeTerminal", terminalState.activeTerminal());
-            model.addAttribute("terminalPanelOpen", terminalState.terminalPanelOpen());
-            model.addAttribute("panelMode", terminalState.panelMode());
+            model.addAttribute("bottomPanelMode", terminalState.bottomPanelMode());
+            model.addAttribute("bottomPanelOpen", terminalState.bottomPanelOpen());
+            model.addAttribute("terminalPanelOpen", terminalState.bottomPanelOpen());
+            model.addAttribute("panelMode", terminalState.bottomPanelMode());
             return;
         }
 
@@ -485,12 +483,14 @@ public class UiController {
         model.addAttribute("workspaceRoot", detail.workspaceRoot());
         model.addAttribute("terminalTabs", terminalState.terminalTabs());
         model.addAttribute("activeTerminal", terminalState.activeTerminal());
-        model.addAttribute("terminalPanelOpen", terminalState.terminalPanelOpen());
-        model.addAttribute("panelMode", terminalState.panelMode());
+        model.addAttribute("bottomPanelMode", terminalState.bottomPanelMode());
+        model.addAttribute("bottomPanelOpen", terminalState.bottomPanelOpen());
+        model.addAttribute("terminalPanelOpen", terminalState.bottomPanelOpen());
+        model.addAttribute("panelMode", terminalState.bottomPanelMode());
     }
 
     private boolean isTerminalPanelOpen(AppStateView view) {
-        return view.activeSession() != null && terminalStateService.snapshot(view.activeSession().id()).terminalPanelOpen();
+        return view.activeSession() != null && terminalStateService.snapshot(view.activeSession().id()).bottomPanelOpen();
     }
 
     private void populateProjectModel(Model model, AppStateView view) {

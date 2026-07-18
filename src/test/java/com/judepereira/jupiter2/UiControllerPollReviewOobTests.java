@@ -4,9 +4,10 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
-import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
+import com.judepereira.jupiter2.ui.UiController;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 
@@ -96,10 +97,52 @@ public class UiControllerPollReviewOobTests {
 
         ctrl.addProject("p", Files.createTempDirectory("jup-toggle").toString(), new ConcurrentModel());
 
+        Model openModel = new ConcurrentModel();
+        String openView = ctrl.toggleReview(openModel);
+
+        Model closedModel = new ConcurrentModel();
+        String closedView = ctrl.toggleReview(closedModel);
+
+        assertThat(openView).isEqualTo("fragments/review :: panel");
+        assertThat(openModel.getAttribute("reviewOob")).isEqualTo(false);
+        assertThat(openModel.getAttribute("reviewPanelOpen")).isEqualTo(true);
+        assertThat(closedView).isEqualTo("fragments/review :: panel");
+        assertThat(closedModel.getAttribute("reviewOob")).isEqualTo(false);
+        assertThat(closedModel.getAttribute("reviewPanelOpen")).isEqualTo(false);
+    }
+
+    @Test
+    public void openingReviewPanelDoesNotCloseOpenTerminalBottomPanel(@TempDir Path workspaceRoot) throws Exception {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter2.agent.llm.AgentStreamListener listener) {
+                return new AgentTurnResult("done", List.of());
+            }
+        };
+
+        var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
+        props.setWorkspaceRoot(workspaceRoot.toString());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
+
+        ctrl.addProject("p", Files.createTempDirectory(workspaceRoot, "project").toString(), new ConcurrentModel());
+        ctrl.openTerminalPanel(new ConcurrentModel());
+
         Model model = new ConcurrentModel();
-        String view = ctrl.toggleReview(model);
+        String view = ctrl.openReviewPanel(model);
+
+        Model closedModel = new ConcurrentModel();
+        String closedView = ctrl.toggleReview(closedModel);
 
         assertThat(view).isEqualTo("fragments/review :: panel");
-        assertThat(model.getAttribute("reviewOob")).isEqualTo(false);
+        assertThat(model.getAttribute("reviewPanelOpen")).isEqualTo(true);
+        assertThat(model.getAttribute("bottomPanelMode")).isEqualTo("terminal");
+        assertThat(model.getAttribute("bottomPanelOpen")).isEqualTo(true);
+        assertThat(model.getAttribute("activeTerminal")).isNotNull();
+        assertThat(((com.judepereira.jupiter2.terminal.TerminalTab) model.getAttribute("activeTerminal")).id()).isEqualTo("terminal-1");
+        assertThat(closedView).isEqualTo("fragments/review :: panel");
+        assertThat(closedModel.getAttribute("reviewPanelOpen")).isEqualTo(false);
+        assertThat(closedModel.getAttribute("bottomPanelMode")).isEqualTo("terminal");
+        assertThat(closedModel.getAttribute("bottomPanelOpen")).isEqualTo(true);
+        assertThat(closedModel.getAttribute("activeTerminal")).isNotNull();
     }
 }

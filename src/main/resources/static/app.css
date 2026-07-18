@@ -201,10 +201,10 @@ input:focus, textarea:focus {
     letter-spacing: 0;
 }
 
-/* Shell grid: left navigation + chat + review. */
+/* Shell grid: left rail + top split (chat/review) + bottom terminal panel. */
 #shell.shell-root {
     display: grid;
-    grid-template-rows: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
     grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 var(--review-width);
     gap: 6px;
     align-items: stretch;
@@ -241,6 +241,7 @@ input:focus, textarea:focus {
 
 .left-rail {
     grid-column: 1;
+    grid-row: 1 / span 2;
 }
 
 .bottom-rail {
@@ -327,6 +328,7 @@ input:focus, textarea:focus {
 
 .left-panel {
     grid-column: 2;
+    grid-row: 1;
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -334,9 +336,9 @@ input:focus, textarea:focus {
     margin: 8px 0 8px 0;
 }
 
-.review-panel,
-.terminal-panel {
+.review-panel {
     grid-column: 4;
+    grid-row: 1;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -347,6 +349,20 @@ input:focus, textarea:focus {
        min-width when open prevents that. */
     min-width: 0;
     margin: 8px 8px 8px 0;
+}
+
+.terminal-panel,
+#bottom-panel {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 220px;
+    padding: 0;
+    margin: 0 8px 8px 0;
+    overflow: hidden;
 }
 
 /* Divider between left panel and review */
@@ -372,9 +388,13 @@ input:focus, textarea:focus {
     display: none;
 }
 
-/* closed modifier: fully remove the review panel from layout and visual chrome */
-.review-panel.closed,
-.terminal-panel.closed {
+/* closed modifier: fully remove the panel from layout and visual chrome */
+.review-panel.closed {
+    display: none;
+}
+
+.terminal-panel.closed,
+#bottom-panel.closed {
     display: none;
 }
 
@@ -394,10 +414,6 @@ input:focus, textarea:focus {
    also enforce a pixel minimum, but adding this rule preserves the
    previous visual behavior while avoiding overflow when closed. */
 #shell.shell-root.review-open .review-panel {
-    min-width: 138px;
-}
-
-#shell.shell-root.review-open .terminal-panel {
     min-width: 138px;
 }
 
@@ -916,17 +932,29 @@ input:focus, textarea:focus {
 @media (max-width: 900px) {
     #shell.shell-root {
         grid-template-columns: minmax(150px, 38vw) minmax(0, 1fr);
-        grid-template-rows: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
     }
 
     .review-panel,
-    .terminal-panel {
+    .terminal-panel,
+    #bottom-panel {
         position: relative;
         grid-column: 2 / span 1;
         order: 3;
         width: 100%;
         min-width: 0;
         max-width: 100%;
+    }
+
+    .review-panel {
+        grid-row: 1;
+    }
+
+    .terminal-panel,
+    #bottom-panel {
+        grid-row: 2;
+        min-height: 240px;
+        margin: 0 0 8px 0;
     }
 
     .bottom-rail {
@@ -951,10 +979,6 @@ input:focus, textarea:focus {
 
 .review-panel {
     overflow: scroll;
-}
-
-.terminal-panel {
-    overflow: hidden;
 }
 
 .project-modal {

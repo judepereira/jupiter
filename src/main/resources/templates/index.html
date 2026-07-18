@@ -32,26 +32,24 @@
     <div id="panel-divider" class="panel-divider" role="separator" aria-label="Click and drag to resize"
          title="Click and drag to resize" aria-orientation="vertical" tabindex="0"></div>
 
-    <!-- main right content: review/diff or terminal -->
-    <th:block th:switch="${panelMode}">
-        <aside id="review" class="main-panel terminal-panel" th:case="'terminal'"
-               th:replace="~{fragments/terminal :: panel}">Loading terminal...
-        </aside>
-        <aside id="review" class="main-panel review-panel" th:case="*"
-               th:replace="~{fragments/review :: panel}" th:with="reviewOob=${false}">Loading review...
-        </aside>
-    </th:block>
+    <!-- main right content: review panel -->
+    <aside id="review" class="main-panel review-panel"
+           th:replace="~{fragments/review :: panel}" th:with="reviewOob=${false}">Loading review...
+    </aside>
 
     <!-- bottom rail -->
     <aside id="bottom-rail" class="rail bottom-rail">
         <div th:replace="~{fragments/panel :: panel(panelName='bottom-rail')}">Bottom rail</div>
         <div id="bottom-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
-        <button id="toggle-terminal-rail-btn" class="rail-btn" hx-post="/ui/panel/terminal" hx-target="#shell > #review"
-                hx-swap="outerHTML">
+        <button id="toggle-terminal-rail-btn" class="rail-btn" hx-post="/ui/panel/terminal" hx-target="#bottom-panel"
+                 hx-swap="outerHTML">
             <i class="bi bi-terminal" aria-label="Open terminal panel"
                title="Open terminal panel"></i>
         </button>
     </aside>
+
+    <!-- bottom panel content -->
+    <div id="bottom-panel" th:replace="~{fragments/terminal :: panel}">Loading terminal...</div>
 
 </div>
 
