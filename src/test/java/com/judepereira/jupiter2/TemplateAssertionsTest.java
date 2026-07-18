@@ -145,10 +145,12 @@ public class TemplateAssertionsTest {
     public void projectFragments_cover_tabs_modal_and_directoryTree() throws Exception {
         Path p = Path.of("src/main/resources/templates/fragments/projects.html");
         String s = Files.readString(p);
-        assertThat(s).contains("id=\"top-bar\"", "class=\"project-tabs\"", "Add project")
+        assertThat(s).contains("id=\"top-bar\"", "class=\"project-tabs\"", "class=\"project-tab-group\"")
                 .contains("projectList=${projects ?: T(java.util.List).of()}", "activeProjectView=${activeProject}")
                 .contains("hx-get=\"/ui/projects/new\"", "hx-target=\"#modal-root\"", "hx-swap=\"innerHTML\"")
                 .contains("class=\"project-tab-close\"", "aria-label=\"Close project\"", "hx-post=@{/ui/projects/{id}/close")
+                .contains("th:fragment=\"selectedNameField(oob)\"", "th:fragment=\"selectedPathField(oob)\"", "hx-swap-oob=${oob} ? 'outerHTML' : null")
+                .contains("selectedNameField(oob=false)", "selectedPathField(oob=false)")
                 .contains("id=\"workspace-session-rail\"", "No project selected")
                 .contains("workspaceList=${workspaces ?: T(java.util.List).of()}", "sessionList=${sessions ?: T(java.util.List).of()}")
                 .contains("hx-post=@{/ui/workspaces/{id}/activate", "hx-post=@{/ui/sessions/{id}/activate")
@@ -162,6 +164,8 @@ public class TemplateAssertionsTest {
         Path p = Path.of("src/main/resources/templates/fragments/directory-list.html");
         String s = Files.readString(p);
         assertThat(s).contains("hx-get=@{/ui/projects/directory(path=${path})}", "hx-target='closest .directory-node'", "hx-swap='outerHTML'")
-                .contains("hx-get=@{/ui/projects/directory/select(path=${path})}", "class=\"directory-tree\"");
+                .contains("hx-get=@{/ui/projects/directory/collapse(path=${path})}", "class=\"directory-node-row\"")
+                .contains("th:fragment=\"nodeResponse(name, path, expanded)\"", "th:replace=\"~{fragments/projects :: selectedNameField(oob=true)}\"", "th:replace=\"~{fragments/projects :: selectedPathField(oob=true)}\"")
+                .doesNotContain("hx-get=@{/ui/projects/directory/select(path=${path})}", "directory-select", "Use button");
     }
 }

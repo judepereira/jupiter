@@ -3,9 +3,10 @@ and other instructions for working with this project.
 
 ## Project Info
 1. We run on Java 25 and Java 25 only - no need for backwards compatiblity
-2. The project is a Spring boot project, using htmx for the entire frontend. 
+2. Java 25 is available under ~/.jdks
+3. The project is a Spring boot project, using htmx for the entire frontend. 
    This is on purpose to simplify coding and building.
-3. The build process for this project is Maven. Always use the bundled Maven wrapper (./mvnw)
+4. The build process for this project is Maven. Always use the bundled Maven wrapper (./mvnw)
 
 ## Principles
 1. Follow YAGNI, DRY and KISS

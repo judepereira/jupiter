@@ -96,25 +96,66 @@ public class UiControllerProjectsAndDirectoryTests {
         ConcurrentModel modal = new ConcurrentModel();
         controller.newProjectModal(modal);
 
-        String home = Path.of(System.getProperty("user.home")).toString();
+        Path homePath = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
+        String home = homePath.toString();
+        String selectedName = homePath.getFileName() == null ? home : homePath.getFileName().toString();
         assertThat(modal.getAttribute("currentPath")).isEqualTo(home);
         assertThat(modal.getAttribute("selectedPath")).isEqualTo(home);
         assertThat(modal.getAttribute("startPath")).isEqualTo(home);
+        assertThat(modal.getAttribute("selectedName")).isEqualTo(selectedName);
 
         Path visibleDir = Files.createDirectory(tempDir.resolve("visible-dir"));
         Files.createFile(tempDir.resolve("notes.txt"));
         Files.createDirectories(visibleDir.resolve("nested-dir"));
 
         ConcurrentModel listing = new ConcurrentModel();
-        String view = controller.listDirectory(tempDir.toString(), listing);
+        String view = controller.listDirectory(visibleDir.toString(), listing);
 
-        assertThat(view).isEqualTo("fragments/directory-list :: node");
-        assertThat(listing.getAttribute("path")).isEqualTo(tempDir.toAbsolutePath().normalize().toString());
+        assertThat(view).isEqualTo("fragments/directory-list :: nodeResponse");
+        assertThat(listing.getAttribute("name")).isEqualTo("visible-dir");
+        assertThat(listing.getAttribute("path")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
         assertThat(listing.getAttribute("expanded")).isEqualTo(true);
+        assertThat(listing.getAttribute("selectedPath")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
+        assertThat(listing.getAttribute("selectedName")).isEqualTo("visible-dir");
         assertThat(directoryEntries(listing)).extracting(UiController.DirectoryEntry::name)
-                .containsExactly("visible-dir");
+                .containsExactly("nested-dir");
         assertThat(directoryEntries(listing)).allSatisfy(entry -> assertThat(entry.directory()).isTrue());
-        assertThat(directoryEntries(listing).get(0).path()).isEqualTo(visibleDir.toString());
+        assertThat(directoryEntries(listing).get(0).path()).isEqualTo(visibleDir.resolve("nested-dir").toAbsolutePath().normalize().toString());
+    }
+
+    @Test
+    public void directoryBrowserSortsHiddenDirectoriesLast(@TempDir Path tempDir) throws Exception {
+        UiController controller = newController();
+
+        Files.createDirectory(tempDir.resolve("beta"));
+        Files.createDirectory(tempDir.resolve(".config"));
+        Files.createDirectory(tempDir.resolve("alpha"));
+        Files.createDirectory(tempDir.resolve(".cache"));
+        Files.createFile(tempDir.resolve("notes.txt"));
+
+        ConcurrentModel listing = new ConcurrentModel();
+        controller.listDirectory(tempDir.toString(), listing);
+
+        assertThat(directoryEntries(listing)).extracting(UiController.DirectoryEntry::name)
+                .containsExactly("alpha", "beta", ".cache", ".config");
+    }
+
+    @Test
+    public void directoryBrowserCollapseReturnsCollapsedNodeAndKeepsSelectionConsistent(@TempDir Path tempDir) throws Exception {
+        UiController controller = newController();
+
+        Path visibleDir = Files.createDirectory(tempDir.resolve("visible-dir"));
+        Files.createDirectories(visibleDir.resolve("nested-dir"));
+
+        ConcurrentModel collapse = new ConcurrentModel();
+        String view = controller.collapseDirectory(visibleDir.toString(), collapse);
+
+        assertThat(view).isEqualTo("fragments/directory-list :: nodeResponse");
+        assertThat(collapse.getAttribute("name")).isEqualTo("visible-dir");
+        assertThat(collapse.getAttribute("path")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
+        assertThat(collapse.getAttribute("expanded")).isEqualTo(false);
+        assertThat(collapse.getAttribute("selectedPath")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
+        assertThat(collapse.getAttribute("selectedName")).isEqualTo("visible-dir");
     }
 
     @Test

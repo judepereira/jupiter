@@ -271,10 +271,11 @@ public class UiController {
 
     @GetMapping("/ui/projects/new")
     public String newProjectModal(Model model) {
-        Path home = Path.of(System.getProperty("user.home"));
+        Path home = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
         model.addAttribute("currentPath", home.toString());
         model.addAttribute("selectedPath", home.toString());
         model.addAttribute("startPath", home.toString());
+        model.addAttribute("selectedName", directoryDisplayName(home));
         model.addAttribute("directoryEntries", listDirectoryEntries(home));
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
@@ -283,18 +284,25 @@ public class UiController {
 
     @GetMapping("/ui/projects/directory")
     public String listDirectory(@RequestParam("path") String path, Model model) {
-        Path current = Path.of(path);
+        Path current = Path.of(path).toAbsolutePath().normalize();
         model.addAttribute("directoryEntries", listDirectoryEntries(current));
-        model.addAttribute("name", current.getFileName() == null ? current.toString() : current.getFileName().toString());
+        model.addAttribute("name", directoryDisplayName(current));
         model.addAttribute("path", current.toString());
+        model.addAttribute("selectedPath", current.toString());
+        model.addAttribute("selectedName", directoryDisplayName(current));
         model.addAttribute("expanded", true);
-        return "fragments/directory-list :: node";
+        return "fragments/directory-list :: nodeResponse";
     }
 
-    @GetMapping("/ui/projects/directory/select")
-    public String selectDirectory(@RequestParam("path") String path, Model model) {
-        model.addAttribute("selectedPath", Path.of(path).toAbsolutePath().normalize().toString());
-        return "fragments/projects :: selectedPathField";
+    @GetMapping("/ui/projects/directory/collapse")
+    public String collapseDirectory(@RequestParam("path") String path, Model model) {
+        Path current = Path.of(path).toAbsolutePath().normalize();
+        model.addAttribute("name", directoryDisplayName(current));
+        model.addAttribute("path", current.toString());
+        model.addAttribute("selectedPath", current.toString());
+        model.addAttribute("selectedName", directoryDisplayName(current));
+        model.addAttribute("expanded", false);
+        return "fragments/directory-list :: nodeResponse";
     }
 
     @GetMapping("/ui/projects/modal/close")
@@ -400,7 +408,7 @@ public class UiController {
             return stream
                     .filter(Files::isDirectory)
                     .map(entry -> new DirectoryEntry(entry.getFileName().toString(), entry.toString(), Files.isDirectory(entry)))
-                    .sorted(Comparator.comparing(DirectoryEntry::directory).reversed().thenComparing(DirectoryEntry::name))
+                    .sorted(Comparator.comparing((DirectoryEntry entry) -> entry.name().startsWith(".")).thenComparing(DirectoryEntry::name, String.CASE_INSENSITIVE_ORDER).thenComparing(DirectoryEntry::name))
                     .toList();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -514,6 +522,11 @@ public class UiController {
 
     private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
         return new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
+    }
+
+    private String directoryDisplayName(Path path) {
+        Path fileName = path.getFileName();
+        return fileName == null ? path.toString() : fileName.toString();
     }
 
     private String normalizeProviderErrorMessage(Exception e) {

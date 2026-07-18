@@ -10,12 +10,11 @@
 <!--                No projects opened-->
 <!--            </button>-->
             <div th:each="project : ${projectList}"
-                 class="project-tab-group"
-                 th:classappend="${activeProjectView != null and project.id == activeProjectView.id} ? ' active' : ''">
+                  class="project-tab-group"
+                  th:classappend="${activeProjectView != null and project.id == activeProjectView.id} ? ' active' : ''">
                 <button type="button"
-                        class="project-tab"
-                        th:classappend="${activeProjectView != null and project.id == activeProjectView.id} ? ' active' : ''"
-                        th:attr="hx-post=@{/ui/projects/{id}/activate(id=${project.id})}, hx-swap='none'">
+                         class="project-tab"
+                         th:attr="hx-post=@{/ui/projects/{id}/activate(id=${project.id})}, hx-swap='none'">
                     <span class="project-tab-label" th:text="${project.name}"></span>
                 </button>
                 <button type="button"
@@ -83,14 +82,25 @@
     </section>
 </th:block>
 
-<th:block th:fragment="selectedPathField" th:with="selectedPathValue=${selectedPath ?: ''}">
+<th:block th:fragment="selectedNameField(oob)" th:with="selectedNameValue=${selectedName ?: ''}">
+    <input id="project-name-input"
+           class="project-name-input"
+           type="text"
+           name="name"
+           autocomplete="off"
+           required
+           th:value="${selectedNameValue}"
+           th:attr="hx-swap-oob=${oob} ? 'outerHTML' : null">
+</th:block>
+
+<th:block th:fragment="selectedPathField(oob)" th:with="selectedPathValue=${selectedPath ?: ''}">
     <input id="project-path-input"
            class="project-path-input"
            type="text"
            name="path"
            readonly
            th:value="${selectedPathValue}"
-           th:attr="hx-swap-oob='outerHTML'">
+           th:attr="hx-swap-oob=${oob} ? 'outerHTML' : null">
 </th:block>
 
 <th:block th:fragment="modalClose">
@@ -106,19 +116,19 @@
 
         <div class="project-modal-card" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
             <div class="project-modal-header">
-                <h4 id="project-modal-title">New Project</h4>
+                <h4 id="project-modal-title">Open Project</h4>
                 <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
             </div>
 
             <form class="project-form" hx-post="/ui/projects/add" hx-target="#shell" hx-swap="none">
                 <label class="project-form-field">
                     <span>Name</span>
-                    <input type="text" name="name" autocomplete="off" required>
+                    <th:block th:replace="~{fragments/projects :: selectedNameField(oob=false)}"></th:block>
                 </label>
 
                 <label class="project-form-field">
                     <span>Path</span>
-                    <input id="project-path-input" class="project-path-input" type="text" name="path" readonly th:value="${selectedPathValue}">
+                    <th:block th:replace="~{fragments/projects :: selectedPathField(oob=false)}"></th:block>
                 </label>
 
                 <section class="directory-browser">
@@ -128,7 +138,7 @@
 
                 <div class="project-form-actions">
                     <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                    <button type="submit" class="project-form-submit">Add project</button>
+                    <button type="submit" class="project-form-submit">Open</button>
                 </div>
             </form>
         </div>
