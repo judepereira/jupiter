@@ -5,6 +5,7 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.ui.UiController;
+import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.Model;
@@ -42,7 +43,7 @@ public class UiControllerAsyncStreamingTests {
 
         var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
         props.setWorkspaceRoot(".");
-        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
 
         Model model = new ConcurrentModel();
         long start = Instant.now().toEpochMilli();
@@ -91,7 +92,7 @@ public class UiControllerAsyncStreamingTests {
 
         var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
-        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
 
         Model m1 = new ConcurrentModel();
         ctrl.sendMessage("first", m1, null);
@@ -102,9 +103,10 @@ public class UiControllerAsyncStreamingTests {
         ctrl.streamChat(assistantId((ConcurrentModel) m2));
 
         assertThat(fake.requests).hasSize(2);
-        assertThat(render(fake.requests.get(0).getConversationHistory())).containsExactly("USER:first");
+        assertThat(render(fake.requests.get(0).getConversationHistory()))
+                .containsExactly("SYSTEM:You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.", "USER:first");
         assertThat(render(fake.requests.get(1).getConversationHistory()))
-                .containsExactly("USER:first", "ASSISTANT:reply-1", "USER:second");
+                .containsExactly("SYSTEM:You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.", "USER:first", "ASSISTANT:reply-1", "USER:second");
     }
 
     @Test
@@ -131,7 +133,7 @@ public class UiControllerAsyncStreamingTests {
 
         var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
         props.setWorkspaceRoot(".");
-        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
 
         // register pending assistant
         Model m1 = new ConcurrentModel();
@@ -223,7 +225,7 @@ public class UiControllerAsyncStreamingTests {
 
         var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
         props.setWorkspaceRoot(".");
-        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
 
         Model model = new ConcurrentModel();
         ctrl.sendMessage("go", model, null);

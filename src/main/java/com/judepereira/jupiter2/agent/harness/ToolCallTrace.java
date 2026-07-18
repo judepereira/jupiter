@@ -8,6 +8,7 @@ import java.util.Map;
 @Getter
 @RequiredArgsConstructor
 public class ToolCallTrace {
+    private final String toolCallId;
     private final String toolName;
     private final Map<String, Object> args;
     private final boolean success;

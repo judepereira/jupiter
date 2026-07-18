@@ -79,7 +79,7 @@ public class CodingAgentHarness {
                     if (toolName == null || toolName.isBlank()) {
                         String toolMsg = "[tool_error] Tool call missing tool name";
                         convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
-                        ToolCallTrace trace = new ToolCallTrace(resolvedToolName, args, false, toolMsg,
+                        ToolCallTrace trace = new ToolCallTrace(toolCallId, resolvedToolName, args, false, toolMsg,
                                 Map.of("error", "tool name missing"));
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
@@ -92,7 +92,7 @@ public class CodingAgentHarness {
                         ToolExecutionResult result = registry.executeByName(toolName, args, execCtx);
                         String toolText = result.getText() == null ? "" : result.getText();
                         convo.add(new Message(Message.Role.TOOL, toolText, toolCallId));
-                        ToolCallTrace trace = new ToolCallTrace(toolName, args, result.isSuccess(), result.getText(), result.getMachine());
+                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, result.isSuccess(), result.getText(), result.getMachine());
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_result:" + toolName);
@@ -100,14 +100,14 @@ public class CodingAgentHarness {
                         // unknown tool
                         String toolMsg = "[tool_error] Unknown tool: " + toolName;
                         convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
-                        ToolCallTrace trace = new ToolCallTrace(toolName, args, false, toolMsg, Map.of("error", e.getMessage()));
+                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg, Map.of("error", e.getMessage()));
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_error:" + toolName);
                     } catch (Exception e) {
                         String toolMsg = "[tool_error] " + e.getMessage();
                         convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
-                        ToolCallTrace trace = new ToolCallTrace(toolName, args, false, toolMsg, Map.of("exception", e.toString()));
+                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg, Map.of("exception", e.toString()));
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_exception:" + toolName);

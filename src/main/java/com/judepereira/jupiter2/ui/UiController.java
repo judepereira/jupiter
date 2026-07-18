@@ -8,9 +8,20 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
-import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
+import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
+import com.judepereira.jupiter2.persistence.AppStateService;
+import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
+import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
+import com.judepereira.jupiter2.persistence.Persistence.ChangedFileView;
+import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
+import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
+import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
+import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
+import com.judepereira.jupiter2.persistence.Persistence.SessionView;
+import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
+import com.judepereira.jupiter2.persistence.Persistence.WorkspaceView;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -28,7 +39,6 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -38,12 +48,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Log4j2
 @Controller
@@ -54,61 +61,70 @@ public class UiController {
 
     private final CodingAgentHarness harness;
     private final AgentProperties agentProperties;
+    private final AppStateService appStateService;
 
     @Qualifier("agentTaskExecutor")
     private final Executor agentExecutor;
-
-    private final AppState appState = new AppState();
     private final ConcurrentMap<String, PendingStream> pendingStreams = new ConcurrentHashMap<>();
 
     @GetMapping("/")
     public String index(Model model) {
-        populateSessionModel(model, appState.activeSession());
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
         return "index";
     }
 
     @PostMapping("/ui/chat/send")
     public String sendMessage(@RequestParam("message") String message, Model model, HttpServletRequest request) {
         List<ChatMessage> newChatMessages = new ArrayList<>();
-        SessionState session = null;
+        AppStateView view = appStateService.loadViewData();
+        SessionView session = null;
         boolean shellRefresh = false;
 
         if (message != null && !message.isBlank()) {
-            shellRefresh = appState.activeSession() == null;
-            session = appState.ensureChatSession(agentProperties.getWorkspaceRoot());
+            shellRefresh = view.activeSession() == null;
+            session = appStateService.ensureChatSession(agentProperties.getWorkspaceRoot());
             String user = message.trim();
-            ChatMessage userMsg = new ChatMessage("user", user, Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of());
-            session.chat.add(userMsg);
-            newChatMessages.add(userMsg);
-
             String assistantId = UUID.randomUUID().toString();
-            ChatMessage pendingAssistant = new ChatMessage("assistant", "Thinking…", Instant.now().toEpochMilli(), true, assistantId, List.of());
-            session.chat.add(pendingAssistant);
-            newChatMessages.add(pendingAssistant);
+            String userId = UUID.randomUUID().toString();
+            QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId, assistantId, user);
+            newChatMessages.add(toChatMessage(queued.userMessage()));
+            newChatMessages.add(toChatMessage(queued.assistantMessage()));
 
             String systemPrompt = "You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.";
-            pendingStreams.put(assistantId, new PendingStream(session.session.id(), session.workspacePath, new AgentTurnRequest(systemPrompt, buildConversationHistory(session), session.workspacePath)));
+            view = appStateService.loadViewData();
+            SessionDetailView sessionDetail = view.activeSessionDetail();
+            String workspaceRoot = sessionDetail.workspaceRoot();
+            List<Message> conversationHistory = new ArrayList<>();
+            conversationHistory.add(new Message(Message.Role.SYSTEM, systemPrompt));
+            conversationHistory.addAll(appStateService.buildConversationHistory(session.id()));
+            pendingStreams.put(assistantId, new PendingStream(session.id(), workspaceRoot, new AgentTurnRequest(systemPrompt, conversationHistory, workspaceRoot)));
         }
 
-        populateSessionModel(model, session != null ? session : appState.activeSession());
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
         model.addAttribute("newChatMessages", List.copyOf(newChatMessages));
-        model.addAttribute("hasPending", session != null && session.chat.stream().anyMatch(m -> m.pending()));
+        boolean hasPending = view.activeSessionDetail() != null && view.activeSessionDetail().chatMessages().stream().anyMatch(ChatMessageView::pending);
+        model.addAttribute("hasPending", hasPending);
         model.addAttribute("shellRefresh", shellRefresh);
         model.addAttribute("includeChatContainer", false);
-        model.addAttribute("reviewOob", shellRefresh || (session != null && !session.chat.stream().anyMatch(m -> m.pending()) && session.reviewPanelOpen.get()));
+        model.addAttribute("reviewOob", shellRefresh || (view.activeSessionDetail() != null && !hasPending && view.activeSessionDetail().reviewPanelOpen()));
         return "fragments/chat-response :: response";
     }
 
     @GetMapping("/ui/review/file/{id}")
     public String loadFile(@PathVariable("id") int id, Model model) {
-        SessionState session = appState.activeSession();
-        if (session != null) {
-            ChangedFile found = session.changedFiles.stream().filter(f -> f.id() == id).findFirst().orElse(null);
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeSession() != null && view.activeSessionDetail() != null) {
+            ChangedFileView found = view.activeSessionDetail().changedFiles().stream().filter(f -> f.id() == id).findFirst().orElse(null);
             if (found != null) {
-                session.selectedFile = found;
+                appStateService.selectChangedFile(view.activeSession().id(), id);
+                view = appStateService.loadViewData();
             }
         }
-        populateSessionModel(model, session);
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
         return "fragments/file-diff :: diff";
     }
 
@@ -125,7 +141,6 @@ public class UiController {
             return emitter;
         }
 
-        SessionState session = appState.session(pending.sessionId());
         SseEmitter emitter = new SseEmitter(0L);
 
         Runnable task = () -> {
@@ -140,19 +155,11 @@ public class UiController {
                             return;
                         }
                         accumulated.append(delta);
+                        appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
                         try {
                             emitter.send(SseEmitter.event().name("delta").data(SseJson.writeValueAsString(Map.of("text", delta))));
                         } catch (JsonProcessingException e) {
                             emitter.send(SseEmitter.event().name("delta").data(delta));
-                        }
-                        synchronized (session.chat) {
-                            for (int i = 0; i < session.chat.size(); i++) {
-                                ChatMessage m = session.chat.get(i);
-                                if (m.id.equals(assistantId)) {
-                                    session.chat.set(i, new ChatMessage("assistant", accumulated.toString(), m.ts, true, assistantId, m.toolCalls));
-                                    break;
-                                }
-                            }
                         }
                     } catch (Exception e) {
                         onError(e);
@@ -174,19 +181,7 @@ public class UiController {
                 @Override
                 public void onToolCallTrace(ToolCallTrace trace) {
                     try {
-                        ToolCallView v = traceToView(trace);
-                        synchronized (session.chat) {
-                            for (int i = 0; i < session.chat.size(); i++) {
-                                ChatMessage m = session.chat.get(i);
-                                if (m.id.equals(assistantId)) {
-                                    List<ToolCallView> updated = new ArrayList<>(m.toolCalls == null ? List.of() : m.toolCalls);
-                                    updated.add(v);
-                                    session.chat.set(i, new ChatMessage("assistant", m.text, m.ts, m.pending, assistantId, List.copyOf(updated)));
-                                    break;
-                                }
-                            }
-                        }
-
+                        ToolCallView v = toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
                         try {
                             emitter.send(SseEmitter.event().name("tool_call").data(SseJson.writeValueAsString(v)));
                         } catch (JsonProcessingException e) {
@@ -200,25 +195,15 @@ public class UiController {
                 @Override
                 public void onComplete(AgentTurnResult result) {
                     try {
-                        synchronized (session.chat) {
-                            for (int i = 0; i < session.chat.size(); i++) {
-                                ChatMessage m = session.chat.get(i);
-                                if (m.id.equals(assistantId)) {
-                                    List<ToolCallView> views = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController::traceToView).toList();
-                                    session.chat.set(i, new ChatMessage("assistant", result.getFinalText(), Instant.now().toEpochMilli(), false, assistantId, views));
-                                    break;
-                                }
-                            }
-                        }
-
+                        String finalText = result.getFinalText() == null ? "" : result.getFinalText();
+                        List<ToolCallTraceInput> traces = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
+                        appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
+                        processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
                         try {
-                            String finalText = result.getFinalText() == null ? "" : result.getFinalText();
                             emitter.send(SseEmitter.event().name("done").data(SseJson.writeValueAsString(Map.of("text", finalText))));
                         } catch (JsonProcessingException e) {
-                            emitter.send(SseEmitter.event().name("done").data(result.getFinalText() == null ? "" : result.getFinalText()));
+                            emitter.send(SseEmitter.event().name("done").data(finalText));
                         }
-
-                        processChangedFiles(result, session, pending.workspaceRoot());
                     } catch (Exception e) {
                         onError(e);
                     } finally {
@@ -231,16 +216,8 @@ public class UiController {
                 public void onError(Exception e) {
                     try {
                         String normalizedMessage = normalizeProviderErrorMessage(e);
-                        synchronized (session.chat) {
-                            for (int i = 0; i < session.chat.size(); i++) {
-                                ChatMessage m = session.chat.get(i);
-                                if (m.id.equals(assistantId)) {
-                                    session.chat.set(i, new ChatMessage("assistant", "Agent execution failed: " + normalizedMessage, Instant.now().toEpochMilli(), false, assistantId, m.toolCalls));
-                                    log.error("Execution failure!", e);
-                                    break;
-                                }
-                            }
-                        }
+                        appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+                        log.error("Execution failure!", e);
                         try {
                             emitter.send(SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", normalizedMessage))));
                         } catch (JsonProcessingException ex) {
@@ -275,14 +252,13 @@ public class UiController {
 
     @PostMapping("/ui/review/toggle")
     public String toggleReview(Model model) {
-        SessionState session = appState.activeSession();
-        if (session != null) {
-            boolean prev;
-            do {
-                prev = session.reviewPanelOpen.get();
-            } while (!session.reviewPanelOpen.compareAndSet(prev, !prev));
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeSession() != null) {
+            appStateService.toggleReviewPanel(view.activeSession().id());
+            view = appStateService.loadViewData();
         }
-        populateSessionModel(model, session);
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
         model.addAttribute("reviewOob", false);
         return "fragments/review :: panel";
     }
@@ -300,7 +276,8 @@ public class UiController {
         model.addAttribute("selectedPath", home.toString());
         model.addAttribute("startPath", home.toString());
         model.addAttribute("directoryEntries", listDirectoryEntries(home));
-        populateProjectModel(model);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
         return "fragments/projects :: modal";
     }
 
@@ -327,9 +304,10 @@ public class UiController {
 
     @PostMapping("/ui/projects/add")
     public String addProject(@RequestParam("name") String name, @RequestParam("path") String path, Model model) {
-        appState.addProject(name, Path.of(path).toAbsolutePath().normalize().toString());
-        populateProjectModel(model);
-        populateSessionModel(model, appState.activeSession());
+        appStateService.addOrReopenProject(name, Path.of(path).toAbsolutePath().normalize().toString());
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
@@ -338,9 +316,22 @@ public class UiController {
 
     @PostMapping("/ui/projects/{projectId}/activate")
     public String activateProject(@PathVariable long projectId, Model model) {
-        appState.activateProject(projectId);
-        populateProjectModel(model);
-        populateSessionModel(model, appState.activeSession());
+        appStateService.activateProject(projectId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
+        model.addAttribute("shellRefresh", true);
+        model.addAttribute("includeChatContainer", true);
+        model.addAttribute("reviewOob", true);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/projects/{projectId}/close")
+    public String closeProject(@PathVariable long projectId, Model model) {
+        appStateService.closeProject(projectId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
@@ -349,9 +340,10 @@ public class UiController {
 
     @PostMapping("/ui/workspaces/{workspaceId}/activate")
     public String activateWorkspace(@PathVariable long workspaceId, Model model) {
-        appState.activateWorkspace(workspaceId);
-        populateProjectModel(model);
-        populateSessionModel(model, appState.activeSession());
+        appStateService.activateWorkspace(workspaceId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
@@ -360,17 +352,17 @@ public class UiController {
 
     @PostMapping("/ui/sessions/{sessionId}/activate")
     public String activateSession(@PathVariable long sessionId, Model model) {
-        appState.activateSession(sessionId);
-        populateProjectModel(model);
-        populateSessionModel(model, appState.activeSession());
+        appStateService.activateSession(sessionId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSessionDetail());
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
         return "fragments/projects :: shellUpdates";
     }
 
-    private void populateSessionModel(Model model, SessionState session) {
-        populateProjectModel(model);
+    private void populateSessionModel(Model model, SessionDetailView session) {
         if (session == null) {
             model.addAttribute("chatMessages", List.of());
             model.addAttribute("changedFiles", List.of());
@@ -382,22 +374,23 @@ public class UiController {
             return;
         }
 
-        model.addAttribute("chatMessages", List.copyOf(session.chat));
-        model.addAttribute("changedFiles", List.copyOf(session.changedFiles));
-        model.addAttribute("reviewPanelOpen", session.reviewPanelOpen.get());
-        model.addAttribute("selectedFile", session.selectedFile);
-        model.addAttribute("hasPending", session.chat.stream().anyMatch(m -> m.pending()));
-        model.addAttribute("reviewOob", !session.chat.stream().anyMatch(m -> m.pending()) && session.reviewPanelOpen.get());
-        model.addAttribute("workspaceRoot", session.workspacePath);
+        boolean hasPending = session.chatMessages().stream().anyMatch(ChatMessageView::pending);
+        model.addAttribute("chatMessages", session.chatMessages().stream().map(this::toChatMessage).toList());
+        model.addAttribute("changedFiles", session.changedFiles().stream().map(this::toChangedFile).toList());
+        model.addAttribute("reviewPanelOpen", session.reviewPanelOpen());
+        model.addAttribute("selectedFile", toChangedFile(session.selectedFile()));
+        model.addAttribute("hasPending", hasPending);
+        model.addAttribute("reviewOob", !hasPending && session.reviewPanelOpen());
+        model.addAttribute("workspaceRoot", session.workspaceRoot());
     }
 
-    private void populateProjectModel(Model model) {
-        model.addAttribute("projects", appState.projectsView());
-        model.addAttribute("activeProject", appState.activeProjectView());
-        model.addAttribute("workspaces", appState.activeProjectWorkspaces());
-        model.addAttribute("activeWorkspace", appState.activeWorkspaceView());
-        model.addAttribute("sessions", appState.activeWorkspaceSessions());
-        model.addAttribute("activeSession", appState.activeSessionView());
+    private void populateProjectModel(Model model, AppStateView view) {
+        model.addAttribute("projects", view.projects().stream().map(this::toProject).toList());
+        model.addAttribute("activeProject", toProject(view.activeProject()));
+        model.addAttribute("workspaces", view.workspaces().stream().map(this::toWorkspace).toList());
+        model.addAttribute("activeWorkspace", toWorkspace(view.activeWorkspace()));
+        model.addAttribute("sessions", view.sessions().stream().map(this::toSession).toList());
+        model.addAttribute("activeSession", toSession(view.activeSession()));
         model.addAttribute("shellRefresh", false);
         model.addAttribute("includeChatContainer", false);
     }
@@ -461,12 +454,11 @@ public class UiController {
         }
     }
 
-    private void processChangedFiles(AgentTurnResult result, SessionState session, String workspaceRoot) {
+    private void processChangedFiles(AgentTurnResult result, long sessionId, String workspaceRoot) {
         var mutatingTools = Set.of("write_file", "apply_patch");
-        List<ToolCallTrace> traces = result.getTraces();
+        List<ToolCallTrace> traces = result.getTraces() == null ? List.of() : result.getTraces();
         Set<String> seen = new HashSet<>();
-        String latestPath = null;
-        List<String> addedPathsInOrder = new ArrayList<>();
+        List<ChangedFileDraft> drafts = new ArrayList<>();
 
         for (ToolCallTrace t : traces) {
             if (t.getToolName() == null || !mutatingTools.contains(t.getToolName()) || !t.isSuccess()) {
@@ -485,41 +477,43 @@ public class UiController {
                 Path rel = FileUtils.relativizeWorkspacePath(root, resolved);
                 String relStr = rel.toString();
                 if (seen.add(relStr)) {
-                    addedPathsInOrder.add(relStr);
-                    latestPath = relStr;
+                    drafts.add(new ChangedFileDraft(relStr, safeComputeDiff(workspaceRoot, relStr)));
                 }
             } catch (Exception ignored) {
             }
         }
 
-        for (String p : addedPathsInOrder) {
-            String diff = safeComputeDiff(workspaceRoot, p);
-            int id = session.nextFileId.getAndIncrement();
-            session.changedFiles.add(0, new ChangedFile(id, p, diff));
-        }
-
-        if (!addedPathsInOrder.isEmpty()) {
-            session.reviewPanelOpen.set(true);
-            String selectedPath = latestPath;
-            if (selectedPath != null) {
-                ChangedFile found = session.changedFiles.stream().filter(f -> f.path().equals(selectedPath)).findFirst().orElse(null);
-                if (found != null) {
-                    session.selectedFile = found;
-                }
-            }
+        if (!drafts.isEmpty()) {
+            appStateService.addChangedFilesToSession(sessionId, drafts);
         }
     }
 
-    private List<Message> buildConversationHistory(SessionState session) {
-        return session.chat.stream()
-                .filter(m -> !m.pending && !"system".equals(m.role))
-                .map(this::toMessage)
-                .toList();
+    private ChatMessage toChatMessage(ChatMessageView view) {
+        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.toolCalls().stream().map(this::toToolCallView).toList());
     }
 
-    private Message toMessage(ChatMessage chatMessage) {
-        Message.Role role = "assistant".equals(chatMessage.role) ? Message.Role.ASSISTANT : Message.Role.USER;
-        return new Message(role, chatMessage.text);
+    private ToolCallView toToolCallView(com.judepereira.jupiter2.persistence.Persistence.ToolCallView view) {
+        return new ToolCallView(view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated());
+    }
+
+    private ChangedFile toChangedFile(ChangedFileView view) {
+        return view == null ? null : new ChangedFile(view.id(), view.path(), view.diff());
+    }
+
+    private Project toProject(ProjectView view) {
+        return view == null ? null : new Project(view.id(), view.name(), view.path());
+    }
+
+    private Workspace toWorkspace(WorkspaceView view) {
+        return view == null ? null : new Workspace(view.id(), view.name(), view.path());
+    }
+
+    private Session toSession(SessionView view) {
+        return view == null ? null : new Session(view.id(), view.name());
+    }
+
+    private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
+        return new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
     }
 
     private String normalizeProviderErrorMessage(Exception e) {
@@ -553,36 +547,6 @@ public class UiController {
         return message.substring(start, end + 1);
     }
 
-    private static ToolCallView traceToView(ToolCallTrace t) {
-        String input;
-        try {
-            input = SseJson.writerWithDefaultPrettyPrinter().writeValueAsString(t.getArgs());
-        } catch (Exception e) {
-            input = String.valueOf(t.getArgs());
-        }
-        String output = t.getTextSummary();
-        boolean[] inTr = new boolean[1];
-        boolean[] outTr = new boolean[1];
-        String inPrev = previewAndTruncate(input, TOOL_PREVIEW_MAX, inTr);
-        String outPrev = previewAndTruncate(output, TOOL_PREVIEW_MAX, outTr);
-        return new ToolCallView(t.getToolName(), t.isSuccess(), inPrev, outPrev, inTr[0], outTr[0]);
-    }
-
-    private static final int TOOL_PREVIEW_MAX = 2000;
-
-    private static String previewAndTruncate(String s, int max, boolean[] truncatedFlag) {
-        if (s == null) {
-            truncatedFlag[0] = false;
-            return "";
-        }
-        if (s.length() <= max) {
-            truncatedFlag[0] = false;
-            return s;
-        }
-        truncatedFlag[0] = true;
-        return s.substring(0, max);
-    }
-
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ProviderErrorPayload(ProviderError error) {}
 
@@ -604,159 +568,4 @@ public class UiController {
     public record DirectoryEntry(String name, String path, boolean directory) {}
 
     private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {}
-
-    private static final class AppState {
-        private final AtomicLong projectIds = new AtomicLong(1);
-        private final AtomicLong workspaceIds = new AtomicLong(1);
-        private final AtomicLong sessionIds = new AtomicLong(1);
-        private final ConcurrentMap<Long, ProjectState> projects = new ConcurrentHashMap<>();
-        private final ConcurrentMap<Long, WorkspaceState> workspaces = new ConcurrentHashMap<>();
-        private final ConcurrentMap<Long, SessionState> sessions = new ConcurrentHashMap<>();
-        private volatile Long activeProjectId;
-        private volatile Long activeWorkspaceId;
-        private volatile Long activeSessionId;
-
-        synchronized SessionState ensureChatSession(String workspaceRoot) {
-            SessionState session = activeSession();
-            if (session != null) {
-                return session;
-            }
-            addProject("Project #1", workspaceRoot);
-            return activeSession();
-        }
-
-        synchronized ProjectState addProject(String name, String path) {
-            long projectId = projectIds.getAndIncrement();
-            Project project = new Project(projectId, name, path);
-            ProjectState projectState = new ProjectState(project);
-            projects.put(projectId, projectState);
-
-            long workspaceId = workspaceIds.getAndIncrement();
-            Workspace workspace = new Workspace(workspaceId, "Workspace #1", path);
-            WorkspaceState workspaceState = new WorkspaceState(workspace, projectId);
-            workspaces.put(workspaceId, workspaceState);
-            projectState.workspaceIds.add(workspaceId);
-            projectState.activeWorkspaceId = workspaceId;
-
-            long sessionId = sessionIds.getAndIncrement();
-            Session session = new Session(sessionId, "Session #1");
-            SessionState sessionState = new SessionState(session, workspaceId, path);
-            sessions.put(sessionId, sessionState);
-            workspaceState.sessionIds.add(sessionId);
-            workspaceState.activeSessionId = sessionId;
-
-            activeProjectId = projectId;
-            activeWorkspaceId = workspaceId;
-            activeSessionId = sessionId;
-            return projectState;
-        }
-
-        synchronized void activateProject(long projectId) {
-            ProjectState project = projects.get(projectId);
-            activeProjectId = projectId;
-            activateWorkspace(project.activeWorkspaceId);
-        }
-
-        synchronized void activateWorkspace(long workspaceId) {
-            WorkspaceState workspace = workspaces.get(workspaceId);
-            activeWorkspaceId = workspaceId;
-            activeProjectId = workspace.projectId;
-            if (workspace.activeSessionId == null) {
-                workspace.activeSessionId = workspace.sessionIds.getFirst();
-            }
-            activateSession(workspace.activeSessionId);
-        }
-
-        synchronized void activateSession(long sessionId) {
-            SessionState session = sessions.get(sessionId);
-            WorkspaceState workspace = workspaces.get(session.workspaceId);
-            activeSessionId = sessionId;
-            activeWorkspaceId = session.workspaceId;
-            activeProjectId = workspace.projectId;
-            workspace.activeSessionId = sessionId;
-        }
-
-        SessionState activeSession() {
-            return activeSessionId == null ? null : sessions.get(activeSessionId);
-        }
-
-        Project activeProjectView() {
-            ProjectState project = activeProjectId == null ? null : projects.get(activeProjectId);
-            return project == null ? null : project.project;
-        }
-
-        Workspace activeWorkspaceView() {
-            WorkspaceState workspace = activeWorkspaceId == null ? null : workspaces.get(activeWorkspaceId);
-            return workspace == null ? null : workspace.workspace;
-        }
-
-        Session activeSessionView() {
-            SessionState session = activeSession();
-            return session == null ? null : session.session;
-        }
-
-        List<Project> projectsView() {
-            return projects.values().stream().map(state -> state.project).sorted(Comparator.comparingLong(Project::id)).toList();
-        }
-
-        List<Workspace> activeProjectWorkspaces() {
-            ProjectState project = activeProjectId == null ? null : projects.get(activeProjectId);
-            if (project == null) {
-                return List.of();
-            }
-            return project.workspaceIds.stream().map(workspaces::get).map(state -> state.workspace).sorted(Comparator.comparingLong(Workspace::id)).toList();
-        }
-
-        List<Session> activeWorkspaceSessions() {
-            WorkspaceState workspace = activeWorkspaceId == null ? null : workspaces.get(activeWorkspaceId);
-            if (workspace == null) {
-                return List.of();
-            }
-            return workspace.sessionIds.stream().map(sessions::get).map(state -> state.session).sorted(Comparator.comparingLong(Session::id)).toList();
-        }
-
-        SessionState session(long id) {
-            return sessions.get(id);
-        }
-    }
-
-    private static final class ProjectState {
-        private final Project project;
-        private final List<Long> workspaceIds = new CopyOnWriteArrayList<>();
-        private volatile Long activeWorkspaceId;
-
-        private ProjectState(Project project) {
-            this.project = project;
-        }
-    }
-
-    private static final class WorkspaceState {
-        private final Workspace workspace;
-        private final long projectId;
-        private final List<Long> sessionIds = new CopyOnWriteArrayList<>();
-        private volatile Long activeSessionId;
-
-        private WorkspaceState(Workspace workspace, long projectId) {
-            this.workspace = workspace;
-            this.projectId = projectId;
-        }
-    }
-
-    private static final class SessionState {
-        private final Session session;
-        private final long workspaceId;
-        private final String workspacePath;
-        private final List<ChatMessage> chat = new CopyOnWriteArrayList<>(List.of(new ChatMessage("system",
-                "Welcome to Jupiter. Let's get started - what's on your mind?", Instant.now().toEpochMilli(), false, UUID.randomUUID().toString(), List.of())));
-        private final List<ChangedFile> changedFiles = new CopyOnWriteArrayList<>();
-        private final AtomicInteger nextFileId = new AtomicInteger(1);
-        private final AtomicBoolean reviewPanelOpen = new AtomicBoolean(false);
-        private volatile ChangedFile selectedFile;
-
-        private SessionState(Session session, long workspaceId, String workspacePath) {
-            this.session = session;
-            this.workspaceId = workspaceId;
-            this.workspacePath = workspacePath;
-        }
-    }
 }

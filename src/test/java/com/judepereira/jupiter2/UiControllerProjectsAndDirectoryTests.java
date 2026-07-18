@@ -5,6 +5,7 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.ui.UiController;
+import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
@@ -120,7 +121,7 @@ public class UiControllerProjectsAndDirectoryTests {
     public void chatMessagesStayScopedToTheActiveProjectAndSession(@TempDir Path firstProject,
                                                                  @TempDir Path secondProject) {
         RecordingHarness harness = new RecordingHarness();
-        UiController controller = new UiController(harness, agentProperties(), Runnable::run);
+        UiController controller = TestAppStateSupport.controller(harness, agentProperties());
 
         ConcurrentModel firstAdd = new ConcurrentModel();
         controller.addProject("First", firstProject.toString(), firstAdd);
@@ -141,29 +142,33 @@ public class UiControllerProjectsAndDirectoryTests {
         controller.streamChat(assistantId(secondSend));
 
         assertThat(harness.requests).hasSize(2);
-        assertThat(conversation(harness.requests.get(0))).containsExactly("USER:alpha");
-        assertThat(conversation(harness.requests.get(1))).containsExactly("USER:beta");
+        assertThat(conversation(harness.requests.get(0))).containsExactly(
+                "SYSTEM:You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.",
+                "USER:alpha");
+        assertThat(conversation(harness.requests.get(1))).containsExactly(
+                "SYSTEM:You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.",
+                "USER:beta");
 
         ConcurrentModel firstHistory = new ConcurrentModel();
         controller.activateProject(firstProjectId, firstHistory);
         assertThat(chatMessages(firstHistory)).extracting(UiController.ChatMessage::text)
-                .containsExactly("Welcome to Jupiter", "alpha", "reply-1");
+                .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?", "alpha", "reply-1");
 
         ConcurrentModel secondHistory = new ConcurrentModel();
         controller.activateProject(secondProjectId, secondHistory);
         assertThat(chatMessages(secondHistory)).extracting(UiController.ChatMessage::text)
-                .containsExactly("Welcome to Jupiter", "beta", "reply-2");
+                .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?", "beta", "reply-2");
     }
 
     private static UiController newController() {
-        return new UiController(new CodingAgentHarness(null, null, null) {
+        return TestAppStateSupport.controller(new CodingAgentHarness(null, null, null) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 AgentTurnResult result = new AgentTurnResult("reply", List.of());
                 listener.onComplete(result);
                 return result;
             }
-        }, agentProperties(), Runnable::run);
+        }, agentProperties());
     }
 
     private static com.judepereira.jupiter2.agent.config.AgentProperties agentProperties() {

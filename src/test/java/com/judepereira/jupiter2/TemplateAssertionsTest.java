@@ -148,6 +148,7 @@ public class TemplateAssertionsTest {
         assertThat(s).contains("id=\"top-bar\"", "class=\"project-tabs\"", "Add project")
                 .contains("projectList=${projects ?: T(java.util.List).of()}", "activeProjectView=${activeProject}")
                 .contains("hx-get=\"/ui/projects/new\"", "hx-target=\"#modal-root\"", "hx-swap=\"innerHTML\"")
+                .contains("class=\"project-tab-close\"", "aria-label=\"Close project\"", "hx-post=@{/ui/projects/{id}/close")
                 .contains("id=\"workspace-session-rail\"", "No project selected")
                 .contains("workspaceList=${workspaces ?: T(java.util.List).of()}", "sessionList=${sessions ?: T(java.util.List).of()}")
                 .contains("hx-post=@{/ui/workspaces/{id}/activate", "hx-post=@{/ui/sessions/{id}/activate")

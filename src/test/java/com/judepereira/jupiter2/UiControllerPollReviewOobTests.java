@@ -5,6 +5,7 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter2.ui.UiController;
+import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
@@ -27,7 +28,7 @@ public class UiControllerPollReviewOobTests {
                 // simulate some streaming deltas
                 listener.onTextDelta("do");
                 listener.onTextDelta("ne");
-                ToolCallTrace t = new ToolCallTrace("write_file", Map.of("path", "out.txt"), true, "wrote", Map.of("path", "out.txt"));
+                ToolCallTrace t = new ToolCallTrace("tool-1-0", "write_file", Map.of("path", "out.txt"), true, "wrote", Map.of("path", "out.txt"));
                 AgentTurnResult res = new AgentTurnResult("done", List.of(t));
                 listener.onComplete(res);
                 return res;
@@ -37,7 +38,7 @@ public class UiControllerPollReviewOobTests {
         var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
         Path tmp = Files.createTempDirectory("jup-test-ws");
         props.setWorkspaceRoot(tmp.toString());
-        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
 
         // send a message to register pending
         Model m1 = new ConcurrentModel();
@@ -91,7 +92,7 @@ public class UiControllerPollReviewOobTests {
 
         var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
         props.setWorkspaceRoot(".");
-        UiController ctrl = new UiController(fake, props, (Runnable r) -> r.run());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
 
         ctrl.addProject("p", Files.createTempDirectory("jup-toggle").toString(), new ConcurrentModel());
 
