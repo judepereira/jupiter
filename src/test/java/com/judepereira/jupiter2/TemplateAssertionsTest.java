@@ -64,9 +64,9 @@ public class TemplateAssertionsTest {
     public void indexAndTerminalAssets_includeTabbedTerminalControls() throws Exception {
         String index = Files.readString(Path.of("src/main/resources/templates/index.html"));
         assertThat(index).contains(
-                "xterm@5.5.0/css/xterm.css",
-                "xterm@5.5.0/lib/xterm.js",
-                "xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js",
+                "/webjars/xterm/5.3.0/css/xterm.css",
+                "/webjars/xterm/5.3.0/lib/xterm.js",
+                "/webjars/xterm-addon-fit/0.5.0/lib/xterm-addon-fit.js",
                 "id=\"toggle-review-rail-btn\"",
                 "id=\"toggle-terminal-rail-btn\"");
 

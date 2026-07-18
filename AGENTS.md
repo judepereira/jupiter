@@ -17,3 +17,4 @@ and other instructions for working with this project.
 2. If something fails, it should fail loud - do not add fallbacks for it. Log errors, 
    and remember, we always communicate the error to the user via the frontend
 3. Use lombok and Java records wherever possible 
+4. When adding browser/frontend library assets (for example xterm, marked, DOMPurify), use WebJars instead of external CDN URLs
