@@ -1,5 +1,6 @@
-package com.judepereira.jupiter2;
+package com.judepereira.jupiter2.e2e;
 
+import com.judepereira.jupiter2.JupiterV2Application;
 import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
@@ -24,7 +25,7 @@ import java.nio.file.Path;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
-class ProjectPersistencePlaywrightTest {
+class ProjectCreationE2ETest {
 
     private static final String ASSISTANT_REPLY = "Deterministic assistant reply";
 
