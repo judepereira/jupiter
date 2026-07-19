@@ -2,15 +2,15 @@ package com.judepereira.jupiter2.agent.llm.openai;
 
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.llm.AgentModelOptions;
-import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 
 public final class OpenAiRequestParametersMapper {
 
-    public OpenAiChatRequestParameters toRequestParameters(AgentModelOptions options) {
+    public OpenAiResponsesChatRequestParameters toRequestParameters(AgentModelOptions options) {
         if (options == null || !options.supportsReasoning() || options.thinkingLevel() == null) {
             return null;
         }
-        return OpenAiChatRequestParameters.builder()
+        return OpenAiResponsesChatRequestParameters.builder()
                 .reasoningEffort(reasoningEffort(options.thinkingLevel()))
                 .build();
     }

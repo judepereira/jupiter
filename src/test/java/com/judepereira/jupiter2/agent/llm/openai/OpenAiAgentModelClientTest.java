@@ -15,7 +15,7 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
-import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -73,8 +73,8 @@ public class OpenAiAgentModelClientTest {
 
         assertEquals(List.of("per-turn-model"), client.chatModelNames());
         assertEquals("per-turn-model", capturedRequest.get().modelName());
-        assertInstanceOf(OpenAiChatRequestParameters.class, capturedRequest.get().parameters());
-        assertEquals("high", ((OpenAiChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
+        assertInstanceOf(OpenAiResponsesChatRequestParameters.class, capturedRequest.get().parameters());
+        assertEquals("high", ((OpenAiResponsesChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
         assertEquals(1, capturedRequest.get().toolSpecifications().size());
         assertEquals("read_file", capturedRequest.get().toolSpecifications().get(0).name());
         assertEquals("assistant", response.getAssistantText());
@@ -114,8 +114,8 @@ public class OpenAiAgentModelClientTest {
 
         assertEquals(List.of("stream-model"), client.streamingModelNames());
         assertEquals("stream-model", capturedRequest.get().modelName());
-        assertInstanceOf(OpenAiChatRequestParameters.class, capturedRequest.get().parameters());
-        assertEquals("medium", ((OpenAiChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
+        assertInstanceOf(OpenAiResponsesChatRequestParameters.class, capturedRequest.get().parameters());
+        assertEquals("medium", ((OpenAiResponsesChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
         assertEquals(List.of("hel", "lo"), deltas);
         assertEquals("done", response.getAssistantText());
         assertNotNull(response.getToolCall());

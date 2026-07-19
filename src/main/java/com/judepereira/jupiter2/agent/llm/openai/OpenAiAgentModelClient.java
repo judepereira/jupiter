@@ -14,8 +14,8 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+import dev.langchain4j.model.openai.OpenAiResponsesChatModel;
+import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -130,14 +130,14 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     protected ChatModel buildChatModel(String modelName) {
-        return OpenAiChatModel.builder()
+        return OpenAiResponsesChatModel.builder()
                 .apiKey(requireApiKey())
                 .modelName(modelName)
                 .build();
     }
 
     protected StreamingChatModel buildStreamingChatModel(String modelName) {
-        return OpenAiStreamingChatModel.builder()
+        return OpenAiResponsesStreamingChatModel.builder()
                 .apiKey(requireApiKey())
                 .modelName(modelName)
                 .build();

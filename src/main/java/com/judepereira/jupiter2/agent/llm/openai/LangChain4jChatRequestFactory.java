@@ -6,7 +6,7 @@ import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 
 import java.util.List;
 
@@ -31,7 +31,7 @@ public final class LangChain4jChatRequestFactory {
     public ChatRequest create(String modelName, List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
         List<ChatMessage> messages = messageMapper.toChatMessages(conversation);
         List<ToolSpecification> toolSpecifications = toolSpecificationMapper.toToolSpecifications(tools);
-        OpenAiChatRequestParameters parameters = requestParametersMapper.toRequestParameters(options);
+        OpenAiResponsesChatRequestParameters parameters = requestParametersMapper.toRequestParameters(options);
 
         ChatRequest.Builder builder = ChatRequest.builder()
                 .modelName(modelName)

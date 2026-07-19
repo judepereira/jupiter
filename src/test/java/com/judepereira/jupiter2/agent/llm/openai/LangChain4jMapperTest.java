@@ -18,7 +18,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
-import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -96,7 +96,7 @@ public class LangChain4jMapperTest {
 
     @Test
     public void maps_thinking_level_to_reasoning_effort() {
-        OpenAiChatRequestParameters parameters = requestParametersMapper.toRequestParameters(
+        OpenAiResponsesChatRequestParameters parameters = requestParametersMapper.toRequestParameters(
                 new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, true)
         );
 
