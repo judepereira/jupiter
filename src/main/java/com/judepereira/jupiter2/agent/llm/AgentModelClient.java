@@ -1,6 +1,6 @@
 package com.judepereira.jupiter2.agent.llm;
 
-import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
+import com.judepereira.jupiter2.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
@@ -16,6 +16,10 @@ public interface AgentModelClient {
      */
     ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools);
 
+    default ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
+        return chat(conversation, tools);
+    }
+
     /**
      * Streaming variant. Default implementation calls chat(...) and emits the final assistant text as a single
      * delta to keep simple/non-streaming clients working.
@@ -27,5 +31,9 @@ public interface AgentModelClient {
             onDelta.accept(t);
         }
         return r;
+    }
+
+    default ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options, Consumer<String> onDelta) {
+        return chatStreaming(conversation, tools, onDelta);
     }
 }

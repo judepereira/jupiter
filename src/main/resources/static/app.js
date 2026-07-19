@@ -284,6 +284,79 @@
             document.body.addEventListener('htmx:afterSettle', htmxChatListener, true);
         }
 
+        function getChatSelectOption(select) {
+            if (!select) return null;
+            return select.options ? select.options[select.selectedIndex] : null;
+        }
+
+        function updateChatQualitySummary(form) {
+            const agentSelect = form && form.querySelector('#chat-agent-select');
+            const modelSelect = form && form.querySelector('#chat-model-select');
+            const thinkingSelect = form && form.querySelector('#chat-thinking-select');
+            const currentModel = form && form.querySelector('[data-chat-current-model]');
+            const currentThinking = form && form.querySelector('[data-chat-current-thinking]');
+            const writeAccess = form && form.querySelector('[data-chat-write-access]');
+            const commandAccess = form && form.querySelector('[data-chat-command-access]');
+            if (!agentSelect || !modelSelect || !thinkingSelect || !currentModel || !currentThinking || !writeAccess || !commandAccess) return;
+
+            const agentOption = getChatSelectOption(agentSelect);
+            const modelOption = getChatSelectOption(modelSelect);
+            const thinkingOption = getChatSelectOption(thinkingSelect);
+            currentModel.textContent = modelOption ? modelOption.textContent : '';
+            currentThinking.textContent = thinkingOption ? thinkingOption.textContent : '';
+            writeAccess.textContent = agentOption && agentOption.dataset && agentOption.dataset.allowWrite === 'true' ? 'yes' : 'no';
+            commandAccess.textContent = agentOption && agentOption.dataset && agentOption.dataset.allowCommand === 'true' ? 'yes' : 'no';
+        }
+
+        function syncChatDefaults(form) {
+            const agentSelect = form && form.querySelector('#chat-agent-select');
+            const modelSelect = form && form.querySelector('#chat-model-select');
+            const thinkingSelect = form && form.querySelector('#chat-thinking-select');
+            if (!agentSelect || !modelSelect || !thinkingSelect) return;
+
+            const agentOption = getChatSelectOption(agentSelect);
+            if (!agentOption || !agentOption.dataset) return;
+
+            modelSelect.value = agentOption.dataset.defaultModel;
+            thinkingSelect.value = agentOption.dataset.defaultThinking;
+            updateChatQualitySummary(form);
+        }
+
+        function bindChatControlListeners(form) {
+            if (!form || form.dataset.chatControlsBound === '1') return;
+            form.dataset.chatControlsBound = '1';
+
+            const agentSelect = form.querySelector('#chat-agent-select');
+            const modelSelect = form.querySelector('#chat-model-select');
+            const thinkingSelect = form.querySelector('#chat-thinking-select');
+            if (!agentSelect || !modelSelect || !thinkingSelect) return;
+
+            agentSelect.addEventListener('change', () => syncChatDefaults(form));
+            modelSelect.addEventListener('change', () => updateChatQualitySummary(form));
+            thinkingSelect.addEventListener('change', () => updateChatQualitySummary(form));
+            syncChatDefaults(form);
+        }
+
+        function resizeChatTextarea(textarea) {
+            if (!textarea) return;
+            textarea.style.height = 'auto';
+            const sh = textarea.scrollHeight;
+            textarea.style.height = sh + 'px';
+
+            const cs = getComputedStyle(textarea);
+            const maxH = cs.maxHeight;
+            if (maxH && maxH !== 'none') {
+                const maxVal = parseFloat(maxH);
+                if (!isNaN(maxVal) && sh > maxVal) {
+                    textarea.style.overflowY = 'auto';
+                } else {
+                    textarea.style.overflowY = 'hidden';
+                }
+            } else {
+                textarea.style.overflowY = '';
+            }
+        }
+
         function initChatComposer() {
             try {
                 const form = document.getElementById('chat-send-form');
@@ -291,80 +364,57 @@
                 if (!form || !textarea) return;
 
                 // Avoid double-binding when initializer is rerun for HTMX swaps.
-                if (textarea.dataset.chatBound === '1') return;
-                textarea.dataset.chatBound = '1';
+                if (textarea.dataset.chatBound !== '1') {
+                    textarea.dataset.chatBound = '1';
 
-                function autoResize() {
-                    // Reset to natural height then apply scrollHeight
-                    textarea.style.height = 'auto';
-                    const sh = textarea.scrollHeight;
-                    textarea.style.height = sh + 'px';
+                    // Handle keyboard: Enter submits, Option+Enter inserts a newline.
+                    // Respect IME composition.
+                    function onKeyDown(e) {
+                        const isEnter = e.key === 'Enter' || e.keyCode === 13;
+                        if (!isEnter) return;
+                        if (e.isComposing) return; // IME in progress
+                        if (e.altKey) return; // Option+Enter should keep the textarea newline behavior
 
-                    // Toggle overflow only when content exceeds computed max-height
-                    const cs = getComputedStyle(textarea);
-                    const maxH = cs.maxHeight;
-                    if (maxH && maxH !== 'none') {
-                        const maxVal = parseFloat(maxH);
-                        if (!isNaN(maxVal) && sh > maxVal) {
-                            textarea.style.overflowY = 'auto';
+                        // Submit on plain Enter.
+                        e.preventDefault();
+                        if (typeof form.requestSubmit === 'function') {
+                            form.requestSubmit();
                         } else {
-                            textarea.style.overflowY = 'hidden';
+                            form.submit();
                         }
-                    } else {
-                        // No max-height set; let natural overflow
-                        textarea.style.overflowY = '';
                     }
-                }
 
-                // Handle keyboard: Enter submits, Option+Enter inserts a newline.
-                // Respect IME composition.
-                function onKeyDown(e) {
-                    const isEnter = e.key === 'Enter' || e.keyCode === 13;
-                    if (!isEnter) return;
-                    if (e.isComposing) return; // IME in progress
-                    if (e.altKey) return; // Option+Enter should keep the textarea newline behavior
+                    textarea.addEventListener('input', () => resizeChatTextarea(textarea));
+                    textarea.addEventListener('keydown', onKeyDown);
+                    // Clear textarea after successful htmx form submit when targeting messages list
+                    if (!htmxAfterOnLoadBound) {
+                        htmxAfterOnLoadBound = true;
+                        document.body.addEventListener('htmx:afterOnLoad', function (evt) {
+                            try {
+                                const detail = evt && evt.detail;
+                                const target = detail && detail.target;
+                                // Only clear when the request was a form submit to /ui/chat/send
+                                if (!detail || !detail.xhr) return;
+                                // HTMX exposes the request path on detail.path in some builds; fallback to inspecting the request URL
+                                const path = (detail.path) || (detail.xhr && detail.xhr.responseURL) || '';
+                                if (!path) return;
+                                if (!path.includes('/ui/chat/send')) return;
 
-                    // Submit on plain Enter.
-                    e.preventDefault();
-                    if (typeof form.requestSubmit === 'function') {
-                        form.requestSubmit();
-                    } else {
-                        form.submit();
+                                const textarea = document.getElementById('chat-input');
+                                if (!textarea) return;
+                                // Clear and reset height
+                                textarea.value = '';
+                                resizeChatTextarea(textarea);
+                            } catch (_) {
+                            }
+                        }, true);
                     }
-                }
-
-                textarea.addEventListener('input', autoResize);
-                textarea.addEventListener('keydown', onKeyDown);
-                // Clear textarea after successful htmx form submit when targeting messages list
-                if (!htmxAfterOnLoadBound) {
-                    htmxAfterOnLoadBound = true;
-                    document.body.addEventListener('htmx:afterOnLoad', function (evt) {
-                        try {
-                            const detail = evt && evt.detail;
-                            const target = detail && detail.target;
-                            // Only clear when the request was a form submit to /ui/chat/send
-                            if (!detail || !detail.xhr) return;
-                            // HTMX exposes the request path on detail.path in some builds; fallback to inspecting the request URL
-                            const path = (detail.path) || (detail.xhr && detail.xhr.responseURL) || '';
-                            if (!path) return;
-                            if (!path.includes('/ui/chat/send')) return;
-
-                            const textarea = document.getElementById('chat-input');
-                            if (!textarea) return;
-                            // Clear and reset height
-                            textarea.value = '';
-                            textarea.style.height = 'auto';
-                            // run autoResize logic
-                            const sh = textarea.scrollHeight;
-                            textarea.style.height = sh + 'px';
-                        } catch (_) {
-                        }
-                    }, true);
                 }
 
                 // Initial resize to match any prefilled content
                 // Use rAF to allow browser to compute styles if needed
-                requestAnimationFrame(autoResize);
+                requestAnimationFrame(() => resizeChatTextarea(textarea));
+                bindChatControlListeners(form);
                 // Bind auto-scroll listeners once chat composer exists on page
                 // and perform an initial check/scroll.
                 bindAutoScrollListeners();

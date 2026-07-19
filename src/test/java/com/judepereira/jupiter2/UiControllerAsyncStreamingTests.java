@@ -3,6 +3,7 @@ package com.judepereira.jupiter2;
 import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
@@ -103,10 +104,51 @@ public class UiControllerAsyncStreamingTests {
         ctrl.streamChat(assistantId((ConcurrentModel) m2));
 
         assertThat(fake.requests).hasSize(2);
-        assertThat(render(fake.requests.get(0).getConversationHistory()))
-                .containsExactly("SYSTEM:You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.", "USER:first");
-        assertThat(render(fake.requests.get(1).getConversationHistory()))
-                .containsExactly("SYSTEM:You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.", "USER:first", "ASSISTANT:reply-1", "USER:second");
+        assertThat(fake.requests.get(0).getSystemPrompt())
+                .isEqualTo("You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
+        assertThat(render(fake.requests.get(0).getConversationHistory())).containsExactly("USER:first");
+        assertThat(fake.requests.get(1).getSystemPrompt())
+                .isEqualTo("You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
+        assertThat(render(fake.requests.get(1).getConversationHistory())).containsExactly("USER:first", "ASSISTANT:reply-1", "USER:second");
+    }
+
+    @Test
+    public void sendMessageForwardsSelectedAgentModelAndThinkingLevel(@TempDir java.nio.file.Path tmp) throws Exception {
+        class RecordingHarness extends CodingAgentHarness {
+            final List<AgentTurnRequest> requests = new ArrayList<>();
+
+            RecordingHarness() {
+                super(null, null, null);
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter2.agent.llm.AgentStreamListener listener) {
+                requests.add(request);
+                AgentTurnResult result = new AgentTurnResult("reply", List.of());
+                listener.onComplete(result);
+                return result;
+            }
+        }
+
+        RecordingHarness fake = new RecordingHarness();
+
+        var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
+
+        Model model = new ConcurrentModel();
+        ctrl.sendMessage("go", "engineer", "openai/gpt-5.5-pro", "LOW", model, null);
+        ctrl.streamChat(assistantId((ConcurrentModel) model));
+
+        assertThat(fake.requests).hasSize(1);
+        AgentTurnRequest request = fake.requests.get(0);
+        assertThat(request.getAgentId()).isEqualTo("engineer");
+        assertThat(request.getModelId()).isEqualTo("openai/gpt-5.5-pro");
+        assertThat(request.getThinkingLevel()).isEqualTo(ThinkingLevel.LOW);
+        assertThat(request.getSystemPrompt()).isEqualTo("You are Engineer, an implementation assistant. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
+        assertThat(request.getConversationHistory()).hasSize(1);
+        assertThat(request.getConversationHistory().get(0).getRole()).isEqualTo(Message.Role.USER);
+        assertThat(request.getConversationHistory().get(0).getContent()).isEqualTo("go");
     }
 
     @Test

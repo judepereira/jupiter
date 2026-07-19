@@ -1,12 +1,14 @@
 package com.judepereira.jupiter2.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter2.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.UiController;
+import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import org.flywaydb.core.Flyway;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -38,12 +40,16 @@ public final class TestAppStateSupport {
     }
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
+        return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService());
+    }
+
+    public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService) {
         TerminalManager terminalManager = mock(TerminalManager.class);
         AtomicInteger sequence = new AtomicInteger();
         when(terminalManager.createTerminal(anyString())).thenAnswer(invocation -> {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
         });
-        return new UiController(harness, properties, appStateService(), terminalManager, new TerminalStateService(), Runnable::run);
+        return new UiController(harness, properties, appStateService(), terminalManager, new TerminalStateService(), modelCatalogService, Runnable::run);
     }
 }

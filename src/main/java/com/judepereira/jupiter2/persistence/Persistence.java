@@ -20,7 +20,10 @@ public final class Persistence {
     public record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated) {
     }
 
-    public record ChatMessageView(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls) {
+    public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel) {
+    }
+
+    public record ChatMessageView(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
     }
 
     public record ChangedFileView(int id, String path, String diff) {

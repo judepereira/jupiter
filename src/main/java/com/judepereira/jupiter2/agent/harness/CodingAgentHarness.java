@@ -1,6 +1,12 @@
 package com.judepereira.jupiter2.agent.harness;
 
+import com.judepereira.jupiter2.agent.catalog.AgentDefinition;
+import com.judepereira.jupiter2.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter2.agent.catalog.ModelCatalogService;
+import com.judepereira.jupiter2.agent.catalog.ModelDefinition;
+import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
+import com.judepereira.jupiter2.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter2.agent.llm.AgentModelClient;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.llm.AgentModelClientFactory;
@@ -11,22 +17,39 @@ import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter2.agent.tools.ToolRegistry;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class CodingAgentHarness {
 
     private final AgentModelClientFactory modelFactory;
     private final ToolRegistry registry;
     private final AgentProperties props;
+    private final AgentDefinitionService agentDefinitionService;
+    private final ModelCatalogService modelCatalogService;
+
+    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props) {
+        this(modelFactory, registry, props, null, null);
+    }
+
+    @Autowired
+    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
+                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService) {
+        this.modelFactory = modelFactory;
+        this.registry = registry;
+        this.props = props;
+        this.agentDefinitionService = agentDefinitionService;
+        this.modelCatalogService = modelCatalogService;
+    }
 
     public AgentTurnResult runTurn(AgentTurnRequest request) {
         return runTurnStreaming(request, new AgentStreamListener() {});
@@ -35,8 +58,17 @@ public class CodingAgentHarness {
     public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
         AgentModelClient model = modelFactory.getClient();
 
+        AgentDefinition agent = resolveAgent(request);
+        ModelDefinition selectedModel = resolveModel(request, agent);
+        ThinkingLevel thinkingLevel = resolveThinkingLevel(request, agent);
+        AgentModelOptions modelOptions = selectedModel == null ? null : new AgentModelOptions(
+                selectedModel.id(), selectedModel.apiModelId(), thinkingLevel, selectedModel.supportsReasoning());
+
         List<Message> convo = new ArrayList<>();
-        convo.add(new Message(Message.Role.SYSTEM, request.getSystemPrompt()));
+        String systemPrompt = resolveSystemPrompt(request, agent);
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            convo.add(new Message(Message.Role.SYSTEM, systemPrompt));
+        }
         convo.addAll(request.getConversationHistory());
 
         List<ToolCallTrace> traces = new ArrayList<>();
@@ -46,17 +78,18 @@ public class CodingAgentHarness {
                 ? props.getWorkspaceRoot()
                 : request.getWorkspaceRoot();
         ToolExecutionContext execCtx = new ToolExecutionContext(Path.of(workspaceRoot),
-                props.getTooling().isAllowWrite(), props.getTooling().isAllowCommand(), props.getCommandTimeoutSeconds());
+                agent != null ? agent.allowWrite() : props.getTooling().isAllowWrite(),
+                agent != null ? agent.allowCommand() : props.getTooling().isAllowCommand(),
+                props.getCommandTimeoutSeconds());
+
+        Set<String> allowedTools = resolveAllowedTools(agent);
+        List<ToolDefinition> defs = resolveToolDefinitions(allowedTools);
 
         StringBuilder accumulated = new StringBuilder();
 
         try {
             for (int i = 0; i < max; i++) {
-                // provide tool definitions
-                List<ToolDefinition> defs = registry.all().values().stream().map(AgentTool -> AgentTool.definition()).collect(Collectors.toList());
-
-                // use streaming chat; emit deltas to listener
-                ModelResponse resp = model.chatStreaming(convo, defs, delta -> {
+                ModelResponse resp = model.chatStreaming(convo, defs, modelOptions, delta -> {
                     // forward and accumulate every non-null delta, including whitespace-only chunks
                     if (delta != null) {
                         accumulated.append(delta);
@@ -84,6 +117,16 @@ public class CodingAgentHarness {
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_error:missing_tool_name");
+                        continue;
+                    }
+                    if (!allowedTools.contains(toolName)) {
+                        String toolMsg = "[tool_error] Tool not allowed for selected agent: " + toolName;
+                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
+                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg,
+                                Map.of("error", "tool not allowed"));
+                        traces.add(trace);
+                        listener.onToolCallTrace(trace);
+                        listener.onStatus("tool_error:not_allowed:" + toolName);
                         continue;
                     }
                     listener.onStatus("calling_tool:" + toolName);
@@ -139,5 +182,57 @@ public class CodingAgentHarness {
             return toolCallId;
         }
         return "tool-" + iteration + "-" + toolIndex;
+    }
+
+    private AgentDefinition resolveAgent(AgentTurnRequest request) {
+        if (agentDefinitionService == null) {
+            return null;
+        }
+        if (request.getAgentId() == null || request.getAgentId().isBlank()) {
+            return agentDefinitionService.defaultAgent();
+        }
+        return agentDefinitionService.getRequired(request.getAgentId());
+    }
+
+    private ModelDefinition resolveModel(AgentTurnRequest request, AgentDefinition agent) {
+        if (modelCatalogService == null) {
+            return null;
+        }
+        String requestedModelId = request.getModelId();
+        if (requestedModelId == null || requestedModelId.isBlank()) {
+            requestedModelId = agent == null ? props.getModel() : agent.defaultModel();
+        }
+        return modelCatalogService.getRequired(requestedModelId);
+    }
+
+    private ThinkingLevel resolveThinkingLevel(AgentTurnRequest request, AgentDefinition agent) {
+        if (request.getThinkingLevel() != null) {
+            return request.getThinkingLevel();
+        }
+        return agent == null ? null : agent.defaultThinkingLevel();
+    }
+
+    private String resolveSystemPrompt(AgentTurnRequest request, AgentDefinition agent) {
+        if (request.getSystemPrompt() != null && !request.getSystemPrompt().isBlank()) {
+            return request.getSystemPrompt();
+        }
+        return agent == null ? request.getSystemPrompt() : agent.systemPrompt();
+    }
+
+    private Set<String> resolveAllowedTools(AgentDefinition agent) {
+        if (agent == null) {
+            return registry.all().keySet();
+        }
+        return new HashSet<>(agent.allowedTools());
+    }
+
+    private List<ToolDefinition> resolveToolDefinitions(Set<String> allowedTools) {
+        if (allowedTools == null) {
+            return registry.all().values().stream().map(tool -> tool.definition()).collect(Collectors.toList());
+        }
+        return registry.all().values().stream()
+                .filter(tool -> allowedTools.contains(tool.name()))
+                .map(tool -> tool.definition())
+                .collect(Collectors.toList());
     }
 }

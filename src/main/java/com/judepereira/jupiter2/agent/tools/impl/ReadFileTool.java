@@ -1,21 +1,25 @@
 package com.judepereira.jupiter2.agent.tools.impl;
 
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter2.agent.tools.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
+import static com.judepereira.jupiter2.agent.llm.dto.ToolParameter.integer;
+import static com.judepereira.jupiter2.agent.llm.dto.ToolParameter.string;
+
 public class ReadFileTool implements AgentTool {
     private static final ToolDefinition DEF = new ToolDefinition(
             "read_file",
             "Read a file from the workspace (utf-8) with optional line range",
-            Map.of(
-                    "path", Map.of("type", "string", "description", "relative file path to read"),
-                    "startLine", Map.of("type", "integer", "description", "optional 1-based start line"),
-                    "endLine", Map.of("type", "integer", "description", "optional 1-based end line")
-            )
+            ToolSchema.object(
+                    string("path", "relative file path to read"),
+                    integer("startLine", "optional 1-based start line"),
+                    integer("endLine", "optional 1-based end line")
+            ).required("path")
     );
     private final int MAX_CHARS = 50_000;
 

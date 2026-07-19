@@ -1,6 +1,7 @@
 package com.judepereira.jupiter2.agent.tools.impl;
 
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter2.agent.tools.*;
 
 import java.io.IOException;
@@ -8,14 +9,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
+import static com.judepereira.jupiter2.agent.llm.dto.ToolParameter.string;
+
 public class WriteFileTool implements AgentTool {
     private static final ToolDefinition DEF = new ToolDefinition(
             "write_file",
             "Write full content to a file (overwrites)",
-            Map.of(
-                    "path", Map.of("type", "string", "description", "relative file path to write"),
-                    "content", Map.of("type", "string", "description", "full content to write")
-            )
+            ToolSchema.object(
+                    string("path", "relative file path to write"),
+                    string("content", "full content to write")
+            ).required("path", "content")
     );
 
     @Override

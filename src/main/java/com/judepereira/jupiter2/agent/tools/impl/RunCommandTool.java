@@ -1,6 +1,7 @@
 package com.judepereira.jupiter2.agent.tools.impl;
 
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter2.agent.tools.*;
 
 import java.io.BufferedReader;
@@ -9,15 +10,17 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import static com.judepereira.jupiter2.agent.llm.dto.ToolParameter.string;
+
 public class RunCommandTool implements AgentTool {
     private final List<String> forbidden = List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
     private static final ToolDefinition DEF = new ToolDefinition(
             "run_command",
             "Run a shell command in workspace (restricted)",
-            Map.of(
-                    "command", Map.of("type", "string", "description", "shell command to run"),
-                    "workingDir", Map.of("type", "string", "description", "optional relative working directory")
-            )
+            ToolSchema.object(
+                    string("command", "shell command to run"),
+                    string("workingDir", "optional relative working directory")
+            ).required("command")
     );
 
     @Override

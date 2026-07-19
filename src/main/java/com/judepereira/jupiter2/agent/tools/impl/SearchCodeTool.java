@@ -1,6 +1,7 @@
 package com.judepereira.jupiter2.agent.tools.impl;
 
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter2.agent.tools.*;
 
 import java.io.BufferedReader;
@@ -11,15 +12,17 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static com.judepereira.jupiter2.agent.llm.dto.ToolParameter.string;
+
 public class SearchCodeTool implements AgentTool {
     private static final ToolDefinition DEF = new ToolDefinition(
             "search_code",
             "Search regex across files in workspace",
-            Map.of(
-                    "path", Map.of("type", "string", "description", "relative path root to search"),
-                    "pattern", Map.of("type", "string", "description", "regex pattern to search (required)"),
-                    "include", Map.of("type", "string", "description", "optional glob include e.g. **/*.java")
-            )
+            ToolSchema.object(
+                    string("path", "relative path root to search"),
+                    string("pattern", "regex pattern to search (required)"),
+                    string("include", "optional glob include e.g. **/*.java")
+            ).required("pattern")
     );
 
     @Override

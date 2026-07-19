@@ -4,6 +4,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
+import com.judepereira.jupiter2.agent.catalog.AgentDefinition;
+import com.judepereira.jupiter2.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter2.agent.catalog.ModelCatalogService;
+import com.judepereira.jupiter2.agent.catalog.ModelDefinition;
+import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
@@ -16,6 +21,7 @@ import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
+import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
@@ -28,6 +34,7 @@ import com.judepereira.jupiter2.terminal.TerminalPanelState;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -58,7 +65,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @Log4j2
 @Controller
-@lombok.RequiredArgsConstructor
 public class UiController {
 
     private static final ObjectMapper SseJson = new ObjectMapper();
@@ -66,6 +72,8 @@ public class UiController {
     private final CodingAgentHarness harness;
     private final AgentProperties agentProperties;
     private final AppStateService appStateService;
+    private final AgentDefinitionService agentDefinitionService;
+    private final ModelCatalogService modelCatalogService;
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
 
@@ -73,20 +81,55 @@ public class UiController {
     private final Executor agentExecutor;
     private final ConcurrentMap<String, PendingStream> pendingStreams = new ConcurrentHashMap<>();
 
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        TerminalManager terminalManager, TerminalStateService terminalStateService,
+                        ModelCatalogService modelCatalogService, Executor agentExecutor) {
+        this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()),
+                modelCatalogService, terminalManager, terminalStateService, agentExecutor);
+    }
+
+    @Autowired
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        TerminalManager terminalManager, TerminalStateService terminalStateService,
+                        @Qualifier("agentTaskExecutor") Executor agentExecutor) {
+        this.harness = harness;
+        this.agentProperties = agentProperties;
+        this.appStateService = appStateService;
+        this.agentDefinitionService = agentDefinitionService;
+        this.modelCatalogService = modelCatalogService;
+        this.terminalManager = terminalManager;
+        this.terminalStateService = terminalStateService;
+        this.agentExecutor = agentExecutor;
+    }
+
     @GetMapping("/")
     public String index(Model model) {
         AppStateView view = appStateService.loadViewData();
+        populateChatControlsModel(model, defaultChatSelection());
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         return "index";
     }
 
+    public String sendMessage(@RequestParam("message") String message,
+                              Model model,
+                              HttpServletRequest request) {
+        return sendMessage(message, null, null, null, model, request);
+    }
+
     @PostMapping("/ui/chat/send")
-    public String sendMessage(@RequestParam("message") String message, Model model, HttpServletRequest request) {
+    public String sendMessage(@RequestParam("message") String message,
+                              @RequestParam(value = "agentId", required = false) String agentId,
+                              @RequestParam(value = "modelId", required = false) String modelId,
+                              @RequestParam(value = "thinkingLevel", required = false) String thinkingLevel,
+                              Model model,
+                              HttpServletRequest request) {
         List<ChatMessage> newChatMessages = new ArrayList<>();
         AppStateView view = appStateService.loadViewData();
         SessionView session = null;
         boolean shellRefresh = false;
+        ChatSelection selected = resolveChatSelection(agentId, modelId, thinkingLevel);
 
         if (message != null && !message.isBlank()) {
             shellRefresh = view.activeSession() == null;
@@ -94,20 +137,22 @@ public class UiController {
             String user = message.trim();
             String assistantId = UUID.randomUUID().toString();
             String userId = UUID.randomUUID().toString();
-            QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId, assistantId, user);
+            ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(), selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name());
+            QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId, assistantId, user, metadata);
             newChatMessages.add(toChatMessage(queued.userMessage()));
             newChatMessages.add(toChatMessage(queued.assistantMessage()));
 
-            String systemPrompt = "You are a concise coding assistant. Use available tools to inspect and modify the workspace when helpful. Prefer tools for file edits and external commands; return a final assistant message when done.";
             view = appStateService.loadViewData();
             SessionDetailView sessionDetail = view.activeSessionDetail();
             String workspaceRoot = sessionDetail.workspaceRoot();
             List<Message> conversationHistory = new ArrayList<>();
-            conversationHistory.add(new Message(Message.Role.SYSTEM, systemPrompt));
             conversationHistory.addAll(appStateService.buildConversationHistory(session.id()));
-            pendingStreams.put(assistantId, new PendingStream(session.id(), workspaceRoot, new AgentTurnRequest(systemPrompt, conversationHistory, workspaceRoot)));
+            pendingStreams.put(assistantId, new PendingStream(session.id(), workspaceRoot,
+                    new AgentTurnRequest(selected.selectedAgent().systemPrompt(), conversationHistory, workspaceRoot,
+                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking())));
         }
 
+        populateChatControlsModel(model, selected);
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         model.addAttribute("newChatMessages", List.copyOf(newChatMessages));
@@ -544,6 +589,33 @@ public class UiController {
         model.addAttribute("reviewOob", true);
     }
 
+    private void populateChatControlsModel(Model model, ChatSelection selection) {
+        model.addAttribute("agents", agentDefinitionService.list());
+        model.addAttribute("models", modelCatalogService.list());
+        model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
+        model.addAttribute("defaultAgent", selection.defaultAgent());
+        model.addAttribute("defaultModel", selection.defaultModel());
+        model.addAttribute("defaultThinking", selection.defaultThinking());
+        model.addAttribute("selectedAgent", selection.selectedAgent());
+        model.addAttribute("selectedModel", selection.selectedModel());
+        model.addAttribute("selectedThinking", selection.selectedThinking());
+    }
+
+    private ChatSelection defaultChatSelection() {
+        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+        ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
+        return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+    }
+
+    private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {
+        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+        AgentDefinition selectedAgent = agentId == null || agentId.isBlank() ? defaultAgent : agentDefinitionService.getRequired(agentId);
+        ModelDefinition selectedModel = modelId == null || modelId.isBlank() ? modelCatalogService.resolveOrDefault(selectedAgent.defaultModel()) : modelCatalogService.getRequired(modelId);
+        ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank() ? selectedAgent.defaultThinkingLevel() : ThinkingLevel.fromValue(thinkingLevel);
+        ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
+        return new ChatSelection(selectedAgent, selectedModel, selectedThinking, defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+    }
+
     private AppStateView currentViewWithSessionIfNeeded(boolean createIfMissing) {
         AppStateView view = appStateService.loadViewData();
         if (createIfMissing && view.activeSession() == null) {
@@ -647,7 +719,7 @@ public class UiController {
     }
 
     private ChatMessage toChatMessage(ChatMessageView view) {
-        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.toolCalls().stream().map(this::toToolCallView).toList());
+        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata());
     }
 
     private ToolCallView toToolCallView(com.judepereira.jupiter2.persistence.Persistence.ToolCallView view) {
@@ -718,7 +790,7 @@ public class UiController {
 
     public record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated) {}
 
-    public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls) {}
+    public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {}
 
     public record ChangedFile(int id, String path, String diff) {}
 
@@ -729,6 +801,9 @@ public class UiController {
     public record Session(long id, String name) {}
 
     public record DirectoryEntry(String name, String path, boolean directory) {}
+
+    private record ChatSelection(AgentDefinition selectedAgent, ModelDefinition selectedModel, ThinkingLevel selectedThinking,
+                                 AgentDefinition defaultAgent, ModelDefinition defaultModel, ThinkingLevel defaultThinking) {}
 
     private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {}
 }

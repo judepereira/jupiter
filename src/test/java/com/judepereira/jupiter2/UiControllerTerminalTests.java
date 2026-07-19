@@ -8,6 +8,7 @@ import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.terminal.TerminalTab;
 import com.judepereira.jupiter2.ui.UiController;
+import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -91,8 +93,9 @@ public class UiControllerTerminalTests {
         assertThat(terminalTabs(openModel)).extracting(TerminalTab::title, TerminalTab::active)
                 .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
 
+        String branchName = "feature-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         ConcurrentModel workspaceBModel = new ConcurrentModel();
-        controller.addWorkspace("feature-b", "create", workspaceBModel);
+        controller.addWorkspace(branchName, "create", workspaceBModel);
 
         assertThat(workspaceBModel.getAttribute("terminalOob")).isEqualTo(true);
         assertThat(terminalTabs(workspaceBModel)).isEmpty();
@@ -288,7 +291,7 @@ public class UiControllerTerminalTests {
             Executor executor) {
 
         private UiController controller() {
-            return new UiController(mock(CodingAgentHarness.class), properties, appStateService, terminalManager, terminalStateService, executor);
+            return new UiController(mock(CodingAgentHarness.class), properties, appStateService, terminalManager, terminalStateService, ModelCatalogTestSupport.modelCatalogService(), executor);
         }
     }
 }

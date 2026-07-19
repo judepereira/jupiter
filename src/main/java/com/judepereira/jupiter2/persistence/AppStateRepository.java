@@ -226,10 +226,16 @@ class AppStateRepository {
 
     long insertConversationMessage(long sessionId, String publicId, String role, long turnId, long sequence, String content,
                                    String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending, Instant now) {
+        return insertConversationMessage(sessionId, publicId, role, turnId, sequence, content, toolCallId, toolCallsJson, showInChat, includeInModel, pending, null, null, null, null, now);
+    }
+
+    long insertConversationMessage(long sessionId, String publicId, String role, long turnId, long sequence, String content,
+                                   String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
+                                   String agentId, String agentName, String modelId, String thinkingLevel, Instant now) {
         return insertAndReturnId("""
                 INSERT INTO conversation_messages
-                (session_id, public_id, role, turn_id, sequence, content, tool_call_id, tool_calls_json, show_in_chat, include_in_model, pending, created_at)
-                VALUES (:sessionId, :publicId, :role, :turnId, :sequence, :content, :toolCallId, :toolCallsJson, :showInChat, :includeInModel, :pending, :createdAt)
+                (session_id, public_id, role, turn_id, sequence, content, tool_call_id, tool_calls_json, show_in_chat, include_in_model, pending, agent_id, agent_name, model_id, thinking_level, created_at)
+                VALUES (:sessionId, :publicId, :role, :turnId, :sequence, :content, :toolCallId, :toolCallsJson, :showInChat, :includeInModel, :pending, :agentId, :agentName, :modelId, :thinkingLevel, :createdAt)
                 """, params -> params
                 .addValue("sessionId", sessionId)
                 .addValue("publicId", publicId)
@@ -242,6 +248,10 @@ class AppStateRepository {
                 .addValue("showInChat", showInChat)
                 .addValue("includeInModel", includeInModel)
                 .addValue("pending", pending)
+                .addValue("agentId", agentId)
+                .addValue("agentName", agentName)
+                .addValue("modelId", modelId)
+                .addValue("thinkingLevel", thinkingLevel)
                 .addValue("createdAt", Timestamp.from(now)));
     }
 
@@ -361,7 +371,8 @@ class AppStateRepository {
     private ConversationMessageRow mapConversationMessage(ResultSet rs, int rowNum) throws SQLException {
         return new ConversationMessageRow(rs.getLong("id"), rs.getLong("session_id"), rs.getString("public_id"), rs.getString("role"), rs.getLong("turn_id"),
                 rs.getLong("sequence"), rs.getString("content"), rs.getString("tool_call_id"), rs.getString("tool_calls_json"), rs.getBoolean("show_in_chat"),
-                rs.getBoolean("include_in_model"), rs.getBoolean("pending"), timestampToInstant(rs.getTimestamp("created_at")));
+                rs.getBoolean("include_in_model"), rs.getBoolean("pending"), rs.getString("agent_id"), rs.getString("agent_name"), rs.getString("model_id"),
+                rs.getString("thinking_level"), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
@@ -381,7 +392,8 @@ class AppStateRepository {
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Long selectedChangedFileId, Instant createdAt, Instant lastOpenedAt) {}
-    record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending, Instant createdAt) {}
+    record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
+                                  String agentId, String agentName, String modelId, String thinkingLevel, Instant createdAt) {}
     record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}
     record ChangedFileRow(long id, long sessionId, String path, String diff, long position, Instant createdAt) {}
 }

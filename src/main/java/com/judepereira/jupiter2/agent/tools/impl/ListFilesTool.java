@@ -1,6 +1,7 @@
 package com.judepereira.jupiter2.agent.tools.impl;
 
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter2.agent.tools.*;
 
 import java.io.IOException;
@@ -9,14 +10,16 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.judepereira.jupiter2.agent.llm.dto.ToolParameter.string;
+
 public class ListFilesTool implements AgentTool {
     private static final ToolDefinition DEF = new ToolDefinition(
             "list_files",
             "List files under a relative path",
-            Map.of(
-                    "path", Map.of("type", "string", "description", "relative path to list"),
-                    "include", Map.of("type", "string", "description", "optional glob filter, e.g. **/*.java")
-            )
+            ToolSchema.object(
+                    string("path", "relative path to list"),
+                    string("include", "optional glob filter, e.g. **/*.java")
+            ).required("path")
     );
 
     @Override

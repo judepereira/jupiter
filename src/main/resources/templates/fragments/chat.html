@@ -11,6 +11,12 @@
                     th:classappend="${m.pending} ? 'pending' : ''">
                     <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
 
+                    <div class="chat-message-meta" th:if="${m.role == 'assistant' and m.metadata != null}">
+                        <span class="chat-meta-chip" th:text="${m.metadata.agentName + ' (' + m.metadata.agentId + ')'}"></span>
+                        <span class="chat-meta-chip" th:text="${m.metadata.modelId}"></span>
+                        <span class="chat-meta-chip" th:text="${m.metadata.thinkingLevel}"></span>
+                    </div>
+
                     <div th:if="${m.toolCalls != null and !#lists.isEmpty(m.toolCalls)}" class="tool-calls">
                         <details th:each="call : ${m.toolCalls}" class="tool-call">
                             <summary class="tool-call-summary">
@@ -41,9 +47,51 @@
         </div>
 
         <form id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend">
-            <label for="chat-input" class="sr-only">Message</label>
-            <textarea id="chat-input" name="message" rows="1" autocomplete="off"></textarea>
-            <button id="chat-send-btn" type="submit">Send</button>
+            <div class="chat-controls">
+                <label>
+                    <span class="chat-control-label">Agent</span>
+                    <select id="chat-agent-select" name="agentId">
+                        <option th:each="agent : ${agents}"
+                                th:value="${agent.id}"
+                                th:selected="${selectedAgent != null and selectedAgent.id == agent.id}"
+                                th:attr="data-description=${agent.description}, data-allow-write=${agent.allowWrite}, data-allow-command=${agent.allowCommand}, data-default-model=${agent.defaultModel}, data-default-thinking=${agent.defaultThinkingLevel}, title=${agent.description}"
+                                th:text="${agent.name + ' — ' + agent.description}"></option>
+                    </select>
+                </label>
+
+                <label>
+                    <span class="chat-control-label">Model</span>
+                    <select id="chat-model-select" name="modelId">
+                        <option th:each="modelDef : ${models}"
+                                th:value="${modelDef.id}"
+                                th:selected="${selectedModel != null and selectedModel.id == modelDef.id}"
+                                th:text="${modelDef.displayName + ' — ' + modelDef.provider}"></option>
+                    </select>
+                </label>
+
+                <label>
+                    <span class="chat-control-label">Thinking</span>
+                    <select id="chat-thinking-select" name="thinkingLevel">
+                        <option th:each="level : ${thinkingLevels}"
+                                th:value="${level}"
+                                th:selected="${selectedThinking != null and selectedThinking == level}"
+                                th:text="${level}"></option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="chat-quality-summary" aria-live="polite">
+                <span>Model: <strong data-chat-current-model th:text="${selectedModel != null ? selectedModel.displayName : ''}"></strong></span>
+                <span>Thinking: <strong data-chat-current-thinking th:text="${selectedThinking}"></strong></span>
+                <span>Write: <strong data-chat-write-access th:text="${selectedAgent != null and selectedAgent.allowWrite ? 'yes' : 'no'}"></strong></span>
+                <span>Command: <strong data-chat-command-access th:text="${selectedAgent != null and selectedAgent.allowCommand ? 'yes' : 'no'}"></strong></span>
+            </div>
+
+            <div class="chat-compose-row">
+                <label for="chat-input" class="sr-only">Message</label>
+                <textarea id="chat-input" name="message" rows="1" autocomplete="off"></textarea>
+                <button id="chat-send-btn" type="submit">Send</button>
+            </div>
         </form>
     </section>
 </div>

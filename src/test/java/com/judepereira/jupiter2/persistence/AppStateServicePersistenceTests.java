@@ -3,6 +3,7 @@ package com.judepereira.jupiter2.persistence;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
+import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
@@ -181,6 +182,28 @@ public class AppStateServicePersistenceTests {
 
         assertThat(history.get(4).getRole()).isEqualTo(Message.Role.USER);
         assertThat(history.get(4).getContent()).isEqualTo("next turn");
+    }
+
+    @Test
+    public void pendingAssistantMetadataIsPersistedAndRendered(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        ChatMessageMetadata metadata = new ChatMessageMetadata("agent-1", "Agent One", "model-1", "HIGH");
+        service.appendUserMessageAndPendingAssistant(sessionId, null, null, "hello", metadata);
+
+        ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(assistant.metadata()).isEqualTo(metadata);
+        assertThat(service.loadViewData().activeSessionDetail().chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role()))
+                .findFirst()
+                .orElseThrow()
+                .metadata()).isEqualTo(metadata);
     }
 
     private static void initGitRepo(Path projectPath) throws IOException, InterruptedException {

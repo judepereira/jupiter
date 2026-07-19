@@ -20,6 +20,12 @@
             th:classappend="${m.pending} ? 'pending' : ''">
             <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
 
+            <div class="chat-message-meta" th:if="${m.role == 'assistant' and m.metadata != null}">
+                <span class="chat-meta-chip" th:text="${m.metadata.agentName + ' (' + m.metadata.agentId + ')'}"></span>
+                <span class="chat-meta-chip" th:text="${m.metadata.modelId}"></span>
+                <span class="chat-meta-chip" th:text="${m.metadata.thinkingLevel}"></span>
+            </div>
+
             <div th:if="${m.toolCalls != null and !#lists.isEmpty(m.toolCalls)}" class="tool-calls">
                 <details th:each="call : ${m.toolCalls}" class="tool-call">
                     <summary class="tool-call-summary">

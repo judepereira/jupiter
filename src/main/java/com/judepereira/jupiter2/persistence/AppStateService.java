@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
+import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileView;
@@ -169,6 +170,11 @@ public class AppStateService {
 
     @Transactional
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId, String assistantPublicId, String userText) {
+        return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText, null);
+    }
+
+    @Transactional
+    public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId, String assistantPublicId, String userText, ChatMessageMetadata assistantMetadata) {
         if (userText == null) {
             throw new IllegalStateException("User text is required");
         }
@@ -179,9 +185,14 @@ public class AppStateService {
         String assistantId = publicId(assistantPublicId);
         repository.insertConversationMessage(sessionId, userId, "user", turnId, userSequence, userText, null, null, true, true, false, now);
         long assistantSequence = repository.nextMessageSequence(sessionId);
-        repository.insertConversationMessage(sessionId, assistantId, "assistant", turnId, assistantSequence, "Thinking…", null, null, true, false, true, now);
-        return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, List.of()),
-                new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, List.of()));
+        repository.insertConversationMessage(sessionId, assistantId, "assistant", turnId, assistantSequence, "Thinking…", null, null, true, false, true,
+                assistantMetadata == null ? null : assistantMetadata.agentId(),
+                assistantMetadata == null ? null : assistantMetadata.agentName(),
+                assistantMetadata == null ? null : assistantMetadata.modelId(),
+                assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
+                now);
+        return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, List.of(), null),
+                new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, List.of(), assistantMetadata));
     }
 
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userText) {
@@ -220,7 +231,8 @@ public class AppStateService {
 
         long assistantToolCallSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant", assistantMessage.turnId(), assistantToolCallSequence,
-                "", null, json(List.of(new ToolCallPayload(toolCallId, trace.toolName(), trace.args()))), false, true, false, now);
+                "", null, json(List.of(new ToolCallPayload(toolCallId, trace.toolName(), trace.args()))), false, true, false,
+                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), now);
 
         long toolResultSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,
@@ -407,7 +419,9 @@ public class AppStateService {
 
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId) {
         List<ToolCallView> toolCalls = repository.listToolCallTracesByAssistantMessage(message.id()).stream().map(this::toToolCallView).toList();
-        return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(), toolCalls);
+        return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(), toolCalls,
+                message.agentId() == null && message.agentName() == null && message.modelId() == null && message.thinkingLevel() == null ? null :
+                        new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel()));
     }
 
     private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace) {

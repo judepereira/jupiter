@@ -1,11 +1,14 @@
 package com.judepereira.jupiter2.agent.tools.impl;
 
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter2.agent.tools.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+
+import static com.judepereira.jupiter2.agent.llm.dto.ToolParameter.string;
 
 /**
  * Simple patch tool: replace first occurrence of oldText with newText in file.
@@ -14,11 +17,11 @@ public class ApplyPatchTool implements AgentTool {
     private static final ToolDefinition DEF = new ToolDefinition(
             "apply_patch",
             "Apply a simple text replace patch to a file",
-            Map.of(
-                    "path", Map.of("type", "string", "description", "relative file path to patch"),
-                    "oldText", Map.of("type", "string", "description", "text to replace (required)"),
-                    "newText", Map.of("type", "string", "description", "replacement text (required)")
-            )
+            ToolSchema.object(
+                    string("path", "relative file path to patch"),
+                    string("oldText", "text to replace (required)"),
+                    string("newText", "replacement text (required)")
+            ).required("path", "oldText", "newText")
     );
 
     @Override
