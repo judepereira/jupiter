@@ -30,9 +30,9 @@ class UiControllerInvalidCheckoutBranchTests {
                 mock(CodingAgentHarness.class),
                 agentProperties(projectRoot),
                 TestAppStateSupport.appStateService(),
-                ModelCatalogTestSupport.modelCatalogService(),
                 mock(TerminalManager.class),
                 new TerminalStateService(),
+                ModelCatalogTestSupport.modelCatalogService(),
                 balloonService,
                 Runnable::run);
 

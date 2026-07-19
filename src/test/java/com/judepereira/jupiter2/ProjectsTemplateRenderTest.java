@@ -54,7 +54,7 @@ public class ProjectsTemplateRenderTest {
 
         String html = engine.process("fragments/projects", context);
 
-        assertThat(html).contains("No projects", "No project selected", "Add project");
+        assertThat(html).contains("No projects", "No project selected", "New tab");
     }
 
     @Test
