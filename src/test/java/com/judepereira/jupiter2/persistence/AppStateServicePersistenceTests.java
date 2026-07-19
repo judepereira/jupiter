@@ -119,6 +119,39 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void activatingOrReopeningAWorkspaceWithNoSessionsRestoresTheWorkspaceAndClearsTheActiveSession(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long projectId = initial.activeProject().id();
+        long workspaceId = initial.activeWorkspace().id();
+        long sessionId = initial.activeSession().id();
+
+        service.closeSession(sessionId);
+        service.collapseWorkspace(workspaceId);
+
+        service.activateWorkspace(workspaceId);
+
+        AppStateView afterActivateWorkspace = service.loadViewData();
+        assertThat(afterActivateWorkspace.activeWorkspace()).isNotNull();
+        assertThat(afterActivateWorkspace.activeWorkspace().id()).isEqualTo(workspaceId);
+        assertThat(afterActivateWorkspace.sessions()).isEmpty();
+        assertThat(afterActivateWorkspace.activeSession()).isNull();
+
+        service.closeProject(projectId);
+        service.addOrReopenProject("Alpha", projectPath.toString());
+
+        AppStateView reopened = service.loadViewData();
+        assertThat(reopened.activeProject()).isNotNull();
+        assertThat(reopened.activeProject().id()).isEqualTo(projectId);
+        assertThat(reopened.activeWorkspace()).isNotNull();
+        assertThat(reopened.activeWorkspace().id()).isEqualTo(workspaceId);
+        assertThat(reopened.sessions()).isEmpty();
+        assertThat(reopened.activeSession()).isNull();
+    }
+
+    @Test
     public void closingANonDefaultWorkspaceDeletesItsRowsAndFallsBackToAnotherWorkspace(@TempDir Path projectPath) throws Exception {
         initGitRepo(projectPath);
 

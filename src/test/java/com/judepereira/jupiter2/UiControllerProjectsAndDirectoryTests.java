@@ -223,6 +223,29 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
+    public void cleanNonDefaultWorkspaceWithoutAnUpstreamClosesWithoutAConfirmationModal(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+        UiController controller = newController();
+
+        ConcurrentModel addProject = new ConcurrentModel();
+        controller.addProject("Alpha", projectPath.toString(), addProject);
+
+        ConcurrentModel addWorkspace = new ConcurrentModel();
+        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        controller.addWorkspace(branchName, "create", addWorkspace);
+        UiController.Workspace featureWorkspace = activeWorkspace(addWorkspace);
+
+        ConcurrentModel close = new ConcurrentModel();
+        String view = controller.closeWorkspace(featureWorkspace.id(), close);
+
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(workspaces(close)).extracting(UiController.Workspace::path)
+                .containsExactly(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(activeWorkspace(close).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(Files.exists(Path.of(featureWorkspace.path()))).isFalse();
+    }
+
+    @Test
     public void dirtyNonDefaultWorkspaceCloseReturnsTheConfirmationModal(@TempDir Path projectPath) throws Exception {
         initGitRepo(projectPath);
         UiController controller = newController();

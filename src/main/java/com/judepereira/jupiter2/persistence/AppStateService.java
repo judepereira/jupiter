@@ -121,12 +121,13 @@ public class AppStateService {
         Instant now = Instant.now();
         var workspace = repository.findWorkspace(workspaceId);
         var session = repository.findSessionToActivate(workspaceId);
-        if (session == null) {
-            throw new IllegalStateException("Missing session for workspace " + workspaceId);
-        }
         repository.updateProjectLastOpened(workspace.projectId(), now);
-        repository.updateSessionLastOpened(session.id(), now);
         repository.updateWorkspaceLastOpened(workspaceId, now);
+        if (session == null) {
+            repository.updateAppState(workspace.projectId(), workspaceId, null);
+            return;
+        }
+        repository.updateSessionLastOpened(session.id(), now);
         repository.updateAppState(workspace.projectId(), workspaceId, session.id());
     }
 
@@ -447,11 +448,12 @@ public class AppStateService {
             throw new IllegalStateException("Missing workspace for project " + projectId);
         }
         var session = repository.findSessionToActivate(workspace.id());
-        if (session == null) {
-            throw new IllegalStateException("Missing session for workspace " + workspace.id());
-        }
         repository.updateProjectLastOpened(projectId, now);
         repository.updateWorkspaceLastOpened(workspace.id(), now);
+        if (session == null) {
+            repository.updateAppState(projectId, workspace.id(), null);
+            return;
+        }
         repository.updateSessionLastOpened(session.id(), now);
         repository.updateAppState(projectId, workspace.id(), session.id());
     }
@@ -511,9 +513,7 @@ public class AppStateService {
         if (head.exists()) {
             GitCommandResult upstream = runGitCommandAllowingMissingUpstream(workspacePath,
                     List.of("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"));
-            if (upstream.missingUpstream()) {
-                unpushedCommits = true;
-            } else {
+            if (upstream.exists()) {
                 String count = runGitCommand(workspacePath, List.of("git", "rev-list", "--count", upstream.stdout().trim() + "..HEAD")).stdout().trim();
                 unpushedCommits = !count.isBlank() && Long.parseLong(count) > 0;
             }

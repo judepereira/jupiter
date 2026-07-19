@@ -712,6 +712,16 @@ input:focus, textarea:focus {
     justify-content: center;
     padding: 0;
     box-sizing: border-box;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.workspace-row:hover .workspace-close-button,
+.workspace-row:focus-within .workspace-close-button,
+.session-row:hover .session-close-button,
+.session-row:focus-within .session-close-button {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .workspace-close-button:hover,
