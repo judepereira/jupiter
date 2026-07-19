@@ -9,6 +9,7 @@ import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
 import org.flywaydb.core.Flyway;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -50,6 +51,6 @@ public final class TestAppStateSupport {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
         });
-        return new UiController(harness, properties, appStateService(), terminalManager, new TerminalStateService(), modelCatalogService, Runnable::run);
+        return new UiController(harness, properties, appStateService(), terminalManager, new TerminalStateService(), modelCatalogService, new SystemBalloonService(new ObjectMapper()), Runnable::run);
     }
 }

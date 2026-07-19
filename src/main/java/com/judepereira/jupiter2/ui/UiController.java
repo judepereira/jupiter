@@ -17,6 +17,7 @@ import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter2.persistence.AppStateService;
+import com.judepereira.jupiter2.persistence.GitWorktreeException;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileView;
@@ -32,6 +33,7 @@ import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalPanelState;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
+import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,6 +78,7 @@ public class UiController {
     private final ModelCatalogService modelCatalogService;
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
+    private final SystemBalloonService systemBalloonService;
 
     @Qualifier("agentTaskExecutor")
     private final Executor agentExecutor;
@@ -84,20 +87,29 @@ public class UiController {
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
                         ModelCatalogService modelCatalogService, Executor agentExecutor) {
+        this(harness, agentProperties, appStateService, terminalManager, terminalStateService, modelCatalogService, new SystemBalloonService(new ObjectMapper()), agentExecutor);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        TerminalManager terminalManager, TerminalStateService terminalStateService,
+                        ModelCatalogService modelCatalogService, SystemBalloonService systemBalloonService,
+                        Executor agentExecutor) {
         this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService, terminalManager, terminalStateService, agentExecutor);
+                modelCatalogService, systemBalloonService, terminalManager, terminalStateService, agentExecutor);
     }
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        TerminalManager terminalManager, TerminalStateService terminalStateService,
+                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
+                        TerminalStateService terminalStateService,
                         @Qualifier("agentTaskExecutor") Executor agentExecutor) {
         this.harness = harness;
         this.agentProperties = agentProperties;
         this.appStateService = appStateService;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
+        this.systemBalloonService = systemBalloonService;
         this.terminalManager = terminalManager;
         this.terminalStateService = terminalStateService;
         this.agentExecutor = agentExecutor;
@@ -301,6 +313,11 @@ public class UiController {
         return emitter;
     }
 
+    @GetMapping("/ui/system-balloons/stream")
+    public SseEmitter systemBalloonStream() {
+        return systemBalloonService.connect();
+    }
+
     @PostMapping("/ui/review/toggle")
     public String toggleReview(Model model) {
         AppStateView view = appStateService.loadViewData();
@@ -460,8 +477,30 @@ public class UiController {
                                @RequestParam(name = "branchMode", defaultValue = "create") String branchMode,
                                Model model) {
         AppStateView view = appStateService.loadViewData();
+        String trimmedBranchName = branchName.trim();
         boolean createBranch = !"checkout".equalsIgnoreCase(branchMode);
-        appStateService.createWorkspace(view.activeProject().id(), branchName, createBranch);
+
+        try {
+            appStateService.createWorkspace(view.activeProject().id(), trimmedBranchName, createBranch);
+        } catch (GitWorktreeException e) {
+            if (!createBranch) {
+                String gitOutput = e.lastGitOutputLines();
+                if (gitOutput == null || gitOutput.isBlank()) {
+                    gitOutput = e.getMessage();
+                }
+                String body = "Could not check out existing Git branch \"" + trimmedBranchName + "\".\n\n" + gitOutput;
+                systemBalloonService.publishError("Checkout Failed", body);
+                populateProjectModel(model, view);
+                populateSessionModel(model, view);
+                model.addAttribute("branchName", trimmedBranchName);
+                model.addAttribute("branchMode", branchMode);
+                model.addAttribute("createBranch", false);
+                model.addAttribute("modalOob", true);
+                return "fragments/projects :: workspaceModal";
+            }
+            throw e;
+        }
+
         view = appStateService.loadViewData();
         populateProjectModel(model, view);
         populateSessionModel(model, view);
@@ -509,9 +548,50 @@ public class UiController {
         return "fragments/projects :: shellUpdates";
     }
 
+    @PostMapping("/ui/workspaces/{workspaceId}/close")
+    public String closeWorkspace(@PathVariable long workspaceId, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        AppStateService.WorkspaceCloseInspection inspection = appStateService.inspectWorkspaceClose(workspaceId);
+        if (inspection.uncommittedChanges() || inspection.unpushedCommits()) {
+            populateProjectModel(model, view);
+            populateSessionModel(model, view);
+            populateWorkspaceCloseModel(model, inspection);
+            return "fragments/projects :: workspaceCloseModal";
+        }
+
+        appStateService.removeWorkspaceWorktree(workspaceId, false);
+        appStateService.closeWorkspace(workspaceId);
+        view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/workspaces/{workspaceId}/close/confirm")
+    public String confirmWorkspaceClose(@PathVariable long workspaceId, Model model) {
+        appStateService.removeWorkspaceWorktree(workspaceId, true);
+        appStateService.closeWorkspace(workspaceId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
+    }
+
     @PostMapping("/ui/sessions/{sessionId}/activate")
     public String activateSession(@PathVariable long sessionId, Model model) {
         appStateService.activateSession(sessionId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/sessions/{sessionId}/close")
+    public String closeSession(@PathVariable long sessionId, Model model) {
+        appStateService.closeSession(sessionId);
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
         populateSessionModel(model, view);
@@ -533,6 +613,11 @@ public class UiController {
     @GetMapping("/ui/sessions/new")
     public String newSessionForm() {
         return "fragments/projects :: newSessionForm";
+    }
+
+    @GetMapping("/ui/sessions/new/button")
+    public String newSessionButton() {
+        return "fragments/projects :: newSessionButton";
     }
 
     private void populateSessionModel(Model model, AppStateView view) {
@@ -580,6 +665,7 @@ public class UiController {
         model.addAttribute("projects", view.projects().stream().map(this::toProject).toList());
         model.addAttribute("activeProject", toProject(view.activeProject()));
         model.addAttribute("workspaces", view.workspaces().stream().map(this::toWorkspace).toList());
+        model.addAttribute("workspaceActions", view.workspaces().stream().map(workspace -> toWorkspaceAction(view.activeProject(), workspace)).toList());
         model.addAttribute("activeWorkspace", toWorkspace(view.activeWorkspace()));
         model.addAttribute("sessions", view.sessions().stream().map(this::toSession).toList());
         model.addAttribute("activeSession", toSession(view.activeSession()));
@@ -619,6 +705,16 @@ public class UiController {
         ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank() ? selectedAgent.defaultThinkingLevel() : ThinkingLevel.fromValue(thinkingLevel);
         ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
         return new ChatSelection(selectedAgent, selectedModel, selectedThinking, defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+    }
+
+    private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {
+        model.addAttribute("workspace", new Workspace(inspection.workspaceId(), inspection.workspaceName(), inspection.workspacePath()));
+        model.addAttribute("workspaceId", inspection.workspaceId());
+        model.addAttribute("workspaceName", inspection.workspaceName());
+        model.addAttribute("workspacePath", inspection.workspacePath());
+        model.addAttribute("workspaceCloseStatus", inspection);
+        model.addAttribute("workspaceCloseReasons", inspection.reasons());
+        model.addAttribute("modalTarget", "#modal-root");
     }
 
     private AppStateView currentViewWithSessionIfNeeded(boolean createIfMissing) {
@@ -743,6 +839,11 @@ public class UiController {
         return view == null ? null : new Workspace(view.id(), view.name(), view.path());
     }
 
+    private WorkspaceAction toWorkspaceAction(ProjectView activeProject, WorkspaceView workspace) {
+        boolean defaultWorkspace = activeProject != null && workspace.path().equals(activeProject.path());
+        return new WorkspaceAction(workspace.id(), defaultWorkspace, !defaultWorkspace);
+    }
+
     private Session toSession(SessionView view) {
         return view == null ? null : new Session(view.id(), view.name());
     }
@@ -802,6 +903,8 @@ public class UiController {
     public record Project(long id, String name, String path) {}
 
     public record Workspace(long id, String name, String path) {}
+
+    public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
 
     public record Session(long id, String name) {}
 

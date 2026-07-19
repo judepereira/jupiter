@@ -7,6 +7,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.stream.Stream;
 
@@ -43,6 +44,28 @@ abstract class E2ETestSupport {
         page.screenshot(new Page.ScreenshotOptions()
                 .setPath(screenshotsDir.resolve(fileName))
                 .setFullPage(true));
+    }
+
+    protected static void initGitRepoWithInitialCommit(Path repoDir) throws Exception {
+        Files.createDirectories(repoDir);
+        runGit(repoDir, "git", "init");
+        runGit(repoDir, "git", "config", "user.name", "Jupiter Tests");
+        runGit(repoDir, "git", "config", "user.email", "tests@example.com");
+        Files.writeString(repoDir.resolve("README.md"), "hello\n");
+        runGit(repoDir, "git", "add", "README.md");
+        runGit(repoDir, "git", "commit", "-m", "init");
+    }
+
+    protected static void runGit(Path workingDirectory, String... command) throws Exception {
+        Process process = new ProcessBuilder(command)
+                .directory(workingDirectory.toFile())
+                .redirectErrorStream(true)
+                .start();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            String output = new String(process.getInputStream().readAllBytes());
+            throw new IllegalStateException("git command failed: " + String.join(" ", command) + "\n" + output);
+        }
     }
 
     protected static void openProjectThroughModal(Page page, String projectName, Path projectDir) {

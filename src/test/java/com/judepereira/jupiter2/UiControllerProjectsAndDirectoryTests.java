@@ -4,16 +4,19 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -33,7 +36,7 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(activeProject(model)).isNotNull();
         assertThat(activeProject(model).name()).isEqualTo("Alpha");
         assertThat(workspaces(model)).extracting(UiController.Workspace::name, UiController.Workspace::path)
-                .containsExactly(tuple("Workspace #1", projectPath.toAbsolutePath().normalize().toString()));
+                .containsExactly(tuple("Default Workspace", projectPath.toAbsolutePath().normalize().toString()));
         assertThat(activeWorkspace(model)).isNotNull();
         assertThat(activeWorkspace(model).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
         assertThat(sessions(model)).extracting(UiController.Session::name)
@@ -81,7 +84,7 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(activeProject(collapse)).isNotNull();
         assertThat(activeProject(collapse).name()).isEqualTo("Alpha");
         assertThat(workspaces(collapse)).extracting(UiController.Workspace::name)
-                .containsExactly("Workspace #1");
+                .containsExactly("Default Workspace");
         assertThat(activeWorkspace(collapse)).isNull();
         assertThat(sessions(collapse)).isEmpty();
         assertThat(activeSession(collapse)).isNull();
@@ -220,6 +223,86 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
+    public void cleanNonDefaultWorkspaceWithoutAnUpstreamClosesWithoutAConfirmationModal(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+        UiController controller = newController();
+
+        ConcurrentModel addProject = new ConcurrentModel();
+        controller.addProject("Alpha", projectPath.toString(), addProject);
+
+        ConcurrentModel addWorkspace = new ConcurrentModel();
+        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        controller.addWorkspace(branchName, "create", addWorkspace);
+        UiController.Workspace featureWorkspace = activeWorkspace(addWorkspace);
+
+        ConcurrentModel close = new ConcurrentModel();
+        String view = controller.closeWorkspace(featureWorkspace.id(), close);
+
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(workspaces(close)).extracting(UiController.Workspace::path)
+                .containsExactly(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(activeWorkspace(close).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(Files.exists(Path.of(featureWorkspace.path()))).isFalse();
+    }
+
+    @Test
+    public void dirtyNonDefaultWorkspaceCloseReturnsTheConfirmationModal(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+        UiController controller = newController();
+
+        ConcurrentModel addProject = new ConcurrentModel();
+        controller.addProject("Alpha", projectPath.toString(), addProject);
+
+        ConcurrentModel addWorkspace = new ConcurrentModel();
+        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        controller.addWorkspace(branchName, "create", addWorkspace);
+        UiController.Workspace featureWorkspace = activeWorkspace(addWorkspace);
+        Path featurePath = Path.of(featureWorkspace.path());
+        Files.writeString(featurePath.resolve("dirty.txt"), "dirty\n");
+
+        ConcurrentModel close = new ConcurrentModel();
+        String view = controller.closeWorkspace(featureWorkspace.id(), close);
+
+        assertThat(view).isEqualTo("fragments/projects :: workspaceCloseModal");
+        assertThat(close.getAttribute("workspaceCloseStatus")).isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
+        assertThat(((AppStateService.WorkspaceCloseInspection) close.getAttribute("workspaceCloseStatus")).uncommittedChanges()).isTrue();
+    }
+
+    @Test
+    public void confirmedDirtyWorkspaceCloseForceRemovesTheWorktreeAndReturnsShellUpdates(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+        UiController controller = newController();
+
+        ConcurrentModel addProject = new ConcurrentModel();
+        controller.addProject("Alpha", projectPath.toString(), addProject);
+
+        ConcurrentModel addWorkspace = new ConcurrentModel();
+        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        controller.addWorkspace(branchName, "create", addWorkspace);
+        UiController.Workspace featureWorkspace = activeWorkspace(addWorkspace);
+        Path featurePath = Path.of(featureWorkspace.path());
+        Files.writeString(featurePath.resolve("dirty.txt"), "dirty\n");
+
+        ConcurrentModel confirm = new ConcurrentModel();
+        String view = controller.confirmWorkspaceClose(featureWorkspace.id(), confirm);
+
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(Files.exists(featurePath)).isFalse();
+        assertThat(workspaces(confirm)).extracting(UiController.Workspace::path)
+                .containsExactly(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(activeWorkspace(confirm).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(sessions(confirm)).extracting(UiController.Session::name).containsExactly("Session #1");
+        assertThat(activeSession(confirm).name()).isEqualTo("Session #1");
+    }
+
+    @Test
+    public void newSessionButtonEndpointReturnsTheButtonFragment() {
+        UiController controller = newController();
+
+        assertThat(controller.newSessionButton()).isEqualTo("fragments/projects :: newSessionButton");
+    }
+
+    @Test
     public void chatMessagesStayScopedToTheActiveProjectAndSession(@TempDir Path firstProject,
                                                                  @TempDir Path secondProject) {
         RecordingHarness harness = new RecordingHarness();
@@ -275,6 +358,28 @@ public class UiControllerProjectsAndDirectoryTests {
         com.judepereira.jupiter2.agent.config.AgentProperties props = new com.judepereira.jupiter2.agent.config.AgentProperties();
         props.setWorkspaceRoot(".");
         return props;
+    }
+
+    private static void initGitRepo(Path projectPath) throws IOException, InterruptedException {
+        Files.createDirectories(projectPath);
+        runGit(projectPath, "git", "init");
+        runGit(projectPath, "git", "config", "user.name", "Jupiter Tests");
+        runGit(projectPath, "git", "config", "user.email", "tests@example.com");
+        Files.writeString(projectPath.resolve("README.md"), "hello\n");
+        runGit(projectPath, "git", "add", "README.md");
+        runGit(projectPath, "git", "commit", "-m", "init");
+    }
+
+    private static void runGit(Path workingDirectory, String... command) throws IOException, InterruptedException {
+        Process process = new ProcessBuilder(command)
+                .directory(workingDirectory.toFile())
+                .redirectErrorStream(true)
+                .start();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            String output = new String(process.getInputStream().readAllBytes());
+            throw new IllegalStateException("git command failed: " + String.join(" ", command) + "\n" + output);
+        }
     }
 
     @SuppressWarnings("unchecked")

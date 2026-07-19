@@ -3,6 +3,7 @@ package com.judepereira.jupiter2;
 import com.judepereira.jupiter2.ui.UiController.Project;
 import com.judepereira.jupiter2.ui.UiController.Session;
 import com.judepereira.jupiter2.ui.UiController.Workspace;
+import com.judepereira.jupiter2.persistence.AppStateService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -49,10 +50,47 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
 
         String html = engine.process("fragments/projects", context);
 
         assertThat(html).contains("No projects", "No project selected", "Add project");
+    }
+
+    @Test
+    public void indexPageIncludesPersistentSystemBalloonRootContainer() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("projects", List.of());
+        context.setVariable("activeProject", null);
+        context.setVariable("workspaces", List.of());
+        context.setVariable("activeWorkspace", null);
+        context.setVariable("sessions", List.of());
+        context.setVariable("activeSession", null);
+        context.setVariable("selectedName", "");
+        context.setVariable("selectedPath", "");
+        context.setVariable("currentPath", "");
+        context.setVariable("directoryEntries", List.of());
+        context.setVariable("includeChatContainer", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("selectedFile", null);
+        context.setVariable("branchName", "");
+        context.setVariable("branchMode", "create");
+        context.setVariable("createBranch", true);
+        context.setVariable("modalOob", false);
+        context.setVariable("bottomPanelMode", "none");
+        context.setVariable("bottomPanelOpen", false);
+        context.setVariable("terminalTabs", List.of());
+        context.setVariable("activeTerminal", null);
+        context.setVariable("terminalOob", false);
+
+        String html = engine.process("index", context);
+
+        assertThat(html).contains("id=\"system-balloon-root\"");
     }
 
     @Test
@@ -76,6 +114,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
 
         String html = engine.process("fragments/projects", context);
         String nameInputHtml = inputTag(html, "project-name-input");
@@ -98,9 +137,9 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo")));
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo"));
         context.setVariable("workspaces", List.of(
-                new Workspace(1L, "Workspace #1", "/repo"),
+                new Workspace(1L, "Default Workspace", "/repo"),
                 new Workspace(2L, "feature-workspace", "/repo/.trees/feature-workspace")));
-        context.setVariable("activeWorkspace", new Workspace(1L, "Workspace #1", "/repo"));
+        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo"));
         context.setVariable("sessions", List.of(new Session(1L, "Session #1"), new Session(2L, "Session #2")));
         context.setVariable("activeSession", new Session(2L, "Session #2"));
         context.setVariable("selectedName", "");
@@ -112,12 +151,16 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
 
         String html = engine.process("fragments/projects", context);
 
-        assertThat(html).contains("New workspace", "New session");
+        assertThat(html).contains("New Workspace", "New session");
         assertThat(html).contains("hx-get=\"/ui/workspaces/new\"", "hx-get=\"/ui/sessions/new\"");
+        assertThat(html).contains("hx-target=\"this\"", "hx-swap=\"outerHTML\"");
         assertThat(html).contains("hx-post=\"/ui/workspaces/1/collapse\"", "hx-post=\"/ui/workspaces/2/activate\"");
+        assertThat(html).contains("hx-post=\"/ui/workspaces/2/close\"", "hx-post=\"/ui/sessions/1/close\"", "hx-post=\"/ui/sessions/2/close\"");
+        assertThat(html).doesNotContain("hx-post=\"/ui/workspaces/1/close\"");
         assertThat(html).contains("bi-chevron-down workspace-disclosure", "bi-chevron-right workspace-disclosure");
         assertThat(html).contains("Session #1", "Session #2");
     }
@@ -143,9 +186,10 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
         String html = engine.process("fragments/projects", context);
 
-        assertThat(html).contains("<form", "class=\"session-create-form\"", "hx-post=\"/ui/sessions/add\"");
+        assertThat(html).contains("<form", "class=\"session-create-form\"", "data-session-create-form", "hx-post=\"/ui/sessions/add\"");
         assertThat(html).contains("id=\"session-name-input\"", "name=\"name\"", "placeholder=\"Session name\"");
     }
 
@@ -170,6 +214,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
         context.setVariable("branchName", "feature-workspace");
         context.setVariable("branchMode", "create");
         context.setVariable("createBranch", true);
@@ -223,6 +268,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
         context.setVariable("bottomPanelMode", "terminal");
         context.setVariable("bottomPanelOpen", true);
         context.setVariable("terminalTabs", List.of());
@@ -264,6 +310,8 @@ public class ProjectsTemplateRenderTest {
         request.setContextPath("");
         request.setServletPath("");
         request.setRequestURI("/");
-        return new WebContext(application.buildExchange(request, new MockHttpServletResponse()), Locale.US);
+        WebContext context = new WebContext(application.buildExchange(request, new MockHttpServletResponse()), Locale.US);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
+        return context;
     }
 }

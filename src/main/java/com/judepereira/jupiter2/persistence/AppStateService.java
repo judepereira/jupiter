@@ -63,7 +63,7 @@ public class AppStateService {
         }
 
         long projectId = repository.insertProject(name, normalizedPath, repository.nextProjectDisplayOrder(), now);
-        long workspaceId = repository.insertWorkspace(projectId, "Workspace #1", normalizedPath, 1L, now);
+        long workspaceId = repository.insertWorkspace(projectId, "Default Workspace", normalizedPath, 1L, now);
         long sessionId = createSessionInternal(workspaceId, now);
         repository.updateAppState(projectId, workspaceId, sessionId);
         return toProjectView(repository.findProject(projectId));
@@ -122,12 +122,13 @@ public class AppStateService {
         Instant now = Instant.now();
         var workspace = repository.findWorkspace(workspaceId);
         var session = repository.findSessionToActivate(workspaceId);
-        if (session == null) {
-            throw new IllegalStateException("Missing session for workspace " + workspaceId);
-        }
         repository.updateProjectLastOpened(workspace.projectId(), now);
-        repository.updateSessionLastOpened(session.id(), now);
         repository.updateWorkspaceLastOpened(workspaceId, now);
+        if (session == null) {
+            repository.updateAppState(workspace.projectId(), workspaceId, null);
+            return;
+        }
+        repository.updateSessionLastOpened(session.id(), now);
         repository.updateAppState(workspace.projectId(), workspaceId, session.id());
     }
 
@@ -137,6 +138,95 @@ public class AppStateService {
         var workspace = repository.findWorkspace(workspaceId);
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateAppState(workspace.projectId(), null, null);
+    }
+
+    @Transactional
+    public void closeSession(long sessionId) {
+        Instant now = Instant.now();
+        var session = repository.findSession(sessionId);
+        var workspace = repository.findWorkspace(session.workspaceId());
+        var appState = repository.loadAppState();
+
+        if (appState.activeSessionId() != null && appState.activeSessionId() == sessionId) {
+            var next = repository.findNextSessionAfter(workspace.id(), session.position());
+            if (next != null) {
+                repository.updateProjectLastOpened(workspace.projectId(), now);
+                repository.updateWorkspaceLastOpened(workspace.id(), now);
+                repository.updateSessionLastOpened(next.id(), now);
+                repository.updateAppState(workspace.projectId(), workspace.id(), next.id());
+            } else {
+                var previous = repository.findPreviousSessionBefore(workspace.id(), session.position());
+                if (previous != null) {
+                    repository.updateProjectLastOpened(workspace.projectId(), now);
+                    repository.updateWorkspaceLastOpened(workspace.id(), now);
+                    repository.updateSessionLastOpened(previous.id(), now);
+                    repository.updateAppState(workspace.projectId(), workspace.id(), previous.id());
+                } else {
+                    repository.updateProjectLastOpened(workspace.projectId(), now);
+                    repository.updateWorkspaceLastOpened(workspace.id(), now);
+                    repository.updateAppState(workspace.projectId(), workspace.id(), null);
+                }
+            }
+        }
+
+        repository.deleteChangedFilesBySession(sessionId);
+        repository.deleteToolCallTracesBySession(sessionId);
+        repository.deleteConversationMessagesBySession(sessionId);
+        repository.deleteSession(sessionId);
+    }
+
+    @Transactional
+    public void closeWorkspace(long workspaceId) {
+        Instant now = Instant.now();
+        var workspace = repository.findWorkspace(workspaceId);
+        var project = repository.findProject(workspace.projectId());
+        ensureWorkspaceCanBeClosed(workspace, project);
+        var appState = repository.loadAppState();
+
+        if (appState.activeWorkspaceId() != null && appState.activeWorkspaceId() == workspaceId) {
+            var next = repository.findNextWorkspaceAfter(project.id(), workspace.position());
+            if (next != null) {
+                activateWorkspace(next.id());
+            } else {
+                var previous = repository.findPreviousWorkspaceBefore(project.id(), workspace.position());
+                if (previous != null) {
+                    activateWorkspace(previous.id());
+                } else {
+                    repository.updateProjectLastOpened(project.id(), now);
+                    repository.updateAppState(project.id(), null, null);
+                }
+            }
+        }
+
+        for (var session : repository.listSessionsByWorkspace(workspaceId)) {
+            repository.deleteChangedFilesBySession(session.id());
+            repository.deleteToolCallTracesBySession(session.id());
+            repository.deleteConversationMessagesBySession(session.id());
+            repository.deleteSession(session.id());
+        }
+        repository.deleteWorkspace(workspaceId);
+    }
+
+    public WorkspaceCloseInspection inspectWorkspaceClose(long workspaceId) {
+        var workspace = repository.findWorkspace(workspaceId);
+        var project = repository.findProject(workspace.projectId());
+        ensureWorkspaceCanBeClosed(workspace, project);
+
+        GitCloseStatus gitStatus = inspectGitCloseStatus(Path.of(workspace.normalizedPath()));
+        return new WorkspaceCloseInspection(workspace.id(), workspace.name(), workspace.normalizedPath(), project.normalizedPath(),
+                gitStatus.uncommittedChanges(), gitStatus.unpushedCommits(), gitStatus.reasons());
+    }
+
+    public void removeWorkspaceWorktree(long workspaceId, boolean force) {
+        var workspace = repository.findWorkspace(workspaceId);
+        var project = repository.findProject(workspace.projectId());
+        ensureWorkspaceCanBeClosed(workspace, project);
+        Path projectRoot = Path.of(project.normalizedPath());
+        Path workspacePath = Path.of(workspace.normalizedPath());
+        List<String> command = force
+                ? List.of("git", "worktree", "remove", "--force", workspacePath.toString())
+                : List.of("git", "worktree", "remove", workspacePath.toString());
+        runGitCommand(projectRoot, command);
     }
 
     @Transactional
@@ -370,11 +460,12 @@ public class AppStateService {
             throw new IllegalStateException("Missing workspace for project " + projectId);
         }
         var session = repository.findSessionToActivate(workspace.id());
-        if (session == null) {
-            throw new IllegalStateException("Missing session for workspace " + workspace.id());
-        }
         repository.updateProjectLastOpened(projectId, now);
         repository.updateWorkspaceLastOpened(workspace.id(), now);
+        if (session == null) {
+            repository.updateAppState(projectId, workspace.id(), null);
+            return;
+        }
         repository.updateSessionLastOpened(session.id(), now);
         repository.updateAppState(projectId, workspace.id(), session.id());
     }
@@ -401,6 +492,8 @@ public class AppStateService {
     }
 
     private void runGitWorktreeAdd(Path projectRoot, Path worktreePath, String branchName, boolean createBranch) {
+        String stdout = "";
+        String stderr = "";
         try {
             Files.createDirectories(worktreePath.getParent());
             List<String> command = createBranch
@@ -409,17 +502,108 @@ public class AppStateService {
             Process process = new ProcessBuilder(command)
                     .directory(projectRoot.toFile())
                     .start();
+            stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr);
+            }
+        } catch (Exception e) {
+            if (e instanceof GitWorktreeException gitWorktreeException) {
+                throw gitWorktreeException;
+            }
+            throw new GitWorktreeException("git worktree add failed", stdout, stderr, e);
+        }
+    }
+
+    private GitCloseStatus inspectGitCloseStatus(Path workspacePath) {
+        String status = runGitCommand(workspacePath, List.of("git", "status", "--porcelain")).stdout().trim();
+        boolean uncommittedChanges = !status.isBlank();
+
+        boolean unpushedCommits = false;
+        GitCommandResult head = runGitCommandAllowingMissingHead(workspacePath, List.of("git", "rev-parse", "--verify", "--quiet", "HEAD"));
+        if (head.exists()) {
+            GitCommandResult upstream = runGitCommandAllowingMissingUpstream(workspacePath,
+                    List.of("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"));
+            if (upstream.exists()) {
+                String count = runGitCommand(workspacePath, List.of("git", "rev-list", "--count", upstream.stdout().trim() + "..HEAD")).stdout().trim();
+                unpushedCommits = !count.isBlank() && Long.parseLong(count) > 0;
+            }
+        }
+
+        List<String> reasons = new ArrayList<>();
+        if (uncommittedChanges) {
+            reasons.add("uncommitted changes");
+        }
+        if (unpushedCommits) {
+            reasons.add("unpushed commits");
+        }
+        return new GitCloseStatus(uncommittedChanges, unpushedCommits, reasons);
+    }
+
+    private GitCommandResult runGitCommand(Path cwd, List<String> command) {
+        try {
+            Process process = new ProcessBuilder(command)
+                    .directory(cwd.toFile())
+                    .start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new IllegalStateException("git worktree add failed with exit code " + exitCode + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr);
+                throw new IllegalStateException("git command failed with exit code " + exitCode + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr);
             }
+            return new GitCommandResult(stdout, stderr, false);
         } catch (Exception e) {
             if (e instanceof IllegalStateException) {
                 throw (IllegalStateException) e;
             }
-            throw new IllegalStateException("git worktree add failed", e);
+            throw new IllegalStateException("git command failed", e);
+        }
+    }
+
+    private GitCommandResult runGitCommandAllowingMissingUpstream(Path cwd, List<String> command) {
+        try {
+            Process process = new ProcessBuilder(command)
+                    .directory(cwd.toFile())
+                    .start();
+            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                return new GitCommandResult(stdout, stderr, false);
+            }
+            if (stderr.contains("no upstream")) {
+                return new GitCommandResult(stdout, stderr, true);
+            }
+            throw new IllegalStateException("git command failed with exit code " + exitCode + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr);
+        } catch (Exception e) {
+            if (e instanceof IllegalStateException) {
+                throw (IllegalStateException) e;
+            }
+            throw new IllegalStateException("git command failed", e);
+        }
+    }
+
+    private GitCommandResult runGitCommandAllowingMissingHead(Path cwd, List<String> command) {
+        try {
+            Process process = new ProcessBuilder(command)
+                    .directory(cwd.toFile())
+                    .start();
+            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exitCode = process.waitFor();
+            return new GitCommandResult(stdout, stderr, exitCode != 0);
+        } catch (Exception e) {
+            if (e instanceof IllegalStateException) {
+                throw (IllegalStateException) e;
+            }
+            throw new IllegalStateException("git command failed", e);
+        }
+    }
+
+    private void ensureWorkspaceCanBeClosed(AppStateRepository.WorkspaceRow workspace, AppStateRepository.ProjectRow project) {
+        if (workspace.normalizedPath().equals(project.normalizedPath())) {
+            throw new IllegalStateException("Default workspace cannot be deleted: " + workspace.id());
         }
     }
 
@@ -539,4 +723,19 @@ public class AppStateService {
     }
 
     private record ToolCallPayload(String toolCallId, String toolName, Map<String, Object> arguments) {}
+
+    public record WorkspaceCloseInspection(long workspaceId, String workspaceName, String workspacePath, String projectPath,
+                                           boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {}
+
+    private record GitCloseStatus(boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {}
+
+    private record GitCommandResult(String stdout, String stderr, boolean missingRef) {
+        boolean exists() {
+            return !missingRef;
+        }
+
+        boolean missingUpstream() {
+            return missingRef;
+        }
+    }
 }
