@@ -199,19 +199,6 @@ input:focus, textarea:focus {
     background: rgba(255, 255, 255, 0.06);
 }
 
-.user-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(180deg, #244d88, #193761);
-    color: #ffffff;
-    font-weight: 800;
-    letter-spacing: 0;
-}
-
 /* Shell grid: left rail + top split (chat/review) + bottom terminal panel. */
 #shell.shell-root {
     display: grid;
@@ -610,12 +597,17 @@ input:focus, textarea:focus {
     position: relative;
 }
 
+.workspace-row {
+    min-height: 29px;
+}
+
 .workspace-row,
 .session-row {
     display: flex;
     align-items: stretch;
     min-width: 0;
     width: 100%;
+    position: relative;
 }
 
 .workspace-group.active {
@@ -641,7 +633,7 @@ input:focus, textarea:focus {
 .workspace-item {
     gap: 8px;
     min-height: 24px;
-    padding: 0 4px 0 0;
+    padding: 0 38px 0 0;
 }
 
 .workspace-item.active,
@@ -674,10 +666,10 @@ input:focus, textarea:focus {
 .session-item {
     gap: 8px;
     min-height: 29px;
-    padding: 0 9px;
+    padding: 0 38px 0 9px;
     background: transparent;
     border-left: 1px solid #d6deeb;
-    border-radius: 0 5px 5px 0;
+    border-radius: 6px;
     position: relative;
 }
 
@@ -697,11 +689,13 @@ input:focus, textarea:focus {
 
 .workspace-close-button,
 .session-close-button {
-    flex: 0 0 auto;
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
     width: 30px;
     min-width: 30px;
     height: 30px;
-    margin-left: 6px;
     border: 1px solid #c9d6ea;
     border-radius: 6px;
     background: #f5f9ff;
@@ -712,6 +706,7 @@ input:focus, textarea:focus {
     justify-content: center;
     padding: 0;
     box-sizing: border-box;
+    z-index: 1;
     opacity: 0;
     pointer-events: none;
 }
@@ -760,9 +755,14 @@ input:focus, textarea:focus {
     margin-left: auto;
 }
 
+.workspace-row:hover .workspace-item,
+.workspace-row:focus-within .workspace-item,
+.session-row:hover .session-item,
+.session-row:focus-within .session-item,
 .session-item:hover,
 .workspace-item:hover {
     background: #eef4fc;
+    border-radius: 6px;
 }
 
 .workspace-session-groups > .workspace-create-button {
