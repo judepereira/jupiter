@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 public class AppStateServicePersistenceTests {
@@ -75,6 +76,87 @@ public class AppStateServicePersistenceTests {
                 .containsExactly(
                         tuple(Message.Role.USER, "hello from session two"),
                         tuple(Message.Role.ASSISTANT, "reply two"));
+    }
+
+    @Test
+    public void closingOneOfMultipleSessionsDeletesItAndFallsBackToAnotherSession(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long workspaceId = initial.activeWorkspace().id();
+        long firstSessionId = initial.activeSession().id();
+
+        service.createSession(workspaceId, "Feature work");
+        AppStateView afterCreate = service.loadViewData();
+        long secondSessionId = afterCreate.activeSession().id();
+
+        service.closeSession(secondSessionId);
+
+        AppStateView view = service.loadViewData();
+        assertThat(view.activeProject()).isNotNull();
+        assertThat(view.activeWorkspace()).isNotNull();
+        assertThat(view.activeWorkspace().id()).isEqualTo(workspaceId);
+        assertThat(view.sessions()).extracting(SessionView::id).containsExactly(firstSessionId);
+        assertThat(view.activeSession()).isNotNull();
+        assertThat(view.activeSession().id()).isEqualTo(firstSessionId);
+    }
+
+    @Test
+    public void closingTheOnlySessionLeavesTheActiveProjectAndWorkspaceButClearsTheActiveSession(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+
+        service.closeSession(initial.activeSession().id());
+
+        AppStateView view = service.loadViewData();
+        assertThat(view.activeProject()).isNotNull();
+        assertThat(view.activeWorkspace()).isNotNull();
+        assertThat(view.sessions()).isEmpty();
+        assertThat(view.activeSession()).isNull();
+    }
+
+    @Test
+    public void closingANonDefaultWorkspaceDeletesItsRowsAndFallsBackToAnotherWorkspace(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long defaultWorkspaceId = initial.activeWorkspace().id();
+        long defaultSessionId = initial.activeSession().id();
+        long projectId = initial.activeProject().id();
+
+        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        WorkspaceView featureWorkspace = service.createWorkspace(projectId, branchName, true);
+        AppStateView afterCreate = service.loadViewData();
+        long featureSessionId = afterCreate.activeSession().id();
+
+        service.closeWorkspace(featureWorkspace.id());
+
+        AppStateView view = service.loadViewData();
+        assertThat(view.activeWorkspace()).isNotNull();
+        assertThat(view.activeWorkspace().id()).isEqualTo(defaultWorkspaceId);
+        assertThat(view.activeSession()).isNotNull();
+        assertThat(view.activeSession().id()).isEqualTo(defaultSessionId);
+        assertThat(view.workspaces()).extracting(WorkspaceView::id).containsExactly(defaultWorkspaceId);
+        assertThat(view.sessions()).extracting(SessionView::id).containsExactly(defaultSessionId);
+
+        assertThatThrownBy(() -> service.closeSession(featureSessionId)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    public void closingTheDefaultWorkspaceIsRejected(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+
+        assertThatThrownBy(() -> service.closeWorkspace(initial.activeWorkspace().id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Default workspace cannot be deleted");
     }
 
     @Test

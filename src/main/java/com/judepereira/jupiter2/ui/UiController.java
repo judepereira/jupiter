@@ -494,9 +494,50 @@ public class UiController {
         return "fragments/projects :: shellUpdates";
     }
 
+    @PostMapping("/ui/workspaces/{workspaceId}/close")
+    public String closeWorkspace(@PathVariable long workspaceId, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        AppStateService.WorkspaceCloseInspection inspection = appStateService.inspectWorkspaceClose(workspaceId);
+        if (inspection.uncommittedChanges() || inspection.unpushedCommits()) {
+            populateProjectModel(model, view);
+            populateSessionModel(model, view);
+            populateWorkspaceCloseModel(model, inspection);
+            return "fragments/projects :: workspaceCloseModal";
+        }
+
+        appStateService.removeWorkspaceWorktree(workspaceId, false);
+        appStateService.closeWorkspace(workspaceId);
+        view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/workspaces/{workspaceId}/close/confirm")
+    public String confirmWorkspaceClose(@PathVariable long workspaceId, Model model) {
+        appStateService.removeWorkspaceWorktree(workspaceId, true);
+        appStateService.closeWorkspace(workspaceId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
+    }
+
     @PostMapping("/ui/sessions/{sessionId}/activate")
     public String activateSession(@PathVariable long sessionId, Model model) {
         appStateService.activateSession(sessionId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/sessions/{sessionId}/close")
+    public String closeSession(@PathVariable long sessionId, Model model) {
+        appStateService.closeSession(sessionId);
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
         populateSessionModel(model, view);
@@ -570,6 +611,7 @@ public class UiController {
         model.addAttribute("projects", view.projects().stream().map(this::toProject).toList());
         model.addAttribute("activeProject", toProject(view.activeProject()));
         model.addAttribute("workspaces", view.workspaces().stream().map(this::toWorkspace).toList());
+        model.addAttribute("workspaceActions", view.workspaces().stream().map(workspace -> toWorkspaceAction(view.activeProject(), workspace)).toList());
         model.addAttribute("activeWorkspace", toWorkspace(view.activeWorkspace()));
         model.addAttribute("sessions", view.sessions().stream().map(this::toSession).toList());
         model.addAttribute("activeSession", toSession(view.activeSession()));
@@ -582,6 +624,16 @@ public class UiController {
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
+    }
+
+    private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {
+        model.addAttribute("workspace", new Workspace(inspection.workspaceId(), inspection.workspaceName(), inspection.workspacePath()));
+        model.addAttribute("workspaceId", inspection.workspaceId());
+        model.addAttribute("workspaceName", inspection.workspaceName());
+        model.addAttribute("workspacePath", inspection.workspacePath());
+        model.addAttribute("workspaceCloseStatus", inspection);
+        model.addAttribute("workspaceCloseReasons", inspection.reasons());
+        model.addAttribute("modalTarget", "#modal-root");
     }
 
     private AppStateView currentViewWithSessionIfNeeded(boolean createIfMissing) {
@@ -706,6 +758,11 @@ public class UiController {
         return view == null ? null : new Workspace(view.id(), view.name(), view.path());
     }
 
+    private WorkspaceAction toWorkspaceAction(ProjectView activeProject, WorkspaceView workspace) {
+        boolean defaultWorkspace = activeProject != null && workspace.path().equals(activeProject.path());
+        return new WorkspaceAction(workspace.id(), defaultWorkspace, !defaultWorkspace);
+    }
+
     private Session toSession(SessionView view) {
         return view == null ? null : new Session(view.id(), view.name());
     }
@@ -765,6 +822,8 @@ public class UiController {
     public record Project(long id, String name, String path) {}
 
     public record Workspace(long id, String name, String path) {}
+
+    public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
 
     public record Session(long id, String name) {}
 

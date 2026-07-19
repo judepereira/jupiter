@@ -610,6 +610,14 @@ input:focus, textarea:focus {
     position: relative;
 }
 
+.workspace-row,
+.session-row {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    width: 100%;
+}
+
 .workspace-group.active {
     border-color: transparent;
     box-shadow: none;
@@ -617,7 +625,6 @@ input:focus, textarea:focus {
 
 .workspace-item,
 .session-item {
-    width: 100%;
     text-align: left;
     border: 1px solid transparent;
     background: transparent;
@@ -627,6 +634,8 @@ input:focus, textarea:focus {
     display: flex;
     align-items: center;
     min-width: 0;
+    flex: 1 1 auto;
+    width: auto;
 }
 
 .workspace-item {
@@ -686,6 +695,30 @@ input:focus, textarea:focus {
     background: #eaf1fb;
 }
 
+.workspace-close-button,
+.session-close-button {
+    flex: 0 0 auto;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    margin-left: 6px;
+    border: 1px solid #c9d6ea;
+    border-radius: 6px;
+    background: #f5f9ff;
+    color: #44638e;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.workspace-close-button:hover,
+.session-close-button:hover {
+    background: #eaf1fb;
+}
+
 .workspace-disclosure,
 .workspace-menu {
     color: #263c64;
@@ -703,6 +736,7 @@ input:focus, textarea:focus {
 
 .workspace-label,
 .session-label {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -710,7 +744,6 @@ input:focus, textarea:focus {
 }
 
 .workspace-label {
-    flex: 1 1 auto;
 }
 
 .workspace-menu {
@@ -1440,6 +1473,52 @@ input:focus, textarea:focus {
     border-color: var(--accent);
     border-radius: 8px;
     border-style: solid;
+}
+
+.workspace-close-modal-card {
+    width: min(560px, 100%);
+}
+
+.workspace-close-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #0b1220;
+    margin-bottom: 12px;
+}
+
+.workspace-close-warning {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #7c2d12;
+}
+
+.workspace-close-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.workspace-close-status .danger {
+    color: #b45309;
+}
+
+.workspace-close-reasons {
+    margin: 0;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.workspace-close-submit {
+    background: #c2410c;
+    border-color: #c2410c;
 }
 
 /* Accessibility helpers */

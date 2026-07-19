@@ -66,25 +66,43 @@
 
         <div th:if="${activeProjectView != null}" class="workspace-session-groups">
             <div th:each="workspace : ${workspaceList}" class="workspace-group" th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''">
-                <button type="button"
-                        class="workspace-item"
-                        th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''"
-                        th:attr="hx-post=${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? @{/ui/workspaces/{id}/collapse(id=${workspace.id})} : @{/ui/workspaces/{id}/activate(id=${workspace.id})}, hx-swap='none'">
-                    <i th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-down workspace-disclosure" aria-hidden="true"></i>
-                    <i th:unless="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-right workspace-disclosure" aria-hidden="true"></i>
-                    <i class="bi bi-folder workspace-icon" aria-hidden="true"></i>
-                    <span class="workspace-label" th:text="${workspace.name}"></span>
-                </button>
+                <div class="workspace-row">
+                    <button type="button"
+                            class="workspace-item"
+                            th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''"
+                            th:attr="hx-post=${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? @{/ui/workspaces/{id}/collapse(id=${workspace.id})} : @{/ui/workspaces/{id}/activate(id=${workspace.id})}, hx-swap='none'">
+                        <i th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-down workspace-disclosure" aria-hidden="true"></i>
+                        <i th:unless="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-right workspace-disclosure" aria-hidden="true"></i>
+                        <i class="bi bi-folder workspace-icon" aria-hidden="true"></i>
+                        <span class="workspace-label" th:text="${workspace.name}"></span>
+                    </button>
+
+                    <button th:if="${activeProjectView != null and workspace.path != activeProjectView.path}"
+                            type="button"
+                            class="workspace-close-button"
+                            aria-label="Close workspace"
+                            th:attr="hx-post=@{/ui/workspaces/{id}/close(id=${workspace.id})}, hx-target='#modal-root', hx-swap='innerHTML'">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    </button>
+                </div>
 
                 <div th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="session-list">
-                    <button th:each="s : ${sessionList}"
-                            type="button"
-                            class="session-item"
-                            th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''"
-                            th:attr="hx-post=@{/ui/sessions/{id}/activate(id=${s.id})}, hx-swap='none'">
-                        <i class="bi bi-chat-square session-icon" aria-hidden="true"></i>
-                        <span class="session-label" th:text="${s.name}"></span>
-                    </button>
+                    <div th:each="s : ${sessionList}" class="session-row" th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''">
+                        <button type="button"
+                                class="session-item"
+                                th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''"
+                                th:attr="hx-post=@{/ui/sessions/{id}/activate(id=${s.id})}, hx-swap='none'">
+                            <i class="bi bi-chat-square session-icon" aria-hidden="true"></i>
+                            <span class="session-label" th:text="${s.name}"></span>
+                        </button>
+
+                        <button type="button"
+                                class="session-close-button"
+                                aria-label="Close session"
+                                th:attr="hx-post=@{/ui/sessions/{id}/close(id=${s.id})}, hx-target='#shell', hx-swap='none'">
+                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        </button>
+                    </div>
 
                     <th:block th:replace="~{fragments/projects :: newSessionButton}"></th:block>
                 </div>
@@ -246,6 +264,45 @@
                     <button type="submit" class="project-form-submit">Create workspace</button>
                 </div>
             </form>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="workspaceCloseModal" th:with="status=${workspaceCloseStatus}">
+    <div id="workspace-close-modal" class="project-modal workspace-close-modal">
+        <div class="project-modal-backdrop"
+             hx-get="/ui/projects/modal/close"
+             hx-target="#modal-root"
+             hx-swap="innerHTML"></div>
+
+        <div class="project-modal-card workspace-close-modal-card" role="dialog" aria-modal="true" aria-labelledby="workspace-close-modal-title">
+            <div class="project-modal-header">
+                <h4 id="workspace-close-modal-title">Close Workspace</h4>
+                <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
+            </div>
+
+            <div class="workspace-close-summary">
+                <div><strong>Name:</strong> <span th:text="${workspaceName}"></span></div>
+                <div><strong>Path:</strong> <span th:text="${workspacePath}"></span></div>
+            </div>
+
+            <div class="workspace-close-warning">
+                <div class="workspace-close-status">
+                    <span th:classappend="${status.uncommittedChanges} ? ' danger' : ''">Uncommitted changes: <strong th:text="${status.uncommittedChanges} ? 'yes' : 'no'"></strong></span>
+                    <span th:classappend="${status.unpushedCommits} ? ' danger' : ''">Unpushed commits: <strong th:text="${status.unpushedCommits} ? 'yes' : 'no'"></strong></span>
+                </div>
+
+                <ul class="workspace-close-reasons">
+                    <li th:each="reason : ${workspaceCloseReasons}" th:text="${reason}"></li>
+                </ul>
+            </div>
+
+            <div class="project-form-actions">
+                <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                <button type="button"
+                        class="project-form-submit workspace-close-submit"
+                        th:attr="hx-post=@{/ui/workspaces/{id}/close/confirm(id=${workspaceId})}, hx-target='#shell', hx-swap='none'">Close workspace</button>
+            </div>
         </div>
     </div>
 </th:block>

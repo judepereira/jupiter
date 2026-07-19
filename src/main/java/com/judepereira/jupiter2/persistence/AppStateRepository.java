@@ -160,6 +160,16 @@ class AppStateRepository {
                 new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
     }
 
+    SessionRow findNextSessionAfter(long workspaceId, long position) {
+        return queryOne("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND position > :position ORDER BY position ASC LIMIT 1",
+                new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
+    }
+
+    SessionRow findPreviousSessionBefore(long workspaceId, long position) {
+        return queryOne("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND position < :position ORDER BY position DESC LIMIT 1",
+                new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
+    }
+
     SessionRow findSessionToActivate(long workspaceId) {
         return queryOne("""
                 SELECT * FROM sessions
@@ -261,6 +271,25 @@ class AppStateRepository {
         return value == null ? 1L : value;
     }
 
+    void deleteChangedFilesBySession(long sessionId) {
+        jdbc.update("DELETE FROM changed_files WHERE session_id = :sessionId",
+                new MapSqlParameterSource("sessionId", sessionId));
+    }
+
+    void deleteToolCallTracesBySession(long sessionId) {
+        jdbc.update("DELETE FROM tool_call_traces WHERE session_id = :sessionId",
+                new MapSqlParameterSource("sessionId", sessionId));
+    }
+
+    void deleteConversationMessagesBySession(long sessionId) {
+        jdbc.update("DELETE FROM conversation_messages WHERE session_id = :sessionId",
+                new MapSqlParameterSource("sessionId", sessionId));
+    }
+
+    void deleteSession(long sessionId) {
+        jdbc.update("DELETE FROM sessions WHERE id = :sessionId", new MapSqlParameterSource("sessionId", sessionId));
+    }
+
     long insertToolCallTrace(long sessionId, long assistantMessageId, long sequence, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant now) {
         return insertAndReturnId("""
                 INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_name, success, args_json, text_summary, machine_summary_json, created_at)
@@ -308,6 +337,20 @@ class AppStateRepository {
     List<ChangedFileRow> listChangedFilesBySession(long sessionId) {
         return jdbc.query("SELECT * FROM changed_files WHERE session_id = :sessionId ORDER BY position DESC",
                 new MapSqlParameterSource("sessionId", sessionId), this::mapChangedFile);
+    }
+
+    WorkspaceRow findNextWorkspaceAfter(long projectId, long position) {
+        return queryOne("SELECT * FROM workspaces WHERE project_id = :projectId AND position > :position ORDER BY position ASC LIMIT 1",
+                new MapSqlParameterSource().addValue("projectId", projectId).addValue("position", position), this::mapWorkspace).orElse(null);
+    }
+
+    WorkspaceRow findPreviousWorkspaceBefore(long projectId, long position) {
+        return queryOne("SELECT * FROM workspaces WHERE project_id = :projectId AND position < :position ORDER BY position DESC LIMIT 1",
+                new MapSqlParameterSource().addValue("projectId", projectId).addValue("position", position), this::mapWorkspace).orElse(null);
+    }
+
+    void deleteWorkspace(long workspaceId) {
+        jdbc.update("DELETE FROM workspaces WHERE id = :workspaceId", new MapSqlParameterSource("workspaceId", workspaceId));
     }
 
     ChangedFileRow findChangedFile(long changedFileId) {
