@@ -14,12 +14,12 @@
     --topbar-bg: #061733;
     --topbar-border: rgba(135, 163, 205, 0.22);
     --shell-bg: #f7faff;
-    --terminal-shell-bg: #fdf6e3;
-    --terminal-shell-fg: #657b83;
-    --terminal-shell-border: #eee8d5;
-    --terminal-control-bg: #eee8d5;
-    --terminal-control-border: #d8d2bc;
-    --terminal-control-active: #e7e0c3;
+    --terminal-shell-bg: #ffffff;
+    --terminal-shell-fg: #334155;
+    --terminal-shell-border: #d9e2ef;
+    --terminal-control-bg: #f8fafc;
+    --terminal-control-border: #cbd5e1;
+    --terminal-control-active: #e8eef8;
 }
 
 body {
@@ -765,7 +765,7 @@ input:focus, textarea:focus {
 
 .terminal-tab-group.active {
     background: var(--terminal-control-active);
-    border-color: #c8c1a8;
+    border-color: #9fb3d4;
 }
 
 .terminal-tab {
@@ -806,12 +806,12 @@ input:focus, textarea:focus {
 }
 
 .terminal-tab-close:hover {
-    background: rgba(101, 123, 131, 0.08);
+    background: rgba(51, 65, 85, 0.08);
 }
 
 .terminal-tab-group.active .terminal-tab,
 .terminal-tab-group.active .terminal-tab-close {
-    color: #586e75;
+    color: #334155;
 }
 
 .terminal-tab-group .terminal-tab {

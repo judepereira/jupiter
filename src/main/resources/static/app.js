@@ -921,27 +921,27 @@
     (function () {
         const mounts = new Map();
         let syncQueued = false;
-        const solarizedLightTheme = {
-            background: '#fdf6e3',
-            foreground: '#657b83',
-            cursor: '#586e75',
-            selectionBackground: '#eee8d5',
-            black: '#073642',
-            red: '#dc322f',
-            green: '#859900',
-            yellow: '#b58900',
-            blue: '#268bd2',
-            magenta: '#d33682',
-            cyan: '#2aa198',
-            white: '#eee8d5',
-            brightBlack: '#002b36',
-            brightRed: '#cb4b16',
-            brightGreen: '#586e75',
-            brightYellow: '#657b83',
-            brightBlue: '#839496',
-            brightMagenta: '#6c71c4',
-            brightCyan: '#93a1a1',
-            brightWhite: '#fdf6e3'
+        const lightTerminalTheme = {
+            background: '#ffffff',
+            foreground: '#1f2937',
+            cursor: '#334155',
+            selectionBackground: '#dbeafe',
+            black: '#111827',
+            red: '#dc2626',
+            green: '#16a34a',
+            yellow: '#ca8a04',
+            blue: '#2563eb',
+            magenta: '#7c3aed',
+            cyan: '#0891b2',
+            white: '#e5e7eb',
+            brightBlack: '#374151',
+            brightRed: '#ef4444',
+            brightGreen: '#22c55e',
+            brightYellow: '#eab308',
+            brightBlue: '#3b82f6',
+            brightMagenta: '#8b5cf6',
+            brightCyan: '#06b6d4',
+            brightWhite: '#f9fafb'
         };
 
         function toWebSocketUrl(rawUrl) {
@@ -1030,7 +1030,7 @@
                 convertEol: true,
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
                 fontSize: 13,
-                theme: solarizedLightTheme
+                theme: lightTerminalTheme
             });
             const fitAddon = new window.FitAddon.FitAddon();
             terminal.loadAddon(fitAddon);
