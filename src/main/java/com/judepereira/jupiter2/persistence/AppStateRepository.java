@@ -103,35 +103,47 @@ class AppStateRepository {
     }
 
     WorkspaceRow findWorkspace(long workspaceId) {
-        return queryRequired("SELECT w.*, p.normalized_path FROM workspaces w JOIN projects p ON p.id = w.project_id WHERE w.id = :id",
+        return queryRequired("SELECT * FROM workspaces WHERE id = :id",
                 new MapSqlParameterSource("id", workspaceId), this::mapWorkspace, "workspace " + workspaceId);
     }
 
     List<WorkspaceRow> listWorkspacesByProject(long projectId) {
-        return jdbc.query("SELECT w.*, p.normalized_path FROM workspaces w JOIN projects p ON p.id = w.project_id WHERE w.project_id = :projectId ORDER BY w.position ASC",
+        return jdbc.query("SELECT * FROM workspaces WHERE project_id = :projectId ORDER BY position ASC",
                 new MapSqlParameterSource("projectId", projectId), this::mapWorkspace);
     }
 
     WorkspaceRow findWorkspaceToActivate(long projectId) {
         return queryOne("""
-                SELECT w.*, p.normalized_path FROM workspaces w
-                JOIN projects p ON p.id = w.project_id
-                WHERE w.project_id = :projectId
-                ORDER BY CASE WHEN w.last_opened_at IS NULL THEN 1 ELSE 0 END, w.last_opened_at DESC, w.position ASC
+                SELECT * FROM workspaces
+                WHERE project_id = :projectId
+                ORDER BY CASE WHEN last_opened_at IS NULL THEN 1 ELSE 0 END, last_opened_at DESC, position ASC
                 LIMIT 1
                 """, new MapSqlParameterSource("projectId", projectId), this::mapWorkspace).orElse(null);
     }
 
-    long insertWorkspace(long projectId, String name, long position, Instant now) {
+    long nextWorkspacePosition(long projectId) {
+        Long value = jdbc.queryForObject("SELECT COALESCE(MAX(position), 0) + 1 FROM workspaces WHERE project_id = :projectId",
+                new MapSqlParameterSource("projectId", projectId), Long.class);
+        return value == null ? 1L : value;
+    }
+
+    long insertWorkspace(long projectId, String name, String normalizedPath, long position, Instant now) {
         return insertAndReturnId("""
-                INSERT INTO workspaces (project_id, name, position, created_at, last_opened_at)
-                VALUES (:projectId, :name, :position, :createdAt, :lastOpenedAt)
+                INSERT INTO workspaces (project_id, name, normalized_path, position, created_at, last_opened_at)
+                VALUES (:projectId, :name, :normalizedPath, :position, :createdAt, :lastOpenedAt)
                 """, params -> params
                 .addValue("projectId", projectId)
                 .addValue("name", name)
+                .addValue("normalizedPath", normalizedPath)
                 .addValue("position", position)
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("lastOpenedAt", Timestamp.from(now)));
+    }
+
+    long nextSessionPosition(long workspaceId) {
+        Long value = jdbc.queryForObject("SELECT COALESCE(MAX(position), 0) + 1 FROM sessions WHERE workspace_id = :workspaceId",
+                new MapSqlParameterSource("workspaceId", workspaceId), Long.class);
+        return value == null ? 1L : value;
     }
 
     void updateWorkspaceLastOpened(long workspaceId, Instant now) {

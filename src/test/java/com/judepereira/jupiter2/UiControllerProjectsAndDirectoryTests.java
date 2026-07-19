@@ -44,6 +44,25 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
+    public void addSessionMakesMultipleSessionsVisibleAndActivatesTheNewOne(@TempDir Path projectPath) {
+        UiController controller = newController();
+
+        ConcurrentModel addProject = new ConcurrentModel();
+        controller.addProject("Alpha", projectPath.toString(), addProject);
+        long sessionOneId = activeSession(addProject).id();
+
+        ConcurrentModel addSession = new ConcurrentModel();
+        String view = controller.addSession(addSession);
+
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(sessions(addSession)).extracting(UiController.Session::name)
+                .containsExactly("Session #1", "Session #2");
+        assertThat(activeSession(addSession).name()).isEqualTo("Session #2");
+        assertThat(activeSession(addSession).id()).isNotEqualTo(sessionOneId);
+        assertThat(activeWorkspace(addSession).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+    }
+
+    @Test
     public void indexExposesProjectTabsAndActiveWorkspaceSessionData(@TempDir Path firstProject,
                                                                      @TempDir Path secondProject) {
         UiController controller = newController();
@@ -156,6 +175,22 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(collapse.getAttribute("expanded")).isEqualTo(false);
         assertThat(collapse.getAttribute("selectedPath")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
         assertThat(collapse.getAttribute("selectedName")).isEqualTo("visible-dir");
+    }
+
+    @Test
+    public void workspaceModalEndpointExposesBranchDefaultsAndFragment(@TempDir Path projectPath) {
+        UiController controller = newController();
+
+        controller.addProject("Alpha", projectPath.toString(), new ConcurrentModel());
+
+        ConcurrentModel modal = new ConcurrentModel();
+        String view = controller.newWorkspaceModal(modal);
+
+        assertThat(view).isEqualTo("fragments/projects :: workspaceModal");
+        assertThat(modal.getAttribute("branchName")).isEqualTo("");
+        assertThat(modal.getAttribute("branchMode")).isEqualTo("create");
+        assertThat(modal.getAttribute("createBranch")).isEqualTo(true);
+        assertThat(activeProject(modal)).isNotNull();
     }
 
     @Test

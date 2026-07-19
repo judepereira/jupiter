@@ -21,6 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -59,12 +62,28 @@ public class AppStateService {
         }
 
         long projectId = repository.insertProject(name, normalizedPath, repository.nextProjectDisplayOrder(), now);
-        long workspaceId = repository.insertWorkspace(projectId, "Workspace #1", 1L, now);
-        long sessionId = repository.insertSession(workspaceId, "Session #1", 1L, now, false, null);
-        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
-                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, now);
+        long workspaceId = repository.insertWorkspace(projectId, "Workspace #1", normalizedPath, 1L, now);
+        long sessionId = createSessionInternal(workspaceId, now);
         repository.updateAppState(projectId, workspaceId, sessionId);
         return toProjectView(repository.findProject(projectId));
+    }
+
+    @Transactional
+    public WorkspaceView createWorkspace(long projectId, String branchName, boolean createBranch) {
+        Instant now = Instant.now();
+        var project = repository.findProject(projectId);
+        if (project.closedAt() != null) {
+            throw new IllegalStateException("Project is closed: " + projectId);
+        }
+
+        Path projectRoot = Path.of(project.normalizedPath());
+        Path worktreePath = projectRoot.resolveSibling(".trees").resolve(branchName).toAbsolutePath().normalize();
+        runGitWorktreeAdd(projectRoot, worktreePath, branchName, createBranch);
+
+        long position = repository.nextWorkspacePosition(projectId);
+        long workspaceId = repository.insertWorkspace(projectId, branchName, worktreePath.toString(), position, now);
+        createSessionInternal(workspaceId, now);
+        return toWorkspaceView(repository.findWorkspace(workspaceId));
     }
 
     @Transactional
@@ -120,6 +139,12 @@ public class AppStateService {
         repository.updateSessionLastOpened(sessionId, now);
         repository.updateWorkspaceLastOpened(workspace.id(), now);
         repository.updateAppState(workspace.projectId(), workspace.id(), sessionId);
+    }
+
+    @Transactional
+    public SessionView createSession(long workspaceId) {
+        long sessionId = createSessionInternal(workspaceId, Instant.now());
+        return toSessionView(repository.findSession(sessionId));
     }
 
     public AppStateView loadViewData() {
@@ -325,6 +350,42 @@ public class AppStateService {
         repository.updateWorkspaceLastOpened(workspace.id(), now);
         repository.updateSessionLastOpened(session.id(), now);
         repository.updateAppState(projectId, workspace.id(), session.id());
+    }
+
+    private long createSessionInternal(long workspaceId, Instant now) {
+        long position = repository.nextSessionPosition(workspaceId);
+        long sessionId = repository.insertSession(workspaceId, "Session #" + position, position, now, false, null);
+        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
+                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, now);
+        var workspace = repository.findWorkspace(workspaceId);
+        repository.updateProjectLastOpened(workspace.projectId(), now);
+        repository.updateWorkspaceLastOpened(workspaceId, now);
+        repository.updateSessionLastOpened(sessionId, now);
+        repository.updateAppState(workspace.projectId(), workspaceId, sessionId);
+        return sessionId;
+    }
+
+    private void runGitWorktreeAdd(Path projectRoot, Path worktreePath, String branchName, boolean createBranch) {
+        try {
+            Files.createDirectories(worktreePath.getParent());
+            List<String> command = createBranch
+                    ? List.of("git", "worktree", "add", "-b", branchName, worktreePath.toString())
+                    : List.of("git", "worktree", "add", worktreePath.toString(), branchName);
+            Process process = new ProcessBuilder(command)
+                    .directory(projectRoot.toFile())
+                    .start();
+            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new IllegalStateException("git worktree add failed with exit code " + exitCode + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr);
+            }
+        } catch (Exception e) {
+            if (e instanceof IllegalStateException) {
+                throw (IllegalStateException) e;
+            }
+            throw new IllegalStateException("git worktree add failed", e);
+        }
     }
 
     private SessionDetailView loadSessionDetail(long sessionId) {

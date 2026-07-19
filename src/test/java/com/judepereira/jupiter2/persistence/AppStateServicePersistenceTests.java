@@ -6,16 +6,103 @@ import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
+import com.judepereira.jupiter2.persistence.Persistence.SessionView;
+import com.judepereira.jupiter2.persistence.Persistence.WorkspaceView;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 public class AppStateServicePersistenceTests {
+
+    @Test
+    public void creatingAProjectStillCreatesOneWorkspaceAndSessionOne(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+
+        AppStateView view = service.loadViewData();
+        assertThat(view.activeProject()).isNotNull();
+        assertThat(view.projects()).extracting(ProjectView::name, ProjectView::path)
+                .containsExactly(tuple("Alpha", projectPath.toAbsolutePath().normalize().toString()));
+        assertThat(view.workspaces()).extracting(WorkspaceView::name, WorkspaceView::path)
+                .containsExactly(tuple("Workspace #1", projectPath.toAbsolutePath().normalize().toString()));
+        assertThat(view.activeWorkspace()).isNotNull();
+        assertThat(view.activeWorkspace().path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(view.sessions()).extracting(SessionView::name).containsExactly("Session #1");
+        assertThat(view.activeSession()).isNotNull();
+        assertThat(view.activeSession().name()).isEqualTo("Session #1");
+        assertThat(view.activeSessionDetail().chatMessages()).extracting(ChatMessageView::text)
+                .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?");
+    }
+
+    @Test
+    public void creatingASecondSessionActivatesItAndKeepsChatHistoriesIsolated(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long workspaceId = initial.activeWorkspace().id();
+        long sessionOneId = initial.activeSession().id();
+
+        QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionOneId, "hello from session one");
+        service.completeAssistantMessage(sessionOneId, firstTurn.assistantMessage().id(), "reply one", List.of());
+
+        service.createSession(workspaceId);
+        AppStateView afterCreate = service.loadViewData();
+        long sessionTwoId = afterCreate.activeSession().id();
+
+        assertThat(afterCreate.activeSession().name()).isEqualTo("Session #2");
+        assertThat(afterCreate.sessions()).extracting(SessionView::name).containsExactly("Session #1", "Session #2");
+        assertThat(sessionTwoId).isNotEqualTo(sessionOneId);
+
+        QueuedChatTurn secondTurn = service.appendUserMessageAndPendingAssistant(sessionTwoId, "hello from session two");
+        service.completeAssistantMessage(sessionTwoId, secondTurn.assistantMessage().id(), "reply two", List.of());
+
+        assertThat(service.buildConversationHistory(sessionOneId)).extracting(Message::getRole, Message::getContent)
+                .containsExactly(
+                        tuple(Message.Role.USER, "hello from session one"),
+                        tuple(Message.Role.ASSISTANT, "reply one"));
+        assertThat(service.buildConversationHistory(sessionTwoId)).extracting(Message::getRole, Message::getContent)
+                .containsExactly(
+                        tuple(Message.Role.USER, "hello from session two"),
+                        tuple(Message.Role.ASSISTANT, "reply two"));
+    }
+
+    @Test
+    public void creatingAWorkspaceCreatesGitWorktreeAndSessionOneForThatWorkspace(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long projectId = initial.activeProject().id();
+
+        String branchName = "feature-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        Path worktreePath = projectPath.toAbsolutePath().normalize().resolveSibling(".trees").resolve(branchName).toAbsolutePath().normalize();
+
+        WorkspaceView workspace = service.createWorkspace(projectId, branchName, true);
+        AppStateView view = service.loadViewData();
+
+        assertThat(workspace.path()).isEqualTo(worktreePath.toString());
+        assertThat(Files.exists(worktreePath)).isTrue();
+        assertThat(view.activeWorkspace()).isNotNull();
+        assertThat(view.activeWorkspace().path()).isEqualTo(worktreePath.toString());
+        assertThat(view.workspaces()).extracting(WorkspaceView::path)
+                .containsExactly(projectPath.toAbsolutePath().normalize().toString(), worktreePath.toString());
+        assertThat(view.activeSession()).isNotNull();
+        assertThat(view.activeSession().name()).isEqualTo("Session #1");
+        assertThat(view.sessions()).extracting(SessionView::name).containsExactly("Session #1");
+        assertThat(view.activeSessionDetail().workspaceRoot()).isEqualTo(worktreePath.toString());
+    }
 
     @Test
     public void closeProjectFallsBackToPreviousVisibleProject(@TempDir Path firstProject,
@@ -94,5 +181,27 @@ public class AppStateServicePersistenceTests {
 
         assertThat(history.get(4).getRole()).isEqualTo(Message.Role.USER);
         assertThat(history.get(4).getContent()).isEqualTo("next turn");
+    }
+
+    private static void initGitRepo(Path projectPath) throws IOException, InterruptedException {
+        Files.createDirectories(projectPath);
+        runGit(projectPath, "git", "init");
+        runGit(projectPath, "git", "config", "user.name", "Jupiter Tests");
+        runGit(projectPath, "git", "config", "user.email", "tests@example.com");
+        Files.writeString(projectPath.resolve("README.md"), "hello\n");
+        runGit(projectPath, "git", "add", "README.md");
+        runGit(projectPath, "git", "commit", "-m", "init");
+    }
+
+    private static void runGit(Path workingDirectory, String... command) throws IOException, InterruptedException {
+        Process process = new ProcessBuilder(command)
+                .directory(workingDirectory.toFile())
+                .redirectErrorStream(true)
+                .start();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            String output = new String(process.getInputStream().readAllBytes());
+            throw new IllegalStateException("git command failed: " + String.join(" ", command) + "\n" + output);
+        }
     }
 }

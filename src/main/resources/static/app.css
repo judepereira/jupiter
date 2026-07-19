@@ -26,6 +26,10 @@ body {
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+input[type=radio] {
+    width: auto !important;
+}
+
 .top-bar {
     position: fixed;
     top: 0;
@@ -252,7 +256,7 @@ input:focus, textarea:focus {
     z-index: 1600;
     width: 100%;
     height: var(--bottom-nav-height);
-    padding: 0 15px;
+    padding: 0;
     background: var(--topbar-bg);
     border: 0;
     border-top: 1px solid rgba(135, 163, 205, 0.18);
@@ -490,7 +494,6 @@ input:focus, textarea:focus {
     gap: 8px;
     min-height: 24px;
     padding: 0 4px 0 0;
-    font-weight: 800;
 }
 
 .workspace-item.active,
@@ -527,7 +530,6 @@ input:focus, textarea:focus {
     background: transparent;
     border-left: 1px solid #d6deeb;
     border-radius: 0 5px 5px 0;
-    font-weight: 500;
     position: relative;
 }
 
@@ -580,6 +582,35 @@ input:focus, textarea:focus {
 .session-item:hover,
 .workspace-item:hover {
     background: #eef4fc;
+}
+
+.workspace-session-groups > .workspace-create-button {
+    margin-top: 4px;
+}
+
+.rail-action-button {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px dashed #c9d6ea;
+    border-radius: 6px;
+    background: #f5f9ff;
+    color: #17325b;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.rail-action-button:hover {
+    background: #eaf1fb;
+}
+
+.session-create-button {
+    margin-top: 8px;
+    border-style: solid;
+    background: #edf4ff;
 }
 
 #chat-history.messages {
@@ -1011,6 +1042,10 @@ input:focus, textarea:focus {
     box-sizing: border-box;
 }
 
+.workspace-modal-card {
+    width: min(620px, 100%);
+}
+
 .project-modal-header {
     display: flex;
     align-items: center;
@@ -1048,6 +1083,46 @@ input:focus, textarea:focus {
     border: 1px solid #dbeafe;
     padding: 6px 12px;
     font: inherit;
+}
+
+.workspace-mode-field {
+    border: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.workspace-mode-field legend {
+    padding: 0;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.workspace-mode-option {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.workspace-mode-option + .workspace-mode-option {
+    margin-top: 8px;
+}
+
+.workspace-mode-option input {
+    margin-top: 3px;
+    flex: 0 0 auto;
+}
+
+.workspace-mode-option span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.workspace-mode-option small {
+    color: var(--muted);
 }
 
 .directory-browser {

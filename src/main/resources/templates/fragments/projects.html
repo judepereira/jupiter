@@ -73,7 +73,6 @@
                     <i class="bi bi-chevron-down workspace-disclosure" aria-hidden="true"></i>
                     <i class="bi bi-folder workspace-icon" aria-hidden="true"></i>
                     <span class="workspace-label" th:text="${workspace.name}"></span>
-                    <i class="bi bi-chevron-down workspace-menu" aria-hidden="true"></i>
                 </button>
 
                 <div th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="session-list">
@@ -85,8 +84,26 @@
                         <i class="bi bi-chat-square session-icon" aria-hidden="true"></i>
                         <span class="session-label" th:text="${s.name}"></span>
                     </button>
+
+                    <button type="button"
+                            class="rail-action-button session-create-button"
+                            hx-post="/ui/sessions/add"
+                            hx-target="#shell"
+                            hx-swap="none">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                        <span>New session</span>
+                    </button>
                 </div>
             </div>
+
+            <button type="button"
+                    class="rail-action-button workspace-create-button"
+                    hx-get="/ui/workspaces/new"
+                    hx-target="#modal-root"
+                    hx-swap="innerHTML">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                <span>New workspace</span>
+            </button>
         </div>
     </section>
 </th:block>
@@ -148,6 +165,54 @@
                 <div class="project-form-actions">
                     <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
                     <button type="submit" class="project-form-submit">Open</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="workspaceModal" th:with="branchNameValue=${branchName ?: ''}, branchModeValue=${branchMode ?: 'create'}">
+    <div id="workspace-modal" class="project-modal workspace-modal">
+        <div class="project-modal-backdrop"
+             hx-get="/ui/projects/modal/close"
+             hx-target="#modal-root"
+             hx-swap="innerHTML"></div>
+
+        <div class="project-modal-card workspace-modal-card" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
+            <div class="project-modal-header">
+                <h4 id="workspace-modal-title">New workspace</h4>
+                <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
+            </div>
+
+            <form class="project-form workspace-form" hx-post="/ui/workspaces/add" hx-target="#shell" hx-swap="none">
+                <label class="project-form-field">
+                    <span>Branch name</span>
+                    <input type="text"
+                           name="branchName"
+                           autocomplete="off"
+                           required
+                           th:value="${branchNameValue}">
+                </label>
+
+                <fieldset class="project-form-field workspace-mode-field">
+                    <label class="workspace-mode-option">
+                        <input type="radio" name="branchMode" value="create" th:checked="${branchModeValue == 'create'}">
+                        <span>
+                            <small>Create a new branch</small>
+                        </span>
+                    </label>
+
+                    <label class="workspace-mode-option">
+                        <input type="radio" name="branchMode" value="checkout" th:checked="${branchModeValue == 'checkout'}">
+                        <span>
+                            <small>Checkout an existing branch</small>
+                        </span>
+                    </label>
+                </fieldset>
+
+                <div class="project-form-actions">
+                    <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                    <button type="submit" class="project-form-submit">Create workspace</button>
                 </div>
             </form>
         </div>

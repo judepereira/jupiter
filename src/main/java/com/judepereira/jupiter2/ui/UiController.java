@@ -361,6 +361,16 @@ public class UiController {
         return "fragments/projects :: modal";
     }
 
+    @GetMapping("/ui/workspaces/new")
+    public String newWorkspaceModal(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        model.addAttribute("branchName", "");
+        model.addAttribute("branchMode", "create");
+        model.addAttribute("createBranch", true);
+        return view.activeProject() == null ? "fragments/projects :: modalClose" : "fragments/projects :: workspaceModal";
+    }
+
     @GetMapping("/ui/projects/directory")
     public String listDirectory(@RequestParam("path") String path, Model model) {
         Path current = Path.of(path).toAbsolutePath().normalize();
@@ -399,6 +409,20 @@ public class UiController {
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/workspaces/add")
+    public String addWorkspace(@RequestParam("branchName") String branchName,
+                               @RequestParam(name = "branchMode", defaultValue = "create") String branchMode,
+                               Model model) {
+        AppStateView view = appStateService.loadViewData();
+        boolean createBranch = !"checkout".equalsIgnoreCase(branchMode);
+        appStateService.createWorkspace(view.activeProject().id(), branchName, createBranch);
+        view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
 
@@ -454,6 +478,17 @@ public class UiController {
         return "fragments/projects :: shellUpdates";
     }
 
+    @PostMapping("/ui/sessions/add")
+    public String addSession(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        appStateService.createSession(view.activeWorkspace().id());
+        view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
+    }
+
     private void populateSessionModel(Model model, SessionView session, SessionDetailView detail) {
         TerminalPanelState terminalState = session == null ? new TerminalPanelState("none", List.of(), null, false) : terminalStateService.snapshot(session.id());
         if (session == null) {
@@ -502,6 +537,13 @@ public class UiController {
         model.addAttribute("activeSession", toSession(view.activeSession()));
         model.addAttribute("shellRefresh", false);
         model.addAttribute("includeChatContainer", false);
+    }
+
+    private void populateShellUpdates(Model model, AppStateView view) {
+        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
+        model.addAttribute("shellRefresh", true);
+        model.addAttribute("includeChatContainer", true);
+        model.addAttribute("reviewOob", true);
     }
 
     private AppStateView currentViewWithSessionIfNeeded(boolean createIfMissing) {

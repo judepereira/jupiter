@@ -1,12 +1,20 @@
 package com.judepereira.jupiter2;
 
+import com.judepereira.jupiter2.ui.UiController.Project;
+import com.judepereira.jupiter2.ui.UiController.Session;
+import com.judepereira.jupiter2.ui.UiController.Workspace;
 import org.junit.jupiter.api.Test;
-import org.thymeleaf.context.Context;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.mock.web.MockServletContext;
+import org.thymeleaf.context.WebContext;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
+import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,7 +32,7 @@ public class ProjectsTemplateRenderTest {
         resolver.setCacheable(false);
         engine.setTemplateResolver(resolver);
 
-        Context context = new Context();
+        WebContext context = webContext();
         context.setVariable("shellRefresh", false);
         context.setVariable("projects", List.of());
         context.setVariable("activeProject", null);
@@ -49,16 +57,9 @@ public class ProjectsTemplateRenderTest {
 
     @Test
     public void projectModalRendersNormalInputsWithoutOutOfBandSwaps() {
-        SpringTemplateEngine engine = new SpringTemplateEngine();
-        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
-        resolver.setPrefix("templates/");
-        resolver.setSuffix(".html");
-        resolver.setTemplateMode(TemplateMode.HTML);
-        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        resolver.setCacheable(false);
-        engine.setTemplateResolver(resolver);
+        SpringTemplateEngine engine = engine();
 
-        Context context = new Context();
+        WebContext context = webContext();
         context.setVariable("shellRefresh", false);
         context.setVariable("projects", List.of());
         context.setVariable("activeProject", null);
@@ -89,6 +90,69 @@ public class ProjectsTemplateRenderTest {
     }
 
     @Test
+    public void workspaceRailRendersNewWorkspaceAndNewSessionControls() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo")));
+        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo"));
+        context.setVariable("workspaces", List.of(
+                new Workspace(1L, "Workspace #1", "/repo"),
+                new Workspace(2L, "feature-workspace", "/repo/.trees/feature-workspace")));
+        context.setVariable("activeWorkspace", new Workspace(1L, "Workspace #1", "/repo"));
+        context.setVariable("sessions", List.of(new Session(1L, "Session #1"), new Session(2L, "Session #2")));
+        context.setVariable("activeSession", new Session(2L, "Session #2"));
+        context.setVariable("selectedName", "");
+        context.setVariable("selectedPath", "");
+        context.setVariable("currentPath", "");
+        context.setVariable("directoryEntries", List.of());
+        context.setVariable("includeChatContainer", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("selectedFile", null);
+
+        String html = engine.process("fragments/projects", context);
+
+        assertThat(html).contains("New workspace", "New session");
+        assertThat(html).contains("hx-get=\"/ui/workspaces/new\"", "hx-post=\"/ui/sessions/add\"");
+        assertThat(html).contains("Session #1", "Session #2");
+    }
+
+    @Test
+    public void workspaceModalRendersExpectedFormActionInputsAndRadioOptions() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("projects", List.of());
+        context.setVariable("activeProject", null);
+        context.setVariable("workspaces", List.of());
+        context.setVariable("activeWorkspace", null);
+        context.setVariable("sessions", List.of());
+        context.setVariable("activeSession", null);
+        context.setVariable("selectedName", "");
+        context.setVariable("selectedPath", "");
+        context.setVariable("currentPath", "");
+        context.setVariable("directoryEntries", List.of());
+        context.setVariable("includeChatContainer", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("selectedFile", null);
+        context.setVariable("branchName", "feature-workspace");
+        context.setVariable("branchMode", "create");
+        context.setVariable("createBranch", true);
+
+        String html = engine.process("fragments/projects", context);
+
+        assertThat(html).contains("id=\"workspace-modal\"", "hx-post=\"/ui/workspaces/add\"", "name=\"branchName\"");
+        assertThat(html).contains("name=\"branchMode\" value=\"create\"", "name=\"branchMode\" value=\"checkout\"");
+        assertThat(html).contains("Create a new branch", "Checkout an existing branch");
+    }
+
+    @Test
     public void terminalFragmentRendersDedicatedBottomPanelId() {
         SpringTemplateEngine engine = new SpringTemplateEngine();
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
@@ -99,7 +163,7 @@ public class ProjectsTemplateRenderTest {
         resolver.setCacheable(false);
         engine.setTemplateResolver(resolver);
 
-        Context context = new Context();
+        WebContext context = webContext();
         context.setVariable("bottomPanelMode", "terminal");
         context.setVariable("bottomPanelOpen", true);
         context.setVariable("terminalTabs", List.of());
@@ -114,16 +178,9 @@ public class ProjectsTemplateRenderTest {
 
     @Test
     public void shellUpdatesRenderReviewAndBottomPanelsIndependently() {
-        SpringTemplateEngine engine = new SpringTemplateEngine();
-        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
-        resolver.setPrefix("templates/");
-        resolver.setSuffix(".html");
-        resolver.setTemplateMode(TemplateMode.HTML);
-        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        resolver.setCacheable(false);
-        engine.setTemplateResolver(resolver);
+        SpringTemplateEngine engine = engine();
 
-        Context context = new Context();
+        WebContext context = webContext();
         context.setVariable("shellRefresh", false);
         context.setVariable("projects", List.of());
         context.setVariable("activeProject", null);
@@ -156,5 +213,27 @@ public class ProjectsTemplateRenderTest {
         int end = html.indexOf('>', idIndex);
 
         return html.substring(start, end + 1);
+    }
+
+    private static SpringTemplateEngine engine() {
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+        return engine;
+    }
+
+    private static WebContext webContext() {
+        MockServletContext servletContext = new MockServletContext();
+        JakartaServletWebApplication application = JakartaServletWebApplication.buildApplication(servletContext);
+        MockHttpServletRequest request = new MockHttpServletRequest(servletContext);
+        request.setContextPath("");
+        request.setServletPath("");
+        request.setRequestURI("/");
+        return new WebContext(application.buildExchange(request, new MockHttpServletResponse()), Locale.US);
     }
 }
