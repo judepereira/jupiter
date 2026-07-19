@@ -81,7 +81,7 @@ public class UiControllerTerminalTests {
     @Test
     public void terminalTabsStayScopedToTheirWorkspace(@TempDir Path projectRoot) throws Exception {
         initGitRepo(projectRoot);
-        String branchName = "feature-b-" + projectRoot.getFileName();
+        String baseBranchName = "feature-b-" + projectRoot.getFileName();
 
         TestContext context = newContext(projectRoot);
         UiController controller = context.controller();
@@ -94,9 +94,9 @@ public class UiControllerTerminalTests {
         assertThat(terminalTabs(openModel)).extracting(TerminalTab::title, TerminalTab::active)
                 .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
 
-        String branchName = "feature-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String uniqueBranchName = baseBranchName + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         ConcurrentModel workspaceBModel = new ConcurrentModel();
-        controller.addWorkspace(branchName, "create", workspaceBModel);
+        controller.addWorkspace(uniqueBranchName, "create", workspaceBModel);
 
         assertThat(workspaceBModel.getAttribute("terminalOob")).isEqualTo(true);
         assertThat(terminalTabs(workspaceBModel)).isEmpty();
