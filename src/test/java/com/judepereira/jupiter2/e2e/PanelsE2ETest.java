@@ -21,58 +21,63 @@ import java.nio.file.Path;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
-class ProjectCreationE2ETest extends E2ETestSupport {
+class PanelsE2ETest extends E2ETestSupport {
 
     private static final String ASSISTANT_REPLY = "Deterministic assistant reply";
 
     @Test
-    void addProjectChatAndPersistenceSurviveRestart(@TempDir Path tempDir) throws Exception {
+    void toggleReviewAndTerminalPanels(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path dbFile = tempDir.resolve("h2db/jupiter");
         Files.createDirectories(dbFile.getParent());
-        Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "ProjectPersistencePlaywrightTest"));
+        Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "PanelsE2ETest"));
 
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
-            try (RunningApp first = startApp(fakeHome, dbFile, TestAppConfig.class);
+            try (RunningApp app = startApp(fakeHome, dbFile, TestAppConfig.class);
                  BrowserContext context = browser.newContext()) {
                 Page page = context.newPage();
 
-                page.navigate(first.baseUrl());
+                page.navigate(app.baseUrl());
                 page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
-                captureScreenshot(page, screenshotsDir, "01-initial-load.png");
 
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).click();
-                assertThat(page.locator("#project-modal")).isVisible();
-                captureScreenshot(page, screenshotsDir, "02-project-modal-open.png");
+                openProject(page, "Alpha", projectDir);
+                captureScreenshot(page, screenshotsDir, "01-project-opened.png");
 
-                openProjectThroughModal(page, "Alpha", projectDir, () -> captureScreenshot(page, screenshotsDir, "03-directory-selected.png"));
-                captureScreenshot(page, screenshotsDir, "04-project-opened.png");
+                assertThat(page.locator("#review")).hasCount(1);
+                assertThat(page.locator("#review")).not().isVisible();
+                assertThat(page.locator("#bottom-panel")).hasCount(1);
+                assertThat(page.locator("#bottom-panel")).not().isVisible();
 
-                String userMessage = "hello there";
-                page.locator("#chat-input").fill(userMessage);
-                page.locator("#chat-send-btn").click();
+                page.locator("#toggle-terminal-rail-btn").click();
 
-                assertThat(page.locator("#chat-messages-list li")).hasCount(3);
-                assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText(userMessage);
-                assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
-                captureScreenshot(page, screenshotsDir, "05-chat-response.png");
-            }
+                assertThat(page.locator("#bottom-panel")).isVisible();
+                assertThat(page.locator("#bottom-panel .terminal-header")).isVisible();
+                assertThat(page.locator("#review")).not().isVisible();
+                runTerminalCommandAndAssertOutput(page);
+                captureScreenshot(page, screenshotsDir, "02-terminal-open.png");
 
-            try (RunningApp second = startApp(fakeHome, dbFile, TestAppConfig.class);
-                 BrowserContext context = browser.newContext()) {
-                Page page = context.newPage();
+                page.locator("#toggle-review-rail-btn").click();
 
-                page.navigate(second.baseUrl());
+                assertThat(page.locator("#review")).isVisible();
+                assertThat(page.locator("#review .review-header")).isVisible();
+                assertThat(page.locator("#bottom-panel")).isVisible();
+                assertThat(page.locator("#bottom-panel .terminal-header")).isVisible();
+                assertThat(page.locator("#review")).hasCount(1);
+                assertThat(page.locator("#bottom-panel")).hasCount(1);
+                captureScreenshot(page, screenshotsDir, "03-review-open.png");
 
-                assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText("Alpha");
-                assertThat(page.locator("#chat-messages-list li")).hasCount(3);
-                assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText("hello there");
-                assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
-                captureScreenshot(page, screenshotsDir, "06-after-restart.png");
+                page.locator("#toggle-review-rail-btn").click();
+
+                assertThat(page.locator("#review")).not().isVisible();
+                assertThat(page.locator("#bottom-panel")).isVisible();
+                assertThat(page.locator("#bottom-panel .terminal-header")).isVisible();
+                assertThat(page.locator("#review")).hasCount(1);
+                assertThat(page.locator("#bottom-panel")).hasCount(1);
+                captureScreenshot(page, screenshotsDir, "04-review-closed.png");
             }
         } finally {
             if (previousHome == null) {
@@ -81,6 +86,15 @@ class ProjectCreationE2ETest extends E2ETestSupport {
                 System.setProperty("user.home", previousHome);
             }
         }
+    }
+
+    private void runTerminalCommandAndAssertOutput(Page page) {
+        assertThat(page.locator(".terminal-mount .xterm")).isVisible();
+        page.locator(".terminal-mount").click();
+        page.keyboard().type("echo \"hello world\"");
+        page.keyboard().press("Enter");
+
+        assertThat(page.locator(".terminal-mount .xterm-rows")).containsText("hello world");
     }
 
     @TestConfiguration(proxyBeanMethods = false)
