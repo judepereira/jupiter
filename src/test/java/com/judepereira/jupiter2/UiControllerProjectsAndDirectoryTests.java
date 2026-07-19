@@ -55,12 +55,12 @@ public class UiControllerProjectsAndDirectoryTests {
         long sessionOneId = activeSession(addProject).id();
 
         ConcurrentModel addSession = new ConcurrentModel();
-        String view = controller.addSession(addSession);
+        String view = controller.addSession("Feature work", addSession);
 
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
         assertThat(sessions(addSession)).extracting(UiController.Session::name)
-                .containsExactly("Session #1", "Session #2");
-        assertThat(activeSession(addSession).name()).isEqualTo("Session #2");
+                .containsExactly("Session #1", "Feature work");
+        assertThat(activeSession(addSession).name()).isEqualTo("Feature work");
         assertThat(activeSession(addSession).id()).isNotEqualTo(sessionOneId);
         assertThat(activeWorkspace(addSession).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
         assertThat(addSession.getAttribute("terminalOob")).isEqualTo(true);

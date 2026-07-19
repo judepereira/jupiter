@@ -116,10 +116,37 @@ public class ProjectsTemplateRenderTest {
         String html = engine.process("fragments/projects", context);
 
         assertThat(html).contains("New workspace", "New session");
-        assertThat(html).contains("hx-get=\"/ui/workspaces/new\"", "hx-post=\"/ui/sessions/add\"");
+        assertThat(html).contains("hx-get=\"/ui/workspaces/new\"", "hx-get=\"/ui/sessions/new\"");
         assertThat(html).contains("hx-post=\"/ui/workspaces/1/collapse\"", "hx-post=\"/ui/workspaces/2/activate\"");
         assertThat(html).contains("bi-chevron-down workspace-disclosure", "bi-chevron-right workspace-disclosure");
         assertThat(html).contains("Session #1", "Session #2");
+    }
+
+    @Test
+    public void newSessionFormFragmentRendersPostFormAndNameInput() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("projects", List.of());
+        context.setVariable("activeProject", null);
+        context.setVariable("workspaces", List.of());
+        context.setVariable("activeWorkspace", null);
+        context.setVariable("sessions", List.of());
+        context.setVariable("activeSession", null);
+        context.setVariable("selectedName", "");
+        context.setVariable("selectedPath", "");
+        context.setVariable("currentPath", "");
+        context.setVariable("directoryEntries", List.of());
+        context.setVariable("includeChatContainer", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("selectedFile", null);
+        String html = engine.process("fragments/projects", context);
+
+        assertThat(html).contains("<form", "class=\"session-create-form\"", "hx-post=\"/ui/sessions/add\"");
+        assertThat(html).contains("id=\"session-name-input\"", "name=\"name\"", "placeholder=\"Session name\"");
     }
 
     @Test
@@ -175,6 +202,7 @@ public class ProjectsTemplateRenderTest {
         String html = engine.process("fragments/terminal", context);
 
         assertThat(html).contains("<aside id=\"bottom-panel\"");
+        assertThat(html).contains("id=\"terminal-panel-divider\"");
         assertThat(html).doesNotContain("<aside id=\"review\"");
     }
 

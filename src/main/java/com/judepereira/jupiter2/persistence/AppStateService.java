@@ -155,6 +155,13 @@ public class AppStateService {
         return toSessionView(repository.findSession(sessionId));
     }
 
+    @Transactional
+    public SessionView createSession(long workspaceId, String name) {
+        long position = repository.nextSessionPosition(workspaceId);
+        long sessionId = createSessionInternal(workspaceId, Instant.now(), position, name);
+        return toSessionView(repository.findSession(sessionId));
+    }
+
     public AppStateView loadViewData() {
         var appState = repository.loadAppState();
         List<ProjectView> projects = repository.listVisibleProjects().stream().map(this::toProjectView).toList();
@@ -362,7 +369,15 @@ public class AppStateService {
 
     private long createSessionInternal(long workspaceId, Instant now) {
         long position = repository.nextSessionPosition(workspaceId);
-        long sessionId = repository.insertSession(workspaceId, "Session #" + position, position, now, false, null);
+        return createSessionInternal(workspaceId, now, position, "Session #" + position);
+    }
+
+    private long createSessionInternal(long workspaceId, Instant now, long position, String name) {
+        String sessionName = name == null ? null : name.trim();
+        if (sessionName == null || sessionName.isBlank()) {
+            throw new IllegalStateException("Session name is required");
+        }
+        long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, null);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
                 "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, now);
         var workspace = repository.findWorkspace(workspaceId);

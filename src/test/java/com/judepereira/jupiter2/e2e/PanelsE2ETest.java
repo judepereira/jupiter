@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class PanelsE2ETest extends E2ETestSupport {
 
@@ -56,8 +57,15 @@ class PanelsE2ETest extends E2ETestSupport {
 
                 assertThat(page.locator("#bottom-panel")).isVisible();
                 assertThat(page.locator("#bottom-panel .terminal-header")).isVisible();
+                assertThat(page.locator("#terminal-panel-divider")).isVisible();
                 assertThat(page.locator("#review")).not().isVisible();
                 runTerminalCommandAndAssertOutput(page);
+
+                double initialBottomPanelHeight = page.locator("#bottom-panel").boundingBox().height;
+                dragTerminalPanelDivider(page, 40);
+                double resizedBottomPanelHeight = page.locator("#bottom-panel").boundingBox().height;
+                assertNotEquals(initialBottomPanelHeight, resizedBottomPanelHeight);
+
                 captureScreenshot(page, screenshotsDir, "02-terminal-open.png");
 
                 page.locator("#toggle-review-rail-btn").click();
@@ -99,6 +107,14 @@ class PanelsE2ETest extends E2ETestSupport {
         page.keyboard().press("Enter");
 
         assertThat(page.locator(".terminal-mount .xterm-rows")).containsText("hello world");
+    }
+
+    private void dragTerminalPanelDivider(Page page, double deltaY) {
+        var dividerBox = page.locator("#terminal-panel-divider").boundingBox();
+        page.mouse().move(dividerBox.x + dividerBox.width / 2, dividerBox.y + dividerBox.height / 2);
+        page.mouse().down();
+        page.mouse().move(dividerBox.x + dividerBox.width / 2, dividerBox.y + dividerBox.height / 2 + deltaY);
+        page.mouse().up();
     }
 
     @TestConfiguration(proxyBeanMethods = false)
