@@ -193,7 +193,14 @@
     </div>
 </th:block>
 
-<th:block th:fragment="workspaceModal" th:with="branchNameValue=${branchName ?: ''}, branchModeValue=${branchMode ?: 'create'}">
+<th:block th:fragment="workspaceModal" th:with="branchNameValue=${branchName ?: ''}, branchModeValue=${branchMode ?: 'create'}, modalOob=${modalOob ?: false}">
+    <div th:if="${modalOob}" id="modal-root" hx-swap-oob="innerHTML">
+        <th:block th:replace="~{fragments/projects :: workspaceModalContent}"></th:block>
+    </div>
+    <th:block th:unless="${modalOob}" th:replace="~{fragments/projects :: workspaceModalContent}"></th:block>
+</th:block>
+
+<th:block th:fragment="workspaceModalContent">
     <div id="workspace-modal" class="project-modal workspace-modal">
         <div class="project-modal-backdrop"
              hx-get="/ui/projects/modal/close"

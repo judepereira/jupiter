@@ -12,6 +12,7 @@ import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter2.persistence.AppStateService;
+import com.judepereira.jupiter2.persistence.GitWorktreeException;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileView;
@@ -26,6 +27,7 @@ import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalPanelState;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
+import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -68,6 +70,7 @@ public class UiController {
     private final AppStateService appStateService;
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
+    private final SystemBalloonService systemBalloonService;
 
     @Qualifier("agentTaskExecutor")
     private final Executor agentExecutor;
@@ -256,6 +259,11 @@ public class UiController {
         return emitter;
     }
 
+    @GetMapping("/ui/system-balloons/stream")
+    public SseEmitter systemBalloonStream() {
+        return systemBalloonService.connect();
+    }
+
     @PostMapping("/ui/review/toggle")
     public String toggleReview(Model model) {
         AppStateView view = appStateService.loadViewData();
@@ -415,8 +423,30 @@ public class UiController {
                                @RequestParam(name = "branchMode", defaultValue = "create") String branchMode,
                                Model model) {
         AppStateView view = appStateService.loadViewData();
+        String trimmedBranchName = branchName.trim();
         boolean createBranch = !"checkout".equalsIgnoreCase(branchMode);
-        appStateService.createWorkspace(view.activeProject().id(), branchName, createBranch);
+
+        try {
+            appStateService.createWorkspace(view.activeProject().id(), trimmedBranchName, createBranch);
+        } catch (GitWorktreeException e) {
+            if (!createBranch) {
+                String gitOutput = e.lastGitOutputLines();
+                if (gitOutput == null || gitOutput.isBlank()) {
+                    gitOutput = e.getMessage();
+                }
+                String body = "Could not check out existing Git branch \"" + trimmedBranchName + "\".\n\n" + gitOutput;
+                systemBalloonService.publishError("Checkout Failed", body);
+                populateProjectModel(model, view);
+                populateSessionModel(model, view);
+                model.addAttribute("branchName", trimmedBranchName);
+                model.addAttribute("branchMode", branchMode);
+                model.addAttribute("createBranch", false);
+                model.addAttribute("modalOob", true);
+                return "fragments/projects :: workspaceModal";
+            }
+            throw e;
+        }
+
         view = appStateService.loadViewData();
         populateProjectModel(model, view);
         populateSessionModel(model, view);

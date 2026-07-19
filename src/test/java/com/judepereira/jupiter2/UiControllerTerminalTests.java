@@ -1,5 +1,6 @@
 package com.judepereira.jupiter2;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
@@ -8,6 +9,7 @@ import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.terminal.TerminalTab;
 import com.judepereira.jupiter2.ui.UiController;
+import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
@@ -289,7 +291,7 @@ public class UiControllerTerminalTests {
             Executor executor) {
 
         private UiController controller() {
-            return new UiController(mock(CodingAgentHarness.class), properties, appStateService, terminalManager, terminalStateService, executor);
+            return new UiController(mock(CodingAgentHarness.class), properties, appStateService, terminalManager, terminalStateService, new SystemBalloonService(new ObjectMapper()), executor);
         }
     }
 }

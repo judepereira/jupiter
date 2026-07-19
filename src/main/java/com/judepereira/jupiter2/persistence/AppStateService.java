@@ -389,6 +389,8 @@ public class AppStateService {
     }
 
     private void runGitWorktreeAdd(Path projectRoot, Path worktreePath, String branchName, boolean createBranch) {
+        String stdout = "";
+        String stderr = "";
         try {
             Files.createDirectories(worktreePath.getParent());
             List<String> command = createBranch
@@ -397,17 +399,17 @@ public class AppStateService {
             Process process = new ProcessBuilder(command)
                     .directory(projectRoot.toFile())
                     .start();
-            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new IllegalStateException("git worktree add failed with exit code " + exitCode + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr);
+                throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr);
             }
         } catch (Exception e) {
-            if (e instanceof IllegalStateException) {
-                throw (IllegalStateException) e;
+            if (e instanceof GitWorktreeException gitWorktreeException) {
+                throw gitWorktreeException;
             }
-            throw new IllegalStateException("git worktree add failed", e);
+            throw new GitWorktreeException("git worktree add failed", stdout, stderr, e);
         }
     }
 
