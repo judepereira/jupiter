@@ -14,6 +14,12 @@
     --topbar-bg: #061733;
     --topbar-border: rgba(135, 163, 205, 0.22);
     --shell-bg: #f7faff;
+    --terminal-shell-bg: #fdf6e3;
+    --terminal-shell-fg: #657b83;
+    --terminal-shell-border: #eee8d5;
+    --terminal-control-bg: #eee8d5;
+    --terminal-control-border: #d8d2bc;
+    --terminal-control-active: #e7e0c3;
 }
 
 body {
@@ -685,8 +691,9 @@ input:focus, textarea:focus {
     height: 100%;
     min-height: 0;
     gap: 8px;
-    background: #0b1020;
-    color: #e5eefc;
+    background: var(--terminal-shell-bg);
+    color: var(--terminal-shell-fg);
+    border: 1px solid var(--terminal-shell-border);
     border-radius: 4px;
     padding: 8px;
     box-sizing: border-box;
@@ -708,9 +715,9 @@ input:focus, textarea:focus {
 .terminal-empty-button,
 .terminal-tab,
 .terminal-tab-close {
-    border: 1px solid rgba(144, 166, 204, 0.25);
-    background: rgba(14, 22, 42, 0.92);
-    color: #e5eefc;
+    border: 1px solid var(--terminal-control-border);
+    background: var(--terminal-control-bg);
+    color: var(--terminal-shell-fg);
     border-radius: 6px;
     cursor: pointer;
 }
@@ -747,9 +754,9 @@ input:focus, textarea:focus {
     max-width: min(260px, 32vw);
     overflow: hidden;
     height: 30px;
-    border: 1px solid rgba(144, 166, 204, 0.25);
-    background: rgba(14, 22, 42, 0.92);
-    color: #e5eefc;
+    border: 1px solid var(--terminal-control-border);
+    background: var(--terminal-control-bg);
+    color: var(--terminal-shell-fg);
     border-radius: 5px;
     cursor: pointer;
     white-space: nowrap;
@@ -757,8 +764,8 @@ input:focus, textarea:focus {
 }
 
 .terminal-tab-group.active {
-    background: #1d2d55;
-    border-color: rgba(178, 199, 237, 0.44);
+    background: var(--terminal-control-active);
+    border-color: #c8c1a8;
 }
 
 .terminal-tab {
@@ -780,16 +787,16 @@ input:focus, textarea:focus {
     border: 0;
     background: transparent;
     color: inherit;
-    border-left: 1px solid rgba(144, 166, 204, 0.18);
+    border-left: 1px solid var(--terminal-control-border);
     border-radius: 0;
 }
 
 .terminal-tab-add {
     border-radius: 5px;
     font-size: 17px;
-    border: 1px solid rgba(144, 166, 204, 0.25);
-    background: rgba(14, 22, 42, 0.92);
-    color: #e5eefc;
+    border: 1px solid var(--terminal-control-border);
+    background: var(--terminal-control-bg);
+    color: var(--terminal-shell-fg);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -799,12 +806,12 @@ input:focus, textarea:focus {
 }
 
 .terminal-tab-close:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(101, 123, 131, 0.08);
 }
 
 .terminal-tab-group.active .terminal-tab,
 .terminal-tab-group.active .terminal-tab-close {
-    color: #ffffff;
+    color: #586e75;
 }
 
 .terminal-tab-group .terminal-tab {
@@ -817,7 +824,7 @@ input:focus, textarea:focus {
     align-items: flex-start;
     gap: 10px;
     padding: 18px 2px;
-    color: #c8d4ea;
+    color: var(--terminal-shell-fg);
 }
 
 .terminal-empty-state p {
@@ -841,8 +848,8 @@ input:focus, textarea:focus {
     width: 100%;
     border-radius: 6px;
     overflow: hidden;
-    background: #050816;
-    border: 1px solid rgba(144, 166, 204, 0.18);
+    background: var(--terminal-shell-bg);
+    border: 1px solid var(--terminal-shell-border);
 }
 
 .terminal-closed {

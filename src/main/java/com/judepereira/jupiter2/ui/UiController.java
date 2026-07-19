@@ -77,7 +77,7 @@ public class UiController {
     public String index(Model model) {
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         return "index";
     }
 
@@ -109,7 +109,7 @@ public class UiController {
         }
 
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         model.addAttribute("newChatMessages", List.copyOf(newChatMessages));
         boolean hasPending = view.activeSessionDetail() != null && view.activeSessionDetail().chatMessages().stream().anyMatch(ChatMessageView::pending);
         model.addAttribute("hasPending", hasPending);
@@ -130,7 +130,7 @@ public class UiController {
             }
         }
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         return "fragments/file-diff :: diff";
     }
 
@@ -264,7 +264,7 @@ public class UiController {
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         model.addAttribute("reviewOob", false);
         return "fragments/review :: panel";
     }
@@ -277,72 +277,69 @@ public class UiController {
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         model.addAttribute("reviewOob", false);
         return "fragments/review :: panel";
     }
 
     @PostMapping("/ui/panel/terminal")
     public String openTerminalPanel(Model model) {
-        AppStateView view = currentViewWithSessionIfNeeded(true);
-        if (view.activeSession() != null) {
-            TerminalPanelState state = terminalStateService.snapshot(view.activeSession().id());
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeWorkspace() != null) {
+            TerminalPanelState state = terminalStateService.snapshot(view.activeWorkspace().id());
             if (state.bottomPanelOpen()) {
-                terminalStateService.closeTerminalPane(view.activeSession().id());
+                terminalStateService.closeTerminalPane(view.activeWorkspace().id());
             } else {
                 if (state.terminalTabs().isEmpty()) {
-                    TerminalHandle terminal = terminalManager.createTerminal(view.activeSessionDetail().workspaceRoot());
-                    terminalStateService.registerTerminal(view.activeSession().id(), terminal);
+                    TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path());
+                    terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
                 }
-                terminalStateService.openTerminalPane(view.activeSession().id());
+                terminalStateService.openTerminalPane(view.activeWorkspace().id());
             }
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         return "fragments/terminal :: panel";
     }
 
     @PostMapping("/ui/terminal/new")
     public String newTerminal(Model model) {
-        AppStateView view = currentViewWithSessionIfNeeded(true);
-        if (view.activeSession() != null) {
-            TerminalHandle terminal = terminalManager.createTerminal(view.activeSessionDetail().workspaceRoot());
-            terminalStateService.registerTerminal(view.activeSession().id(), terminal);
-            terminalStateService.openTerminalPane(view.activeSession().id());
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeWorkspace() != null) {
+            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path());
+            terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
+            terminalStateService.openTerminalPane(view.activeWorkspace().id());
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         return "fragments/terminal :: panel";
     }
 
     @PostMapping("/ui/terminal/{id}/activate")
     public String activateTerminal(@PathVariable String id, Model model) {
-        AppStateView view = currentViewWithSessionIfNeeded(true);
-        if (view.activeSession() != null) {
-            terminalStateService.activateTerminal(view.activeSession().id(), id);
-            terminalStateService.openTerminalPane(view.activeSession().id());
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeWorkspace() != null) {
+            terminalStateService.activateTerminal(view.activeWorkspace().id(), id);
+            terminalStateService.openTerminalPane(view.activeWorkspace().id());
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         return "fragments/terminal :: panel";
     }
 
     @PostMapping("/ui/terminal/{id}/close")
     public String closeTerminal(@PathVariable String id, Model model) {
-        AppStateView view = currentViewWithSessionIfNeeded(true);
-        if (view.activeSession() != null) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeWorkspace() != null) {
+            terminalStateService.closeTerminal(view.activeWorkspace().id(), id);
             terminalManager.closeTerminal(id);
-            terminalStateService.closeTerminal(view.activeSession().id(), id);
             view = appStateService.loadViewData();
-            populateProjectModel(model, view);
-            populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
-            return "fragments/terminal :: panel";
         }
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         return "fragments/terminal :: panel";
     }
 
@@ -408,11 +405,8 @@ public class UiController {
         appStateService.addOrReopenProject(name, Path.of(path).toAbsolutePath().normalize().toString());
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
-        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
-        model.addAttribute("shellRefresh", true);
-        model.addAttribute("includeChatContainer", true);
-        model.addAttribute("reviewOob", true);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
 
@@ -425,7 +419,7 @@ public class UiController {
         appStateService.createWorkspace(view.activeProject().id(), branchName, createBranch);
         view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
@@ -435,11 +429,8 @@ public class UiController {
         appStateService.activateProject(projectId);
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
-        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
-        model.addAttribute("shellRefresh", true);
-        model.addAttribute("includeChatContainer", true);
-        model.addAttribute("reviewOob", true);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
 
@@ -448,11 +439,8 @@ public class UiController {
         appStateService.closeProject(projectId);
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
-        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
-        model.addAttribute("shellRefresh", true);
-        model.addAttribute("includeChatContainer", true);
-        model.addAttribute("reviewOob", true);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
 
@@ -461,11 +449,8 @@ public class UiController {
         appStateService.activateWorkspace(workspaceId);
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
-        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
-        model.addAttribute("shellRefresh", true);
-        model.addAttribute("includeChatContainer", true);
-        model.addAttribute("reviewOob", true);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
 
@@ -474,11 +459,8 @@ public class UiController {
         appStateService.collapseWorkspace(workspaceId);
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
-        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
-        model.addAttribute("shellRefresh", true);
-        model.addAttribute("includeChatContainer", true);
-        model.addAttribute("reviewOob", true);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
 
@@ -487,11 +469,8 @@ public class UiController {
         appStateService.activateSession(sessionId);
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
-        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
-        model.addAttribute("shellRefresh", true);
-        model.addAttribute("includeChatContainer", true);
-        model.addAttribute("reviewOob", true);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
 
@@ -501,13 +480,15 @@ public class UiController {
         appStateService.createSession(view.activeWorkspace().id());
         view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        populateSessionModel(model, view);
         populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
     }
 
-    private void populateSessionModel(Model model, SessionView session, SessionDetailView detail) {
-        TerminalPanelState terminalState = session == null ? new TerminalPanelState("none", List.of(), null, false) : terminalStateService.snapshot(session.id());
+    private void populateSessionModel(Model model, AppStateView view) {
+        SessionView session = view.activeSession();
+        SessionDetailView detail = view.activeSessionDetail();
+        TerminalPanelState terminalState = view.activeWorkspace() == null ? new TerminalPanelState("none", List.of(), null, false) : terminalStateService.snapshot(view.activeWorkspace().id());
         if (session == null) {
             model.addAttribute("chatMessages", List.of());
             model.addAttribute("changedFiles", List.of());
@@ -515,7 +496,7 @@ public class UiController {
             model.addAttribute("selectedFile", null);
             model.addAttribute("hasPending", false);
             model.addAttribute("reviewOob", false);
-            model.addAttribute("workspaceRoot", null);
+            model.addAttribute("workspaceRoot", view.activeWorkspace() == null ? null : view.activeWorkspace().path());
             model.addAttribute("terminalTabs", terminalState.terminalTabs());
             model.addAttribute("activeTerminal", terminalState.activeTerminal());
             model.addAttribute("bottomPanelMode", terminalState.bottomPanelMode());
@@ -542,7 +523,7 @@ public class UiController {
     }
 
     private boolean isTerminalPanelOpen(AppStateView view) {
-        return view.activeSession() != null && terminalStateService.snapshot(view.activeSession().id()).bottomPanelOpen();
+        return view.activeWorkspace() != null && terminalStateService.snapshot(view.activeWorkspace().id()).bottomPanelOpen();
     }
 
     private void populateProjectModel(Model model, AppStateView view) {
@@ -557,7 +538,7 @@ public class UiController {
     }
 
     private void populateShellUpdates(Model model, AppStateView view) {
-        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
+        model.addAttribute("terminalOob", true);
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);

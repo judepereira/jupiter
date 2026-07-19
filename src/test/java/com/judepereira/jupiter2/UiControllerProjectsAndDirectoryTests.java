@@ -40,6 +40,9 @@ public class UiControllerProjectsAndDirectoryTests {
                 .containsExactly("Session #1");
         assertThat(activeSession(model)).isNotNull();
         assertThat(activeSession(model).name()).isEqualTo("Session #1");
+        assertThat(model.getAttribute("terminalOob")).isEqualTo(true);
+        assertThat((List<?>) model.getAttribute("terminalTabs")).isEmpty();
+        assertThat(model.getAttribute("bottomPanelOpen")).isEqualTo(false);
         assertThat(model.getAttribute("workspaceRoot")).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
     }
 
@@ -60,6 +63,8 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(activeSession(addSession).name()).isEqualTo("Session #2");
         assertThat(activeSession(addSession).id()).isNotEqualTo(sessionOneId);
         assertThat(activeWorkspace(addSession).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(addSession.getAttribute("terminalOob")).isEqualTo(true);
+        assertThat((List<?>) addSession.getAttribute("terminalTabs")).isEmpty();
     }
 
     @Test
@@ -156,10 +161,11 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(listing.getAttribute("expanded")).isEqualTo(true);
         assertThat(listing.getAttribute("selectedPath")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
         assertThat(listing.getAttribute("selectedName")).isEqualTo("visible-dir");
-        assertThat(directoryEntries(listing)).extracting(UiController.DirectoryEntry::name)
+        assertThat(directoryEntries(listing)).extracting("name")
                 .containsExactly("nested-dir");
-        assertThat(directoryEntries(listing)).allSatisfy(entry -> assertThat(entry.directory()).isTrue());
-        assertThat(directoryEntries(listing).get(0).path()).isEqualTo(visibleDir.resolve("nested-dir").toAbsolutePath().normalize().toString());
+        assertThat(directoryEntries(listing)).allSatisfy(entry -> assertThat(entry).extracting("directory").isEqualTo(true));
+        assertThat(directoryEntries(listing)).extracting("path")
+                .containsExactly(visibleDir.resolve("nested-dir").toAbsolutePath().normalize().toString());
     }
 
     @Test
@@ -175,7 +181,7 @@ public class UiControllerProjectsAndDirectoryTests {
         ConcurrentModel listing = new ConcurrentModel();
         controller.listDirectory(tempDir.toString(), listing);
 
-        assertThat(directoryEntries(listing)).extracting(UiController.DirectoryEntry::name)
+        assertThat(directoryEntries(listing)).extracting("name")
                 .containsExactly("alpha", "beta", ".cache", ".config");
     }
 
@@ -289,8 +295,8 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<UiController.DirectoryEntry> directoryEntries(ConcurrentModel model) {
-        return (List<UiController.DirectoryEntry>) model.getAttribute("directoryEntries");
+    private static List<?> directoryEntries(ConcurrentModel model) {
+        return (List<?>) model.getAttribute("directoryEntries");
     }
 
     @SuppressWarnings("unchecked")

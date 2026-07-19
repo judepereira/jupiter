@@ -921,6 +921,28 @@
     (function () {
         const mounts = new Map();
         let syncQueued = false;
+        const solarizedLightTheme = {
+            background: '#fdf6e3',
+            foreground: '#657b83',
+            cursor: '#586e75',
+            selectionBackground: '#eee8d5',
+            black: '#073642',
+            red: '#dc322f',
+            green: '#859900',
+            yellow: '#b58900',
+            blue: '#268bd2',
+            magenta: '#d33682',
+            cyan: '#2aa198',
+            white: '#eee8d5',
+            brightBlack: '#002b36',
+            brightRed: '#cb4b16',
+            brightGreen: '#586e75',
+            brightYellow: '#657b83',
+            brightBlue: '#839496',
+            brightMagenta: '#6c71c4',
+            brightCyan: '#93a1a1',
+            brightWhite: '#fdf6e3'
+        };
 
         function toWebSocketUrl(rawUrl) {
             if (!rawUrl) return '';
@@ -939,6 +961,10 @@
             if (!entry) return;
             mounts.delete(mount);
             try {
+                entry.resizeObserver && entry.resizeObserver.disconnect();
+            } catch (_) {
+            }
+            try {
                 entry.socket.close();
             } catch (_) {
             }
@@ -950,15 +976,22 @@
 
         function fitEntry(entry) {
             if (!entry || !document.contains(entry.mount)) return;
-            try {
-                entry.fitAddon.fit();
-                const cols = entry.terminal.cols;
-                const rows = entry.terminal.rows;
-                if (entry.socket.readyState === WebSocket.OPEN) {
-                    entry.socket.send(JSON.stringify({type: 'resize', cols, rows}));
-                }
-            } catch (_) {
+            entry.fitAddon.fit();
+            const cols = Math.floor(entry.terminal.cols);
+            const rows = Math.floor(entry.terminal.rows);
+            const resizeSignature = cols + 'x' + rows;
+            if (entry.socket.readyState === WebSocket.OPEN && resizeSignature !== entry.lastSentResizeSignature) {
+                entry.socket.send(JSON.stringify({type: 'resize', cols, rows}));
+                entry.lastSentResizeSignature = resizeSignature;
             }
+        }
+
+        function scheduleInitialFit(entry) {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    fitEntry(entry);
+                });
+            });
         }
 
         function syncTerminals() {
@@ -997,27 +1030,25 @@
                 convertEol: true,
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
                 fontSize: 13,
-                theme: {
-                    background: '#050816',
-                    foreground: '#dbe7ff',
-                    cursor: '#dbe7ff',
-                    selectionBackground: '#25406f'
-                }
+                theme: solarizedLightTheme
             });
             const fitAddon = new window.FitAddon.FitAddon();
             terminal.loadAddon(fitAddon);
             terminal.open(mount);
 
             const socket = new WebSocket(wsUrl);
-            const entry = {mount, terminal, fitAddon, socket};
+            const entry = {mount, terminal, fitAddon, socket, resizeObserver: null, lastSentResizeSignature: ''};
             mounts.set(mount, entry);
 
-            function sendResize() {
-                try {
-                    fitEntry(entry);
-                } catch (_) {
-                }
-            }
+            socket.addEventListener('open', () => {
+                scheduleInitialFit(entry);
+            });
+
+            const resizeObserver = new ResizeObserver(() => queueSync());
+            entry.resizeObserver = resizeObserver;
+            resizeObserver.observe(mount);
+            const bottomPanel = mount.closest('.bottom-panel');
+            if (bottomPanel) resizeObserver.observe(bottomPanel);
 
             terminal.onData(data => {
                 try {
@@ -1028,7 +1059,6 @@
                 }
             });
 
-            socket.addEventListener('open', sendResize);
             socket.addEventListener('message', evt => {
                 try {
                     const payload = JSON.parse(evt.data);

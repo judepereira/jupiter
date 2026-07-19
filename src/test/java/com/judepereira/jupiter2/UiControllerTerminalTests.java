@@ -12,7 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -72,6 +74,69 @@ public class UiControllerTerminalTests {
         assertThat(bottomPanelMode(reopenedModel)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(reopenedModel)).isTrue();
         verify(context.terminalManager()).createTerminal(workspaceRoot.toAbsolutePath().normalize().toString());
+    }
+
+    @Test
+    public void terminalTabsStayScopedToTheirWorkspace(@TempDir Path projectRoot) throws Exception {
+        initGitRepo(projectRoot);
+
+        TestContext context = newContext(projectRoot);
+        UiController controller = context.controller();
+
+        controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
+        long workspaceAId = context.appStateService().loadViewData().activeWorkspace().id();
+
+        ConcurrentModel openModel = new ConcurrentModel();
+        controller.openTerminalPanel(openModel);
+        assertThat(terminalTabs(openModel)).extracting(TerminalTab::title, TerminalTab::active)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+
+        ConcurrentModel workspaceBModel = new ConcurrentModel();
+        controller.addWorkspace("feature-b", "create", workspaceBModel);
+
+        assertThat(workspaceBModel.getAttribute("terminalOob")).isEqualTo(true);
+        assertThat(terminalTabs(workspaceBModel)).isEmpty();
+        assertThat(activeTerminal(workspaceBModel)).isNull();
+        assertThat(bottomPanelMode(workspaceBModel)).isEqualTo("none");
+        assertThat(bottomPanelOpen(workspaceBModel)).isFalse();
+
+        ConcurrentModel switchedBackModel = new ConcurrentModel();
+        controller.activateWorkspace(workspaceAId, switchedBackModel);
+
+        assertThat(switchedBackModel.getAttribute("terminalOob")).isEqualTo(true);
+        assertThat(terminalTabs(switchedBackModel)).extracting(TerminalTab::title, TerminalTab::active)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+        assertThat(activeTerminal(switchedBackModel).id()).isEqualTo("terminal-1");
+        assertThat(bottomPanelMode(switchedBackModel)).isEqualTo("terminal");
+        assertThat(bottomPanelOpen(switchedBackModel)).isTrue();
+    }
+
+    @Test
+    public void switchingSessionsWithinTheSameWorkspaceKeepsTerminalTabs(@TempDir Path projectRoot) throws Exception {
+        initGitRepo(projectRoot);
+
+        TestContext context = newContext(projectRoot);
+        UiController controller = context.controller();
+
+        controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
+        controller.openTerminalPanel(new ConcurrentModel());
+        long sessionOneId = context.appStateService().loadViewData().activeSession().id();
+
+        ConcurrentModel sessionTwoModel = new ConcurrentModel();
+        controller.addSession(sessionTwoModel);
+
+        assertThat(sessionTwoModel.getAttribute("terminalOob")).isEqualTo(true);
+        assertThat(terminalTabs(sessionTwoModel)).extracting(TerminalTab::title, TerminalTab::active)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+        assertThat(activeTerminal(sessionTwoModel).id()).isEqualTo("terminal-1");
+
+        ConcurrentModel backToSessionOneModel = new ConcurrentModel();
+        controller.activateSession(sessionOneId, backToSessionOneModel);
+
+        assertThat(backToSessionOneModel.getAttribute("terminalOob")).isEqualTo(true);
+        assertThat(terminalTabs(backToSessionOneModel)).extracting(TerminalTab::title, TerminalTab::active)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+        assertThat(activeTerminal(backToSessionOneModel).id()).isEqualTo("terminal-1");
     }
 
     @Test
@@ -174,6 +239,28 @@ public class UiControllerTerminalTests {
                 terminalManager,
                 properties,
                 Runnable::run);
+    }
+
+    private static void initGitRepo(Path projectPath) throws IOException, InterruptedException {
+        Files.createDirectories(projectPath);
+        runGit(projectPath, "git", "init");
+        runGit(projectPath, "git", "config", "user.name", "Jupiter Tests");
+        runGit(projectPath, "git", "config", "user.email", "tests@example.com");
+        Files.writeString(projectPath.resolve("README.md"), "hello\n");
+        runGit(projectPath, "git", "add", "README.md");
+        runGit(projectPath, "git", "commit", "-m", "init");
+    }
+
+    private static void runGit(Path workingDirectory, String... command) throws IOException, InterruptedException {
+        Process process = new ProcessBuilder(command)
+                .directory(workingDirectory.toFile())
+                .redirectErrorStream(true)
+                .start();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            String output = new String(process.getInputStream().readAllBytes());
+            throw new IllegalStateException("git command failed: " + String.join(" ", command) + "\n" + output);
+        }
     }
 
     @SuppressWarnings("unchecked")

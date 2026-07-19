@@ -41,9 +41,10 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
     }
 
     public TerminalPanelState closeTerminal(long sessionId, String terminalId) {
-        terminalSessions.remove(terminalId);
         SessionState state = states.get(sessionId);
-        return state == null ? SessionState.emptySnapshot() : state.closeTerminal(terminalId);
+        TerminalPanelState snapshot = state == null ? SessionState.emptySnapshot() : state.closeTerminal(terminalId);
+        terminalSessions.remove(terminalId);
+        return snapshot;
     }
 
     @Override

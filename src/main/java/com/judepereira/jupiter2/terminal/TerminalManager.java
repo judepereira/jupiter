@@ -30,6 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class TerminalManager {
 
+    private static final int OUTPUT_REPLAY_CAP = 200_000;
+
     private final ObjectMapper objectMapper;
     private final List<TerminalLifecycleListener> lifecycleListeners;
     private final ConcurrentMap<String, TerminalRuntime> terminals = new ConcurrentHashMap<>();
@@ -140,6 +142,8 @@ public class TerminalManager {
         private final PtyProcess process;
         private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
         private final AtomicBoolean cleanedUp = new AtomicBoolean(false);
+        private final Object outputLock = new Object();
+        private final StringBuilder outputBuffer = new StringBuilder();
 
         private TerminalRuntime(String terminalId, String title, PtyProcess process) {
             this.terminalId = terminalId;
@@ -157,19 +161,30 @@ public class TerminalManager {
                 char[] buffer = new char[4096];
                 int read;
                 while ((read = reader.read(buffer)) != -1) {
-                    sendToSessions(Map.of("type", "output", "data", new String(buffer, 0, read)));
+                    String chunk = new String(buffer, 0, read);
+                    synchronized (outputLock) {
+                        appendOutput(chunk);
+                        sendToSessions(Map.of("type", "output", "data", chunk));
+                    }
                 }
                 exitCode = process.waitFor();
             } catch (Exception e) {
                 log.error("Terminal {} failed", terminalId, e);
-                sendToSessions(Map.of("type", "error", "message", e.getMessage() == null ? "terminal_error" : e.getMessage()));
+                synchronized (outputLock) {
+                    sendToSessions(Map.of("type", "error", "message", e.getMessage() == null ? "terminal_error" : e.getMessage()));
+                }
             } finally {
                 cleanup(exitCode);
             }
         }
 
         private void attach(WebSocketSession session) {
-            sessions.add(session);
+            synchronized (outputLock) {
+                sessions.add(session);
+                if (outputBuffer.length() > 0) {
+                    sendJson(session, Map.of("type", "output", "data", outputBuffer.toString()));
+                }
+            }
         }
 
         private void detach(WebSocketSession session) {
@@ -218,23 +233,33 @@ public class TerminalManager {
             }
         }
 
+        private void appendOutput(String chunk) {
+            outputBuffer.append(chunk);
+            int overflow = outputBuffer.length() - OUTPUT_REPLAY_CAP;
+            if (overflow > 0) {
+                outputBuffer.delete(0, overflow);
+            }
+        }
+
         private void cleanup(int exitCode) {
             if (!cleanedUp.compareAndSet(false, true)) {
                 return;
             }
-            terminals.remove(terminalId);
-            sendToSessions(Map.of("type", "exit", "code", exitCode));
-            notifyExited(terminalId, exitCode);
-            for (WebSocketSession session : sessions) {
-                try {
-                    if (session.isOpen()) {
-                        session.close();
+            synchronized (outputLock) {
+                terminals.remove(terminalId);
+                sendToSessions(Map.of("type", "exit", "code", exitCode));
+                notifyExited(terminalId, exitCode);
+                for (WebSocketSession session : sessions) {
+                    try {
+                        if (session.isOpen()) {
+                            session.close();
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to close websocket session", e);
                     }
-                } catch (Exception e) {
-                    log.error("Failed to close websocket session", e);
                 }
+                sessions.clear();
             }
-            sessions.clear();
         }
     }
 }
