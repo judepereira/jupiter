@@ -57,12 +57,12 @@ public class AppStateServicePersistenceTests {
         QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionOneId, "hello from session one");
         service.completeAssistantMessage(sessionOneId, firstTurn.assistantMessage().id(), "reply one", List.of());
 
-        service.createSession(workspaceId);
+        service.createSession(workspaceId, "Feature work");
         AppStateView afterCreate = service.loadViewData();
         long sessionTwoId = afterCreate.activeSession().id();
 
-        assertThat(afterCreate.activeSession().name()).isEqualTo("Session #2");
-        assertThat(afterCreate.sessions()).extracting(SessionView::name).containsExactly("Session #1", "Session #2");
+        assertThat(afterCreate.activeSession().name()).isEqualTo("Feature work");
+        assertThat(afterCreate.sessions()).extracting(SessionView::name).containsExactly("Session #1", "Feature work");
         assertThat(sessionTwoId).isNotEqualTo(sessionOneId);
 
         QueuedChatTurn secondTurn = service.appendUserMessageAndPendingAssistant(sessionTwoId, "hello from session two");

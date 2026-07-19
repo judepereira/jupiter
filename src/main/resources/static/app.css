@@ -4,6 +4,7 @@
     --bottom-nav-height: 42px;
     /* width of the review panel (can be overridden by JS during drag) */
     --review-width: 40%;
+    --terminal-panel-height: 320px;
     --rail-bg: #f8fafc;
     --rail-fg: #15233f;
     --panel-bg: #ffffff;
@@ -14,12 +15,12 @@
     --topbar-bg: #061733;
     --topbar-border: rgba(135, 163, 205, 0.22);
     --shell-bg: #f7faff;
-    --terminal-shell-bg: #fdf6e3;
-    --terminal-shell-fg: #657b83;
-    --terminal-shell-border: #eee8d5;
-    --terminal-control-bg: #eee8d5;
-    --terminal-control-border: #d8d2bc;
-    --terminal-control-active: #e7e0c3;
+    --terminal-shell-bg: #ffffff;
+    --terminal-shell-fg: #334155;
+    --terminal-shell-border: #d9e2ef;
+    --terminal-control-bg: #f8fafc;
+    --terminal-control-border: #cbd5e1;
+    --terminal-control-active: #e8eef8;
 }
 
 body {
@@ -343,7 +344,7 @@ input:focus, textarea:focus {
     flex-direction: column;
     gap: 0;
     min-height: 0;
-    margin: 8px 0 8px 0;
+    margin: 8px 0 0 0;
 }
 
 .review-panel {
@@ -358,18 +359,19 @@ input:focus, textarea:focus {
        produce off-canvas overflow; using 0 here + a stronger
        min-width when open prevents that. */
     min-width: 0;
-    margin: 8px 8px 8px 0;
+    margin: 8px 8px 0 0;
 }
 
 .terminal-panel,
 #bottom-panel {
-    grid-column: 2 / -1;
+    /*grid-column: 2 / -1;*/
     grid-row: 2;
     display: flex;
     flex-direction: column;
     width: 100%;
     min-width: 0;
-    min-height: 220px;
+    height: var(--terminal-panel-height);
+    min-height: 0;
     padding: 0;
     margin: 0 8px 8px 0;
     overflow: hidden;
@@ -406,6 +408,26 @@ input:focus, textarea:focus {
 .terminal-panel.closed,
 #bottom-panel.closed {
     display: none;
+}
+
+.terminal-panel-divider {
+    height: 6px;
+    margin: 0 8px 0 0;
+    background: transparent;
+    cursor: row-resize;
+    touch-action: none;
+    display: block;
+    border-radius: 999px;
+    transition: background-color 120ms ease;
+}
+
+.terminal-panel-divider:hover {
+    background: var(--divider-background-hover);
+}
+
+.terminal-panel-divider:active,
+.terminal-panel-divider.dragging {
+    background: var(--divider-background-hover);
 }
 
 /* Defensive closed-state styling when shell has collapsed the review
@@ -551,7 +573,6 @@ input:focus, textarea:focus {
 
 .session-item.active {
     background: #eaf1fb;
-    box-shadow: inset -3px 0 0 #1f6fff;
 }
 
 .workspace-disclosure,
@@ -617,6 +638,35 @@ input:focus, textarea:focus {
     margin-top: 8px;
     border-style: solid;
     background: #edf4ff;
+}
+
+.session-create-form {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    margin-top: 8px;
+    padding: 0 10px;
+    border: 1px solid #c9d6ea;
+    border-radius: 6px;
+    background: #edf4ff;
+    box-sizing: border-box;
+}
+
+.session-create-input {
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: #17325b;
+}
+
+.session-create-input::placeholder {
+    color: #7a8ca8;
 }
 
 #chat-history.messages {
@@ -729,27 +779,13 @@ input:focus, textarea:focus {
     display: flex;
     flex-direction: column;
     height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
     gap: 8px;
     background: var(--terminal-shell-bg);
     color: var(--terminal-shell-fg);
-    border: 1px solid var(--terminal-shell-border);
-    border-radius: 4px;
     padding: 8px;
     box-sizing: border-box;
-}
-
-.terminal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    flex: 0 0 auto;
-}
-
-.terminal-header h2 {
-    margin: 0;
-    font-size: 18px;
 }
 
 .terminal-empty-button,
@@ -805,7 +841,7 @@ input:focus, textarea:focus {
 
 .terminal-tab-group.active {
     background: var(--terminal-control-active);
-    border-color: #c8c1a8;
+    border-color: #9fb3d4;
 }
 
 .terminal-tab {
@@ -846,12 +882,12 @@ input:focus, textarea:focus {
 }
 
 .terminal-tab-close:hover {
-    background: rgba(101, 123, 131, 0.08);
+    background: rgba(51, 65, 85, 0.08);
 }
 
 .terminal-tab-group.active .terminal-tab,
 .terminal-tab-group.active .terminal-tab-close {
-    color: #586e75;
+    color: #334155;
 }
 
 .terminal-tab-group .terminal-tab {
@@ -884,7 +920,7 @@ input:focus, textarea:focus {
 
 .terminal-mount {
     flex: 1 1 auto;
-    min-height: 220px;
+    min-height: 0;
     width: 100%;
     border-radius: 6px;
     overflow: hidden;
@@ -1091,8 +1127,12 @@ input:focus, textarea:focus {
     .terminal-panel,
     #bottom-panel {
         grid-row: 2;
-        min-height: 240px;
+        height: 240px;
         margin: 0 0 8px 0;
+    }
+
+    :root {
+        --terminal-panel-height: 240px;
     }
 
     .bottom-rail {
@@ -1104,6 +1144,10 @@ input:focus, textarea:focus {
         display: none;
     }
 
+    .terminal-panel-divider {
+        display: none;
+    }
+
     /* collapse review by default on small screens to leave space for chat.
        Closed state should not leave a footprint — use display:none via the
        .closed modifier (applied to .review-panel or .review-shell). */
@@ -1111,7 +1155,7 @@ input:focus, textarea:focus {
     }
 
     .terminal-shell {
-        min-height: 240px;
+        min-height: 0;
     }
 }
 

@@ -148,6 +148,110 @@
         });
     }
 
+    // Simple draggable divider for resizing the terminal bottom panel.
+    (function () {
+        let dragging = false;
+        let activePointerId = null;
+        let activeDivider = null;
+
+        function getShell() {
+            return document.getElementById('shell');
+        }
+
+        function getBottomPanel() {
+            return document.getElementById('bottom-panel');
+        }
+
+        function getDivider() {
+            return document.getElementById('terminal-panel-divider');
+        }
+
+        function setPanelHeightPx(px) {
+            const shell = getShell();
+            if (!shell) return;
+
+            const shellRect = shell.getBoundingClientRect();
+            const minPx = 160;
+            const maxPx = Math.floor(shellRect.height - 120);
+            if (maxPx < minPx) return;
+            const clamped = Math.max(minPx, Math.min(px, maxPx));
+            shell.style.setProperty('--terminal-panel-height', clamped + 'px');
+        }
+
+        function clampTerminalPanelHeight() {
+            const shell = getShell();
+            if (!shell) return;
+
+            const current = getComputedStyle(shell).getPropertyValue('--terminal-panel-height').trim();
+            if (!current || current.endsWith('%')) return;
+
+            const px = parseFloat(current);
+            if (Number.isFinite(px)) setPanelHeightPx(px);
+        }
+
+        function beginDrag(e) {
+            if (e.button && e.button !== 0) return;
+
+            const shell = getShell();
+            const bottomPanel = getBottomPanel();
+            const divider = getDivider();
+            if (!shell || !bottomPanel || !divider || bottomPanel.classList.contains('closed')) return;
+            if (shell.getBoundingClientRect().height <= 280) return;
+
+            dragging = true;
+            activePointerId = e.pointerId;
+            activeDivider = divider;
+
+            divider.classList.add('dragging');
+            try {
+                divider.setPointerCapture(e.pointerId);
+            } catch (_) {
+            }
+            e.preventDefault();
+        }
+
+        function onPointerMove(e) {
+            if (!dragging || e.pointerId !== activePointerId) return;
+
+            const shell = getShell();
+            if (!shell) return;
+
+            const shellRect = shell.getBoundingClientRect();
+            setPanelHeightPx(shellRect.bottom - e.clientY);
+        }
+
+        function endDrag(e) {
+            if (!dragging) return;
+            if (e && e.pointerId != null && activePointerId != null && e.pointerId !== activePointerId) return;
+
+            dragging = false;
+            const divider = activeDivider || getDivider();
+            activePointerId = null;
+            activeDivider = null;
+
+            if (divider) {
+                divider.classList.remove('dragging');
+                try {
+                    divider.releasePointerCapture(e && e.pointerId);
+                } catch (_) {
+                }
+            }
+        }
+
+        document.addEventListener('pointerdown', e => {
+            const divider = e.target && e.target.closest ? e.target.closest('#terminal-panel-divider') : null;
+            if (!divider) return;
+            beginDrag(e);
+        });
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', endDrag);
+        document.addEventListener('pointercancel', endDrag);
+        window.addEventListener('resize', clampTerminalPanelHeight);
+        document.body.addEventListener('htmx:afterSwap', () => {
+            if (dragging) endDrag({pointerId: activePointerId});
+        }, true);
+    })();
+
     // Chat composer logic: kept outside the divider-guard so it runs even when
     // divider or shell are absent (HTMX swaps may only render chat fragments).
     (function () {
@@ -971,27 +1075,27 @@
     (function () {
         const mounts = new Map();
         let syncQueued = false;
-        const solarizedLightTheme = {
-            background: '#fdf6e3',
-            foreground: '#657b83',
-            cursor: '#586e75',
-            selectionBackground: '#eee8d5',
-            black: '#073642',
-            red: '#dc322f',
-            green: '#859900',
-            yellow: '#b58900',
-            blue: '#268bd2',
-            magenta: '#d33682',
-            cyan: '#2aa198',
-            white: '#eee8d5',
-            brightBlack: '#002b36',
-            brightRed: '#cb4b16',
-            brightGreen: '#586e75',
-            brightYellow: '#657b83',
-            brightBlue: '#839496',
-            brightMagenta: '#6c71c4',
-            brightCyan: '#93a1a1',
-            brightWhite: '#fdf6e3'
+        const lightTerminalTheme = {
+            background: '#ffffff',
+            foreground: '#1f2937',
+            cursor: '#334155',
+            selectionBackground: '#dbeafe',
+            black: '#111827',
+            red: '#dc2626',
+            green: '#16a34a',
+            yellow: '#ca8a04',
+            blue: '#2563eb',
+            magenta: '#7c3aed',
+            cyan: '#0891b2',
+            white: '#e5e7eb',
+            brightBlack: '#374151',
+            brightRed: '#ef4444',
+            brightGreen: '#22c55e',
+            brightYellow: '#eab308',
+            brightBlue: '#3b82f6',
+            brightMagenta: '#8b5cf6',
+            brightCyan: '#06b6d4',
+            brightWhite: '#f9fafb'
         };
 
         function toWebSocketUrl(rawUrl) {
@@ -1080,7 +1184,7 @@
                 convertEol: true,
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
                 fontSize: 13,
-                theme: solarizedLightTheme
+                theme: lightTerminalTheme
             });
             const fitAddon = new window.FitAddon.FitAddon();
             terminal.loadAddon(fitAddon);
@@ -1142,6 +1246,16 @@
         window.addEventListener('resize', queueSync);
         document.body.addEventListener('htmx:afterSwap', queueSync, true);
         document.body.addEventListener('htmx:afterSettle', queueSync, true);
+    })();
+
+    (function () {
+        function focusSessionNameInput() {
+            const input = document.getElementById('session-name-input');
+            if (input) input.focus();
+        }
+
+        document.body.addEventListener('htmx:afterSwap', () => Promise.resolve().then(focusSessionNameInput), true);
+        document.body.addEventListener('htmx:afterSettle', () => Promise.resolve().then(focusSessionNameInput), true);
     })();
 
 })();

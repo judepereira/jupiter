@@ -520,14 +520,19 @@ public class UiController {
     }
 
     @PostMapping("/ui/sessions/add")
-    public String addSession(Model model) {
+    public String addSession(@RequestParam("name") String name, Model model) {
         AppStateView view = appStateService.loadViewData();
-        appStateService.createSession(view.activeWorkspace().id());
+        appStateService.createSession(view.activeWorkspace().id(), name);
         view = appStateService.loadViewData();
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         populateShellUpdates(model, view);
         return "fragments/projects :: shellUpdates";
+    }
+
+    @GetMapping("/ui/sessions/new")
+    public String newSessionForm() {
+        return "fragments/projects :: newSessionForm";
     }
 
     private void populateSessionModel(Model model, AppStateView view) {

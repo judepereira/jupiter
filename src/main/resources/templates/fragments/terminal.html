@@ -1,11 +1,11 @@
 <aside th:fragment="panel" id="bottom-panel" class="main-panel bottom-panel terminal-panel"
        th:classappend="${bottomPanelMode != 'terminal'} ? 'closed' : ''"
        th:attr="hx-swap-oob=${terminalOob} ? 'outerHTML' : null">
-    <div class="terminal-shell" th:if="${bottomPanelMode == 'terminal'}">
-        <div class="terminal-header">
-            <h2>Terminal</h2>
-        </div>
+    <div id="terminal-panel-divider" class="terminal-panel-divider" role="separator"
+         aria-label="Drag to resize" title="Drag to resize"
+         aria-orientation="horizontal" tabindex="0"></div>
 
+    <div class="terminal-shell" th:if="${bottomPanelMode == 'terminal'}">
         <div class="terminal-empty-state" th:if="${terminalTabs.isEmpty()}">
             <p>No terminals open.</p>
             <button type="button" class="terminal-empty-button" hx-post="/ui/terminal/new" hx-target="#bottom-panel"

@@ -95,7 +95,7 @@ public class TerminalManager {
             String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank()).orElse("/bin/bash");
             Map<String, String> env = new HashMap<>(System.getenv());
             env.put("TERM", "xterm-256color");
-            return new PtyProcessBuilder(new String[]{shell})
+            return new PtyProcessBuilder(new String[]{shell, "-l"}) // Force a login shell.
                     .setEnvironment(env)
                     .setDirectory(Path.of(workspaceRoot).toAbsolutePath().normalize().toString())
                     .setConsole(false)
