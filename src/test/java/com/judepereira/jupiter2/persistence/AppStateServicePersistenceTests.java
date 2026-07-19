@@ -34,7 +34,7 @@ public class AppStateServicePersistenceTests {
         assertThat(view.projects()).extracting(ProjectView::name, ProjectView::path)
                 .containsExactly(tuple("Alpha", projectPath.toAbsolutePath().normalize().toString()));
         assertThat(view.workspaces()).extracting(WorkspaceView::name, WorkspaceView::path)
-                .containsExactly(tuple("Workspace #1", projectPath.toAbsolutePath().normalize().toString()));
+                .containsExactly(tuple("Default Workspace", projectPath.toAbsolutePath().normalize().toString()));
         assertThat(view.activeWorkspace()).isNotNull();
         assertThat(view.activeWorkspace().path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
         assertThat(view.sessions()).extracting(SessionView::name).containsExactly("Session #1");

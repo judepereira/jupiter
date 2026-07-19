@@ -62,7 +62,7 @@ public class AppStateService {
         }
 
         long projectId = repository.insertProject(name, normalizedPath, repository.nextProjectDisplayOrder(), now);
-        long workspaceId = repository.insertWorkspace(projectId, "Workspace #1", normalizedPath, 1L, now);
+        long workspaceId = repository.insertWorkspace(projectId, "Default Workspace", normalizedPath, 1L, now);
         long sessionId = createSessionInternal(workspaceId, now);
         repository.updateAppState(projectId, workspaceId, sessionId);
         return toProjectView(repository.findProject(projectId));
