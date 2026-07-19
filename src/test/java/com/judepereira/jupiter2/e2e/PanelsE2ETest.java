@@ -56,7 +56,7 @@ class PanelsE2ETest extends E2ETestSupport {
                 page.locator("#toggle-terminal-rail-btn").click();
 
                 assertThat(page.locator("#bottom-panel")).isVisible();
-                assertThat(page.locator("#bottom-panel .terminal-header")).isVisible();
+                assertThat(page.locator("#bottom-panel .terminal-shell")).isVisible();
                 assertThat(page.locator("#terminal-panel-divider")).isVisible();
                 assertThat(page.locator("#review")).not().isVisible();
                 runTerminalCommandAndAssertOutput(page);
@@ -73,7 +73,7 @@ class PanelsE2ETest extends E2ETestSupport {
                 assertThat(page.locator("#review")).isVisible();
                 assertThat(page.locator("#review .review-header")).isVisible();
                 assertThat(page.locator("#bottom-panel")).isVisible();
-                assertThat(page.locator("#bottom-panel .terminal-header")).isVisible();
+                assertThat(page.locator("#bottom-panel .terminal-shell")).isVisible();
                 assertThat(page.locator("#review")).hasCount(1);
                 assertThat(page.locator("#bottom-panel")).hasCount(1);
                 captureScreenshot(page, screenshotsDir, "03-review-open.png");
@@ -82,7 +82,7 @@ class PanelsE2ETest extends E2ETestSupport {
 
                 assertThat(page.locator("#review")).not().isVisible();
                 assertThat(page.locator("#bottom-panel")).isVisible();
-                assertThat(page.locator("#bottom-panel .terminal-header")).isVisible();
+                assertThat(page.locator("#bottom-panel .terminal-shell")).isVisible();
                 assertThat(page.locator("#review")).hasCount(1);
                 assertThat(page.locator("#bottom-panel")).hasCount(1);
                 captureScreenshot(page, screenshotsDir, "04-review-closed.png");

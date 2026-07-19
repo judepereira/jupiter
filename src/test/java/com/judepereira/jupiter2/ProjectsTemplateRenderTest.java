@@ -117,6 +117,7 @@ public class ProjectsTemplateRenderTest {
 
         assertThat(html).contains("New workspace", "New session");
         assertThat(html).contains("hx-get=\"/ui/workspaces/new\"", "hx-get=\"/ui/sessions/new\"");
+        assertThat(html).contains("hx-target=\"this\"", "hx-swap=\"outerHTML\"");
         assertThat(html).contains("hx-post=\"/ui/workspaces/1/collapse\"", "hx-post=\"/ui/workspaces/2/activate\"");
         assertThat(html).contains("bi-chevron-down workspace-disclosure", "bi-chevron-right workspace-disclosure");
         assertThat(html).contains("Session #1", "Session #2");
@@ -145,7 +146,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("selectedFile", null);
         String html = engine.process("fragments/projects", context);
 
-        assertThat(html).contains("<form", "class=\"session-create-form\"", "hx-post=\"/ui/sessions/add\"");
+        assertThat(html).contains("<form", "class=\"session-create-form\"", "data-session-create-form", "hx-post=\"/ui/sessions/add\"");
         assertThat(html).contains("id=\"session-name-input\"", "name=\"name\"", "placeholder=\"Session name\"");
     }
 

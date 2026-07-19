@@ -86,14 +86,7 @@
                         <span class="session-label" th:text="${s.name}"></span>
                     </button>
 
-                    <button type="button"
-                            class="rail-action-button session-create-button"
-                            hx-get="/ui/sessions/new"
-                            hx-target="this"
-                            hx-swap="outerHTML">
-                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                        <span>New session</span>
-                    </button>
+                    <th:block th:replace="~{fragments/projects :: newSessionButton}"></th:block>
                 </div>
             </div>
 
@@ -109,8 +102,20 @@
     </section>
 </th:block>
 
+<th:block th:fragment="newSessionButton">
+    <button type="button"
+            class="rail-action-button session-create-button"
+            hx-get="/ui/sessions/new"
+            hx-target="this"
+            hx-swap="outerHTML">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+        <span>New session</span>
+    </button>
+</th:block>
+
 <th:block th:fragment="newSessionForm">
     <form class="session-create-form"
+          data-session-create-form
           hx-post="/ui/sessions/add"
           hx-target="#shell"
           hx-swap="none">

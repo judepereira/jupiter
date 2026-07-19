@@ -490,6 +490,11 @@ public class UiController {
         return "fragments/projects :: newSessionForm";
     }
 
+    @GetMapping("/ui/sessions/new/button")
+    public String newSessionButton() {
+        return "fragments/projects :: newSessionButton";
+    }
+
     private void populateSessionModel(Model model, AppStateView view) {
         SessionView session = view.activeSession();
         SessionDetailView detail = view.activeSessionDetail();

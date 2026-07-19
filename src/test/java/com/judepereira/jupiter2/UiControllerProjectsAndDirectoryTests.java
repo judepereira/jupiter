@@ -220,6 +220,13 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
+    public void newSessionButtonEndpointReturnsTheButtonFragment() {
+        UiController controller = newController();
+
+        assertThat(controller.newSessionButton()).isEqualTo("fragments/projects :: newSessionButton");
+    }
+
+    @Test
     public void chatMessagesStayScopedToTheActiveProjectAndSession(@TempDir Path firstProject,
                                                                  @TempDir Path secondProject) {
         RecordingHarness harness = new RecordingHarness();
