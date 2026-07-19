@@ -63,6 +63,26 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
+    public void collapseWorkspaceClearsTheActiveWorkspaceAndSessionWhileKeepingTheProjectSelected(@TempDir Path projectPath) {
+        UiController controller = newController();
+
+        ConcurrentModel addProject = new ConcurrentModel();
+        controller.addProject("Alpha", projectPath.toString(), addProject);
+
+        ConcurrentModel collapse = new ConcurrentModel();
+        String view = controller.collapseWorkspace(activeWorkspace(addProject).id(), collapse);
+
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(activeProject(collapse)).isNotNull();
+        assertThat(activeProject(collapse).name()).isEqualTo("Alpha");
+        assertThat(workspaces(collapse)).extracting(UiController.Workspace::name)
+                .containsExactly("Workspace #1");
+        assertThat(activeWorkspace(collapse)).isNull();
+        assertThat(sessions(collapse)).isEmpty();
+        assertThat(activeSession(collapse)).isNull();
+    }
+
+    @Test
     public void indexExposesProjectTabsAndActiveWorkspaceSessionData(@TempDir Path firstProject,
                                                                      @TempDir Path secondProject) {
         UiController controller = newController();

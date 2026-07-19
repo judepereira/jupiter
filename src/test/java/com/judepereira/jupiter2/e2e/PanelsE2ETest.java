@@ -78,6 +78,10 @@ class PanelsE2ETest extends E2ETestSupport {
                 assertThat(page.locator("#review")).hasCount(1);
                 assertThat(page.locator("#bottom-panel")).hasCount(1);
                 captureScreenshot(page, screenshotsDir, "04-review-closed.png");
+
+                page.locator("#toggle-terminal-rail-btn").click();
+
+                assertThat(page.locator("#bottom-panel")).not().isVisible();
             }
         } finally {
             if (previousHome == null) {

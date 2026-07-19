@@ -69,8 +69,9 @@
                 <button type="button"
                         class="workspace-item"
                         th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''"
-                        th:attr="hx-post=@{/ui/workspaces/{id}/activate(id=${workspace.id})}, hx-swap='none'">
-                    <i class="bi bi-chevron-down workspace-disclosure" aria-hidden="true"></i>
+                        th:attr="hx-post=${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? @{/ui/workspaces/{id}/collapse(id=${workspace.id})} : @{/ui/workspaces/{id}/activate(id=${workspace.id})}, hx-swap='none'">
+                    <i th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-down workspace-disclosure" aria-hidden="true"></i>
+                    <i th:unless="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-right workspace-disclosure" aria-hidden="true"></i>
                     <i class="bi bi-folder workspace-icon" aria-hidden="true"></i>
                     <span class="workspace-label" th:text="${workspace.name}"></span>
                 </button>

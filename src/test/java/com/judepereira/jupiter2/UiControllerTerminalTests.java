@@ -46,6 +46,35 @@ public class UiControllerTerminalTests {
     }
 
     @Test
+    public void openingTerminalPanelTogglesClosedAndReopensExistingTabs(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        UiController controller = context.controller();
+
+        controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+
+        controller.openTerminalPanel(new ConcurrentModel());
+
+        ConcurrentModel closedModel = new ConcurrentModel();
+        controller.openTerminalPanel(closedModel);
+
+        assertThat(terminalTabs(closedModel)).extracting(TerminalTab::title, TerminalTab::active)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+        assertThat(activeTerminal(closedModel).id()).isEqualTo("terminal-1");
+        assertThat(bottomPanelMode(closedModel)).isEqualTo("none");
+        assertThat(bottomPanelOpen(closedModel)).isFalse();
+
+        ConcurrentModel reopenedModel = new ConcurrentModel();
+        controller.openTerminalPanel(reopenedModel);
+
+        assertThat(terminalTabs(reopenedModel)).extracting(TerminalTab::title, TerminalTab::active)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+        assertThat(activeTerminal(reopenedModel).id()).isEqualTo("terminal-1");
+        assertThat(bottomPanelMode(reopenedModel)).isEqualTo("terminal");
+        assertThat(bottomPanelOpen(reopenedModel)).isTrue();
+        verify(context.terminalManager()).createTerminal(workspaceRoot.toAbsolutePath().normalize().toString());
+    }
+
+    @Test
     public void creatingNewTerminalAddsTabAndActivatesNewest(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
         UiController controller = context.controller();

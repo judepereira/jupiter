@@ -131,6 +131,14 @@ public class AppStateService {
     }
 
     @Transactional
+    public void collapseWorkspace(long workspaceId) {
+        Instant now = Instant.now();
+        var workspace = repository.findWorkspace(workspaceId);
+        repository.updateProjectLastOpened(workspace.projectId(), now);
+        repository.updateAppState(workspace.projectId(), null, null);
+    }
+
+    @Transactional
     public void activateSession(long sessionId) {
         Instant now = Instant.now();
         var session = repository.findSession(sessionId);

@@ -287,11 +287,15 @@ public class UiController {
         AppStateView view = currentViewWithSessionIfNeeded(true);
         if (view.activeSession() != null) {
             TerminalPanelState state = terminalStateService.snapshot(view.activeSession().id());
-            if (state.terminalTabs().isEmpty()) {
-                TerminalHandle terminal = terminalManager.createTerminal(view.activeSessionDetail().workspaceRoot());
-                terminalStateService.registerTerminal(view.activeSession().id(), terminal);
+            if (state.bottomPanelOpen()) {
+                terminalStateService.closeTerminalPane(view.activeSession().id());
+            } else {
+                if (state.terminalTabs().isEmpty()) {
+                    TerminalHandle terminal = terminalManager.createTerminal(view.activeSessionDetail().workspaceRoot());
+                    terminalStateService.registerTerminal(view.activeSession().id(), terminal);
+                }
+                terminalStateService.openTerminalPane(view.activeSession().id());
             }
-            terminalStateService.openTerminalPane(view.activeSession().id());
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
@@ -455,6 +459,19 @@ public class UiController {
     @PostMapping("/ui/workspaces/{workspaceId}/activate")
     public String activateWorkspace(@PathVariable long workspaceId, Model model) {
         appStateService.activateWorkspace(workspaceId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view.activeSession(), view.activeSessionDetail());
+        model.addAttribute("terminalOob", isTerminalPanelOpen(view));
+        model.addAttribute("shellRefresh", true);
+        model.addAttribute("includeChatContainer", true);
+        model.addAttribute("reviewOob", true);
+        return "fragments/projects :: shellUpdates";
+    }
+
+    @PostMapping("/ui/workspaces/{workspaceId}/collapse")
+    public String collapseWorkspace(@PathVariable long workspaceId, Model model) {
+        appStateService.collapseWorkspace(workspaceId);
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
         populateSessionModel(model, view.activeSession(), view.activeSessionDetail());

@@ -117,6 +117,8 @@ public class ProjectsTemplateRenderTest {
 
         assertThat(html).contains("New workspace", "New session");
         assertThat(html).contains("hx-get=\"/ui/workspaces/new\"", "hx-post=\"/ui/sessions/add\"");
+        assertThat(html).contains("hx-post=\"/ui/workspaces/1/collapse\"", "hx-post=\"/ui/workspaces/2/activate\"");
+        assertThat(html).contains("bi-chevron-down workspace-disclosure", "bi-chevron-right workspace-disclosure");
         assertThat(html).contains("Session #1", "Session #2");
     }
 
