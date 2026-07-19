@@ -21,6 +21,8 @@ public class CatalogServicesTest {
         assertThat(plan.allowWrite()).isFalse();
         assertThat(plan.allowCommand()).isFalse();
         assertThat(plan.allowedTools()).containsExactly("list_files", "read_file", "search_code");
+        assertThat(plan.systemPrompt()).isEqualTo(
+                "You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
 
         AgentDefinition engineer = service.getRequired("engineer");
         assertThat(engineer.allowWrite()).isTrue();
@@ -29,6 +31,8 @@ public class CatalogServicesTest {
         assertThat(engineer.defaultModel()).isEqualTo("openai/gpt-5.5");
         assertThat(engineer.allowedTools()).containsExactly(
                 "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
+        assertThat(engineer.systemPrompt()).isEqualTo(
+                "You are Engineer, an implementation assistant. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
     }
 
     @Test

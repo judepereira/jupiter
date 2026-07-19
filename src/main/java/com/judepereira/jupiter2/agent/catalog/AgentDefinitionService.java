@@ -2,12 +2,17 @@ package com.judepereira.jupiter2.agent.catalog;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.core.io.ClassPathResource;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,14 +20,15 @@ import java.util.Map;
 @Service
 public class AgentDefinitionService {
 
-    private static final String RESOURCE_PATH = "agents/agents.json";
+    private static final String RESOURCE_PATTERN = "classpath*:agents/*.md";
     private static final String DEFAULT_AGENT_ID = "plan";
+    private static final YAMLMapper YAML_MAPPER = new YAMLMapper();
 
     private final List<AgentDefinition> agents;
     private final Map<String, AgentDefinition> agentsById;
 
     public AgentDefinitionService(ObjectMapper objectMapper) {
-        this.agents = loadAgents(objectMapper);
+        this.agents = loadAgents();
         this.agentsById = indexAgents(agents);
         getRequired(DEFAULT_AGENT_ID);
     }
@@ -53,14 +59,118 @@ public class AgentDefinitionService {
         return agentsById.getOrDefault(id, defaultAgent());
     }
 
-    private static List<AgentDefinition> loadAgents(ObjectMapper objectMapper) {
-        try (InputStream inputStream = new ClassPathResource(RESOURCE_PATH).getInputStream()) {
-            var agents = objectMapper.readValue(inputStream, new TypeReference<List<AgentDefinition>>() {
-            });
+    private static List<AgentDefinition> loadAgents() {
+        try {
+            var resolver = new PathMatchingResourcePatternResolver();
+            var agents = Arrays.stream(resolver.getResources(RESOURCE_PATTERN))
+                    .sorted(Comparator.comparing(Resource::getFilename, Comparator.nullsLast(String::compareTo))
+                            .thenComparing(AgentDefinitionService::resourceSortKey))
+                    .map(AgentDefinitionService::loadAgent)
+                    .toList();
             validateAgents(agents);
             return List.copyOf(agents);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to load agent catalog from classpath:" + RESOURCE_PATH, e);
+            throw new IllegalStateException("Failed to load agent catalog from classpath:" + RESOURCE_PATTERN, e);
+        }
+    }
+
+    private static AgentDefinition loadAgent(Resource resource) {
+        try (InputStream inputStream = resource.getInputStream()) {
+            var content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            var frontMatter = parseFrontMatter(resource, content);
+            var metadata = YAML_MAPPER.readValue(frontMatter.yaml(), FrontMatter.class);
+            return new AgentDefinition(
+                    metadata.id(),
+                    metadata.name(),
+                    metadata.description(),
+                    frontMatter.body(),
+                    metadata.defaultModel(),
+                    metadata.defaultThinkingLevel(),
+                    metadata.allowWrite(),
+                    metadata.allowCommand(),
+                    metadata.allowedTools()
+            );
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load agent definition from classpath:" + resourceSortKey(resource), e);
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("Failed to load agent definition from classpath:" + resourceSortKey(resource), e);
+        }
+    }
+
+    private static FrontMatterAndBody parseFrontMatter(Resource resource, String content) {
+        if (!content.startsWith("---")) {
+            throw new IllegalStateException("Missing YAML frontmatter in classpath:" + resourceSortKey(resource));
+        }
+
+        int firstLineEnd = lineEnd(content, 0);
+        if (!stripTrailingCarriageReturn(content.substring(0, firstLineEnd)).equals("---")) {
+            throw new IllegalStateException("Malformed YAML frontmatter in classpath:" + resourceSortKey(resource));
+        }
+
+        int frontMatterStart = nextLineStart(content, firstLineEnd);
+        int frontMatterEnd = findClosingFrontMatterDelimiter(content, frontMatterStart, resource);
+        var yaml = content.substring(frontMatterStart, frontMatterEnd);
+        var bodyStart = nextLineStart(content, frontMatterEnd + 3);
+        var body = bodyStart >= content.length() ? "" : content.substring(bodyStart);
+        return new FrontMatterAndBody(yaml, trimTrailingLineBreak(trimLeadingLineBreak(body)));
+    }
+
+    private static int findClosingFrontMatterDelimiter(String content, int start, Resource resource) {
+        int index = start;
+        while (index <= content.length()) {
+            int lineEnd = lineEnd(content, index);
+            if (stripTrailingCarriageReturn(content.substring(index, lineEnd)).equals("---")) {
+                return index;
+            }
+            if (lineEnd == content.length()) {
+                break;
+            }
+            index = nextLineStart(content, lineEnd);
+        }
+        throw new IllegalStateException("Missing closing YAML frontmatter delimiter in classpath:" + resourceSortKey(resource));
+    }
+
+    private static int lineEnd(String content, int start) {
+        int newline = content.indexOf('\n', start);
+        return newline == -1 ? content.length() : newline;
+    }
+
+    private static int nextLineStart(String content, int lineEnd) {
+        if (lineEnd >= content.length()) {
+            return content.length();
+        }
+        return lineEnd + 1;
+    }
+
+    private static String trimLeadingLineBreak(String body) {
+        if (body.startsWith("\r\n")) {
+            return body.substring(2);
+        }
+        if (body.startsWith("\n") || body.startsWith("\r")) {
+            return body.substring(1);
+        }
+        return body;
+    }
+
+    private static String trimTrailingLineBreak(String body) {
+        if (body.endsWith("\r\n")) {
+            return body.substring(0, body.length() - 2);
+        }
+        if (body.endsWith("\n") || body.endsWith("\r")) {
+            return body.substring(0, body.length() - 1);
+        }
+        return body;
+    }
+
+    private static String stripTrailingCarriageReturn(String line) {
+        return line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
+    }
+
+    private static String resourceSortKey(Resource resource) {
+        try {
+            return resource.getURL().toString();
+        } catch (IOException e) {
+            return resource.getDescription();
         }
     }
 
@@ -97,5 +207,20 @@ public class AgentDefinitionService {
                 throw new IllegalStateException("defaultModel is required for agent: " + agent.id());
             }
         }
+    }
+
+    private record FrontMatterAndBody(String yaml, String body) {
+    }
+
+    private record FrontMatter(
+            String id,
+            String name,
+            String description,
+            String defaultModel,
+            ThinkingLevel defaultThinkingLevel,
+            boolean allowWrite,
+            boolean allowCommand,
+            List<String> allowedTools
+    ) {
     }
 }
