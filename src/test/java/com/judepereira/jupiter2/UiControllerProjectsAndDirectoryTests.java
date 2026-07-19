@@ -36,7 +36,7 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(activeProject(model)).isNotNull();
         assertThat(activeProject(model).name()).isEqualTo("Alpha");
         assertThat(workspaces(model)).extracting(UiController.Workspace::name, UiController.Workspace::path)
-                .containsExactly(tuple("Workspace #1", projectPath.toAbsolutePath().normalize().toString()));
+                .containsExactly(tuple("Default Workspace", projectPath.toAbsolutePath().normalize().toString()));
         assertThat(activeWorkspace(model)).isNotNull();
         assertThat(activeWorkspace(model).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
         assertThat(sessions(model)).extracting(UiController.Session::name)
@@ -84,7 +84,7 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(activeProject(collapse)).isNotNull();
         assertThat(activeProject(collapse).name()).isEqualTo("Alpha");
         assertThat(workspaces(collapse)).extracting(UiController.Workspace::name)
-                .containsExactly("Workspace #1");
+                .containsExactly("Default Workspace");
         assertThat(activeWorkspace(collapse)).isNull();
         assertThat(sessions(collapse)).isEmpty();
         assertThat(activeSession(collapse)).isNull();

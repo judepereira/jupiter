@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -13,6 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Log4j2
 @Service
@@ -24,14 +27,44 @@ public class SystemBalloonService {
     private final ObjectMapper objectMapper;
     private final Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
     private final List<SystemBalloon> publishedBalloons = new CopyOnWriteArrayList<>();
+    private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
     public SseEmitter connect() {
         SseEmitter emitter = new SseEmitter(0L);
+        if (shutdownStarted.get()) {
+            emitter.complete();
+            return emitter;
+        }
+
         emitters.add(emitter);
         emitter.onCompletion(() -> disconnect(emitter));
         emitter.onTimeout(() -> disconnect(emitter));
         emitter.onError(throwable -> disconnect(emitter));
+
+        if (shutdownStarted.get()) {
+            disconnect(emitter);
+            emitter.complete();
+        }
+
         return emitter;
+    }
+
+    @EventListener
+    public void onContextClosed(ContextClosedEvent event) {
+        if (!shutdownStarted.compareAndSet(false, true)) {
+            return;
+        }
+
+        List<SseEmitter> activeEmitters = List.copyOf(emitters);
+        emitters.clear();
+
+        for (SseEmitter emitter : activeEmitters) {
+            try {
+                emitter.complete();
+            } catch (Exception e) {
+                log.error("Failed to complete system balloon SSE client during shutdown", e);
+            }
+        }
     }
 
     public void publishError(String body) {
@@ -91,6 +124,10 @@ public class SystemBalloonService {
 
     private void disconnect(SseEmitter emitter) {
         emitters.remove(emitter);
+    }
+
+    int activeEmitterCount() {
+        return emitters.size();
     }
 
     List<SystemBalloon> publishedBalloons() {

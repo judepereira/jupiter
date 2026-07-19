@@ -137,9 +137,9 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo")));
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo"));
         context.setVariable("workspaces", List.of(
-                new Workspace(1L, "Workspace #1", "/repo"),
+                new Workspace(1L, "Default Workspace", "/repo"),
                 new Workspace(2L, "feature-workspace", "/repo/.trees/feature-workspace")));
-        context.setVariable("activeWorkspace", new Workspace(1L, "Workspace #1", "/repo"));
+        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo"));
         context.setVariable("sessions", List.of(new Session(1L, "Session #1"), new Session(2L, "Session #2")));
         context.setVariable("activeSession", new Session(2L, "Session #2"));
         context.setVariable("selectedName", "");
