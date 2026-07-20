@@ -6,6 +6,7 @@ public record AgentModelOptions(
         String modelId,
         String apiModelId,
         ThinkingLevel thinkingLevel,
-        boolean supportsReasoning
+        boolean supportsReasoning,
+        String textVerbosity
 ) {
 }

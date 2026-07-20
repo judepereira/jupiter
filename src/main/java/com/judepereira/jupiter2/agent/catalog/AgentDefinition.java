@@ -7,8 +7,10 @@ public record AgentDefinition(
         String name,
         String description,
         String systemPrompt,
+        AgentMode mode,
         String defaultModel,
         ThinkingLevel defaultThinkingLevel,
+        String textVerbosity,
         boolean allowWrite,
         boolean allowCommand,
         List<String> allowedTools

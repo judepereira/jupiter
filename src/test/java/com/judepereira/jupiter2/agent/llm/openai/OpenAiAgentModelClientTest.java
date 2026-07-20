@@ -68,7 +68,7 @@ public class OpenAiAgentModelClientTest {
         var response = client.chat(
                 List.of(new Message(Message.Role.USER, "read it")),
                 List.of(new ToolDefinition("read_file", "Read a file", ToolSchema.object(string("path", "path")).required("path"))),
-                new AgentModelOptions("turn-model", "per-turn-model", ThinkingLevel.HIGH, true)
+                new AgentModelOptions("turn-model", "per-turn-model", ThinkingLevel.HIGH, true, null)
         );
 
         assertEquals(List.of("per-turn-model"), client.chatModelNames());
@@ -108,7 +108,7 @@ public class OpenAiAgentModelClientTest {
         var response = client.chatStreaming(
                 List.of(new Message(Message.Role.USER, "stream it")),
                 List.of(new ToolDefinition("write_file", "Write a file", ToolSchema.object(string("path", "path")).required("path"))),
-                new AgentModelOptions("turn-model", "stream-model", ThinkingLevel.MEDIUM, true),
+                new AgentModelOptions("turn-model", "stream-model", ThinkingLevel.MEDIUM, true, null),
                 deltas::add
         );
 

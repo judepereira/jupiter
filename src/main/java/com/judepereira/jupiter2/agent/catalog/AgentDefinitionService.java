@@ -16,6 +16,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class AgentDefinitionService {
@@ -23,6 +25,14 @@ public class AgentDefinitionService {
     private static final String RESOURCE_PATTERN = "classpath*:agents/*.md";
     private static final String DEFAULT_AGENT_ID = "plan";
     private static final YAMLMapper YAML_MAPPER = new YAMLMapper();
+    private static final List<String> SUPPORTED_TOOLS = List.of(
+            "list_files",
+            "read_file",
+            "search_code",
+            "write_file",
+            "apply_patch",
+            "run_command"
+    );
 
     private final List<AgentDefinition> agents;
     private final Map<String, AgentDefinition> agentsById;
@@ -79,16 +89,24 @@ public class AgentDefinitionService {
             var content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
             var frontMatter = parseFrontMatter(resource, content);
             var metadata = YAML_MAPPER.readValue(frontMatter.yaml(), FrontMatter.class);
+            var id = resolveId(resource, metadata.id());
+            var name = resolveName(id, metadata.name());
+            var allowedTools = resolveAllowedTools(metadata.tools(), id);
+            var allowWrite = allowedTools.contains("write_file") || allowedTools.contains("apply_patch");
+            var allowCommand = allowedTools.contains("run_command");
+            validateRequiredFields(metadata, id);
             return new AgentDefinition(
-                    metadata.id(),
-                    metadata.name(),
+                    id,
+                    name,
                     metadata.description(),
                     frontMatter.body(),
-                    metadata.defaultModel(),
-                    metadata.defaultThinkingLevel(),
-                    metadata.allowWrite(),
-                    metadata.allowCommand(),
-                    metadata.allowedTools()
+                    metadata.mode(),
+                    metadata.model(),
+                    metadata.reasoningEffort(),
+                    metadata.textVerbosity(),
+                    allowWrite,
+                    allowCommand,
+                    allowedTools
             );
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load agent definition from classpath:" + resourceSortKey(resource), e);
@@ -182,6 +200,58 @@ public class AgentDefinitionService {
         return Collections.unmodifiableMap(indexed);
     }
 
+    private static String resolveId(Resource resource, String id) {
+        if (id != null && !id.isBlank()) {
+            return id;
+        }
+        return resourceFilenameToId(resource.getFilename());
+    }
+
+    private static String resolveName(String id, String name) {
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        return idToDisplayName(id);
+    }
+
+    private static List<String> resolveAllowedTools(Map<String, Boolean> tools, String agentId) {
+        if (tools == null || tools.isEmpty()) {
+            throw new IllegalStateException("tools is required for agent: " + agentId);
+        }
+        if (Boolean.TRUE.equals(tools.get("*"))) {
+            return SUPPORTED_TOOLS;
+        }
+        return tools.entrySet().stream()
+                .filter(entry -> Boolean.TRUE.equals(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .peek(AgentDefinitionService::validateToolName)
+                .toList();
+    }
+
+    private static void validateToolName(String tool) {
+        if (tool == null || tool.isBlank()) {
+            throw new IllegalStateException("tools contains a blank tool");
+        }
+        if (!SUPPORTED_TOOLS.contains(tool)) {
+            throw new IllegalStateException("Unknown tool in agent definition: " + tool);
+        }
+    }
+
+    private static String resourceFilenameToId(String filename) {
+        if (filename == null || filename.isBlank()) {
+            throw new IllegalStateException("Agent id is required");
+        }
+        String baseName = filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
+        return baseName.replaceFirst("^\\d+-", "");
+    }
+
+    private static String idToDisplayName(String id) {
+        return Arrays.stream(id.split("[-_]") )
+                .filter(part -> !part.isBlank())
+                .map(part -> part.substring(0, 1).toUpperCase() + part.substring(1))
+                .collect(Collectors.joining(" "));
+    }
+
     private static void validateAgents(List<AgentDefinition> agents) {
         if (agents == null || agents.isEmpty()) {
             throw new IllegalStateException("Agent catalog is empty");
@@ -195,17 +265,36 @@ public class AgentDefinitionService {
             if (seen.put(agent.id(), Boolean.TRUE) != null) {
                 throw new IllegalStateException("Duplicate agent id: " + agent.id());
             }
-            if (agent.allowedTools() == null || agent.allowedTools().isEmpty()) {
-                throw new IllegalStateException("allowedTools is required for agent: " + agent.id());
+            if (agent.description() == null || agent.description().isBlank()) {
+                throw new IllegalStateException("description is required for agent: " + agent.id());
             }
-            for (String tool : agent.allowedTools()) {
-                if (tool == null || tool.isBlank()) {
-                    throw new IllegalStateException("allowedTools contains a blank tool for agent: " + agent.id());
-                }
+            if (agent.mode() == null) {
+                throw new IllegalStateException("mode is required for agent: " + agent.id());
             }
             if (agent.defaultModel() == null || agent.defaultModel().isBlank()) {
-                throw new IllegalStateException("defaultModel is required for agent: " + agent.id());
+                throw new IllegalStateException("model is required for agent: " + agent.id());
             }
+            if (agent.defaultThinkingLevel() == null) {
+                throw new IllegalStateException("reasoningEffort is required for agent: " + agent.id());
+            }
+            if (agent.allowedTools() == null || agent.allowedTools().isEmpty()) {
+                throw new IllegalStateException("tools is required for agent: " + agent.id());
+            }
+        }
+    }
+
+    private static void validateRequiredFields(FrontMatter metadata, String id) {
+        if (metadata.description() == null || metadata.description().isBlank()) {
+            throw new IllegalStateException("description is required for agent: " + id);
+        }
+        if (metadata.mode() == null) {
+            throw new IllegalStateException("mode is required for agent: " + id);
+        }
+        if (metadata.model() == null || metadata.model().isBlank()) {
+            throw new IllegalStateException("model is required for agent: " + id);
+        }
+        if (metadata.reasoningEffort() == null) {
+            throw new IllegalStateException("reasoningEffort is required for agent: " + id);
         }
     }
 
@@ -216,11 +305,11 @@ public class AgentDefinitionService {
             String id,
             String name,
             String description,
-            String defaultModel,
-            ThinkingLevel defaultThinkingLevel,
-            boolean allowWrite,
-            boolean allowCommand,
-            List<String> allowedTools
+            AgentMode mode,
+            String model,
+            ThinkingLevel reasoningEffort,
+            String textVerbosity,
+            Map<String, Boolean> tools
     ) {
     }
 }

@@ -62,7 +62,8 @@ public class CodingAgentHarness {
         ModelDefinition selectedModel = resolveModel(request, agent);
         ThinkingLevel thinkingLevel = resolveThinkingLevel(request, agent);
         AgentModelOptions modelOptions = selectedModel == null ? null : new AgentModelOptions(
-                selectedModel.id(), selectedModel.apiModelId(), thinkingLevel, selectedModel.supportsReasoning());
+                selectedModel.id(), selectedModel.apiModelId(), thinkingLevel, selectedModel.supportsReasoning(),
+                agent == null ? null : agent.textVerbosity());
 
         List<Message> convo = new ArrayList<>();
         String systemPrompt = resolveSystemPrompt(request, agent);

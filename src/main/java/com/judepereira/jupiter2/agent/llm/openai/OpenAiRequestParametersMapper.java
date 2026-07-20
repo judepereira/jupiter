@@ -7,12 +7,22 @@ import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 public final class OpenAiRequestParametersMapper {
 
     public OpenAiResponsesChatRequestParameters toRequestParameters(AgentModelOptions options) {
-        if (options == null || !options.supportsReasoning() || options.thinkingLevel() == null) {
+        if (options == null) {
             return null;
         }
-        return OpenAiResponsesChatRequestParameters.builder()
-                .reasoningEffort(reasoningEffort(options.thinkingLevel()))
-                .build();
+        boolean hasReasoning = options.supportsReasoning() && options.thinkingLevel() != null;
+        boolean hasTextVerbosity = options.textVerbosity() != null && !options.textVerbosity().isBlank();
+        if (!hasReasoning && !hasTextVerbosity) {
+            return null;
+        }
+        var builder = OpenAiResponsesChatRequestParameters.builder();
+        if (hasReasoning) {
+            builder.reasoningEffort(reasoningEffort(options.thinkingLevel()));
+        }
+        if (hasTextVerbosity) {
+            builder.textVerbosity(options.textVerbosity());
+        }
+        return builder.build();
     }
 
     private static String reasoningEffort(ThinkingLevel thinkingLevel) {

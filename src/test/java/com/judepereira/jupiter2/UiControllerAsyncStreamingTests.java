@@ -145,7 +145,7 @@ public class UiControllerAsyncStreamingTests {
         assertThat(request.getAgentId()).isEqualTo("engineer");
         assertThat(request.getModelId()).isEqualTo("openai/gpt-5.5-pro");
         assertThat(request.getThinkingLevel()).isEqualTo(ThinkingLevel.LOW);
-        assertThat(request.getSystemPrompt()).isEqualTo("You are Engineer, an implementation assistant. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
+        assertThat(request.getSystemPrompt()).isEqualTo("You are an apprentice to a seasoned software engineer. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
         assertThat(request.getConversationHistory()).hasSize(1);
         assertThat(request.getConversationHistory().get(0).getRole()).isEqualTo(Message.Role.USER);
         assertThat(request.getConversationHistory().get(0).getContent()).isEqualTo("go");

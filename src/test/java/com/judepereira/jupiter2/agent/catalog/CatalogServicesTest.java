@@ -3,6 +3,10 @@ package com.judepereira.jupiter2.agent.catalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ByteArrayResource;
+
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,18 +25,60 @@ public class CatalogServicesTest {
         assertThat(plan.allowWrite()).isFalse();
         assertThat(plan.allowCommand()).isFalse();
         assertThat(plan.allowedTools()).containsExactly("list_files", "read_file", "search_code");
+        assertThat(plan.mode()).isEqualTo(AgentMode.AGENT);
+        assertThat(plan.defaultModel()).isEqualTo("openai/gpt-5.5");
+        assertThat(plan.defaultThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(plan.systemPrompt()).isEqualTo(
                 "You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
 
         AgentDefinition engineer = service.getRequired("engineer");
+        assertThat(engineer.name()).isEqualTo("Engineer");
+        assertThat(engineer.description()).isEqualTo("An apprentice to a seasoned software engineer.");
         assertThat(engineer.allowWrite()).isTrue();
         assertThat(engineer.allowCommand()).isTrue();
+        assertThat(engineer.mode()).isEqualTo(AgentMode.SUBAGENT);
         assertThat(engineer.defaultThinkingLevel()).isEqualTo(ThinkingLevel.MEDIUM);
         assertThat(engineer.defaultModel()).isEqualTo("openai/gpt-5.5");
+        assertThat(engineer.textVerbosity()).isEqualTo("low");
         assertThat(engineer.allowedTools()).containsExactly(
                 "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
         assertThat(engineer.systemPrompt()).isEqualTo(
-                "You are Engineer, an implementation assistant. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
+                "You are an apprentice to a seasoned software engineer. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
+    }
+
+    @Test
+    public void agentModeRejectsInvalidValues() {
+        assertThatThrownBy(() -> AgentMode.fromValue("invalid"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid mode");
+    }
+
+    @Test
+    public void agentDefinitionLoadingFailsLoudlyWhenRequiredFieldsAreMissing() throws Exception {
+        String frontMatter = """
+                ---
+                description: Missing required fields
+                mode: agent
+                reasoningEffort: high
+                tools:
+                  list_files: true
+                ---
+                body
+                """;
+
+        Method loadAgent = AgentDefinitionService.class.getDeclaredMethod("loadAgent", org.springframework.core.io.Resource.class);
+        loadAgent.setAccessible(true);
+
+        ByteArrayResource resource = new ByteArrayResource(frontMatter.getBytes(StandardCharsets.UTF_8)) {
+            @Override
+            public String getFilename() {
+                return "99-missing-model.md";
+            }
+        };
+
+        assertThatThrownBy(() -> loadAgent.invoke(null, resource))
+                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .hasRootCauseMessage("model is required for agent: missing-model");
     }
 
     @Test

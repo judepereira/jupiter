@@ -97,17 +97,18 @@ public class LangChain4jMapperTest {
     @Test
     public void maps_thinking_level_to_reasoning_effort() {
         OpenAiResponsesChatRequestParameters parameters = requestParametersMapper.toRequestParameters(
-                new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, true)
+                new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, true, "low")
         );
 
         assertNotNull(parameters);
         assertEquals("high", parameters.reasoningEffort());
+        assertEquals("low", parameters.textVerbosity());
     }
 
     @Test
     public void omits_reasoning_effort_when_not_supported() {
         assertNull(requestParametersMapper.toRequestParameters(
-                new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, false)
+                new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, false, null)
         ));
     }
 
