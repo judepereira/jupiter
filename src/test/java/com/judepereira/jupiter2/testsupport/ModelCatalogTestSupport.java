@@ -27,6 +27,17 @@ public final class ModelCatalogTestSupport {
                     "output": 128000
                   }
                 },
+                "openai/gpt-4.1": {
+                  "id": "openai/gpt-4.1",
+                  "name": "GPT-4.1",
+                  "reasoning": true,
+                  "tool_call": true,
+                  "release_date": "2025-04-14",
+                  "limit": {
+                    "context": 128000,
+                    "output": 16000
+                  }
+                },
                 "anthropic/claude-opus-4": {
                   "id": "anthropic/claude-opus-4",
                   "name": "Claude Opus 4",

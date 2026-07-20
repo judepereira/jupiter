@@ -88,6 +88,8 @@ public class CatalogServicesTest {
         assertThat(service.defaultModelId()).isEqualTo("openai/gpt-5.5");
         assertThat(service.list()).extracting(ModelDefinition::id)
                 .containsExactly("openai/gpt-5.5", "openai/gpt-5.5-pro");
+        assertThat(service.list()).extracting(ModelDefinition::id)
+                .doesNotContain("openai/gpt-4.1");
         assertThat(service.list()).extracting(ModelDefinition::provider)
                 .containsOnly("openai");
 
@@ -101,7 +103,7 @@ public class CatalogServicesTest {
         String json = """
                 {
                   "models": {
-                    "openai/bad-model": {
+                    "openai/gpt-5.5-bad": {
                       "id": "",
                       "name": "Bad Model",
                       "reasoning": true,
