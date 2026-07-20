@@ -13,7 +13,7 @@ public final class Persistence {
     private Persistence() {
     }
 
-    public record ProjectView(long id, String name, String path) {
+    public record ProjectView(long id, String name, String path, String workspaceInitCommands) {
     }
 
     public record WorkspaceView(long id, String name, String path) {

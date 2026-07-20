@@ -267,6 +267,12 @@ public class AppStateService {
     }
 
     @Transactional
+    public void updateProjectWorkspaceInitCommands(long projectId, String workspaceInitCommands) {
+        String normalized = workspaceInitCommands == null || workspaceInitCommands.isBlank() ? null : workspaceInitCommands;
+        repository.updateProjectWorkspaceInitCommands(projectId, normalized);
+    }
+
+    @Transactional
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId, String assistantPublicId, String userText) {
         return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText, null);
     }
@@ -775,7 +781,8 @@ public class AppStateService {
     }
 
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
-        return new ProjectView(row.id(), row.name(), row.normalizedPath());
+        String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank() ? null : row.workspaceInitCommands();
+        return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands);
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {

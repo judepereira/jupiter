@@ -1379,6 +1379,10 @@ input:focus, textarea:focus {
     width: min(620px, 100%);
 }
 
+.settings-modal-card {
+    width: min(760px, 100%);
+}
+
 .project-modal-header {
     display: flex;
     align-items: center;
@@ -1401,6 +1405,40 @@ input:focus, textarea:focus {
     gap: 14px;
 }
 
+.settings-modal-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-section h5 {
+    margin: 0;
+}
+
+.settings-project-meta {
+    display: grid;
+    gap: 6px;
+    color: var(--muted);
+    word-break: break-word;
+}
+
+.settings-commands {
+    min-height: 170px;
+    resize: vertical;
+    font: inherit;
+    line-height: 1.4;
+}
+
+.settings-app-section {
+    padding-top: 4px;
+    border-top: 1px solid #e6eef6;
+}
+
 .project-form-field {
     display: flex;
     flex-direction: column;
@@ -1409,7 +1447,8 @@ input:focus, textarea:focus {
 }
 
 .project-form-field input,
-.project-path-input {
+.project-path-input,
+.project-form-field textarea {
     width: 100%;
     box-sizing: border-box;
     border-radius: 6px;

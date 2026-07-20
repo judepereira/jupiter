@@ -60,6 +60,10 @@ public final class TestAppStateSupport {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
         });
+        when(terminalManager.createTerminal(anyString(), anyString())).thenAnswer(invocation -> {
+            int n = sequence.incrementAndGet();
+            return new TerminalHandle("terminal-" + n, (String) invocation.getArgument(1));
+        });
         AppStateService appStateService = appStateService();
         return new UiController(harness, properties, appStateService, terminalManager, new TerminalStateService(),
                 modelCatalogService, new SystemBalloonService(new ObjectMapper()), contextCompactionService(appStateService), Runnable::run);

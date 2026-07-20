@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -176,6 +178,77 @@ public class UiControllerTerminalTests {
     }
 
     @Test
+    public void creatingWorkspaceRunsWorkspaceInitCommandsInWorkspaceInitTerminal(@TempDir Path projectRoot) throws Exception {
+        initGitRepo(projectRoot);
+
+        TestContext context = newContext(projectRoot);
+        UiController controller = context.controller();
+
+        controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        String commands = "echo init-one\npwd\ntouch init-ran.txt";
+        context.appStateService().updateProjectWorkspaceInitCommands(projectId, commands);
+
+        String branchName = "feature-init-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        ConcurrentModel model = new ConcurrentModel();
+        String view = controller.addWorkspace(branchName, "create", model);
+
+        Path worktreePath = projectRoot.toAbsolutePath().normalize().resolveSibling(".trees").resolve(branchName).toAbsolutePath().normalize();
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(terminalTabs(model)).extracting(TerminalTab::title, TerminalTab::active)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("Workspace Init", true));
+        assertThat(bottomPanelMode(model)).isEqualTo("terminal");
+        assertThat(bottomPanelOpen(model)).isTrue();
+        assertThat(context.terminalStateService().snapshot(context.appStateService().loadViewData().activeWorkspace().id()).bottomPanelOpen()).isTrue();
+        verify(context.terminalManager()).createTerminal(worktreePath.toString(), "Workspace Init");
+        verify(context.terminalManager()).write(anyString(), eq(commands + "\n"));
+    }
+
+    @Test
+    public void creatingWorkspaceWithBlankWorkspaceInitCommandsDoesNotAutoCreateATerminal(@TempDir Path projectRoot) throws Exception {
+        initGitRepo(projectRoot);
+
+        TestContext context = newContext(projectRoot);
+        UiController controller = context.controller();
+
+        controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        context.appStateService().updateProjectWorkspaceInitCommands(projectId, "   ");
+
+        String branchName = "feature-blank-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        ConcurrentModel model = new ConcurrentModel();
+        controller.addWorkspace(branchName, "create", model);
+
+        assertThat(terminalTabs(model)).isEmpty();
+        assertThat(activeTerminal(model)).isNull();
+        assertThat(bottomPanelMode(model)).isEqualTo("none");
+        assertThat(bottomPanelOpen(model)).isFalse();
+        verify(context.terminalManager(), never()).createTerminal(anyString(), anyString());
+    }
+
+    @Test
+    public void creatingWorkspaceWithNullWorkspaceInitCommandsDoesNotAutoCreateATerminal(@TempDir Path projectRoot) throws Exception {
+        initGitRepo(projectRoot);
+
+        TestContext context = newContext(projectRoot);
+        UiController controller = context.controller();
+
+        controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        context.appStateService().updateProjectWorkspaceInitCommands(projectId, null);
+
+        String branchName = "feature-null-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        ConcurrentModel model = new ConcurrentModel();
+        controller.addWorkspace(branchName, "create", model);
+
+        assertThat(terminalTabs(model)).isEmpty();
+        assertThat(activeTerminal(model)).isNull();
+        assertThat(bottomPanelMode(model)).isEqualTo("none");
+        assertThat(bottomPanelOpen(model)).isFalse();
+        verify(context.terminalManager(), never()).createTerminal(anyString(), anyString());
+    }
+
+    @Test
     public void activatingTerminalSwitchesActiveId(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
         UiController controller = context.controller();
@@ -242,6 +315,10 @@ public class UiControllerTerminalTests {
         when(terminalManager.createTerminal(anyString())).thenAnswer(invocation -> {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
+        });
+        when(terminalManager.createTerminal(anyString(), anyString())).thenAnswer(invocation -> {
+            int n = sequence.incrementAndGet();
+            return new TerminalHandle("terminal-" + n, (String) invocation.getArgument(1));
         });
 
         AgentProperties properties = new AgentProperties();

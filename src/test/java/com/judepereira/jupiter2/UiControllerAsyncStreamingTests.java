@@ -244,7 +244,7 @@ public class UiControllerAsyncStreamingTests {
         };
         UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
                 new SystemBalloonService(new ObjectMapper()), mock(TerminalManager.class), new TerminalStateService(),
-                contextCompactionService, Runnable::run);
+                contextCompactionService, Runnable::run, "0.0.1-SNAPSHOT");
 
         for (int i = 1; i <= 7; i++) {
             Model model = new ConcurrentModel();
@@ -390,7 +390,7 @@ public class UiControllerAsyncStreamingTests {
 
         UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
                 new SystemBalloonService(new ObjectMapper()), mock(TerminalManager.class), new TerminalStateService(),
-                contextCompactionService, Runnable::run);
+                contextCompactionService, Runnable::run, "0.0.1-SNAPSHOT");
 
         Model sendModel = new ConcurrentModel();
         ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);

@@ -9,6 +9,8 @@ import org.springframework.context.ConfigurableApplicationContext;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
@@ -17,6 +19,8 @@ abstract class E2ETestSupport {
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
         String jdbcUrl = "jdbc:h2:file:" + dbFile.toAbsolutePath().normalize() + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE";
+        Map<String, String> previousProperties = new HashMap<>();
+        overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
         Class<?>[] sources = Stream.concat(Stream.of(JupiterV2Application.class), Arrays.stream(testConfigClasses)).toArray(Class<?>[]::new);
         ConfigurableApplicationContext context = new SpringApplicationBuilder(sources)
                 .web(WebApplicationType.SERVLET)
@@ -37,7 +41,22 @@ abstract class E2ETestSupport {
         if (port == null) {
             throw new IllegalStateException("Missing local.server.port");
         }
-        return new RunningApp(context, "http://localhost:" + port);
+        return new RunningApp(context, "http://localhost:" + port, () -> restoreSystemProperties(previousProperties));
+    }
+
+    private static void overrideSystemProperty(Map<String, String> previousProperties, String key, String value) {
+        previousProperties.put(key, System.getProperty(key));
+        System.setProperty(key, value);
+    }
+
+    private static void restoreSystemProperties(Map<String, String> previousProperties) {
+        previousProperties.forEach((key, value) -> {
+            if (value == null) {
+                System.clearProperty(key);
+            } else {
+                System.setProperty(key, value);
+            }
+        });
     }
 
     protected static void captureScreenshot(Page page, Path screenshotsDir, String fileName) {
@@ -90,10 +109,14 @@ abstract class E2ETestSupport {
         assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText(projectName);
     }
 
-    protected record RunningApp(ConfigurableApplicationContext context, String baseUrl) implements AutoCloseable {
+    protected record RunningApp(ConfigurableApplicationContext context, String baseUrl, Runnable cleanup) implements AutoCloseable {
         @Override
         public void close() {
-            context.close();
+            try {
+                context.close();
+            } finally {
+                cleanup.run();
+            }
         }
     }
 }

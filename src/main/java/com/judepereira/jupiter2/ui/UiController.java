@@ -40,6 +40,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -73,6 +74,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class UiController {
 
     private static final ObjectMapper SseJson = new ObjectMapper();
+    private static final String DEFAULT_APP_VERSION = "0.0.1-SNAPSHOT";
 
     private final CodingAgentHarness harness;
     private final AgentProperties agentProperties;
@@ -83,6 +85,7 @@ public class UiController {
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
     private final SystemBalloonService systemBalloonService;
+    private final String appVersion;
 
     @Qualifier("agentTaskExecutor")
     private final Executor agentExecutor;
@@ -91,16 +94,18 @@ public class UiController {
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
                         ModelCatalogService modelCatalogService, ContextCompactionService contextCompactionService, Executor agentExecutor) {
-        this(harness, agentProperties, appStateService, terminalManager, terminalStateService, modelCatalogService, new SystemBalloonService(new ObjectMapper()), contextCompactionService, agentExecutor);
+        this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
+                new SystemBalloonService(new ObjectMapper()), terminalManager, terminalStateService, contextCompactionService,
+                agentExecutor, DEFAULT_APP_VERSION);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
                         ModelCatalogService modelCatalogService, SystemBalloonService systemBalloonService,
                         ContextCompactionService contextCompactionService, Executor agentExecutor) {
-        this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService, systemBalloonService, terminalManager, terminalStateService,
-                contextCompactionService, agentExecutor);
+        this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
+                systemBalloonService, terminalManager, terminalStateService, contextCompactionService,
+                agentExecutor, DEFAULT_APP_VERSION);
     }
 
     @Autowired
@@ -108,7 +113,8 @@ public class UiController {
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                         SystemBalloonService systemBalloonService, TerminalManager terminalManager,
                         TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
-                        @Qualifier("agentTaskExecutor") Executor agentExecutor) {
+                        @Qualifier("agentTaskExecutor") Executor agentExecutor,
+                        @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
         this.appStateService = appStateService;
@@ -119,6 +125,7 @@ public class UiController {
         this.terminalManager = terminalManager;
         this.terminalStateService = terminalStateService;
         this.agentExecutor = agentExecutor;
+        this.appVersion = appVersion;
     }
 
     @GetMapping("/")
@@ -557,6 +564,28 @@ public class UiController {
         return "fragments/projects :: modalClose";
     }
 
+    @GetMapping("/ui/settings")
+    public String settingsModal(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeProject() == null) {
+            return "fragments/projects :: modalClose";
+        }
+
+        populateProjectModel(model, view);
+        return "fragments/projects :: settingsModal";
+    }
+
+    @PostMapping("/ui/settings/apply")
+    public String applySettings(@RequestParam("workspaceInitCommands") String workspaceInitCommands, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeProject() == null) {
+            return "fragments/projects :: modalClose";
+        }
+
+        appStateService.updateProjectWorkspaceInitCommands(view.activeProject().id(), workspaceInitCommands);
+        return "fragments/projects :: modalClose";
+    }
+
     @PostMapping("/ui/projects/add")
     public String addProject(@RequestParam("name") String name, @RequestParam("path") String path, Model model) {
         appStateService.addOrReopenProject(name, Path.of(path).toAbsolutePath().normalize().toString());
@@ -597,6 +626,13 @@ public class UiController {
         }
 
         view = appStateService.loadViewData();
+        String workspaceInitCommands = view.activeProject().workspaceInitCommands();
+        if (workspaceInitCommands != null && !workspaceInitCommands.isBlank()) {
+            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), "Workspace Init");
+            terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
+            terminalStateService.openTerminalPane(view.activeWorkspace().id());
+            terminalManager.write(terminal.id(), workspaceInitCommands.endsWith("\n") ? workspaceInitCommands : workspaceInitCommands + "\n");
+        }
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         populateShellUpdates(model, view);
@@ -768,6 +804,7 @@ public class UiController {
         model.addAttribute("activeSession", toSession(view.activeSession()));
         model.addAttribute("shellRefresh", false);
         model.addAttribute("includeChatContainer", false);
+        model.addAttribute("appVersion", appVersion);
     }
 
     private void populateShellUpdates(Model model, AppStateView view) {
@@ -945,7 +982,7 @@ public class UiController {
     }
 
     private Project toProject(ProjectView view) {
-        return view == null ? null : new Project(view.id(), view.name(), view.path());
+        return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands());
     }
 
     private Workspace toWorkspace(WorkspaceView view) {
@@ -1013,7 +1050,7 @@ public class UiController {
 
     public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
 
-    public record Project(long id, String name, String path) {}
+    public record Project(long id, String name, String path, String workspaceInitCommands) {}
 
     public record Workspace(long id, String name, String path) {}
 

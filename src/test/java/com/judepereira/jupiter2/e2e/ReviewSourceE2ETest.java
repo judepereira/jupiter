@@ -81,7 +81,9 @@ class ReviewSourceE2ETest extends E2ETestSupport {
 
                 var outsideFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt"));
                 assertThat(outsideFileButton).hasCount(1);
-                outsideFileButton.click();
+                page.waitForResponse(
+                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                        outsideFileButton::click);
 
                 assertTrue((Boolean) outsideFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).containsText("outside git change");
@@ -140,22 +142,30 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 firstFileButton.waitFor();
                 secondFileButton.waitFor();
 
-                firstFileButton.click();
+                page.waitForResponse(
+                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                        firstFileButton::click);
                 assertTrue((Boolean) firstFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).containsText("first file diff");
 
-                firstFileButton.click();
+                page.waitForResponse(
+                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                        firstFileButton::click);
                 assertTrue(!(Boolean) firstFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).hasCount(0);
 
                 consoleErrors.clear();
 
-                secondFileButton.click();
+                page.waitForResponse(
+                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                        secondFileButton::click);
                 assertTrue((Boolean) secondFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).containsText("second file diff");
                 assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
 
-                secondFileButton.click();
+                page.waitForResponse(
+                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                        secondFileButton::click);
                 assertTrue(!(Boolean) secondFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).hasCount(0);
             }
@@ -178,25 +188,32 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null) {
-                @Override
-                public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                    Path workspaceRoot = Path.of(request.getWorkspaceRoot());
-                    Path sessionFile = workspaceRoot.resolve("session-edit.txt");
-                    try {
-                        Files.writeString(sessionFile, "session edit\n");
-                    } catch (Exception e) {
-                        throw new IllegalStateException(e);
-                    }
+            return new TestCodingAgentHarness();
+        }
 
-                    ToolCallTrace trace = new ToolCallTrace("tool-1-0", "write_file",
-                            Map.of("path", "session-edit.txt", "content", "session edit"), true,
-                            "wrote session-edit.txt", Map.of("path", "session-edit.txt"));
-                    AgentTurnResult result = new AgentTurnResult("done", List.of(trace));
-                    listener.onComplete(result);
-                    return result;
+        static class TestCodingAgentHarness extends CodingAgentHarness {
+
+            TestCodingAgentHarness() {
+                super(null, null, null);
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+                Path workspaceRoot = Path.of(request.getWorkspaceRoot());
+                Path sessionFile = workspaceRoot.resolve("session-edit.txt");
+                try {
+                    Files.writeString(sessionFile, "session edit\n");
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
                 }
-            };
+
+                ToolCallTrace trace = new ToolCallTrace("tool-1-0", "write_file",
+                        Map.of("path", "session-edit.txt", "content", "session edit"), true,
+                        "wrote session-edit.txt", Map.of("path", "session-edit.txt"));
+                AgentTurnResult result = new AgentTurnResult("done", List.of(trace));
+                listener.onComplete(result);
+                return result;
+            }
         }
     }
 }

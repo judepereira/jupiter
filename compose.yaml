@@ -1,20 +1,39 @@
 services:
   postgres:
-    image: 'postgres:latest'
+    image: postgres:latest
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      POSTGRES_DB: "${POSTGRES_DB:-jupiter}"
+      POSTGRES_USER: "${POSTGRES_USER:-jupiter}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-jupiter}"
     ports:
-      - '5432'
-    networks:
-      - jupiterv2
+      - "${POSTGRES_PORT:-45432}:5432"
+    volumes:
+      - "${POSTGRES_DATA_DIR:-./.data/postgres}:/var/lib/postgresql/data"
 
-networks:
-  jupiterv2:
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.8.0.0/16
-          ip_range: 172.8.5.0/24
-          gateway: 172.8.5.254
+  app:
+    profiles: [standalone]
+    depends_on:
+      - postgres
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USERNAME: "${USERNAME:-${USER}}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/${POSTGRES_DB:-jupiter}"
+      SPRING_DATASOURCE_USERNAME: "${POSTGRES_USER:-jupiter}"
+      SPRING_DATASOURCE_PASSWORD: "${POSTGRES_PASSWORD:-jupiter}"
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+    labels:
+      org.springframework.boot.ignore: "true"
+    ports:
+      - "${PORT:-7272}:7272"
+    volumes:
+      - "${HOST_DEVELOPER_DIR:-${HOME}/developer}:${HOST_DEVELOPER_DIR:-${HOME}/developer}"
+      - "${HOST_SSH_DIR:-${HOME}/.ssh}:/home/${USERNAME:-${USER}}/.ssh:ro"

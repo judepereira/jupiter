@@ -134,8 +134,8 @@ public class ProjectsTemplateRenderTest {
 
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
-        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo")));
-        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo"));
+        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null)));
+        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null));
         context.setVariable("workspaces", List.of(
                 new Workspace(1L, "Default Workspace", "/repo"),
                 new Workspace(2L, "feature-workspace", "/repo/.trees/feature-workspace")));

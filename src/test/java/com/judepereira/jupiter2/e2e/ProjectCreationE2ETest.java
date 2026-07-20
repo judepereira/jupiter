@@ -89,15 +89,22 @@ class ProjectCreationE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null) {
-                @Override
-                public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                    listener.onTextDelta(ASSISTANT_REPLY);
-                    AgentTurnResult result = new AgentTurnResult(ASSISTANT_REPLY, java.util.List.of());
-                    listener.onComplete(result);
-                    return result;
-                }
-            };
+            return new TestCodingAgentHarness();
+        }
+
+        static class TestCodingAgentHarness extends CodingAgentHarness {
+
+            TestCodingAgentHarness() {
+                super(null, null, null);
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+                listener.onTextDelta(ASSISTANT_REPLY);
+                AgentTurnResult result = new AgentTurnResult(ASSISTANT_REPLY, java.util.List.of());
+                listener.onComplete(result);
+                return result;
+            }
         }
     }
 }

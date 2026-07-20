@@ -43,8 +43,11 @@ public class TerminalManager {
     }
 
     public TerminalHandle createTerminal(String workspaceRoot) {
+        return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement());
+    }
+
+    public TerminalHandle createTerminal(String workspaceRoot, String title) {
         String terminalId = UUID.randomUUID().toString();
-        String title = "Terminal " + terminalSequence.getAndIncrement();
         PtyProcess process = startProcess(workspaceRoot);
         TerminalRuntime runtime = new TerminalRuntime(terminalId, title, process);
         terminals.put(terminalId, runtime);

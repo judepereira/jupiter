@@ -1,0 +1,14 @@
+.git
+.idea/
+.vscode/
+*.iml
+.DS_Store
+target/
+.data/
+.env
+.env.*
+**/.env
+**/.env.*
+*.log
+tmp/
+logs/

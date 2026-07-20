@@ -102,6 +102,11 @@ class AppStateRepository {
                 new MapSqlParameterSource().addValue("projectId", projectId).addValue("lastOpenedAt", Timestamp.from(now)));
     }
 
+    void updateProjectWorkspaceInitCommands(long projectId, String workspaceInitCommands) {
+        jdbc.update("UPDATE projects SET workspace_init_commands = :workspaceInitCommands WHERE id = :projectId",
+                new MapSqlParameterSource().addValue("projectId", projectId).addValue("workspaceInitCommands", workspaceInitCommands));
+    }
+
     WorkspaceRow findWorkspace(long workspaceId) {
         return queryRequired("SELECT * FROM workspaces WHERE id = :id",
                 new MapSqlParameterSource("id", workspaceId), this::mapWorkspace, "workspace " + workspaceId);
@@ -422,7 +427,8 @@ class AppStateRepository {
 
     private ProjectRow mapProject(ResultSet rs, int rowNum) throws SQLException {
         return new ProjectRow(rs.getLong("id"), rs.getString("name"), rs.getString("normalized_path"), rs.getLong("display_order"),
-                timestampToInstant(rs.getTimestamp("closed_at")), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
+                timestampToInstant(rs.getTimestamp("closed_at")), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")),
+                rs.getString("workspace_init_commands"));
     }
 
     private WorkspaceRow mapWorkspace(ResultSet rs, int rowNum) throws SQLException {
@@ -458,7 +464,7 @@ class AppStateRepository {
     }
 
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}
-    record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt) {}
+    record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
                       Instant createdAt, Instant lastOpenedAt) {}
