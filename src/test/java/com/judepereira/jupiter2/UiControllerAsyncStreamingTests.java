@@ -1,12 +1,22 @@
 package com.judepereira.jupiter2;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter2.agent.catalog.AgentDefinition;
+import com.judepereira.jupiter2.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter2.agent.catalog.AgentMode;
 import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
+import com.judepereira.jupiter2.persistence.ContextCompactionService;
+import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
+import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter2.terminal.TerminalManager;
+import com.judepereira.jupiter2.terminal.TerminalStateService;
+import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.Model;
@@ -18,6 +28,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 public class UiControllerAsyncStreamingTests {
 
@@ -149,6 +160,251 @@ public class UiControllerAsyncStreamingTests {
         assertThat(request.getConversationHistory()).hasSize(1);
         assertThat(request.getConversationHistory().get(0).getRole()).isEqualTo(Message.Role.USER);
         assertThat(request.getConversationHistory().get(0).getContent()).isEqualTo("go");
+    }
+
+    @Test
+    public void sendMessageCompactsOldHistoryAndRendersSummaryInResponse(@TempDir java.nio.file.Path tmp) throws Exception {
+        class RecordingHarness extends CodingAgentHarness {
+            final List<AgentTurnRequest> requests = new ArrayList<>();
+
+            RecordingHarness() {
+                super(null, null, null);
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter2.agent.llm.AgentStreamListener listener) {
+                if (request.getSystemPrompt() != null && request.getSystemPrompt().toLowerCase().contains("compact")) {
+                    return new AgentTurnResult("compact summary", List.of());
+                }
+                requests.add(request);
+                AgentTurnResult result = new AgentTurnResult("reply-" + requests.size(), List.of());
+                listener.onComplete(result);
+                return result;
+            }
+        }
+
+        RecordingHarness fake = new RecordingHarness();
+
+        var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "openai/gpt-5.5", ThinkingLevel.LOW, null, true, true,
+                List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command"));
+        AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper()) {
+            @Override
+            public List<AgentDefinition> list() {
+                return List.of(agent);
+            }
+
+            @Override
+            public AgentDefinition defaultAgent() {
+                return agent;
+            }
+
+            @Override
+            public AgentDefinition getRequired(String id) {
+                return agent;
+            }
+        };
+        var modelCatalog = ModelCatalogTestSupport.modelCatalogService("https://models.dev/catalog.json", """
+                {
+                  "models": {
+                    "openai/gpt-5.5": {
+                      "id": "openai/gpt-5.5",
+                      "name": "GPT-5.5",
+                      "reasoning": true,
+                      "tool_call": true,
+                      "release_date": "2026-04-23",
+                      "limit": {
+                      "context": 5000,
+                        "output": 500
+                      }
+                    }
+                  }
+                }
+                """);
+        java.util.concurrent.atomic.AtomicInteger compactionCalls = new java.util.concurrent.atomic.AtomicInteger();
+        ContextCompactionService contextCompactionService = new ContextCompactionService(appStateService,
+                new com.judepereira.jupiter2.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter2.agent.config.AgentProperties()) {
+                    @Override
+                    public com.judepereira.jupiter2.agent.llm.AgentModelClient getClient() {
+                        return null;
+                    }
+                }) {
+            @Override
+            public java.util.Optional<com.judepereira.jupiter2.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
+                                                                                                                       com.judepereira.jupiter2.agent.catalog.ModelDefinition model,
+                                                                                                                       ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
+                if (compactionCalls.incrementAndGet() < 8) {
+                    return java.util.Optional.empty();
+                }
+                appStateService.markTurnsIncludeInModelFalse(sessionId, 7);
+                return java.util.Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 7L));
+            }
+        };
+        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
+                new SystemBalloonService(new ObjectMapper()), mock(TerminalManager.class), new TerminalStateService(),
+                contextCompactionService, Runnable::run);
+
+        for (int i = 1; i <= 7; i++) {
+            Model model = new ConcurrentModel();
+            ctrl.sendMessage("turn-" + i + " " + "u".repeat(800), model, null);
+            ctrl.streamChat(assistantId((ConcurrentModel) model));
+        }
+
+        Model compacted = new ConcurrentModel();
+        ctrl.sendMessage("turn-8 " + "u".repeat(800), compacted, null);
+        ctrl.streamChat(assistantId((ConcurrentModel) compacted));
+
+        assertThat(fake.requests).isNotEmpty();
+        AgentTurnRequest lastRequest = fake.requests.getLast();
+        assertThat(render(lastRequest.getConversationHistory())).anyMatch(row -> row.contains("SYSTEM:compact summary"));
+        assertThat(render(lastRequest.getConversationHistory())).anyMatch(row -> row.contains("USER:turn-8"));
+    }
+
+    @Test
+    public void midTurnCompactionRebuildsConversationBeforeSecondModelRequest(@TempDir java.nio.file.Path tmp) throws Exception {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", tmp.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+
+        for (int i = 1; i <= 3; i++) {
+            String userText = "prior-" + i + " " + "u".repeat(120);
+            var turn = appStateService.appendUserMessageAndPendingAssistant(sessionId, userText);
+            appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(80), List.of());
+        }
+
+        AgentDefinition agent = new AgentDefinition("engineer", "Engineer", "", "Implement", AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true,
+                List.of("big_tool"));
+
+        AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper()) {
+            @Override
+            public List<AgentDefinition> list() {
+                return List.of(agent);
+            }
+
+            @Override
+            public AgentDefinition defaultAgent() {
+                return agent;
+            }
+
+            @Override
+            public AgentDefinition getRequired(String id) {
+                return agent;
+            }
+        };
+
+        var modelCatalog = ModelCatalogTestSupport.modelCatalogService("https://models.dev/catalog.json", """
+                {
+                  "models": {
+                    "openai/gpt-5.5": {
+                      "id": "openai/gpt-5.5",
+                      "name": "GPT-5.5",
+                      "reasoning": true,
+                      "tool_call": true,
+                      "release_date": "2026-04-23",
+                      "limit": {
+                        "context": 5000,
+                        "output": 128
+                      }
+                    }
+                  }
+                }
+                """);
+
+        class RecordingModel implements com.judepereira.jupiter2.agent.llm.AgentModelClient {
+            final List<List<Message>> conversations = new ArrayList<>();
+            private int index;
+
+            @Override
+            public com.judepereira.jupiter2.agent.llm.dto.ModelResponse chat(List<Message> conversation, List<com.judepereira.jupiter2.agent.llm.dto.ToolDefinition> tools) {
+                return chatStreaming(conversation, tools, null, delta -> {});
+            }
+
+            @Override
+            public com.judepereira.jupiter2.agent.llm.dto.ModelResponse chatStreaming(List<Message> conversation, List<com.judepereira.jupiter2.agent.llm.dto.ToolDefinition> tools,
+                                                                                      com.judepereira.jupiter2.agent.llm.AgentModelOptions options,
+                                                                                      java.util.function.Consumer<String> onDelta) {
+                conversations.add(List.copyOf(conversation));
+                return switch (index++) {
+                    case 0 -> new com.judepereira.jupiter2.agent.llm.dto.ModelResponse(null,
+                            new com.judepereira.jupiter2.agent.llm.dto.ToolCall("big_tool", java.util.Map.of()));
+                    default -> new com.judepereira.jupiter2.agent.llm.dto.ModelResponse("all done", null);
+                };
+            }
+        }
+
+        RecordingModel model = new RecordingModel();
+        var registry = new com.judepereira.jupiter2.agent.tools.ToolRegistry();
+        registry.register(new com.judepereira.jupiter2.agent.tools.AgentTool() {
+            @Override
+            public String name() {
+                return "big_tool";
+            }
+
+            @Override
+            public com.judepereira.jupiter2.agent.llm.dto.ToolDefinition definition() {
+                return new com.judepereira.jupiter2.agent.llm.dto.ToolDefinition("big_tool", "Big tool",
+                        com.judepereira.jupiter2.agent.llm.dto.ToolSchema.object());
+            }
+
+            @Override
+            public com.judepereira.jupiter2.agent.tools.ToolExecutionResult execute(java.util.Map<String, Object> args,
+                                                                                   com.judepereira.jupiter2.agent.tools.ToolExecutionContext context) {
+                String text = "tool-result-" + "x".repeat(5000);
+                return new com.judepereira.jupiter2.agent.tools.ToolExecutionResult(true, text, java.util.Map.of("path", "generated.txt"));
+            }
+        });
+
+        var props = new com.judepereira.jupiter2.agent.config.AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        props.setMaxIterations(5);
+        props.getTooling().setAllowWrite(true);
+
+        CodingAgentHarness harness = new CodingAgentHarness(new com.judepereira.jupiter2.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter2.agent.config.AgentProperties()) {
+            @Override
+            public com.judepereira.jupiter2.agent.llm.AgentModelClient getClient() {
+                return model;
+            }
+        }, registry, props, agentDefinitionService, modelCatalog);
+
+        java.util.concurrent.atomic.AtomicInteger compactionCalls = new java.util.concurrent.atomic.AtomicInteger();
+        ContextCompactionService contextCompactionService = new ContextCompactionService(appStateService,
+                new com.judepereira.jupiter2.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter2.agent.config.AgentProperties()) {
+                    @Override
+                    public com.judepereira.jupiter2.agent.llm.AgentModelClient getClient() {
+                        return null;
+                    }
+                }) {
+            @Override
+            public java.util.Optional<com.judepereira.jupiter2.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
+                                                                                                                       com.judepereira.jupiter2.agent.catalog.ModelDefinition model,
+                                                                                                                       ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
+                if (compactionCalls.incrementAndGet() < 2) {
+                    return java.util.Optional.empty();
+                }
+                appStateService.markTurnsIncludeInModelFalse(sessionId, 3);
+                return java.util.Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
+            }
+        };
+
+        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
+                new SystemBalloonService(new ObjectMapper()), mock(TerminalManager.class), new TerminalStateService(),
+                contextCompactionService, Runnable::run);
+
+        Model sendModel = new ConcurrentModel();
+        ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);
+        ctrl.streamChat(assistantId((ConcurrentModel) sendModel));
+
+        assertThat(model.conversations).hasSize(2);
+        List<String> second = render(model.conversations.get(1));
+        assertThat(second).anyMatch(row -> row.contains("SYSTEM:compact summary"));
+        assertThat(second).anyMatch(row -> row.contains("USER:current turn"));
+        assertThat(second).anyMatch(row -> row.contains("TOOL:tool-result-"));
+        assertThat(second).anyMatch(row -> row.contains("ASSISTANT:"));
+        assertThat(appStateService.loadViewData().activeSessionDetail().chatMessages().stream()
+                .map(com.judepereira.jupiter2.persistence.Persistence.ChatMessageView::text)
+                .toList()).contains("compact summary");
     }
 
     @Test

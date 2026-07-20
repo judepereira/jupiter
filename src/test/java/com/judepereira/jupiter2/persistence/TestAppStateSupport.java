@@ -1,14 +1,22 @@
 package com.judepereira.jupiter2.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter2.agent.llm.AgentModelClient;
+import com.judepereira.jupiter2.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter2.agent.llm.AgentModelOptions;
+import com.judepereira.jupiter2.agent.llm.dto.Message;
+import com.judepereira.jupiter2.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter2.persistence.ContextCompactionService;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
 import org.flywaydb.core.Flyway;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -16,6 +24,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -51,6 +60,39 @@ public final class TestAppStateSupport {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
         });
-        return new UiController(harness, properties, appStateService(), terminalManager, new TerminalStateService(), modelCatalogService, new SystemBalloonService(new ObjectMapper()), Runnable::run);
+        AppStateService appStateService = appStateService();
+        return new UiController(harness, properties, appStateService, terminalManager, new TerminalStateService(),
+                modelCatalogService, new SystemBalloonService(new ObjectMapper()), contextCompactionService(appStateService), Runnable::run);
+    }
+
+    public static ContextCompactionService contextCompactionService(AppStateService appStateService) {
+        return new ContextCompactionService(appStateService, summaryClientFactory());
+    }
+
+    private static AgentModelClientFactory summaryClientFactory() {
+        AgentModelClient client = new AgentModelClient() {
+            @Override
+            public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
+                return chat(conversation, tools, new AgentModelOptions(null, null, ThinkingLevel.LOW, false, null));
+            }
+
+            @Override
+            public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
+                return new ModelResponse("compact summary", null);
+            }
+
+            @Override
+            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
+                                               java.util.function.Consumer<String> onDelta) {
+                throw new AssertionError("context compaction should not stream");
+            }
+        };
+
+        return new AgentModelClientFactory(null, new AgentProperties()) {
+            @Override
+            public AgentModelClient getClient() {
+                return client;
+            }
+        };
     }
 }

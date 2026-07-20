@@ -873,6 +873,54 @@
                         }
                     });
 
+                    es.addEventListener('context_compaction', (e) => {
+                        try {
+                            const payload = parseStreamPayload(e) || {};
+                            const id = payload && payload.id != null ? String(payload.id) : '';
+                            const text = payload && payload.text != null ? String(payload.text) : '';
+                            if (!id || !text) return;
+
+                            Array.from(list.querySelectorAll('li[data-id]')).forEach(item => {
+                                if (item.dataset.id === id) item.remove();
+                            });
+
+                            const compactedRow = document.createElement('li');
+                            compactedRow.dataset.id = id;
+                            compactedRow.dataset.system = 'true';
+
+                            const strong = document.createElement('strong');
+                            strong.textContent = 'system';
+
+                            const textSpan = document.createElement('span');
+                            textSpan.className = 'chat-message-text';
+
+                            compactedRow.appendChild(strong);
+                            compactedRow.appendChild(document.createTextNode(': '));
+                            compactedRow.appendChild(textSpan);
+
+                            const pendingRow = list.querySelector('li[data-pending="true"]');
+                            if (pendingRow && pendingRow.parentNode) {
+                                pendingRow.parentNode.insertBefore(compactedRow, pendingRow);
+                            } else {
+                                list.appendChild(compactedRow);
+                            }
+
+                            renderChatMarkdown(textSpan, text);
+                            lastMessageCount = list.children.length;
+
+                            if (shouldStickToBottom || wasNearBottom()) {
+                                requestAnimationFrame(() => {
+                                    try {
+                                        const history = document.getElementById('chat-history');
+                                        if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
+                                    } catch (_) {
+                                    }
+                                });
+                            }
+                        } catch (_) {
+                        }
+                    });
+
                     es.addEventListener('done', (e) => {
                         try {
                             const payload = parseStreamPayload(e);

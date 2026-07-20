@@ -26,14 +26,16 @@ class UiControllerInvalidCheckoutBranchTests {
         initGitRepo(projectRoot);
 
         SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper());
+        var appStateService = TestAppStateSupport.appStateService();
         UiController controller = new UiController(
                 mock(CodingAgentHarness.class),
                 agentProperties(projectRoot),
-                TestAppStateSupport.appStateService(),
+                appStateService,
                 mock(TerminalManager.class),
                 new TerminalStateService(),
                 ModelCatalogTestSupport.modelCatalogService(),
                 balloonService,
+                TestAppStateSupport.contextCompactionService(appStateService),
                 Runnable::run);
 
         ConcurrentModel addProject = new ConcurrentModel();

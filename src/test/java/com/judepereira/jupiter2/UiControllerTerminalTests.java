@@ -293,8 +293,10 @@ public class UiControllerTerminalTests {
             AgentProperties properties,
             Executor executor) {
 
-        private UiController controller() {
-            return new UiController(mock(CodingAgentHarness.class), properties, appStateService, terminalManager, terminalStateService, ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper()), executor);
+            private UiController controller() {
+            return new UiController(mock(CodingAgentHarness.class), properties, appStateService, terminalManager, terminalStateService,
+                    ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper()),
+                    TestAppStateSupport.contextCompactionService(appStateService), executor);
+            }
         }
-    }
 }

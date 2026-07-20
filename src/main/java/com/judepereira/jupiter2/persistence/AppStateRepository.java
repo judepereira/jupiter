@@ -236,16 +236,16 @@ class AppStateRepository {
 
     long insertConversationMessage(long sessionId, String publicId, String role, long turnId, long sequence, String content,
                                    String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending, Instant now) {
-        return insertConversationMessage(sessionId, publicId, role, turnId, sequence, content, toolCallId, toolCallsJson, showInChat, includeInModel, pending, null, null, null, null, now);
+        return insertConversationMessage(sessionId, publicId, role, turnId, sequence, content, toolCallId, toolCallsJson, showInChat, includeInModel, pending, null, null, null, null, null, now);
     }
 
     long insertConversationMessage(long sessionId, String publicId, String role, long turnId, long sequence, String content,
                                    String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
-                                   String agentId, String agentName, String modelId, String thinkingLevel, Instant now) {
+                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant now) {
         return insertAndReturnId("""
                 INSERT INTO conversation_messages
-                (session_id, public_id, role, turn_id, sequence, content, tool_call_id, tool_calls_json, show_in_chat, include_in_model, pending, agent_id, agent_name, model_id, thinking_level, created_at)
-                VALUES (:sessionId, :publicId, :role, :turnId, :sequence, :content, :toolCallId, :toolCallsJson, :showInChat, :includeInModel, :pending, :agentId, :agentName, :modelId, :thinkingLevel, :createdAt)
+                (session_id, public_id, role, turn_id, sequence, content, tool_call_id, tool_calls_json, show_in_chat, include_in_model, pending, agent_id, agent_name, model_id, thinking_level, compacted_through_turn_id, created_at)
+                VALUES (:sessionId, :publicId, :role, :turnId, :sequence, :content, :toolCallId, :toolCallsJson, :showInChat, :includeInModel, :pending, :agentId, :agentName, :modelId, :thinkingLevel, :compactedThroughTurnId, :createdAt)
                 """, params -> params
                 .addValue("sessionId", sessionId)
                 .addValue("publicId", publicId)
@@ -262,12 +262,24 @@ class AppStateRepository {
                 .addValue("agentName", agentName)
                 .addValue("modelId", modelId)
                 .addValue("thinkingLevel", thinkingLevel)
+                .addValue("compactedThroughTurnId", compactedThroughTurnId)
                 .addValue("createdAt", Timestamp.from(now)));
     }
 
     void updateMessageContentAndPending(long messageId, String content, boolean pending, boolean includeInModel) {
         jdbc.update("UPDATE conversation_messages SET content = :content, pending = :pending, include_in_model = :includeInModel WHERE id = :messageId",
                 new MapSqlParameterSource().addValue("messageId", messageId).addValue("content", content).addValue("pending", pending).addValue("includeInModel", includeInModel));
+    }
+
+    void updateConversationMessagesIncludeInModelUpToTurnId(long sessionId, long maxTurnId, boolean includeInModel) {
+        if (maxTurnId <= 0) {
+            return;
+        }
+        jdbc.update("UPDATE conversation_messages SET include_in_model = :includeInModel WHERE session_id = :sessionId AND turn_id <= :maxTurnId",
+                new MapSqlParameterSource()
+                        .addValue("sessionId", sessionId)
+                        .addValue("maxTurnId", maxTurnId)
+                        .addValue("includeInModel", includeInModel));
     }
 
     void updateMessageToolCalls(long messageId, String toolCallsJson) {
@@ -415,7 +427,7 @@ class AppStateRepository {
         return new ConversationMessageRow(rs.getLong("id"), rs.getLong("session_id"), rs.getString("public_id"), rs.getString("role"), rs.getLong("turn_id"),
                 rs.getLong("sequence"), rs.getString("content"), rs.getString("tool_call_id"), rs.getString("tool_calls_json"), rs.getBoolean("show_in_chat"),
                 rs.getBoolean("include_in_model"), rs.getBoolean("pending"), rs.getString("agent_id"), rs.getString("agent_name"), rs.getString("model_id"),
-                rs.getString("thinking_level"), timestampToInstant(rs.getTimestamp("created_at")));
+                rs.getString("thinking_level"), rs.getObject("compacted_through_turn_id", Long.class), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
@@ -436,7 +448,7 @@ class AppStateRepository {
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Long selectedChangedFileId, Instant createdAt, Instant lastOpenedAt) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
-                                  String agentId, String agentName, String modelId, String thinkingLevel, Instant createdAt) {}
+                                  String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant createdAt) {}
     record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}
     record ChangedFileRow(long id, long sessionId, String path, String diff, long position, Instant createdAt) {}
 }

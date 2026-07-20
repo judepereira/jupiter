@@ -1,6 +1,17 @@
 package com.judepereira.jupiter2.persistence;
 
 import com.judepereira.jupiter2.agent.llm.dto.Message;
+import com.judepereira.jupiter2.agent.llm.AgentModelClient;
+import com.judepereira.jupiter2.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter2.agent.llm.AgentModelOptions;
+import com.judepereira.jupiter2.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter2.agent.llm.dto.ToolCall;
+import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter2.agent.catalog.AgentDefinition;
+import com.judepereira.jupiter2.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter2.agent.catalog.AgentMode;
+import com.judepereira.jupiter2.agent.catalog.ModelDefinition;
+import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
@@ -9,6 +20,7 @@ import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
 import com.judepereira.jupiter2.persistence.Persistence.WorkspaceView;
+import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -18,6 +30,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -297,6 +310,223 @@ public class AppStateServicePersistenceTests {
 
         assertThat(history.get(4).getRole()).isEqualTo(Message.Role.USER);
         assertThat(history.get(4).getContent()).isEqualTo("next turn");
+    }
+
+    @Test
+    public void compactionMarksOlderTurnsOutOfModelAndAddsVisibleSummary(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        for (int i = 1; i <= 7; i++) {
+            String userText = "turn-" + i + " " + "u".repeat(800);
+            QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, userText);
+            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(120), List.of());
+        }
+
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "openai/gpt-5.5", ThinkingLevel.LOW, null, true, true,
+                List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command"));
+        var modelCatalog = ModelCatalogTestSupport.modelCatalogService("https://models.dev/catalog.json", """
+                {
+                  "models": {
+                    "openai/gpt-5.5": {
+                      "id": "openai/gpt-5.5",
+                      "name": "GPT-5.5",
+                      "reasoning": true,
+                      "tool_call": true,
+                      "release_date": "2026-04-23",
+                      "limit": {
+                        "context": 5000,
+                        "output": 500
+                      }
+                    }
+                  }
+                }
+                """);
+
+        RecordingSummaryClient client = new RecordingSummaryClient();
+        ContextCompactionService compactionService = new ContextCompactionService(service,
+                new com.judepereira.jupiter2.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter2.agent.config.AgentProperties()) {
+                    @Override
+                    public com.judepereira.jupiter2.agent.llm.AgentModelClient getClient() {
+                        return client;
+                    }
+                }) {
+            @Override
+            public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
+                                                                         ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
+                service.markTurnsIncludeInModelFalse(sessionId, 5);
+                client.chat(List.of(new Message(Message.Role.SYSTEM, "Summarize"), new Message(Message.Role.USER, "transcript")), List.of(),
+                        new AgentModelOptions(ignoredModel.id(), ignoredModel.apiModelId(), ignoredThinkingLevel, ignoredModel.supportsReasoning(), ignoredAgent.textVerbosity()));
+                return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 5L));
+            }
+        };
+        var model = modelCatalog.getRequired(agent.defaultModel());
+
+        ChatMessageView summary = compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(),
+                "new user turn " + "x".repeat(800)).orElseThrow();
+
+        assertThat(summary.text()).isEqualTo("compact summary");
+        assertThat(client.toolCalls).allMatch(List::isEmpty);
+        assertThat(client.options).hasSize(1);
+        assertThat(client.options.getFirst().modelId()).isEqualTo(model.id());
+        assertThat(client.options.getFirst().apiModelId()).isEqualTo(model.apiModelId());
+        assertThat(client.options.getFirst().thinkingLevel()).isEqualTo(agent.defaultThinkingLevel());
+        assertThat(client.options.getFirst().supportsReasoning()).isEqualTo(model.supportsReasoning());
+        assertThat(client.conversations.getFirst()).extracting(Message::getRole)
+                .containsExactly(Message.Role.SYSTEM, Message.Role.USER);
+        assertThat(service.loadViewData().activeSessionDetail().chatMessages()).extracting(ChatMessageView::text)
+                .contains("compact summary");
+
+        assertThat(service.buildConversationHistory(sessionId)).extracting(Message::getContent)
+                .contains("compact summary")
+                .doesNotContain("turn-1 " + "u".repeat(800));
+    }
+
+    @Test
+    public void compactionKeepsToolCallPairsTogetherInRemainingHistory(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        for (int i = 1; i <= 3; i++) {
+            String userText = "turn-" + i + " " + "u".repeat(200);
+            QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, userText);
+            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(200), List.of());
+        }
+
+        QueuedChatTurn toolTurn = service.appendUserMessageAndPendingAssistant(sessionId, "tool turn " + "t".repeat(200));
+        ToolCallTraceInput trace = new ToolCallTraceInput("tool-call-1", "write_file",
+                Map.of("path", "x.txt", "content", "hello"), true, "wrote x.txt", Map.of("path", "x.txt"));
+        service.appendToolCallTrace(sessionId, toolTurn.assistantMessage().id(), trace);
+        service.completeAssistantMessage(sessionId, toolTurn.assistantMessage().id(), "tool reply " + "r".repeat(200), List.of(trace));
+
+        for (int i = 5; i <= 6; i++) {
+            String userText = "turn-" + i + " " + "u".repeat(200);
+            QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, userText);
+            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(200), List.of());
+        }
+
+        ContextCompactionService compactionService = new ContextCompactionService(service,
+                new com.judepereira.jupiter2.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter2.agent.config.AgentProperties()) {
+                    @Override
+                    public com.judepereira.jupiter2.agent.llm.AgentModelClient getClient() {
+                        return new RecordingSummaryClient();
+                    }
+                }) {
+            @Override
+            public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
+                                                                       ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
+                service.markTurnsIncludeInModelFalse(sessionId, 3);
+                return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
+            }
+        };
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true, List.of());
+        ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, false, 5000, 32, null, null, null);
+
+        compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(), "next user " + "q".repeat(20))
+                .orElseThrow();
+
+        QueuedChatTurn nextTurn = service.appendUserMessageAndPendingAssistant(sessionId, "after compaction " + "n".repeat(40));
+        service.completeAssistantMessage(sessionId, nextTurn.assistantMessage().id(), "after compaction reply", List.of());
+
+        List<Message> history = service.buildConversationHistory(sessionId);
+        assertThat(history).extracting(Message::getContent)
+                .contains("compact summary")
+                .doesNotContain("turn-1 " + "u".repeat(200))
+                .contains("wrote x.txt");
+        assertThat(history).filteredOn(message -> message.getRole() == Message.Role.ASSISTANT && message.getToolCalls() != null && !message.getToolCalls().isEmpty())
+                .singleElement()
+                .satisfies(message -> assertThat(message.getToolCalls()).extracting(ToolCall::getToolCallId).contains("tool-call-1"));
+        assertThat(history).filteredOn(message -> message.getRole() == Message.Role.TOOL)
+                .singleElement()
+                .extracting(Message::getToolCallId)
+                .isEqualTo("tool-call-1");
+        assertThat(history).anySatisfy(message -> assertThat(message.getContent()).contains("after compaction"));
+
+        assertThat(history).extracting(Message::getRole).contains(Message.Role.TOOL);
+    }
+
+    @Test
+    public void midTurnCompactionKeepsCurrentToolTurnInHistory(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        for (int i = 1; i <= 3; i++) {
+            String userText = "turn-" + i + " " + "u".repeat(120);
+            QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, userText);
+            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(80), List.of());
+        }
+
+        QueuedChatTurn toolTurn = service.appendUserMessageAndPendingAssistant(sessionId, "tool turn " + "t".repeat(120));
+        String hugeOutput = "tool-result-" + "x".repeat(5000);
+        ToolCallTraceInput trace = new ToolCallTraceInput("tool-call-1", "write_file",
+                Map.of("path", "x.txt", "content", "hello"), true, hugeOutput, Map.of("path", "x.txt"));
+        service.appendToolCallTrace(sessionId, toolTurn.assistantMessage().id(), trace);
+
+        ContextCompactionService compactionService = new ContextCompactionService(service,
+                new com.judepereira.jupiter2.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter2.agent.config.AgentProperties()) {
+                    @Override
+                    public AgentModelClient getClient() {
+                        return new RecordingSummaryClient();
+                    }
+                }) {
+            @Override
+            public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
+                                                                       ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
+                service.markTurnsIncludeInModelFalse(sessionId, 3);
+                return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
+            }
+        };
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true, List.of("write_file"));
+        ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, false, 5000, 32, null, null, null);
+
+        compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(), null)
+                .orElseThrow();
+
+        List<Message> history = service.buildConversationHistory(sessionId);
+        assertThat(history).extracting(Message::getContent)
+                .contains("compact summary")
+                .contains("tool turn " + "t".repeat(120))
+                .contains(hugeOutput)
+                .doesNotContain("turn-1 " + "u".repeat(120))
+                .doesNotContain("turn-2 " + "u".repeat(120));
+        assertThat(history).extracting(Message::getRole).contains(Message.Role.USER, Message.Role.ASSISTANT, Message.Role.TOOL, Message.Role.SYSTEM);
+    }
+
+    private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
+        return new AgentModelClientFactory(null, new com.judepereira.jupiter2.agent.config.AgentProperties()) {
+            @Override
+            public AgentModelClient getClient() {
+                return client;
+            }
+        };
+    }
+
+    private static final class RecordingSummaryClient implements AgentModelClient {
+        private final List<List<Message>> conversations = new ArrayList<>();
+        private final List<List<ToolDefinition>> toolCalls = new ArrayList<>();
+        private final List<AgentModelOptions> options = new ArrayList<>();
+
+        @Override
+        public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
+            return chat(conversation, tools, null);
+        }
+
+        @Override
+        public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
+            conversations.add(List.copyOf(conversation));
+            toolCalls.add(List.copyOf(tools));
+            this.options.add(options);
+            return new ModelResponse("compact summary", null);
+        }
+
+        @Override
+        public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
+                                           java.util.function.Consumer<String> onDelta) {
+            throw new AssertionError("context compaction should not stream");
+        }
     }
 
     @Test

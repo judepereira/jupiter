@@ -90,6 +90,12 @@ public class CodingAgentHarness {
 
         try {
             for (int i = 0; i < max; i++) {
+                List<Message> preparedConversation = listener.onBeforeModelRequest(request, List.copyOf(convo));
+                if (preparedConversation == null) {
+                    throw new IllegalStateException("Listener returned null conversation before model request");
+                }
+                convo = new ArrayList<>(preparedConversation);
+
                 ModelResponse resp = model.chatStreaming(convo, defs, modelOptions, delta -> {
                     // forward and accumulate every non-null delta, including whitespace-only chunks
                     if (delta != null) {

@@ -287,6 +287,7 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.agentName(),
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
+                null,
                 now);
         return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, List.of(), null),
                 new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, List.of(), assistantMetadata));
@@ -329,7 +330,7 @@ public class AppStateService {
         long assistantToolCallSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant", assistantMessage.turnId(), assistantToolCallSequence,
                 "", null, json(List.of(new ToolCallPayload(toolCallId, trace.toolName(), trace.args()))), false, true, false,
-                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), now);
+                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), null, now);
 
         long toolResultSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,
@@ -408,10 +409,44 @@ public class AppStateService {
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
     }
 
+    public ChatMessageView appendVisibleSystemMessage(long sessionId, String content) {
+        return appendVisibleSystemMessage(sessionId, content, null);
+    }
+
+    public ChatMessageView appendVisibleSystemMessage(long sessionId, String content, Long compactedThroughTurnId) {
+        Instant now = Instant.now();
+        long turnId = repository.nextTurnId(sessionId);
+        long sequence = repository.nextMessageSequence(sessionId);
+        String id = UUID.randomUUID().toString();
+        repository.insertConversationMessage(sessionId, id, "system", turnId, sequence, content, null, null, true, true, false,
+                null, null, null, null, compactedThroughTurnId, now);
+        return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
+    }
+
+    public List<AppStateRepository.ConversationMessageRow> listConversationMessages(long sessionId) {
+        return repository.listMessagesBySession(sessionId);
+    }
+
+    @Transactional
+    public void markTurnsIncludeInModelFalse(long sessionId, long maxTurnId) {
+        repository.updateConversationMessagesIncludeInModelUpToTurnId(sessionId, maxTurnId, false);
+    }
+
     public List<Message> buildConversationHistory(long sessionId) {
         var messages = repository.listMessagesBySession(sessionId).stream()
                 .filter(message -> message.includeInModel() && !message.pending())
                 .toList();
+
+        long compactionCutoffTurnId = messages.stream()
+                .filter(message -> "system".equals(message.role()) && message.showInChat() && message.compactedThroughTurnId() != null)
+                .mapToLong(AppStateRepository.ConversationMessageRow::compactedThroughTurnId)
+                .max()
+                .orElse(Long.MIN_VALUE);
+        if (compactionCutoffTurnId != Long.MIN_VALUE) {
+            messages = messages.stream()
+                    .filter(message -> message.turnId() > compactionCutoffTurnId)
+                    .toList();
+        }
 
         Map<String, Long> toolCallRoots = new java.util.HashMap<>();
         for (var message : messages) {
@@ -482,7 +517,7 @@ public class AppStateService {
         }
         long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, null);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
-                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, now);
+                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null, null, null, null, null, now);
         var workspace = repository.findWorkspace(workspaceId);
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateWorkspaceLastOpened(workspaceId, now);

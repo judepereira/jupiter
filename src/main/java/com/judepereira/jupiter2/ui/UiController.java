@@ -17,6 +17,7 @@ import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter2.persistence.AppStateService;
+import com.judepereira.jupiter2.persistence.ContextCompactionService;
 import com.judepereira.jupiter2.persistence.GitWorktreeException;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
@@ -57,6 +58,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,6 +78,7 @@ public class UiController {
     private final AppStateService appStateService;
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
+    private final ContextCompactionService contextCompactionService;
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
     private final SystemBalloonService systemBalloonService;
@@ -86,29 +89,31 @@ public class UiController {
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
-                        ModelCatalogService modelCatalogService, Executor agentExecutor) {
-        this(harness, agentProperties, appStateService, terminalManager, terminalStateService, modelCatalogService, new SystemBalloonService(new ObjectMapper()), agentExecutor);
+                        ModelCatalogService modelCatalogService, ContextCompactionService contextCompactionService, Executor agentExecutor) {
+        this(harness, agentProperties, appStateService, terminalManager, terminalStateService, modelCatalogService, new SystemBalloonService(new ObjectMapper()), contextCompactionService, agentExecutor);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
                         ModelCatalogService modelCatalogService, SystemBalloonService systemBalloonService,
-                        Executor agentExecutor) {
+                        ContextCompactionService contextCompactionService, Executor agentExecutor) {
         this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService, systemBalloonService, terminalManager, terminalStateService, agentExecutor);
+                modelCatalogService, systemBalloonService, terminalManager, terminalStateService,
+                contextCompactionService, agentExecutor);
     }
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                         SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService,
+                        TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
                         @Qualifier("agentTaskExecutor") Executor agentExecutor) {
         this.harness = harness;
         this.agentProperties = agentProperties;
         this.appStateService = appStateService;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
+        this.contextCompactionService = contextCompactionService;
         this.systemBalloonService = systemBalloonService;
         this.terminalManager = terminalManager;
         this.terminalStateService = terminalStateService;
@@ -150,6 +155,9 @@ public class UiController {
             String assistantId = UUID.randomUUID().toString();
             String userId = UUID.randomUUID().toString();
             ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(), selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name());
+            Optional<ChatMessageView> summaryMessage = contextCompactionService.compactIfNeeded(session.id(), selected.selectedAgent(), selected.selectedModel(),
+                    selected.selectedThinking(), agentProperties.getWorkspaceRoot(), user);
+            summaryMessage.ifPresent(summary -> newChatMessages.add(toChatMessage(summary)));
             QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId, assistantId, user, metadata);
             newChatMessages.add(toChatMessage(queued.userMessage()));
             newChatMessages.add(toChatMessage(queued.assistantMessage()));
@@ -161,7 +169,7 @@ public class UiController {
             conversationHistory.addAll(appStateService.buildConversationHistory(session.id()));
             pendingStreams.put(assistantId, new PendingStream(session.id(), workspaceRoot,
                     new AgentTurnRequest(selected.selectedAgent().systemPrompt(), conversationHistory, workspaceRoot,
-                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking())));
+                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id())));
         }
 
         populateChatControlsModel(model, selected);
@@ -253,6 +261,38 @@ public class UiController {
                     } catch (Exception e) {
                         onError(e);
                     }
+                }
+
+                @Override
+                public List<Message> onBeforeModelRequest(AgentTurnRequest currentRequest, List<Message> conversation) {
+                    if (currentRequest.getSessionId() == null) {
+                        return conversation;
+                    }
+
+                    AgentDefinition requestAgent = resolveRequestAgent(currentRequest);
+                    ModelDefinition requestModel = resolveRequestModel(currentRequest, requestAgent);
+                    ThinkingLevel requestThinking = currentRequest.getThinkingLevel() != null
+                            ? currentRequest.getThinkingLevel()
+                            : (requestAgent == null ? null : requestAgent.defaultThinkingLevel());
+
+                    Optional<ChatMessageView> summary = contextCompactionService.compactIfNeeded(currentRequest.getSessionId(), requestAgent,
+                            requestModel, requestThinking, pending.workspaceRoot(), null);
+                    if (summary.isEmpty()) {
+                        return conversation;
+                    }
+
+                    try {
+                        emitter.send(SseEmitter.event().name("context_compaction").data(SseJson.writeValueAsString(summary.get())));
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Failed to send context compaction event", e);
+                    }
+
+                    List<Message> rebuilt = new ArrayList<>();
+                    if (currentRequest.getSystemPrompt() != null && !currentRequest.getSystemPrompt().isBlank()) {
+                        rebuilt.add(new Message(Message.Role.SYSTEM, currentRequest.getSystemPrompt()));
+                    }
+                    rebuilt.addAll(appStateService.buildConversationHistory(currentRequest.getSessionId()));
+                    return rebuilt;
                 }
 
                 @Override
@@ -817,6 +857,21 @@ public class UiController {
         if (!drafts.isEmpty()) {
             appStateService.addChangedFilesToSession(sessionId, drafts);
         }
+    }
+
+    private AgentDefinition resolveRequestAgent(AgentTurnRequest request) {
+        if (request.getAgentId() == null || request.getAgentId().isBlank()) {
+            return agentDefinitionService.defaultAgent();
+        }
+        return agentDefinitionService.getRequired(request.getAgentId());
+    }
+
+    private ModelDefinition resolveRequestModel(AgentTurnRequest request, AgentDefinition agent) {
+        String requestedModelId = request.getModelId();
+        if (requestedModelId == null || requestedModelId.isBlank()) {
+            requestedModelId = agent == null ? agentProperties.getModel() : agent.defaultModel();
+        }
+        return modelCatalogService.getRequired(requestedModelId);
     }
 
     private ChatMessage toChatMessage(ChatMessageView view) {

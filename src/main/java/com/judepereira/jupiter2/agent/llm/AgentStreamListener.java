@@ -1,7 +1,11 @@
 package com.judepereira.jupiter2.agent.llm;
 
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
+import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
+import com.judepereira.jupiter2.agent.llm.dto.Message;
+
+import java.util.List;
 
 /**
  * Simple callback interface for streaming model responses.
@@ -18,4 +22,8 @@ public interface AgentStreamListener {
     default void onError(Exception e) {}
 
     default void onToolCallTrace(ToolCallTrace trace) {}
+
+    default List<Message> onBeforeModelRequest(AgentTurnRequest request, List<Message> conversation) {
+        return conversation;
+    }
 }
