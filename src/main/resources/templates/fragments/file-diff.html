@@ -1,7 +1,6 @@
 <!doctype html>
-<div th:fragment="diff" id="file-diff" class="file-diff-container">
+<div th:fragment="diff" class="file-diff-container">
     <div class="file-diff">
-        <h4 id="diff-file-path" th:text="${selectedFile != null ? selectedFile.path : 'No file selected'}"></h4>
         <pre id="diff-content" th:text="${selectedFile != null ? selectedFile.diff : ''}"></pre>
     </div>
 </div>

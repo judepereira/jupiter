@@ -4,7 +4,11 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
+import com.judepereira.jupiter2.persistence.AppStateService;
+import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
+import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
+import com.microsoft.playwright.ConsoleMessage;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
@@ -23,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReviewSourceE2ETest extends E2ETestSupport {
 
@@ -89,6 +94,81 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 System.setProperty("user.home", previousHome);
             }
         }
+    }
+
+    @Test
+    void reviewPanelFileEntriesToggleDiffVisibilityWithoutConsoleErrors(@TempDir Path tempDir) throws Exception {
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("sample-repo"));
+        Path dbFile = tempDir.resolve("h2db/jupiter");
+        Files.createDirectories(dbFile.getParent());
+
+        initGitRepoWithInitialCommit(projectDir);
+
+        String previousHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+
+        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
+            try (RunningApp app = startApp(fakeHome, dbFile, TestAppConfig.class);
+                 BrowserContext context = browser.newContext()) {
+                Page page = context.newPage();
+                List<String> consoleErrors = new java.util.concurrent.CopyOnWriteArrayList<>();
+                page.onConsoleMessage(message -> {
+                    if (message.type().equals("error")) {
+                        consoleErrors.add(formatConsoleMessage(message));
+                    }
+                });
+
+                page.navigate(app.baseUrl());
+                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+
+                openProject(page, "Alpha", projectDir);
+
+                AppStateService appStateService = app.context().getBean(AppStateService.class);
+                AppStateView view = appStateService.loadViewData();
+                long sessionId = view.activeSession().id();
+                appStateService.addChangedFilesToSession(sessionId, List.of(
+                        new ChangedFileDraft("first-review-file.txt", "first file diff\n"),
+                        new ChangedFileDraft("second-review-file.txt", "second file diff\n")
+                ));
+
+                page.reload();
+
+                assertThat(page.locator("#review .changed-file-item")).hasCount(2);
+
+                var firstFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("first-review-file.txt"));
+                var secondFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("second-review-file.txt"));
+
+                firstFileButton.click();
+                assertThat(page.locator("#diff-file-path")).hasText("first-review-file.txt");
+                assertThat(page.locator("#diff-content")).containsText("first file diff");
+
+                firstFileButton.click();
+                assertThat(page.locator("#diff-file-path")).hasCount(0);
+                assertThat(page.locator("#diff-content")).hasCount(0);
+
+                consoleErrors.clear();
+
+                secondFileButton.click();
+                assertThat(page.locator("#diff-file-path")).hasText("second-review-file.txt");
+                assertThat(page.locator("#diff-content")).containsText("second file diff");
+                assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
+
+                secondFileButton.click();
+                assertThat(page.locator("#diff-file-path")).hasCount(0);
+                assertThat(page.locator("#diff-content")).hasCount(0);
+            }
+        } finally {
+            if (previousHome == null) {
+                System.clearProperty("user.home");
+            } else {
+                System.setProperty("user.home", previousHome);
+            }
+        }
+    }
+
+    private static String formatConsoleMessage(ConsoleMessage message) {
+        return message.type() + ": " + message.text();
     }
 
     @TestConfiguration(proxyBeanMethods = false)

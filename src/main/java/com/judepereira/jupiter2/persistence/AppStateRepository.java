@@ -180,10 +180,10 @@ class AppStateRepository {
     }
 
     long insertSession(long workspaceId, String name, long position, Instant now, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource,
-                       Long selectedChangedFileId, String selectedGitChangedFilePath) {
+                       Long selectedChangedFileId) {
         return insertAndReturnId("""
-                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, selected_git_changed_file_path, created_at, last_opened_at)
-                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :selectedGitChangedFilePath, :createdAt, :lastOpenedAt)
+                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, created_at, last_opened_at)
+                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :createdAt, :lastOpenedAt)
                 """, params -> params
                 .addValue("workspaceId", workspaceId)
                 .addValue("name", name)
@@ -191,7 +191,6 @@ class AppStateRepository {
                 .addValue("reviewPanelOpen", reviewPanelOpen)
                 .addValue("reviewSource", reviewSource.name())
                 .addValue("selectedChangedFileId", selectedChangedFileId)
-                .addValue("selectedGitChangedFilePath", selectedGitChangedFilePath)
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("lastOpenedAt", Timestamp.from(now)));
     }
@@ -201,39 +200,28 @@ class AppStateRepository {
                 new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("lastOpenedAt", Timestamp.from(now)));
     }
 
-    void updateSessionReviewState(long sessionId, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId, String selectedGitChangedFilePath) {
-        jdbc.update("UPDATE sessions SET review_panel_open = :reviewPanelOpen, review_source = :reviewSource, selected_changed_file_id = :selectedChangedFileId, selected_git_changed_file_path = :selectedGitChangedFilePath WHERE id = :sessionId",
+    void updateSessionReviewState(long sessionId, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId) {
+        jdbc.update("UPDATE sessions SET review_panel_open = :reviewPanelOpen, review_source = :reviewSource, selected_changed_file_id = :selectedChangedFileId WHERE id = :sessionId",
                 new MapSqlParameterSource()
                         .addValue("sessionId", sessionId)
                         .addValue("reviewPanelOpen", reviewPanelOpen)
                         .addValue("reviewSource", reviewSource.name())
-                        .addValue("selectedChangedFileId", selectedChangedFileId)
-                        .addValue("selectedGitChangedFilePath", selectedGitChangedFilePath));
+                        .addValue("selectedChangedFileId", selectedChangedFileId));
     }
 
     void updateSessionSelectedChangedFile(long sessionId, Long selectedChangedFileId) {
-        jdbc.update("UPDATE sessions SET review_source = :reviewSource, selected_changed_file_id = :selectedChangedFileId, selected_git_changed_file_path = NULL WHERE id = :sessionId",
+        jdbc.update("UPDATE sessions SET review_source = :reviewSource, selected_changed_file_id = :selectedChangedFileId WHERE id = :sessionId",
                 new MapSqlParameterSource()
                         .addValue("sessionId", sessionId)
                         .addValue("reviewSource", Persistence.ReviewSource.SESSION.name())
                         .addValue("selectedChangedFileId", selectedChangedFileId));
     }
 
-    void updateSessionSelectedGitChangedFilePath(long sessionId, String selectedGitChangedFilePath) {
-        jdbc.update("UPDATE sessions SET review_source = :reviewSource, selected_changed_file_id = NULL, selected_git_changed_file_path = :selectedGitChangedFilePath WHERE id = :sessionId",
+    void updateSessionReviewSource(long sessionId, Persistence.ReviewSource reviewSource) {
+        jdbc.update("UPDATE sessions SET review_source = :reviewSource WHERE id = :sessionId",
                 new MapSqlParameterSource()
                         .addValue("sessionId", sessionId)
-                        .addValue("reviewSource", Persistence.ReviewSource.GIT.name())
-                        .addValue("selectedGitChangedFilePath", selectedGitChangedFilePath));
-    }
-
-    void updateSessionReviewSource(long sessionId, Persistence.ReviewSource reviewSource, Long selectedChangedFileId, String selectedGitChangedFilePath) {
-        jdbc.update("UPDATE sessions SET review_source = :reviewSource, selected_changed_file_id = :selectedChangedFileId, selected_git_changed_file_path = :selectedGitChangedFilePath WHERE id = :sessionId",
-                new MapSqlParameterSource()
-                        .addValue("sessionId", sessionId)
-                        .addValue("reviewSource", reviewSource.name())
-                        .addValue("selectedChangedFileId", selectedChangedFileId)
-                        .addValue("selectedGitChangedFilePath", selectedGitChangedFilePath));
+                        .addValue("reviewSource", reviewSource.name()));
     }
 
     ConversationMessageRow findMessageBySessionAndPublicId(long sessionId, String publicId) {
@@ -445,7 +433,7 @@ class AppStateRepository {
     private SessionRow mapSession(ResultSet rs, int rowNum) throws SQLException {
         Long selectedChangedFileId = rs.getObject("selected_changed_file_id", Long.class);
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
-                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getString("selected_git_changed_file_path"),
+                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId,
                 timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
     }
 
@@ -473,7 +461,7 @@ class AppStateRepository {
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
-                      String selectedGitChangedFilePath, Instant createdAt, Instant lastOpenedAt) {}
+                      Instant createdAt, Instant lastOpenedAt) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant createdAt) {}
     record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}

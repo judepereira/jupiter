@@ -21,6 +21,7 @@
     --terminal-control-bg: #f8fafc;
     --terminal-control-border: #cbd5e1;
     --terminal-control-active: #e8eef8;
+    --conversation-panel-bg: #f3f7fb;
 }
 
 body {
@@ -451,6 +452,7 @@ input:focus, textarea:focus {
     display: flex;
     flex-direction: column;
     width: 100%;
+    background: var(--conversation-panel-bg);
     /* allow the review column to fully collapse when the shell
        requests it (review-closed). Some browsers will honor an
        element's min-width even when grid column is 0 which can
@@ -832,7 +834,7 @@ input:focus, textarea:focus {
     overflow: auto;
     padding: 8px;
     border-radius: 6px;
-    background: #f3f7fb;
+    background: var(--conversation-panel-bg);
     border: 1px solid #e8f0fb;
     /* Prevent browser auto-adjusting scroll during incremental streaming updates */
     overflow-anchor: none;
@@ -1144,16 +1146,17 @@ input:focus, textarea:focus {
 
 /* Review internal split: files list + diff preview */
 .changed-files {
-    flex: 0 0 35%;
     overflow: auto;
-    border-right: 1px dashed #e6eef6;
-    padding-right: 8px;
 }
 
 .file-diff-container {
-    flex: 1 1 auto;
-    overflow: auto;
-    padding-left: 8px;
+    margin-top: 6px;
+    margin-left: 8px;
+}
+
+.changed-file-item {
+    display: flex;
+    flex-direction: column;
 }
 
 .file-diff pre {
@@ -1256,7 +1259,8 @@ input:focus, textarea:focus {
     gap: 6px;
 }
 
-.changed-file-item a {
+.changed-file-item a,
+.changed-file-item button {
     display: block;
     padding: 6px 8px;
     border-radius: 6px;
@@ -1264,8 +1268,24 @@ input:focus, textarea:focus {
     text-decoration: none;
 }
 
-.changed-file-item a:hover {
+.changed-file-item button {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+}
+
+.changed-file-item a.active,
+.changed-file-item button.active {
     background: #f1f9ff;
+    font-weight: 600;
+}
+
+.changed-file-item a:hover,
+.changed-file-item button:hover {
+    background: #eef4fc;
 }
 
 /* Responsive: keep the nav usable without recreating the old side-rail grid. */

@@ -16,6 +16,7 @@ import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
+import com.judepereira.jupiter2.persistence.Persistence.ChangedFileView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
@@ -261,6 +262,36 @@ public class AppStateServicePersistenceTests {
         assertThat(gitView.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.GIT);
         assertThat(gitView.activeSessionDetail().changedFiles()).extracting(com.judepereira.jupiter2.persistence.Persistence.ChangedFileView::path)
                 .contains("session-only.txt", "outside-only.txt");
+    }
+
+    @Test
+    public void gitReviewReloadIgnoresDeletedSelectedFilesAndKeepsLiveChangedFiles(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        Path liveFile = projectPath.resolve("live-git.txt");
+        Path removedFile = projectPath.resolve("removed-git.txt");
+        Files.writeString(liveFile, "live change\n");
+        Files.writeString(removedFile, "removed change\n");
+
+        service.switchReviewSource(sessionId, ReviewSource.GIT);
+        AppStateView initialGitView = service.loadViewData();
+        assertThat(initialGitView.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.GIT);
+        assertThat(initialGitView.activeSessionDetail().changedFiles()).extracting(ChangedFileView::path)
+                .contains("live-git.txt", "removed-git.txt");
+
+        Files.delete(removedFile);
+
+        AppStateView reloaded = service.loadViewData();
+        assertThat(reloaded.activeSessionDetail()).isNotNull();
+        assertThat(reloaded.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.GIT);
+        assertThat(reloaded.activeSessionDetail().selectedFile()).isNull();
+        assertThat(reloaded.activeSessionDetail().changedFiles()).extracting(ChangedFileView::path)
+                .contains("live-git.txt")
+                .doesNotContain("removed-git.txt");
     }
 
     @Test

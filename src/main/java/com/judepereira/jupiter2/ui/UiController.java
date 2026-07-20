@@ -197,25 +197,48 @@ public class UiController {
         }
         populateProjectModel(model, view);
         populateSessionModel(model, view);
-        return "fragments/file-diff :: diff";
+        model.addAttribute("reviewOob", false);
+        return "fragments/review :: panel";
+    }
+
+    public String loadFile(ReviewSource source, String key, Model model) {
+        return loadReviewFile(source, key, false, model);
     }
 
     @GetMapping("/ui/review/file")
-    public String loadFile(@RequestParam("source") ReviewSource source, @RequestParam("key") String key, Model model) {
+    public String loadFile(@RequestParam("source") ReviewSource source,
+                           @RequestParam("key") String key,
+                           @RequestParam(value = "close", defaultValue = "false") boolean close,
+                           Model model) {
+        return loadReviewFile(source, key, close, model);
+    }
+
+    private String loadReviewFile(ReviewSource source, String key, boolean close, Model model) {
         AppStateView view = appStateService.loadViewData();
+        ChangedFileView selectedFile = null;
         if (view.activeSession() != null) {
             long sessionId = view.activeSession().id();
-            appStateService.switchReviewSource(sessionId, source);
-            if (source == ReviewSource.GIT) {
-                appStateService.selectGitChangedFile(sessionId, key.startsWith("git:") ? key.substring(4) : key);
+            if (close) {
+                if (source == ReviewSource.SESSION) {
+                    appStateService.clearSessionChangedFileSelection(sessionId);
+                }
+            } else if (source == ReviewSource.GIT) {
+                selectedFile = appStateService.selectGitChangedFile(sessionId, key.startsWith("git:") ? key.substring(4) : key);
+                appStateService.switchReviewSource(sessionId, source);
             } else {
                 appStateService.selectSessionChangedFile(sessionId, Integer.parseInt(key.startsWith("session:") ? key.substring(8) : key));
+                view = appStateService.loadViewData();
+                selectedFile = view.activeSessionDetail().selectedFile();
             }
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
         populateSessionModel(model, view);
-        return "fragments/file-diff :: diff";
+        if (selectedFile != null) {
+            model.addAttribute("selectedFile", toChangedFile(selectedFile));
+        }
+        model.addAttribute("reviewOob", false);
+        return "fragments/review :: panel";
     }
 
     @GetMapping("/ui/chat/stream/{assistantId}")
@@ -752,6 +775,7 @@ public class UiController {
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
+        populateChatControlsModel(model, defaultChatSelection());
     }
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {

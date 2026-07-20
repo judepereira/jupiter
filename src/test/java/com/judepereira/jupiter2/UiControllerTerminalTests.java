@@ -1,6 +1,7 @@
 package com.judepereira.jupiter2;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
@@ -143,6 +144,13 @@ public class UiControllerTerminalTests {
         assertThat(terminalTabs(backToSessionOneModel)).extracting(TerminalTab::title, TerminalTab::active)
                 .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
         assertThat(activeTerminal(backToSessionOneModel).id()).isEqualTo("terminal-1");
+        assertThat(backToSessionOneModel.getAttribute("includeChatContainer")).isEqualTo(true);
+        assertThat((List<?>) backToSessionOneModel.getAttribute("agents")).isNotEmpty();
+        assertThat((List<?>) backToSessionOneModel.getAttribute("models")).isNotEmpty();
+        assertThat(backToSessionOneModel.getAttribute("thinkingLevels")).isEqualTo(List.of(ThinkingLevel.values()));
+        assertThat(backToSessionOneModel.getAttribute("selectedAgent")).isEqualTo(backToSessionOneModel.getAttribute("defaultAgent"));
+        assertThat(backToSessionOneModel.getAttribute("selectedModel")).isEqualTo(backToSessionOneModel.getAttribute("defaultModel"));
+        assertThat(backToSessionOneModel.getAttribute("selectedThinking")).isEqualTo(backToSessionOneModel.getAttribute("defaultThinking"));
     }
 
     @Test

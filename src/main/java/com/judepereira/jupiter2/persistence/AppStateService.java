@@ -372,7 +372,7 @@ public class AppStateService {
     public boolean toggleReviewPanel(long sessionId) {
         var session = repository.findSession(sessionId);
         boolean open = !session.reviewPanelOpen();
-        repository.updateSessionReviewState(sessionId, open, session.reviewSource(), session.selectedChangedFileId(), session.selectedGitChangedFilePath());
+        repository.updateSessionReviewState(sessionId, open, session.reviewSource(), session.selectedChangedFileId());
         return open;
     }
 
@@ -386,25 +386,30 @@ public class AppStateService {
     }
 
     @Transactional
+    public void clearSessionChangedFileSelection(long sessionId) {
+        repository.updateSessionSelectedChangedFile(sessionId, null);
+    }
+
+    @Transactional
     public void selectChangedFile(long sessionId, int changedFileId) {
         selectSessionChangedFile(sessionId, changedFileId);
     }
 
     @Transactional
-    public void selectGitChangedFile(long sessionId, String changedFilePath) {
+    public ChangedFileView selectGitChangedFile(long sessionId, String changedFilePath) {
         var session = repository.findSession(sessionId);
         var workspace = repository.findWorkspace(session.workspaceId());
         var gitFiles = listGitChangedFiles(Path.of(workspace.normalizedPath()));
-        if (gitFiles.stream().noneMatch(file -> file.path().equals(changedFilePath))) {
-            throw new IllegalStateException("Git changed file does not belong to session " + sessionId + ": " + changedFilePath);
-        }
-        repository.updateSessionSelectedGitChangedFilePath(sessionId, changedFilePath);
+        return gitFiles.stream()
+                .filter(file -> file.path().equals(changedFilePath))
+                .findFirst()
+                .map(this::toChangedFileView)
+                .orElseThrow(() -> new IllegalStateException("Git changed file not found: " + changedFilePath));
     }
 
     @Transactional
     public void switchReviewSource(long sessionId, ReviewSource reviewSource) {
-        var session = repository.findSession(sessionId);
-        repository.updateSessionReviewSource(sessionId, reviewSource, session.selectedChangedFileId(), session.selectedGitChangedFilePath());
+        repository.updateSessionReviewSource(sessionId, reviewSource);
     }
 
     @Transactional
@@ -418,7 +423,7 @@ public class AppStateService {
             long position = repository.nextChangedFilePosition(sessionId);
             latestFileId = repository.insertChangedFile(sessionId, draft.path(), draft.diff(), position, now);
         }
-        repository.updateSessionReviewState(sessionId, true, ReviewSource.SESSION, latestFileId, null);
+        repository.updateSessionReviewState(sessionId, true, ReviewSource.SESSION, latestFileId);
         return repository.listChangedFilesBySession(sessionId).stream().map(this::toChangedFileView).toList();
     }
 
@@ -538,7 +543,7 @@ public class AppStateService {
         if (sessionName == null || sessionName.isBlank()) {
             throw new IllegalStateException("Session name is required");
         }
-        long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, ReviewSource.SESSION, null, null);
+        long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, ReviewSource.SESSION, null);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
                 "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null, null, null, null, null, now);
         var workspace = repository.findWorkspace(workspaceId);
@@ -674,7 +679,7 @@ public class AppStateService {
                 ? listGitChangedFiles(Path.of(workspace.normalizedPath())).stream().map(this::toChangedFileView).toList()
                 : repository.listChangedFilesBySession(sessionId).stream().map(this::toChangedFileView).toList();
         ChangedFileView selected = reviewSource == ReviewSource.GIT
-                ? selectedGitChangedFile(files, session.selectedGitChangedFilePath())
+                ? null
                 : session.selectedChangedFileId() == null ? null : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
     }
@@ -787,16 +792,6 @@ public class AppStateService {
 
     private ChangedFileView toChangedFileView(GitChangedFile file) {
         return new ChangedFileView("git:" + file.path(), ReviewSource.GIT, null, file.path(), file.diff());
-    }
-
-    private ChangedFileView selectedGitChangedFile(List<ChangedFileView> files, String selectedGitChangedFilePath) {
-        if (selectedGitChangedFilePath == null) {
-            return null;
-        }
-        return files.stream()
-                .filter(file -> file.source() == ReviewSource.GIT && selectedGitChangedFilePath.equals(file.path()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Selected git changed file not found: " + selectedGitChangedFilePath));
     }
 
     private record ToolCallPayload(String toolCallId, String toolName, Map<String, Object> arguments) {}

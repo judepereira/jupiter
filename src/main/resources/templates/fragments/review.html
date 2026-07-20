@@ -2,7 +2,7 @@
 <aside th:fragment="panel" id="review" class="main-panel review-panel" th:classappend="${!reviewPanelOpen} ? 'closed' : ''" th:attr="hx-swap-oob=${reviewOob} ? 'outerHTML' : null">
     <div id="review-panel" class="review-shell" th:attr="data-open=${reviewPanelOpen}" th:if="${reviewPanelOpen}">
         <div class="review-header">
-            <h2>Review</h2>
+            <h5>Review</h5>
             <select class="review-source-select"
                     name="source"
                     hx-post="/ui/review/source"
@@ -14,23 +14,21 @@
             </select>
         </div>
 
-        <div th:if="${reviewPanelOpen}">
-            <nav id="changed-files-list" class="changed-files">
-                <h3>Changed files</h3>
-                <ul>
-                    <li th:each="f : ${changedFiles}" class="changed-file-item">
-                         <a th:href="@{/ui/review/file(source=${f.source},key=${f.key})}"
-                            th:hx-get="@{/ui/review/file(source=${f.source},key=${f.key})}"
-                             th:attr="hx-target='#file-diff'"
-                             hx-swap="outerHTML"
-                             th:text="${f.path}"></a>
-                    </li>
-                </ul>
-            </nav>
-
-            <section id="file-diff" class="file-diff-container" th:replace="~{fragments/file-diff :: diff}">Loading diff...</section>
-        </div>
-
-        
+        <nav id="changed-files-list" class="changed-files">
+            <h6>Changed files</h6>
+            <ul>
+                <li th:each="f : ${changedFiles}" class="changed-file-item" th:with="isSelected=${selectedFile != null and selectedFile.source == f.source and (selectedFile.key eq f.key or (selectedFile.id != null and f.id != null and selectedFile.id == f.id) or selectedFile.path eq f.path)}">
+                    <button type="button"
+                            th:attr="hx-get=@{/ui/review/file(source=${f.source},key=${f.key},close=${isSelected})}"
+                            hx-target="#review"
+                            hx-swap="outerHTML"
+                            th:classappend="${isSelected} ? ' active' : ''"
+                            th:text="${f.path}"></button>
+                    <th:block th:if="${isSelected}">
+                        <div th:replace="~{fragments/file-diff :: diff}">Loading diff...</div>
+                    </th:block>
+                </li>
+            </ul>
+        </nav>
     </div>
     </aside>
