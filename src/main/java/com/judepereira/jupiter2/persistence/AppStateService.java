@@ -12,6 +12,7 @@ import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileView;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
+import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
@@ -371,17 +372,39 @@ public class AppStateService {
     public boolean toggleReviewPanel(long sessionId) {
         var session = repository.findSession(sessionId);
         boolean open = !session.reviewPanelOpen();
-        repository.updateSessionReviewState(sessionId, open, session.selectedChangedFileId());
+        repository.updateSessionReviewState(sessionId, open, session.reviewSource(), session.selectedChangedFileId(), session.selectedGitChangedFilePath());
         return open;
     }
 
     @Transactional
-    public void selectChangedFile(long sessionId, int changedFileId) {
+    public void selectSessionChangedFile(long sessionId, int changedFileId) {
         var file = repository.findChangedFile(changedFileId);
         if (file.sessionId() != sessionId) {
             throw new IllegalStateException("Changed file does not belong to session " + sessionId);
         }
         repository.updateSessionSelectedChangedFile(sessionId, file.id());
+    }
+
+    @Transactional
+    public void selectChangedFile(long sessionId, int changedFileId) {
+        selectSessionChangedFile(sessionId, changedFileId);
+    }
+
+    @Transactional
+    public void selectGitChangedFile(long sessionId, String changedFilePath) {
+        var session = repository.findSession(sessionId);
+        var workspace = repository.findWorkspace(session.workspaceId());
+        var gitFiles = listGitChangedFiles(Path.of(workspace.normalizedPath()));
+        if (gitFiles.stream().noneMatch(file -> file.path().equals(changedFilePath))) {
+            throw new IllegalStateException("Git changed file does not belong to session " + sessionId + ": " + changedFilePath);
+        }
+        repository.updateSessionSelectedGitChangedFilePath(sessionId, changedFilePath);
+    }
+
+    @Transactional
+    public void switchReviewSource(long sessionId, ReviewSource reviewSource) {
+        var session = repository.findSession(sessionId);
+        repository.updateSessionReviewSource(sessionId, reviewSource, session.selectedChangedFileId(), session.selectedGitChangedFilePath());
     }
 
     @Transactional
@@ -395,7 +418,7 @@ public class AppStateService {
             long position = repository.nextChangedFilePosition(sessionId);
             latestFileId = repository.insertChangedFile(sessionId, draft.path(), draft.diff(), position, now);
         }
-        repository.updateSessionReviewState(sessionId, true, latestFileId);
+        repository.updateSessionReviewState(sessionId, true, ReviewSource.SESSION, latestFileId, null);
         return repository.listChangedFilesBySession(sessionId).stream().map(this::toChangedFileView).toList();
     }
 
@@ -515,7 +538,7 @@ public class AppStateService {
         if (sessionName == null || sessionName.isBlank()) {
             throw new IllegalStateException("Session name is required");
         }
-        long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, null);
+        long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, ReviewSource.SESSION, null, null);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
                 "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null, null, null, null, null, now);
         var workspace = repository.findWorkspace(workspaceId);
@@ -642,13 +665,18 @@ public class AppStateService {
         }
     }
 
-    private SessionDetailView loadSessionDetail(long sessionId) {
+    public SessionDetailView loadSessionDetail(long sessionId) {
         var session = repository.findSession(sessionId);
         var workspace = repository.findWorkspace(session.workspaceId());
         var messages = repository.listVisibleMessagesBySession(sessionId).stream().map(message -> toChatMessageView(message, sessionId)).toList();
-        var files = repository.listChangedFilesBySession(sessionId).stream().map(this::toChangedFileView).toList();
-        ChangedFileView selected = session.selectedChangedFileId() == null ? null : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
-        return new SessionDetailView(messages, files, session.reviewPanelOpen(), selected, workspace.normalizedPath());
+        ReviewSource reviewSource = session.reviewSource();
+        List<ChangedFileView> files = reviewSource == ReviewSource.GIT
+                ? listGitChangedFiles(Path.of(workspace.normalizedPath())).stream().map(this::toChangedFileView).toList()
+                : repository.listChangedFilesBySession(sessionId).stream().map(this::toChangedFileView).toList();
+        ChangedFileView selected = reviewSource == ReviewSource.GIT
+                ? selectedGitChangedFile(files, session.selectedGitChangedFilePath())
+                : session.selectedChangedFileId() == null ? null : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
+        return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
     }
 
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId) {
@@ -754,13 +782,93 @@ public class AppStateService {
     }
 
     private ChangedFileView toChangedFileView(AppStateRepository.ChangedFileRow row) {
-        return new ChangedFileView(Math.toIntExact(row.id()), row.path(), row.diff());
+        return new ChangedFileView("session:" + row.id(), ReviewSource.SESSION, Math.toIntExact(row.id()), row.path(), row.diff());
+    }
+
+    private ChangedFileView toChangedFileView(GitChangedFile file) {
+        return new ChangedFileView("git:" + file.path(), ReviewSource.GIT, null, file.path(), file.diff());
+    }
+
+    private ChangedFileView selectedGitChangedFile(List<ChangedFileView> files, String selectedGitChangedFilePath) {
+        if (selectedGitChangedFilePath == null) {
+            return null;
+        }
+        return files.stream()
+                .filter(file -> file.source() == ReviewSource.GIT && selectedGitChangedFilePath.equals(file.path()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Selected git changed file not found: " + selectedGitChangedFilePath));
     }
 
     private record ToolCallPayload(String toolCallId, String toolName, Map<String, Object> arguments) {}
 
+    private List<GitChangedFile> listGitChangedFiles(Path workspaceRoot) {
+        boolean hasHead = runGitCommandAllowingMissingHead(workspaceRoot, List.of("git", "rev-parse", "--verify", "HEAD")).exists();
+        String status = runGitCommand(workspaceRoot, List.of("git", "status", "--porcelain", "-z", "--untracked-files=all")).stdout();
+        return parseGitStatus(status).stream()
+                .map(entry -> new GitChangedFile(entry.path(), entry.untracked()
+                        ? readUntrackedFileDiff(workspaceRoot, entry.path())
+                        : readTrackedFileDiff(workspaceRoot, entry.path(), hasHead)))
+                .sorted(Comparator.comparing(GitChangedFile::path))
+                .toList();
+    }
+
+    private List<GitStatusEntry> parseGitStatus(String status) {
+        List<GitStatusEntry> entries = new ArrayList<>();
+        int i = 0;
+        while (i < status.length()) {
+            String code = status.substring(i, i + 2);
+            i += 3;
+            String path = readNullTerminated(status, i);
+            i += path.length() + 1;
+            if (code.charAt(0) == 'R' || code.charAt(0) == 'C') {
+                path = readNullTerminated(status, i);
+                i += path.length() + 1;
+            }
+            if (!"!!".equals(code)) {
+                entries.add(new GitStatusEntry(path, "??".equals(code)));
+            }
+        }
+        return entries;
+    }
+
+    private String readNullTerminated(String value, int offset) {
+        int end = value.indexOf('\0', offset);
+        if (end < 0) {
+            throw new IllegalStateException("Malformed git status output");
+        }
+        return value.substring(offset, end);
+    }
+
+    private String readTrackedFileDiff(Path workspaceRoot, String path, boolean hasHead) {
+        if (hasHead) {
+            return runGitCommand(workspaceRoot, List.of("git", "diff", "HEAD", "--", path)).stdout().stripTrailing();
+        }
+        String staged = runGitCommand(workspaceRoot, List.of("git", "diff", "--cached", "--", path)).stdout().stripTrailing();
+        String unstaged = runGitCommand(workspaceRoot, List.of("git", "diff", "--", path)).stdout().stripTrailing();
+        if (staged.isBlank()) {
+            return unstaged;
+        }
+        if (unstaged.isBlank()) {
+            return staged;
+        }
+        return staged + "\n" + unstaged;
+    }
+
+    private String readUntrackedFileDiff(Path workspaceRoot, String path) {
+        Path file = workspaceRoot.resolve(path).normalize();
+        try {
+            return "+++ " + path + "\n" + Files.readString(file);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read untracked file: " + path, e);
+        }
+    }
+
+    private record GitStatusEntry(String path, boolean untracked) {}
+
+    private record GitChangedFile(String path, String diff) {}
+
     public record WorkspaceCloseInspection(long workspaceId, String workspaceName, String workspacePath, String projectPath,
-                                           boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {}
+                                            boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {}
 
     private record GitCloseStatus(boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {}
 

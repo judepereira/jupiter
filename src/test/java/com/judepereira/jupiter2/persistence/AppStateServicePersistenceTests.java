@@ -15,7 +15,9 @@ import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
+import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
+import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
@@ -234,8 +236,36 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void reviewSourceSwitchesBetweenSessionAndGitChangedFiles(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        Files.writeString(projectPath.resolve("session-only.txt"), "session content\n");
+        Files.writeString(projectPath.resolve("outside-only.txt"), "outside content\n");
+
+        service.addChangedFilesToSession(sessionId, List.of(new ChangedFileDraft("session-only.txt", "session diff")));
+
+        AppStateView sessionView = service.loadViewData();
+        assertThat(sessionView.activeSessionDetail()).isNotNull();
+        assertThat(sessionView.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.SESSION);
+        assertThat(sessionView.activeSessionDetail().changedFiles()).extracting(com.judepereira.jupiter2.persistence.Persistence.ChangedFileView::path)
+                .containsExactly("session-only.txt");
+
+        service.switchReviewSource(sessionId, ReviewSource.GIT);
+
+        AppStateView gitView = service.loadViewData();
+        assertThat(gitView.activeSessionDetail()).isNotNull();
+        assertThat(gitView.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.GIT);
+        assertThat(gitView.activeSessionDetail().changedFiles()).extracting(com.judepereira.jupiter2.persistence.Persistence.ChangedFileView::path)
+                .contains("session-only.txt", "outside-only.txt");
+    }
+
+    @Test
     public void closeProjectFallsBackToPreviousVisibleProject(@TempDir Path firstProject,
-                                                             @TempDir Path secondProject) {
+                                                              @TempDir Path secondProject) {
         AppStateService service = TestAppStateSupport.appStateService();
 
         service.addOrReopenProject("First", firstProject.toString());

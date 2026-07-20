@@ -26,6 +26,7 @@ import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
+import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
@@ -188,11 +189,29 @@ public class UiController {
     public String loadFile(@PathVariable("id") int id, Model model) {
         AppStateView view = appStateService.loadViewData();
         if (view.activeSession() != null && view.activeSessionDetail() != null) {
-            ChangedFileView found = view.activeSessionDetail().changedFiles().stream().filter(f -> f.id() == id).findFirst().orElse(null);
+            ChangedFileView found = view.activeSessionDetail().changedFiles().stream().filter(f -> f.id() != null && f.id() == id).findFirst().orElse(null);
             if (found != null) {
-                appStateService.selectChangedFile(view.activeSession().id(), id);
+                appStateService.selectSessionChangedFile(view.activeSession().id(), id);
                 view = appStateService.loadViewData();
             }
+        }
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        return "fragments/file-diff :: diff";
+    }
+
+    @GetMapping("/ui/review/file")
+    public String loadFile(@RequestParam("source") ReviewSource source, @RequestParam("key") String key, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeSession() != null) {
+            long sessionId = view.activeSession().id();
+            appStateService.switchReviewSource(sessionId, source);
+            if (source == ReviewSource.GIT) {
+                appStateService.selectGitChangedFile(sessionId, key.startsWith("git:") ? key.substring(4) : key);
+            } else {
+                appStateService.selectSessionChangedFile(sessionId, Integer.parseInt(key.startsWith("session:") ? key.substring(8) : key));
+            }
+            view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
         populateSessionModel(model, view);
@@ -363,6 +382,19 @@ public class UiController {
         AppStateView view = appStateService.loadViewData();
         if (view.activeSession() != null) {
             appStateService.toggleReviewPanel(view.activeSession().id());
+            view = appStateService.loadViewData();
+        }
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        model.addAttribute("reviewOob", false);
+        return "fragments/review :: panel";
+    }
+
+    @PostMapping("/ui/review/source")
+    public String switchReviewSource(@RequestParam("source") ReviewSource source, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeSession() != null) {
+            appStateService.switchReviewSource(view.activeSession().id(), source);
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
@@ -668,6 +700,7 @@ public class UiController {
             model.addAttribute("chatMessages", List.of());
             model.addAttribute("changedFiles", List.of());
             model.addAttribute("reviewPanelOpen", false);
+            model.addAttribute("reviewSource", null);
             model.addAttribute("selectedFile", null);
             model.addAttribute("hasPending", false);
             model.addAttribute("reviewOob", false);
@@ -685,6 +718,7 @@ public class UiController {
         model.addAttribute("chatMessages", detail.chatMessages().stream().map(this::toChatMessage).toList());
         model.addAttribute("changedFiles", detail.changedFiles().stream().map(this::toChangedFile).toList());
         model.addAttribute("reviewPanelOpen", detail.reviewPanelOpen());
+        model.addAttribute("reviewSource", detail.reviewSource());
         model.addAttribute("selectedFile", toChangedFile(detail.selectedFile()));
         model.addAttribute("hasPending", hasPending);
         model.addAttribute("reviewOob", !hasPending && detail.reviewPanelOpen());
@@ -883,7 +917,7 @@ public class UiController {
     }
 
     private ChangedFile toChangedFile(ChangedFileView view) {
-        return view == null ? null : new ChangedFile(view.id(), view.path(), view.diff());
+        return view == null ? null : new ChangedFile(view.key(), view.source(), view.id(), view.path(), view.diff());
     }
 
     private Project toProject(ProjectView view) {
@@ -953,7 +987,7 @@ public class UiController {
 
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {}
 
-    public record ChangedFile(int id, String path, String diff) {}
+    public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
 
     public record Project(long id, String name, String path) {}
 

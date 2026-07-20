@@ -1099,6 +1099,14 @@ input:focus, textarea:focus {
     margin-bottom: 8px;
 }
 
+.review-source-select {
+    max-width: 180px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+}
+
 .review-toggle {
     background: transparent;
     border: 1px solid var(--panel-border);

@@ -3,6 +3,15 @@
     <div id="review-panel" class="review-shell" th:attr="data-open=${reviewPanelOpen}" th:if="${reviewPanelOpen}">
         <div class="review-header">
             <h2>Review</h2>
+            <select class="review-source-select"
+                    name="source"
+                    hx-post="/ui/review/source"
+                    hx-trigger="change"
+                    hx-target="#review"
+                    hx-swap="outerHTML">
+                <option value="SESSION" th:selected="${reviewSource != null and reviewSource.name() == 'SESSION'}">Session changes</option>
+                <option value="GIT" th:selected="${reviewSource != null and reviewSource.name() == 'GIT'}">Git changes</option>
+            </select>
         </div>
 
         <div th:if="${reviewPanelOpen}">
@@ -10,11 +19,11 @@
                 <h3>Changed files</h3>
                 <ul>
                     <li th:each="f : ${changedFiles}" class="changed-file-item">
-                        <a th:href="@{/ui/review/file/{id}(id=${f.id})}"
-                           hx-get="@{/ui/review/file/{id}(id=${f.id})}"
-                           th:attr="hx-target='#file-diff'"
-                           hx-swap="outerHTML"
-                           th:text="${f.path}"></a>
+                         <a th:href="@{/ui/review/file(source=${f.source},key=${f.key})}"
+                            th:hx-get="@{/ui/review/file(source=${f.source},key=${f.key})}"
+                             th:attr="hx-target='#file-diff'"
+                             hx-swap="outerHTML"
+                             th:text="${f.path}"></a>
                     </li>
                 </ul>
             </nav>

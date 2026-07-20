@@ -5,6 +5,11 @@ import java.util.Map;
 
 public final class Persistence {
 
+    public enum ReviewSource {
+        SESSION,
+        GIT
+    }
+
     private Persistence() {
     }
 
@@ -26,10 +31,11 @@ public final class Persistence {
     public record ChatMessageView(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
     }
 
-    public record ChangedFileView(int id, String path, String diff) {
+    public record ChangedFileView(String key, ReviewSource source, Integer id, String path, String diff) {
     }
 
-    public record SessionDetailView(List<ChatMessageView> chatMessages, List<ChangedFileView> changedFiles, boolean reviewPanelOpen, ChangedFileView selectedFile, String workspaceRoot) {
+    public record SessionDetailView(List<ChatMessageView> chatMessages, List<ChangedFileView> changedFiles, boolean reviewPanelOpen,
+                                    ReviewSource reviewSource, ChangedFileView selectedFile, String workspaceRoot) {
     }
 
     public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail) {
