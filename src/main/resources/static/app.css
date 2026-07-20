@@ -1259,31 +1259,27 @@ input:focus, textarea:focus {
     gap: 6px;
 }
 
-.changed-file-item a,
 .changed-file-item button {
-    display: block;
-    padding: 6px 8px;
-    border-radius: 6px;
-    color: var(--accent);
-    text-decoration: none;
-}
-
-.changed-file-item button {
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 38px 0 0;
     width: 100%;
-    border: 0;
+    border: 1px solid transparent;
     background: transparent;
+    border-radius: 6px;
+    color: #131d32;
     cursor: pointer;
     text-align: left;
     font: inherit;
+    line-height: 1.2;
 }
 
-.changed-file-item a.active,
 .changed-file-item button.active {
-    background: #f1f9ff;
+    background: #eaf1fb;
     font-weight: 600;
 }
 
-.changed-file-item a:hover,
 .changed-file-item button:hover {
     background: #eef4fc;
 }

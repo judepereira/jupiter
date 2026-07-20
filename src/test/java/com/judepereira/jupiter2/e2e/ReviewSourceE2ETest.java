@@ -68,22 +68,22 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 page.reload();
                 assertThat(page.locator("#review .review-source-select")).isVisible();
 
-                assertThat(page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("session-edit.txt"))).hasCount(1);
-                assertThat(page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("outside-git-only.txt"))).hasCount(0);
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt"))).hasCount(1);
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt"))).hasCount(0);
 
                 page.waitForResponse(
                         response -> response.url().contains("/ui/review/source") && response.status() == 200,
                         () -> page.locator("#review .review-source-select").selectOption("GIT"));
 
-                assertThat(page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("session-edit.txt"))).hasCount(1);
-                assertThat(page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("outside-git-only.txt"))).hasCount(1);
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt"))).hasCount(1);
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt"))).hasCount(1);
                 captureScreenshot(page, screenshotsDir, "02-git-source.png");
 
-                var outsideFileLink = page.locator("#review-panel a[href*='outside-git-only.txt']");
-                assertThat(outsideFileLink).hasCount(1);
-                outsideFileLink.click(new com.microsoft.playwright.Locator.ClickOptions().setForce(true));
+                var outsideFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt"));
+                assertThat(outsideFileButton).hasCount(1);
+                outsideFileButton.click();
 
-                assertThat(page.locator("#diff-file-path")).hasText("outside-git-only.txt");
+                assertTrue((Boolean) outsideFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).containsText("outside git change");
                 captureScreenshot(page, screenshotsDir, "03-git-file-selected.png");
             }
@@ -134,28 +134,29 @@ class ReviewSourceE2ETest extends E2ETestSupport {
 
                 page.reload();
 
-                assertThat(page.locator("#review .changed-file-item")).hasCount(2);
-
                 var firstFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("first-review-file.txt"));
                 var secondFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("second-review-file.txt"));
 
+                firstFileButton.waitFor();
+                secondFileButton.waitFor();
+
                 firstFileButton.click();
-                assertThat(page.locator("#diff-file-path")).hasText("first-review-file.txt");
+                assertTrue((Boolean) firstFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).containsText("first file diff");
 
                 firstFileButton.click();
-                assertThat(page.locator("#diff-file-path")).hasCount(0);
+                assertTrue(!(Boolean) firstFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).hasCount(0);
 
                 consoleErrors.clear();
 
                 secondFileButton.click();
-                assertThat(page.locator("#diff-file-path")).hasText("second-review-file.txt");
+                assertTrue((Boolean) secondFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).containsText("second file diff");
                 assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
 
                 secondFileButton.click();
-                assertThat(page.locator("#diff-file-path")).hasCount(0);
+                assertTrue(!(Boolean) secondFileButton.evaluate("el => el.classList.contains('active')"));
                 assertThat(page.locator("#diff-content")).hasCount(0);
             }
         } finally {
