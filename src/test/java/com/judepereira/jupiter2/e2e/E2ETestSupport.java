@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -18,23 +19,29 @@ import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertTha
 abstract class E2ETestSupport {
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
+        return startApp(fakeHome, dbFile, Map.of(), testConfigClasses);
+    }
+
+    protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {
         String jdbcUrl = "jdbc:h2:file:" + dbFile.toAbsolutePath().normalize() + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE";
         Map<String, String> previousProperties = new HashMap<>();
         overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
+        additionalProperties.forEach((key, value) -> overrideSystemProperty(previousProperties, key, value));
         Class<?>[] sources = Stream.concat(Stream.of(JupiterV2Application.class), Arrays.stream(testConfigClasses)).toArray(Class<?>[]::new);
+        Map<String, String> properties = new LinkedHashMap<>();
+        properties.put("server.port", "0");
+        properties.put("spring.datasource.url", jdbcUrl);
+        properties.put("spring.datasource.driver-class-name", "org.h2.Driver");
+        properties.put("spring.datasource.username", "sa");
+        properties.put("spring.datasource.password", "");
+        properties.put("spring.flyway.enabled", "true");
+        properties.put("spring.docker.compose.enabled", "false");
+        properties.put("agent.workspace-root", fakeHome.toAbsolutePath().normalize().toString());
+        properties.put("openai.api-key", "test");
+        properties.putAll(additionalProperties);
         ConfigurableApplicationContext context = new SpringApplicationBuilder(sources)
                 .web(WebApplicationType.SERVLET)
-                .properties(
-                        "server.port=0",
-                        "spring.datasource.url=" + jdbcUrl,
-                        "spring.datasource.driver-class-name=org.h2.Driver",
-                        "spring.datasource.username=sa",
-                        "spring.datasource.password=",
-                        "spring.flyway.enabled=true",
-                        "spring.docker.compose.enabled=false",
-                        "agent.workspace-root=" + fakeHome.toAbsolutePath().normalize(),
-                        "openai.api-key=test"
-                )
+                .properties(properties.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new))
                 .run();
 
         Integer port = context.getEnvironment().getProperty("local.server.port", Integer.class);

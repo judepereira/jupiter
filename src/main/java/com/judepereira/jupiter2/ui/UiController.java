@@ -31,6 +31,7 @@ import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.WorkspaceView;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalPanelState;
@@ -52,6 +53,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -85,6 +87,7 @@ public class UiController {
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
     private final SystemBalloonService systemBalloonService;
+    private final OpenAiOAuthService openAiOAuthService;
     private final String appVersion;
 
     @Qualifier("agentTaskExecutor")
@@ -95,7 +98,8 @@ public class UiController {
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
                         ModelCatalogService modelCatalogService, ContextCompactionService contextCompactionService, Executor agentExecutor) {
         this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                new SystemBalloonService(new ObjectMapper()), terminalManager, terminalStateService, contextCompactionService,
+                new SystemBalloonService(new ObjectMapper()), terminalManager, terminalStateService,
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()), contextCompactionService,
                 agentExecutor, DEFAULT_APP_VERSION);
     }
 
@@ -104,7 +108,8 @@ public class UiController {
                         ModelCatalogService modelCatalogService, SystemBalloonService systemBalloonService,
                         ContextCompactionService contextCompactionService, Executor agentExecutor) {
         this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                systemBalloonService, terminalManager, terminalStateService, contextCompactionService,
+                systemBalloonService, terminalManager, terminalStateService,
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()), contextCompactionService,
                 agentExecutor, DEFAULT_APP_VERSION);
     }
 
@@ -112,7 +117,7 @@ public class UiController {
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                         SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService, ContextCompactionService contextCompactionService,
                         @Qualifier("agentTaskExecutor") Executor agentExecutor,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
@@ -124,8 +129,20 @@ public class UiController {
         this.systemBalloonService = systemBalloonService;
         this.terminalManager = terminalManager;
         this.terminalStateService = terminalStateService;
+        this.openAiOAuthService = openAiOAuthService;
         this.agentExecutor = agentExecutor;
         this.appVersion = appVersion;
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
+                        Executor agentExecutor, String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                terminalManager, terminalStateService,
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
+                contextCompactionService, agentExecutor, appVersion);
     }
 
     @GetMapping("/")
@@ -572,6 +589,7 @@ public class UiController {
         }
 
         populateProjectModel(model, view);
+        model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
         return "fragments/projects :: settingsModal";
     }
 
@@ -584,6 +602,24 @@ public class UiController {
 
         appStateService.updateProjectWorkspaceInitCommands(view.activeProject().id(), workspaceInitCommands);
         return "fragments/projects :: modalClose";
+    }
+
+    @PostMapping("/ui/settings/openai/start")
+    public String startOpenAiOAuth(Model model) {
+        model.addAttribute("openAiOAuthView", openAiOAuthService.startDeviceAuthorization());
+        return "fragments/projects :: openaiOAuthSection";
+    }
+
+    @PostMapping("/ui/settings/openai/logout")
+    public String logoutOpenAiOAuth(Model model) {
+        model.addAttribute("openAiOAuthView", openAiOAuthService.resetConnectionState());
+        return "fragments/projects :: openaiOAuthSection";
+    }
+
+    @GetMapping("/ui/settings/openai/status")
+    public String openAiOAuthStatus(Model model) {
+        model.addAttribute("openAiOAuthView", openAiOAuthService.pollCurrentDeviceAuthorization());
+        return "fragments/projects :: openaiOAuthSection";
     }
 
     @PostMapping("/ui/projects/add")

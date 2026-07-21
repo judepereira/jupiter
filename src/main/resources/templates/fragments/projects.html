@@ -214,8 +214,44 @@
                     <h5>App</h5>
                     <p>Made with &lt;3 in Amsterdam</p>
                     <p>Version <strong th:text="${appVersion}"></strong></p>
+                    <div class="settings-openai-section">
+                        <h6>OpenAI subscription</h6>
+                        <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
+                    </div>
                 </section>
             </div>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="openaiOAuthSection" th:with="view=${openAiOAuthView}, pending=${openAiOAuthView != null and openAiOAuthView.pending}, connected=${openAiOAuthView != null and openAiOAuthView.connected}">
+    <div id="openai-oauth-section"
+          class="settings-openai-oauth"
+          th:attr="hx-get=${pending} ? '/ui/settings/openai/status' : null, hx-trigger=${pending} ? ${view.pollTrigger} : null, hx-swap=${pending} ? 'outerHTML' : null">
+        <p th:text="${view == null ? 'OpenAI is not connected.' : view.message}"></p>
+
+        <div th:if="${pending}" class="settings-openai-device-flow">
+            <p class="settings-openai-user-code-label"><strong>Use this code in ChatGPT:</strong></p>
+            <div class="settings-openai-user-code" th:text="${view.userCode}"></div>
+            <p><strong>Verify at:</strong> <a th:href="${view.verificationUri}" th:text="${view.verificationUri}"></a></p>
+            <p th:if="${view.verificationUriComplete != null}"><a th:href="${view.verificationUriComplete}" th:text="${view.verificationUriComplete}"></a></p>
+        </div>
+
+        <p th:if="${connected}"><strong>Status:</strong> Connected</p>
+
+        <div class="project-form-actions">
+            <button type="button"
+                    class="project-form-submit"
+                    th:if="${connected}"
+                    hx-post="/ui/settings/openai/logout"
+                    hx-target="#openai-oauth-section"
+                    hx-swap="outerHTML">Disconnect ChatGPT/OpenAI subscription</button>
+            <button type="button"
+                    class="project-form-submit"
+                    th:if="${!pending and !connected}"
+                    hx-post="/ui/settings/openai/start"
+                    hx-target="#openai-oauth-section"
+                    hx-swap="outerHTML">Connect ChatGPT/OpenAI subscription</button>
         </div>
     </div>
 </th:block>

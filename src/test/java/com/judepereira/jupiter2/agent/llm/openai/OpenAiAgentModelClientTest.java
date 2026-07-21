@@ -7,6 +7,7 @@ import com.judepereira.jupiter2.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -125,6 +127,32 @@ public class OpenAiAgentModelClientTest {
         verify(streamingModel, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
     }
 
+    @Test
+    public void oauth_access_token_preempts_api_key_and_uses_a_separate_cache_entry() {
+        OpenAiOAuthService oauthService = mock(OpenAiOAuthService.class);
+        when(oauthService.currentAccessToken()).thenReturn(Optional.empty(), Optional.of("oauth-access-token"));
+        when(oauthService.currentAccountId()).thenReturn(Optional.of("acct-123"));
+
+        ChatModel apiKeyModel = mock(ChatModel.class);
+        ChatModel oauthModel = mock(ChatModel.class);
+        when(apiKeyModel.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder().aiMessage(AiMessage.from("api-key")).build());
+        when(oauthModel.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder().aiMessage(AiMessage.from("oauth")).build());
+
+        TrackingClient client = new TrackingClient(apiKeyModel, oauthModel, oauthService);
+
+        assertEquals("api-key", client.chat(List.of(new Message(Message.Role.USER, "first")), List.of()).getAssistantText());
+        assertEquals("oauth", client.chat(List.of(new Message(Message.Role.USER, "second")), List.of()).getAssistantText());
+
+        assertEquals(List.of("gpt-5.4", "gpt-5.4"), client.chatModelNames());
+        assertEquals(List.of("api-key-123", "oauth-access-token"), client.chatModelCredentials());
+        assertEquals(List.of("https://api.openai.com/v1", "https://chatgpt.com/backend-api/codex"), client.chatModelBaseUrls());
+        assertEquals(List.of(Optional.empty(), Optional.of("acct-123")), client.chatModelAccountIds());
+        verify(apiKeyModel, times(1)).chat(any(ChatRequest.class));
+        verify(oauthModel, times(1)).chat(any(ChatRequest.class));
+        verify(oauthService, times(2)).currentAccessToken();
+        verify(oauthService, times(1)).currentAccountId();
+    }
+
     private static final class RecordingClient extends OpenAiAgentModelClient {
         private final List<String> chatModelNames = new ArrayList<>();
         private final List<String> streamingModelNames = new ArrayList<>();
@@ -132,19 +160,25 @@ public class OpenAiAgentModelClientTest {
         private final StreamingChatModel streamingChatModel;
 
         private RecordingClient(ChatModel chatModel, StreamingChatModel streamingChatModel) {
-            super(new OpenAiProperties(), new AgentProperties());
+            super(openAiProperties(), new AgentProperties());
             this.chatModel = chatModel;
             this.streamingChatModel = streamingChatModel;
         }
 
+        private static OpenAiProperties openAiProperties() {
+            OpenAiProperties openAiProperties = new OpenAiProperties();
+            openAiProperties.setApiKey("api-key-123");
+            return openAiProperties;
+        }
+
         @Override
-        protected ChatModel buildChatModel(String modelName) {
+        protected ChatModel buildChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
             chatModelNames.add(modelName);
             return chatModel;
         }
 
         @Override
-        protected StreamingChatModel buildStreamingChatModel(String modelName) {
+        protected StreamingChatModel buildStreamingChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
             streamingModelNames.add(modelName);
             return streamingChatModel;
         }
@@ -155,6 +189,53 @@ public class OpenAiAgentModelClientTest {
 
         private List<String> streamingModelNames() {
             return streamingModelNames;
+        }
+    }
+
+    private static final class TrackingClient extends OpenAiAgentModelClient {
+        private final List<String> chatModelNames = new ArrayList<>();
+        private final List<String> chatModelCredentials = new ArrayList<>();
+        private final List<String> chatModelBaseUrls = new ArrayList<>();
+        private final List<Optional<String>> chatModelAccountIds = new ArrayList<>();
+        private final ChatModel apiKeyModel;
+        private final ChatModel oauthModel;
+        private int buildCount;
+
+        private TrackingClient(ChatModel apiKeyModel, ChatModel oauthModel, OpenAiOAuthService oauthService) {
+            super(apiKeyProperties(), new AgentProperties(), oauthService);
+            this.apiKeyModel = apiKeyModel;
+            this.oauthModel = oauthModel;
+        }
+
+        private static OpenAiProperties apiKeyProperties() {
+            OpenAiProperties openAiProperties = new OpenAiProperties();
+            openAiProperties.setApiKey("api-key-123");
+            return openAiProperties;
+        }
+
+        @Override
+        protected ChatModel buildChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+            chatModelNames.add(modelName);
+            chatModelCredentials.add(credential);
+            chatModelBaseUrls.add(baseUrl);
+            chatModelAccountIds.add(accountId);
+            return buildCount++ == 0 ? apiKeyModel : oauthModel;
+        }
+
+        private List<String> chatModelNames() {
+            return chatModelNames;
+        }
+
+        private List<String> chatModelCredentials() {
+            return chatModelCredentials;
+        }
+
+        private List<String> chatModelBaseUrls() {
+            return chatModelBaseUrls;
+        }
+
+        private List<Optional<String>> chatModelAccountIds() {
+            return chatModelAccountIds;
         }
     }
 }

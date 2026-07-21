@@ -1439,6 +1439,59 @@ input:focus, textarea:focus {
     border-top: 1px solid #e6eef6;
 }
 
+.settings-openai-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid #dbeafe;
+    border-radius: 10px;
+    background: #f8fbff;
+}
+
+.settings-openai-section h6 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.settings-openai-oauth {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-openai-oauth p {
+    margin: 0;
+}
+
+.settings-openai-device-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #cfe0ff;
+}
+
+.settings-openai-user-code-label {
+    color: #0b1220;
+}
+
+.settings-openai-user-code {
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px dashed #1f6fff;
+    background: #eef5ff;
+    color: #0b2f6b;
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-align: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 .project-form-field {
     display: flex;
     flex-direction: column;
