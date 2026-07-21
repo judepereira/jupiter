@@ -116,10 +116,10 @@ public class UiControllerAsyncStreamingTests {
 
         assertThat(fake.requests).hasSize(2);
         assertThat(fake.requests.get(0).getSystemPrompt())
-                .isEqualTo("You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
+                .isNull();
         assertThat(render(fake.requests.get(0).getConversationHistory())).containsExactly("USER:first");
         assertThat(fake.requests.get(1).getSystemPrompt())
-                .isEqualTo("You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
+                .isNull();
         assertThat(render(fake.requests.get(1).getConversationHistory())).containsExactly("USER:first", "ASSISTANT:reply-1", "USER:second");
     }
 
@@ -156,7 +156,7 @@ public class UiControllerAsyncStreamingTests {
         assertThat(request.getAgentId()).isEqualTo("engineer");
         assertThat(request.getModelId()).isEqualTo("openai/gpt-5.5-pro");
         assertThat(request.getThinkingLevel()).isEqualTo(ThinkingLevel.LOW);
-        assertThat(request.getSystemPrompt()).isEqualTo("You are an apprentice to a seasoned software engineer. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
+        assertThat(request.getSystemPrompt()).isNull();
         assertThat(request.getConversationHistory()).hasSize(1);
         assertThat(request.getConversationHistory().get(0).getRole()).isEqualTo(Message.Role.USER);
         assertThat(request.getConversationHistory().get(0).getContent()).isEqualTo("go");

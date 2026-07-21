@@ -335,9 +335,9 @@ public class UiControllerProjectsAndDirectoryTests {
         controller.streamChat(assistantId(secondSend));
 
         assertThat(harness.requests).hasSize(2);
-        assertThat(harness.requests.get(0).getSystemPrompt()).isEqualTo("You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
+        assertThat(harness.requests.get(0).getSystemPrompt()).isNull();
         assertThat(conversation(harness.requests.get(0))).containsExactly("USER:alpha");
-        assertThat(harness.requests.get(1).getSystemPrompt()).isEqualTo("You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
+        assertThat(harness.requests.get(1).getSystemPrompt()).isNull();
         assertThat(conversation(harness.requests.get(1))).containsExactly("USER:beta");
 
         ConcurrentModel firstHistory = new ConcurrentModel();

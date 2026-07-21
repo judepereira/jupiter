@@ -36,19 +36,27 @@ public class CodingAgentHarness {
     private final AgentProperties props;
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
+    private final SystemPromptComposer systemPromptComposer;
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props) {
-        this(modelFactory, registry, props, null, null);
+        this(modelFactory, registry, props, null, null, new SystemPromptComposer());
+    }
+
+    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
+                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService) {
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, new SystemPromptComposer());
     }
 
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
-                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService) {
+                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                              SystemPromptComposer systemPromptComposer) {
         this.modelFactory = modelFactory;
         this.registry = registry;
         this.props = props;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
+        this.systemPromptComposer = systemPromptComposer;
     }
 
     public AgentTurnResult runTurn(AgentTurnRequest request) {
@@ -65,12 +73,8 @@ public class CodingAgentHarness {
                 selectedModel.id(), selectedModel.apiModelId(), thinkingLevel, selectedModel.supportsReasoning(),
                 agent == null ? null : agent.textVerbosity());
 
-        List<Message> convo = new ArrayList<>();
         String systemPrompt = resolveSystemPrompt(request, agent);
-        if (systemPrompt != null && !systemPrompt.isBlank()) {
-            convo.add(new Message(Message.Role.SYSTEM, systemPrompt));
-        }
-        convo.addAll(request.getConversationHistory());
+        List<Message> convo = new ArrayList<>(seedConversation(systemPrompt, request.getConversationHistory()));
 
         List<ToolCallTrace> traces = new ArrayList<>();
 
@@ -94,7 +98,7 @@ public class CodingAgentHarness {
                 if (preparedConversation == null) {
                     throw new IllegalStateException("Listener returned null conversation before model request");
                 }
-                convo = new ArrayList<>(preparedConversation);
+                convo = new ArrayList<>(seedConversation(systemPrompt, preparedConversation));
 
                 ModelResponse resp = model.chatStreaming(convo, defs, modelOptions, delta -> {
                     // forward and accumulate every non-null delta, including whitespace-only chunks
@@ -227,10 +231,33 @@ public class CodingAgentHarness {
     }
 
     private String resolveSystemPrompt(AgentTurnRequest request, AgentDefinition agent) {
-        if (request.getSystemPrompt() != null && !request.getSystemPrompt().isBlank()) {
-            return request.getSystemPrompt();
+        if (agent == null) {
+            String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
+                    ? props.getWorkspaceRoot()
+                    : request.getWorkspaceRoot();
+            return systemPromptComposer.compose(request.getSystemPrompt(), workspaceRoot);
         }
-        return agent == null ? request.getSystemPrompt() : agent.systemPrompt();
+        String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
+                ? props.getWorkspaceRoot()
+                : request.getWorkspaceRoot();
+        return systemPromptComposer.composeForAgent(agent, workspaceRoot);
+    }
+
+    private static List<Message> seedConversation(String systemPrompt, List<Message> conversation) {
+        if (conversation.isEmpty()) {
+            return List.of(new Message(Message.Role.SYSTEM, systemPrompt));
+        }
+        Message first = conversation.getFirst();
+        if (first.getRole() == Message.Role.SYSTEM) {
+            if (!systemPrompt.equals(first.getContent())) {
+                throw new IllegalStateException("Conversation already contains a different system prompt");
+            }
+            return conversation;
+        }
+        List<Message> seeded = new ArrayList<>(conversation.size() + 1);
+        seeded.add(new Message(Message.Role.SYSTEM, systemPrompt));
+        seeded.addAll(conversation);
+        return seeded;
     }
 
     private Set<String> resolveAllowedTools(AgentDefinition agent) {

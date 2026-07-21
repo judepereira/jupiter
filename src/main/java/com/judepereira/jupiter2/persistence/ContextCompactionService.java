@@ -3,13 +3,14 @@ package com.judepereira.jupiter2.persistence;
 import com.judepereira.jupiter2.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter2.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
+import com.judepereira.jupiter2.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter2.agent.llm.AgentModelClient;
 import com.judepereira.jupiter2.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter2.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +21,6 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 public class ContextCompactionService {
 
     private static final int MIN_RECENT_COMPLETED_TURNS = 2;
@@ -33,13 +33,26 @@ public class ContextCompactionService {
 
     private final AppStateService appStateService;
     private final AgentModelClientFactory modelClientFactory;
+    private final SystemPromptComposer systemPromptComposer;
+
+    public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory) {
+        this(appStateService, modelClientFactory, new SystemPromptComposer());
+    }
+
+    @Autowired
+    public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory,
+                                    SystemPromptComposer systemPromptComposer) {
+        this.appStateService = appStateService;
+        this.modelClientFactory = modelClientFactory;
+        this.systemPromptComposer = systemPromptComposer;
+    }
 
     @Transactional
     public Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent, ModelDefinition model,
                                                       ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
         List<AppStateRepository.ConversationMessageRow> rows = includedCompletedRows(sessionId);
         int budget = availableInputBudget(model);
-        int estimatedBefore = estimateTurnTokens(agent, model, rows, upcomingUserText);
+        int estimatedBefore = estimateTurnTokens(agent, model, rows, upcomingUserText, workspaceRoot);
 
         if (estimatedBefore <= compactThreshold(budget)) {
             return Optional.empty();
@@ -77,7 +90,7 @@ public class ContextCompactionService {
         appStateService.markTurnsIncludeInModelFalse(sessionId, compactedThroughTurnId);
         ChatMessageView summaryMessage = appStateService.appendVisibleSystemMessage(sessionId, summary, compactedThroughTurnId);
 
-        int estimatedAfter = estimateTurnTokens(agent, model, includedCompletedRows(sessionId), upcomingUserText);
+        int estimatedAfter = estimateTurnTokens(agent, model, includedCompletedRows(sessionId), upcomingUserText, workspaceRoot);
         if (estimatedAfter > budget) {
             throw new IllegalStateException("Conversation still does not fit after compaction for " + model.id()
                     + ": estimated " + estimatedAfter + " tokens for budget " + budget);
@@ -129,8 +142,8 @@ public class ContextCompactionService {
                 + model.outputTokens();
     }
 
-    private int estimateTurnTokens(AgentDefinition agent, ModelDefinition model, List<AppStateRepository.ConversationMessageRow> rows, String userText) {
-        return estimatePromptTokens(agent.systemPrompt())
+    private int estimateTurnTokens(AgentDefinition agent, ModelDefinition model, List<AppStateRepository.ConversationMessageRow> rows, String userText, String workspaceRoot) {
+        return estimatePromptTokens(systemPromptComposer.composeForAgent(agent, workspaceRoot))
                 + estimateRowsTokens(rows)
                 + estimateTextTokens(userText)
                 + toolSchemaTokens(agent)

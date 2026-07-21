@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -75,8 +76,10 @@ public class CodingAgentHarnessFakeModelTest {
 
         assertEquals("ok", res.getFinalText());
         assertEquals(1, captured.size());
-        assertEquals(List.of("SYSTEM:sys", "USER:u1", "ASSISTANT:a1", "USER:u2"),
-                captured.get(0).stream().map(m -> m.getRole() + ":" + m.getContent()).toList());
+        assertEquals(Message.Role.SYSTEM, captured.get(0).get(0).getRole());
+        assertComposedSystemPrompt(captured.get(0).get(0).getContent(), "sys", tmp);
+        assertEquals(List.of("USER:u1", "ASSISTANT:a1", "USER:u2"),
+                captured.get(0).subList(1, captured.get(0).size()).stream().map(m -> m.getRole() + ":" + m.getContent()).toList());
     }
 
     @Test
@@ -112,7 +115,8 @@ public class CodingAgentHarnessFakeModelTest {
 
         assertEquals(2, captured.size());
         var second = captured.get(1);
-        assertEquals("SYSTEM:sys", second.get(0).getRole() + ":" + second.get(0).getContent());
+        assertEquals(Message.Role.SYSTEM, second.get(0).getRole());
+        assertComposedSystemPrompt(second.get(0).getContent(), "sys", tmp);
         assertEquals("USER:user", second.get(1).getRole() + ":" + second.get(1).getContent());
         assertEquals(Message.Role.ASSISTANT, second.get(2).getRole());
         assertNull(second.get(2).getContent());
@@ -333,5 +337,16 @@ public class CodingAgentHarnessFakeModelTest {
         assertEquals(1, res.getTraces().size());
         assertEquals("(missing_tool_name)", res.getTraces().get(0).getToolName());
         assertFalse(res.getTraces().get(0).isSuccess());
+    }
+
+    private static void assertComposedSystemPrompt(String actual, String appendage, Path workspaceRoot) {
+        assertNotNull(actual);
+        assertTrue(actual.contains("You are Jupiter, a coding agent operating inside a single workspace."));
+        assertTrue(actual.contains("Follow the user's request exactly, use tools when needed, keep changes minimal, and fail loudly when something is wrong."));
+        assertTrue(actual.contains(appendage));
+        assertTrue(actual.contains("Working directory: " + workspaceRoot.toAbsolutePath().normalize()));
+        assertTrue(actual.contains("Current date: " + LocalDate.now()));
+        assertTrue(actual.contains("Operating system: Ubuntu Linux"));
+        assertTrue(actual.contains("Shell: bash"));
     }
 }

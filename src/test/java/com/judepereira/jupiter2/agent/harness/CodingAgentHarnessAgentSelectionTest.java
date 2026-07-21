@@ -20,6 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,9 @@ public class CodingAgentHarnessAgentSelectionTest {
         ));
 
         AgentProperties props = properties(tmp, true, true);
-        CodingAgentHarness harness = newHarness(model, props, registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand));
+        AgentDefinitionService agentDefinitions = new AgentDefinitionService(new ObjectMapper());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
+                agentDefinitions, ModelCatalogTestSupport.modelCatalogService());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Plan.",
@@ -58,6 +61,8 @@ public class CodingAgentHarnessAgentSelectionTest {
 
         assertThat(result.getFinalText()).isEqualTo("finished");
         assertThat(model.capturedToolNames().get(0)).containsExactlyInAnyOrder("list_files", "read_file", "search_code");
+        assertThat(model.capturedConversations().get(0).get(0).getContent())
+                .satisfies(system -> assertSystemPrompt(system, agentDefinitions.getRequired("plan").systemPrompt(), tmp));
         assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.5");
         assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(writeFile.executions).isZero();
@@ -89,7 +94,9 @@ public class CodingAgentHarnessAgentSelectionTest {
         ));
 
         AgentProperties props = properties(tmp, false, false);
-        CodingAgentHarness harness = newHarness(model, props, registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand));
+        AgentDefinitionService agentDefinitions = new AgentDefinitionService(new ObjectMapper());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
+                agentDefinitions, ModelCatalogTestSupport.modelCatalogService());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Engineer.",
@@ -103,6 +110,8 @@ public class CodingAgentHarnessAgentSelectionTest {
         assertThat(result.getFinalText()).isEqualTo("done");
         assertThat(model.capturedToolNames().get(0)).containsExactlyInAnyOrder(
                 "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
+        assertThat(model.capturedConversations().get(0).get(0).getContent())
+                .satisfies(system -> assertSystemPrompt(system, agentDefinitions.getRequired("engineer").systemPrompt(), tmp));
         assertThat(model.capturedOptions().get(0).modelId()).isEqualTo("openai/gpt-5.5");
         assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.5");
         assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.MEDIUM);
@@ -113,12 +122,6 @@ public class CodingAgentHarnessAgentSelectionTest {
         assertThat(result.getTraces()).hasSize(1);
         assertThat(result.getTraces().get(0).getToolName()).isEqualTo("run_command");
         assertThat(result.getTraces().get(0).isSuccess()).isTrue();
-    }
-
-    private static CodingAgentHarness newHarness(RecordingModel model, AgentProperties props, ToolRegistry registry) {
-        AgentDefinitionService agentDefinitions = new AgentDefinitionService(new ObjectMapper());
-        var modelCatalog = ModelCatalogTestSupport.modelCatalogService();
-        return new CodingAgentHarness(fakeFactory(model), registry, props, agentDefinitions, modelCatalog);
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
@@ -159,8 +162,20 @@ public class CodingAgentHarnessAgentSelectionTest {
         return new RecordingTool(name, new ToolDefinition(name, name + " tool", ToolSchema.object()), executor);
     }
 
+    private static void assertSystemPrompt(String actual, String appendage, Path workspaceRoot) {
+        assertThat(actual).contains(
+                "You are Jupiter, a coding agent operating inside a single workspace.",
+                "Follow the user's request exactly, use tools when needed, keep changes minimal, and fail loudly when something is wrong.",
+                appendage,
+                "Working directory: " + workspaceRoot.toAbsolutePath().normalize(),
+                "Current date: " + LocalDate.now(),
+                "Operating system: Ubuntu Linux",
+                "Shell: bash");
+    }
+
     private static final class RecordingModel implements AgentModelClient {
         private final List<ModelResponse> responses;
+        private final List<List<Message>> capturedConversations = new ArrayList<>();
         private final List<List<ToolDefinition>> capturedToolDefinitions = new ArrayList<>();
         private final List<AgentModelOptions> capturedOptions = new ArrayList<>();
         private int index;
@@ -181,12 +196,17 @@ public class CodingAgentHarnessAgentSelectionTest {
         }
 
         private ModelResponse next(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
+            capturedConversations.add(List.copyOf(conversation));
             capturedToolDefinitions.add(List.copyOf(tools));
             capturedOptions.add(options);
             if (index >= responses.size()) {
                 return new ModelResponse("", null);
             }
             return responses.get(index++);
+        }
+
+        private List<List<Message>> capturedConversations() {
+            return capturedConversations;
         }
 
         private List<List<String>> capturedToolNames() {

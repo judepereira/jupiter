@@ -193,7 +193,7 @@ public class UiController {
             List<Message> conversationHistory = new ArrayList<>();
             conversationHistory.addAll(appStateService.buildConversationHistory(session.id()));
             pendingStreams.put(assistantId, new PendingStream(session.id(), workspaceRoot,
-                    new AgentTurnRequest(selected.selectedAgent().systemPrompt(), conversationHistory, workspaceRoot,
+                    new AgentTurnRequest(null, conversationHistory, workspaceRoot,
                             selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id())));
         }
 
@@ -353,12 +353,7 @@ public class UiController {
                         throw new IllegalStateException("Failed to send context compaction event", e);
                     }
 
-                    List<Message> rebuilt = new ArrayList<>();
-                    if (currentRequest.getSystemPrompt() != null && !currentRequest.getSystemPrompt().isBlank()) {
-                        rebuilt.add(new Message(Message.Role.SYSTEM, currentRequest.getSystemPrompt()));
-                    }
-                    rebuilt.addAll(appStateService.buildConversationHistory(currentRequest.getSessionId()));
-                    return rebuilt;
+                    return appStateService.buildConversationHistory(currentRequest.getSessionId());
                 }
 
                 @Override
