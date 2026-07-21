@@ -13,6 +13,8 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
+import com.judepereira.jupiter2.agent.task.SubagentTaskService;
+import com.judepereira.jupiter2.agent.task.SubagentTaskStreamBridge;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
@@ -27,6 +29,7 @@ import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
+import com.judepereira.jupiter2.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
@@ -284,24 +287,25 @@ public class UiController {
             AtomicBoolean done = new AtomicBoolean(false);
             StringBuilder accumulated = new StringBuilder();
 
-            AgentStreamListener listener = new AgentStreamListener() {
-                @Override
-                public void onTextDelta(String delta) {
-                    try {
-                        if (delta == null) {
-                            return;
-                        }
-                        accumulated.append(delta);
-                        appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
+            try (SubagentTaskStreamBridge.Scope ignored = SubagentTaskStreamBridge.bind(buildSubagentStreamListener(emitter))) {
+                AgentStreamListener listener = new AgentStreamListener() {
+                    @Override
+                    public void onTextDelta(String delta) {
                         try {
-                            emitter.send(SseEmitter.event().name("delta").data(SseJson.writeValueAsString(Map.of("text", delta))));
-                        } catch (JsonProcessingException e) {
-                            emitter.send(SseEmitter.event().name("delta").data(delta));
+                            if (delta == null) {
+                                return;
+                            }
+                            accumulated.append(delta);
+                            appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
+                            try {
+                                emitter.send(SseEmitter.event().name("delta").data(SseJson.writeValueAsString(Map.of("text", delta))));
+                            } catch (JsonProcessingException e) {
+                                emitter.send(SseEmitter.event().name("delta").data(delta));
+                            }
+                        } catch (Exception e) {
+                            onError(e);
                         }
-                    } catch (Exception e) {
-                        onError(e);
                     }
-                }
 
                 @Override
                 public void onStatus(String status) {
@@ -395,13 +399,14 @@ public class UiController {
                 }
             };
 
-            try {
-                AgentTurnResult result = harness.runTurnStreaming(pending.request(), listener);
-                if (!done.get()) {
-                    listener.onComplete(result);
+                try {
+                    AgentTurnResult result = harness.runTurnStreaming(pending.request(), listener);
+                    if (!done.get()) {
+                        listener.onComplete(result);
+                    }
+                } catch (Exception e) {
+                    listener.onError(e);
                 }
-            } catch (Exception e) {
-                listener.onError(e);
             }
         };
 
@@ -412,6 +417,35 @@ public class UiController {
         }
 
         return emitter;
+    }
+
+    @GetMapping("/ui/chat/primary")
+    public String loadPrimaryChat(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeSession() == null || view.activeSessionDetail() == null) {
+            throw new IllegalStateException("No active primary session");
+        }
+
+        populateChatControlsModel(model, defaultChatSelection());
+        populateChatModel(model, view.activeSessionDetail().chatMessages(), false, null, null, null);
+        return "fragments/chat :: chat";
+    }
+
+    @GetMapping("/ui/chat/subagent/{sessionId}")
+    public String loadSubagentChat(@PathVariable long sessionId, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeSession() == null) {
+            throw new IllegalStateException("No active primary session");
+        }
+
+        SubagentSessionDetailView subagent = appStateService.loadSubagentSessionDetail(sessionId);
+        if (subagent.parentSessionId() == null || subagent.parentSessionId() != view.activeSession().id()) {
+            throw new IllegalStateException("Subagent session does not belong to the active primary session: " + sessionId);
+        }
+
+        populateChatControlsModel(model, defaultChatSelection());
+        populateChatModel(model, subagent.sessionDetail().chatMessages(), true, subagent.subagentAgentName(), subagent.subagentAgentId(), sessionId);
+        return "fragments/chat :: chat";
     }
 
     @GetMapping("/ui/system-balloons/stream")
@@ -821,6 +855,18 @@ public class UiController {
         model.addAttribute("panelMode", terminalState.bottomPanelMode());
     }
 
+    private void populateChatModel(Model model, List<ChatMessageView> chatMessages, boolean subagentView, String subagentAgentName, String subagentAgentId,
+                                   Long subagentSessionId) {
+        model.addAttribute("chatMessages", chatMessages.stream().map(this::toChatMessage).toList());
+        model.addAttribute("hasPending", chatMessages.stream().anyMatch(ChatMessageView::pending));
+        model.addAttribute("reviewOob", false);
+        model.addAttribute("shellRefresh", false);
+        model.addAttribute("subagentView", subagentView);
+        model.addAttribute("subagentAgentName", subagentAgentName);
+        model.addAttribute("subagentAgentId", subagentAgentId);
+        model.addAttribute("subagentSessionId", subagentSessionId);
+    }
+
     private boolean isTerminalPanelOpen(AppStateView view) {
         return view.activeWorkspace() != null && terminalStateService.snapshot(view.activeWorkspace().id()).bottomPanelOpen();
     }
@@ -847,7 +893,7 @@ public class UiController {
     }
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {
-        model.addAttribute("agents", agentDefinitionService.list());
+        model.addAttribute("agents", agentDefinitionService.listPrimaryAgents());
         model.addAttribute("models", modelCatalogService.list());
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
@@ -1005,7 +1051,8 @@ public class UiController {
     }
 
     private ToolCallView toToolCallView(com.judepereira.jupiter2.persistence.Persistence.ToolCallView view) {
-        return new ToolCallView(view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated());
+        return new ToolCallView(view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated(),
+                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName());
     }
 
     private ChangedFile toChangedFile(ChangedFileView view) {
@@ -1031,6 +1078,43 @@ public class UiController {
 
     private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
         return new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
+    }
+
+    private SubagentTaskService.SubagentTaskStreamListener buildSubagentStreamListener(SseEmitter emitter) {
+        return new SubagentTaskService.SubagentTaskStreamListener() {
+            @Override
+            public void onStarted(SubagentTaskService.SubagentTaskStarted event) {
+                sendSseEvent(emitter, "subagent_started", event);
+            }
+
+            @Override
+            public void onTextDelta(SubagentTaskService.SubagentTaskTextDelta event) {
+                sendSseEvent(emitter, "subagent_delta", event);
+            }
+
+            @Override
+            public void onToolCall(SubagentTaskService.SubagentTaskToolCall event) {
+                sendSseEvent(emitter, "subagent_tool_call", event);
+            }
+
+            @Override
+            public void onComplete(SubagentTaskService.SubagentTaskCompleted event) {
+                sendSseEvent(emitter, "subagent_done", event);
+            }
+
+            @Override
+            public void onError(SubagentTaskService.SubagentTaskError event) {
+                sendSseEvent(emitter, "subagent_error", event);
+            }
+        };
+    }
+
+    private void sendSseEvent(SseEmitter emitter, String name, Object payload) {
+        try {
+            emitter.send(SseEmitter.event().name(name).data(SseJson.writeValueAsString(payload)));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to send SSE event: " + name, e);
+        }
     }
 
     private String directoryDisplayName(Path path) {
@@ -1075,7 +1159,8 @@ public class UiController {
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ProviderError(String message) {}
 
-    public record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated) {}
+    public record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                               Long subagentSessionId, String subagentAgentId, String subagentAgentName) {}
 
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {}
 

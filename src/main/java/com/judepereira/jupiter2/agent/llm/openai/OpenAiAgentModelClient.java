@@ -135,7 +135,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         }
 
         if (error.get() != null) {
-            throw new IllegalStateException("OpenAI streaming request failed", error.get());
+            throw new IllegalStateException("OpenAI streaming request failed: " + error.get().getMessage(),
+                    error.get());
         }
 
         if (toolCall.get() != null) {

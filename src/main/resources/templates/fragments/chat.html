@@ -2,6 +2,12 @@
 <div th:fragment="chat" id="chat-container" th:attr="hx-swap-oob=${shellRefresh} ? 'outerHTML' : null">
     <!-- HTMX polling attributes are applied to the messages list when hasPending is true -->
     <section id="chat" class="chat-shell">
+        <div th:if="${subagentView ?: false}" class="subagent-bar">
+            <button type="button" class="subagent-back-button" hx-get="/ui/chat/primary" hx-target="#chat-container" hx-swap="outerHTML">Back</button>
+            <span class="subagent-bar-label">Subagent:</span>
+            <strong class="subagent-bar-name" th:text="${subagentAgentName}"></strong>
+        </div>
+
         <div id="chat-history" class="messages" aria-live="polite">
             <!-- Message list fragment: do not use polling; SSE binds to pending assistant rows -->
             <ul id="chat-messages-list" th:fragment="messages">
@@ -26,6 +32,14 @@
                             </summary>
 
                             <div class="tool-call-detail">
+                                <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
+                                    <button type="button"
+                                            class="tool-call-subagent-button"
+                                            th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                        Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                                    </button>
+                                </div>
+
                                 <section class="tool-call-section">
                                     <div class="tool-call-label">Input
                                         <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
@@ -46,7 +60,7 @@
             </ul>
         </div>
 
-        <form id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend">
+        <form th:if="${!(subagentView ?: false)}" id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend">
             <div class="chat-controls">
                 <label>
                     <span class="chat-control-label">Agent</span>

@@ -34,10 +34,18 @@
                               th:text="${call.success} ? 'success' : 'failure'"></span>
                     </summary>
 
-                    <div class="tool-call-detail">
-                        <section class="tool-call-section">
-                            <div class="tool-call-label">Input
-                                <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
+            <div class="tool-call-detail">
+                <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
+                    <button type="button"
+                            class="tool-call-subagent-button"
+                            th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                        Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                    </button>
+                </div>
+
+                <section class="tool-call-section">
+                    <div class="tool-call-label">Input
+                        <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
                             </div>
                             <pre class="tool-call-pre" th:text="${call.inputPreview}"></pre>
                         </section>

@@ -181,24 +181,29 @@ public class AppStateRepository {
     }
 
     List<SessionRow> listSessionsByWorkspace(long workspaceId) {
-        return jdbc.query("SELECT * FROM sessions WHERE workspace_id = :workspaceId ORDER BY position ASC",
+        return jdbc.query("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND hidden = FALSE ORDER BY position ASC",
                 new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
     }
 
+    List<SessionRow> listChildSessionsByParentSession(long parentSessionId) {
+        return jdbc.query("SELECT * FROM sessions WHERE parent_session_id = :parentSessionId ORDER BY position ASC",
+                new MapSqlParameterSource("parentSessionId", parentSessionId), this::mapSession);
+    }
+
     SessionRow findNextSessionAfter(long workspaceId, long position) {
-        return queryOne("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND position > :position ORDER BY position ASC LIMIT 1",
+        return queryOne("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND hidden = FALSE AND position > :position ORDER BY position ASC LIMIT 1",
                 new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
     }
 
     SessionRow findPreviousSessionBefore(long workspaceId, long position) {
-        return queryOne("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND position < :position ORDER BY position DESC LIMIT 1",
+        return queryOne("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND hidden = FALSE AND position < :position ORDER BY position DESC LIMIT 1",
                 new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
     }
 
     SessionRow findSessionToActivate(long workspaceId) {
         return queryOne("""
                 SELECT * FROM sessions
-                WHERE workspace_id = :workspaceId
+                WHERE workspace_id = :workspaceId AND hidden = FALSE
                 ORDER BY CASE WHEN last_opened_at IS NULL THEN 1 ELSE 0 END, last_opened_at DESC, position ASC
                 LIMIT 1
                 """, new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession).orElse(null);
@@ -206,9 +211,14 @@ public class AppStateRepository {
 
     long insertSession(long workspaceId, String name, long position, Instant now, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource,
                        Long selectedChangedFileId) {
+        return insertSession(workspaceId, name, position, now, reviewPanelOpen, reviewSource, selectedChangedFileId, false, null, null, null, null);
+    }
+
+    long insertSession(long workspaceId, String name, long position, Instant now, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource,
+                       Long selectedChangedFileId, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName) {
         return insertAndReturnId("""
-                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, created_at, last_opened_at)
-                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :createdAt, :lastOpenedAt)
+                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, created_at, last_opened_at)
+                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :createdAt, :lastOpenedAt)
                 """, params -> params
                 .addValue("workspaceId", workspaceId)
                 .addValue("name", name)
@@ -216,6 +226,11 @@ public class AppStateRepository {
                 .addValue("reviewPanelOpen", reviewPanelOpen)
                 .addValue("reviewSource", reviewSource.name())
                 .addValue("selectedChangedFileId", selectedChangedFileId)
+                .addValue("hidden", hidden)
+                .addValue("parentSessionId", parentSessionId)
+                .addValue("parentToolCallId", parentToolCallId)
+                .addValue("subagentAgentId", subagentAgentId)
+                .addValue("subagentAgentName", subagentAgentName)
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("lastOpenedAt", Timestamp.from(now)));
     }
@@ -459,7 +474,8 @@ public class AppStateRepository {
     private SessionRow mapSession(ResultSet rs, int rowNum) throws SQLException {
         Long selectedChangedFileId = rs.getObject("selected_changed_file_id", Long.class);
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
-                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId,
+                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getBoolean("hidden"),
+                rs.getObject("parent_session_id", Long.class), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
                 timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
     }
 
@@ -493,6 +509,7 @@ public class AppStateRepository {
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
+                      boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
                       Instant createdAt, Instant lastOpenedAt) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant createdAt) {}

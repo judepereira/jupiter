@@ -31,7 +31,8 @@ public class AgentDefinitionService {
             "search_code",
             "write_file",
             "apply_patch",
-            "run_command"
+            "run_command",
+            "task"
     );
 
     private final List<AgentDefinition> agents;
@@ -45,6 +46,14 @@ public class AgentDefinitionService {
 
     public List<AgentDefinition> list() {
         return agents;
+    }
+
+    public List<AgentDefinition> listPrimaryAgents() {
+        return agents.stream().filter(agent -> agent.mode() == AgentMode.AGENT).toList();
+    }
+
+    public List<AgentDefinition> listSubagents() {
+        return agents.stream().filter(agent -> agent.mode() == AgentMode.SUBAGENT).toList();
     }
 
     public AgentDefinition getRequired(String id) {
@@ -91,7 +100,7 @@ public class AgentDefinitionService {
             var metadata = YAML_MAPPER.readValue(frontMatter.yaml(), FrontMatter.class);
             var id = resolveId(resource, metadata.id());
             var name = resolveName(id, metadata.name());
-            var allowedTools = resolveAllowedTools(metadata.tools(), id);
+            var allowedTools = resolveAllowedTools(metadata.tools(), id, metadata.mode());
             var allowWrite = allowedTools.contains("write_file") || allowedTools.contains("apply_patch");
             var allowCommand = allowedTools.contains("run_command");
             validateRequiredFields(metadata, id);
@@ -214,18 +223,25 @@ public class AgentDefinitionService {
         return idToDisplayName(id);
     }
 
-    private static List<String> resolveAllowedTools(Map<String, Boolean> tools, String agentId) {
+    private static List<String> resolveAllowedTools(Map<String, Boolean> tools, String agentId, AgentMode mode) {
         if (tools == null || tools.isEmpty()) {
             throw new IllegalStateException("tools is required for agent: " + agentId);
         }
         if (Boolean.TRUE.equals(tools.get("*"))) {
+            if (mode == AgentMode.SUBAGENT) {
+                return SUPPORTED_TOOLS.stream().filter(tool -> !"task".equals(tool)).toList();
+            }
             return SUPPORTED_TOOLS;
         }
-        return tools.entrySet().stream()
+        List<String> allowed = tools.entrySet().stream()
                 .filter(entry -> Boolean.TRUE.equals(entry.getValue()))
                 .map(Map.Entry::getKey)
                 .peek(AgentDefinitionService::validateToolName)
                 .toList();
+        if (mode == AgentMode.SUBAGENT && allowed.contains("task")) {
+            throw new IllegalStateException("task is not allowed for subagent: " + agentId);
+        }
+        return allowed;
     }
 
     private static void validateToolName(String tool) {

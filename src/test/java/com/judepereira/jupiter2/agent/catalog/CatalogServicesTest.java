@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -14,11 +15,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public class CatalogServicesTest {
 
     @Test
-    public void agentCatalogLoadsPlanAndEngineerWithExpectedDefaults() {
+    public void agentCatalogLoadsPlanEngineerAndExploreWithExpectedDefaults() {
         AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
 
         assertThat(service.list()).extracting(AgentDefinition::id)
-                .containsExactly("plan", "engineer");
+                .containsExactly("plan", "engineer", "explore");
+        assertThat(service.listPrimaryAgents()).extracting(AgentDefinition::id)
+                .containsExactly("plan");
+        assertThat(service.listSubagents()).extracting(AgentDefinition::id)
+                .containsExactly("engineer", "explore");
         assertThat(service.defaultAgent().id()).isEqualTo("plan");
 
         AgentDefinition plan = service.getRequired("plan");
@@ -44,6 +49,58 @@ public class CatalogServicesTest {
                 "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
         assertThat(engineer.systemPrompt()).isEqualTo(
                 "You are an apprentice to a seasoned software engineer. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
+
+        AgentDefinition explore = service.getRequired("explore");
+        assertThat(explore.name()).isEqualTo("Explore");
+        assertThat(explore.description()).isEqualTo("A read-only exploration subagent that finds codebase context");
+        assertThat(explore.allowWrite()).isFalse();
+        assertThat(explore.allowCommand()).isFalse();
+        assertThat(explore.mode()).isEqualTo(AgentMode.SUBAGENT);
+        assertThat(explore.defaultThinkingLevel()).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(explore.defaultModel()).isEqualTo("openai/gpt-5.4-mini");
+        assertThat(explore.textVerbosity()).isEqualTo("low");
+        assertThat(explore.allowedTools()).containsExactly("list_files", "read_file", "search_code");
+        assertThat(explore.systemPrompt()).isEqualTo(
+                "You are Explore, a read-only codebase exploration subagent. Inspect the repository, find relevant files, symbols, and flows, and return concise findings with file, class, and method references. Do not edit files or run commands.");
+    }
+
+    @Test
+    public void wildcardToolSupportIncludesTaskForPrimaryAgentsButNotSubagents() throws Exception {
+        Method loadAgent = AgentDefinitionService.class.getDeclaredMethod("loadAgent", Resource.class);
+        loadAgent.setAccessible(true);
+
+        AgentDefinition primary = (AgentDefinition) loadAgent.invoke(null, resource("11-primary.md", """
+                ---
+                id: primary-task
+                name: Primary Task
+                description: Primary agent with wildcard tools
+                mode: agent
+                model: openai/gpt-5.5
+                reasoningEffort: high
+                textVerbosity: low
+                tools:
+                  '*': true
+                ---
+                body
+                """));
+
+        AgentDefinition subagent = (AgentDefinition) loadAgent.invoke(null, resource("12-subagent.md", """
+                ---
+                id: subagent-task
+                name: Subagent Task
+                description: Subagent with wildcard tools
+                mode: subagent
+                model: openai/gpt-5.5
+                reasoningEffort: high
+                textVerbosity: low
+                tools:
+                  '*': true
+                ---
+                body
+                """));
+
+        assertThat(primary.allowedTools()).containsExactly("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command", "task");
+        assertThat(subagent.allowedTools()).containsExactly("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
     }
 
     @Test
@@ -121,5 +178,14 @@ public class CatalogServicesTest {
         assertThatThrownBy(() -> ModelCatalogTestSupport.modelCatalogService("http://example.test/catalog.json", json))
                 .isInstanceOf(IllegalStateException.class)
                 .hasRootCauseMessage("Model id is required");
+    }
+
+    private static Resource resource(String filename, String content) {
+        return new ByteArrayResource(content.getBytes(StandardCharsets.UTF_8)) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        };
     }
 }

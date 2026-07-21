@@ -23,7 +23,7 @@
 
     <!-- main left content: chat composer + history -->
     <main id="left-panel" class="main-panel left-panel">
-        <div id="chat-container" th:replace="~{fragments/chat :: chat}" th:with="hasPending=${false}, reviewOob=${false}, shellRefresh=${false}">
+        <div id="chat-container" th:replace="~{fragments/chat :: chat}" th:with="hasPending=${false}, reviewOob=${false}, shellRefresh=${false}, subagentView=${false}">
             Loading chat...
         </div>
     </main>

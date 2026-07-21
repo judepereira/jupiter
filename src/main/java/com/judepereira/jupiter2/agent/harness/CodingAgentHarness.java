@@ -2,6 +2,7 @@ package com.judepereira.jupiter2.agent.harness;
 
 import com.judepereira.jupiter2.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter2.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter2.agent.catalog.AgentMode;
 import com.judepereira.jupiter2.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter2.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
@@ -82,10 +83,14 @@ public class CodingAgentHarness {
         String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
                 ? props.getWorkspaceRoot()
                 : request.getWorkspaceRoot();
-        ToolExecutionContext execCtx = new ToolExecutionContext(Path.of(workspaceRoot),
+        ToolExecutionContext execCtxTemplate = new ToolExecutionContext(Path.of(workspaceRoot),
                 agent != null ? agent.allowWrite() : props.getTooling().isAllowWrite(),
                 agent != null ? agent.allowCommand() : props.getTooling().isAllowCommand(),
-                props.getCommandTimeoutSeconds());
+                props.getCommandTimeoutSeconds(),
+                request.getSessionId(),
+                request.getAgentId(),
+                agent == null ? null : agent.mode(),
+                null);
 
         Set<String> allowedTools = resolveAllowedTools(agent);
         List<ToolDefinition> defs = resolveToolDefinitions(allowedTools);
@@ -150,6 +155,14 @@ public class CodingAgentHarness {
                     listener.onStatus("calling_tool:" + toolName);
                     // execute tool
                     try {
+                        ToolExecutionContext execCtx = new ToolExecutionContext(execCtxTemplate.getWorkspaceRoot(),
+                                execCtxTemplate.isAllowWrite(),
+                                execCtxTemplate.isAllowCommand(),
+                                execCtxTemplate.getCommandTimeoutSeconds(),
+                                execCtxTemplate.getSessionId(),
+                                execCtxTemplate.getAgentId(),
+                                execCtxTemplate.getAgentMode(),
+                                toolCallId);
                         ToolExecutionResult result = registry.executeByName(toolName, args, execCtx);
                         String toolText = result.getText() == null ? "" : result.getText();
                         convo.add(new Message(Message.Role.TOOL, toolText, toolCallId));
@@ -262,9 +275,13 @@ public class CodingAgentHarness {
 
     private Set<String> resolveAllowedTools(AgentDefinition agent) {
         if (agent == null) {
-            return registry.all().keySet();
+            return registry.all().keySet().stream().filter(tool -> !"task".equals(tool)).collect(Collectors.toCollection(HashSet::new));
         }
-        return new HashSet<>(agent.allowedTools());
+        Set<String> allowed = new HashSet<>(agent.allowedTools());
+        if (agent.mode() == AgentMode.SUBAGENT) {
+            allowed.remove("task");
+        }
+        return allowed;
     }
 
     private List<ToolDefinition> resolveToolDefinitions(Set<String> allowedTools) {

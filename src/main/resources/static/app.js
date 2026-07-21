@@ -877,6 +877,7 @@
 
                     const es = new EventSource(url);
                     row._es = es;
+                    const subagentActivities = new Map();
 
                     // Helper to parse SSE payloads that may be JSON {text:...} or legacy raw strings
                     function parseStreamPayload(e) {
@@ -892,6 +893,148 @@
                         return {text: raw};
                     }
 
+                    function ensureSubagentActivityContainer() {
+                        let container = row.querySelector('.subagent-activities');
+                        if (container) return container;
+
+                        container = document.createElement('div');
+                        container.className = 'subagent-activities';
+                        const toolCalls = row.querySelector('.tool-calls');
+                        if (toolCalls && toolCalls.parentNode === row) {
+                            row.insertBefore(container, toolCalls);
+                        } else {
+                            row.appendChild(container);
+                        }
+                        return container;
+                    }
+
+                    function subagentKey(payload) {
+                        const childSessionId = payload && payload.childSessionId != null ? String(payload.childSessionId) : '';
+                        if (childSessionId) return childSessionId;
+                        const parentToolCallId = payload && payload.parentToolCallId != null ? String(payload.parentToolCallId) : '';
+                        if (parentToolCallId) return parentToolCallId;
+                        const agentId = payload && payload.subagentAgentId != null ? String(payload.subagentAgentId) : '';
+                        return agentId || 'subagent';
+                    }
+
+                    function ensureSubagentCard(payload) {
+                        const key = subagentKey(payload || {});
+                        let entry = subagentActivities.get(key);
+                        if (entry) return entry;
+
+                        const container = ensureSubagentActivityContainer();
+                        const card = document.createElement('div');
+                        card.className = 'subagent-activity';
+                        card.dataset.subagentKey = key;
+                        if (payload && payload.childSessionId != null) {
+                            card.dataset.childSessionId = String(payload.childSessionId);
+                        }
+
+                        const header = document.createElement('div');
+                        header.className = 'subagent-activity__header';
+
+                        const name = document.createElement('strong');
+                        name.className = 'subagent-activity__name';
+                        name.textContent = payload && payload.subagentAgentName ? String(payload.subagentAgentName) : 'subagent';
+
+                        const status = document.createElement('span');
+                        status.className = 'subagent-activity__status';
+                        status.textContent = 'running';
+
+                        const open = document.createElement('button');
+                        open.type = 'button';
+                        open.className = 'tool-call-subagent-button subagent-activity__open';
+                        open.textContent = 'Open subagent';
+
+                        header.appendChild(name);
+                        header.appendChild(status);
+                        header.appendChild(open);
+
+                        const body = document.createElement('div');
+                        body.className = 'subagent-activity__body';
+
+                        const text = document.createElement('pre');
+                        text.className = 'subagent-activity__text';
+
+                        const toolCalls = document.createElement('div');
+                        toolCalls.className = 'tool-calls subagent-activity__tools';
+
+                        body.appendChild(text);
+                        body.appendChild(toolCalls);
+                        card.appendChild(header);
+                        card.appendChild(body);
+                        container.appendChild(card);
+
+                        entry = {card, status, text, toolCalls, open};
+                        subagentActivities.set(key, entry);
+                        return entry;
+                    }
+
+                    function configureSubagentOpenButton(entry, payload) {
+                        const childSessionId = payload && payload.childSessionId != null ? String(payload.childSessionId) : '';
+                        if (!entry || !childSessionId) return;
+                        entry.open.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(childSessionId));
+                        entry.open.setAttribute('hx-target', '#chat-container');
+                        entry.open.setAttribute('hx-swap', 'outerHTML');
+                        const name = payload && payload.subagentAgentName ? String(payload.subagentAgentName) : childSessionId;
+                        entry.open.replaceChildren(document.createTextNode('Open subagent: '), (() => {
+                            const strong = document.createElement('strong');
+                            strong.textContent = name;
+                            return strong;
+                        })());
+                    }
+
+                    function renderSubagentToolCall(entry, payload) {
+                        if (!entry) return;
+                        const details = document.createElement('details');
+                        details.className = 'tool-call subagent-tool-call';
+
+                        const summary = document.createElement('summary');
+                        summary.className = 'tool-call-summary';
+
+                        const name = document.createElement('span');
+                        name.className = 'tool-call-name';
+                        name.textContent = payload && payload.toolName ? String(payload.toolName) : 'tool';
+
+                        const status = document.createElement('span');
+                        status.className = 'tool-call-status ' + ((payload && payload.success) ? 'tool-call-status-success' : 'tool-call-status-failure');
+                        status.textContent = (payload && payload.success) ? ' success' : ' failure';
+
+                        summary.appendChild(name);
+                        summary.appendChild(status);
+                        details.appendChild(summary);
+
+                        const detail = document.createElement('div');
+                        detail.className = 'tool-call-detail';
+
+                        const inputSection = document.createElement('section');
+                        inputSection.className = 'tool-call-section';
+                        const inputLabel = document.createElement('div');
+                        inputLabel.className = 'tool-call-label';
+                        inputLabel.textContent = 'Input';
+                        const inputPre = document.createElement('pre');
+                        inputPre.className = 'tool-call-pre';
+                        inputPre.textContent = payload && payload.inputPreview ? String(payload.inputPreview) : '';
+                        inputSection.appendChild(inputLabel);
+                        inputSection.appendChild(inputPre);
+
+                        const outputSection = document.createElement('section');
+                        outputSection.className = 'tool-call-section';
+                        const outputLabel = document.createElement('div');
+                        outputLabel.className = 'tool-call-label';
+                        outputLabel.textContent = 'Output';
+                        const outputPre = document.createElement('pre');
+                        outputPre.className = 'tool-call-pre';
+                        outputPre.textContent = payload && payload.outputPreview ? String(payload.outputPreview) : '';
+                        outputSection.appendChild(outputLabel);
+                        outputSection.appendChild(outputPre);
+
+                        detail.appendChild(inputSection);
+                        detail.appendChild(outputSection);
+                        details.appendChild(detail);
+                        entry.toolCalls.appendChild(details);
+                    }
+
                     es.addEventListener('delta', (e) => {
                         try {
                             const payload = parseStreamPayload(e);
@@ -900,6 +1043,66 @@
                                 buffer += payload.text;
                                 gotDelta = true;
                                 scheduleFlush();
+                            }
+                        } catch (_) {
+                        }
+                    });
+
+                    es.addEventListener('subagent_started', (e) => {
+                        try {
+                            const payload = parseStreamPayload(e) || {};
+                            const entry = ensureSubagentCard(payload);
+                            configureSubagentOpenButton(entry, payload);
+                            entry.status.textContent = 'running';
+                            if (payload.task != null) {
+                                entry.text.textContent = String(payload.task);
+                            }
+                        } catch (_) {
+                        }
+                    });
+
+                    es.addEventListener('subagent_delta', (e) => {
+                        try {
+                            const payload = parseStreamPayload(e) || {};
+                            const entry = ensureSubagentCard(payload);
+                            if (payload.delta != null) {
+                                entry.text.textContent = (entry.text.textContent || '') + String(payload.delta);
+                            }
+                        } catch (_) {
+                        }
+                    });
+
+                    es.addEventListener('subagent_tool_call', (e) => {
+                        try {
+                            const payload = parseStreamPayload(e) || {};
+                            const entry = ensureSubagentCard(payload);
+                            renderSubagentToolCall(entry, payload);
+                        } catch (_) {
+                        }
+                    });
+
+                    es.addEventListener('subagent_done', (e) => {
+                        try {
+                            const payload = parseStreamPayload(e) || {};
+                            const entry = ensureSubagentCard(payload);
+                            if (payload.finalText != null) {
+                                entry.text.textContent = String(payload.finalText);
+                            }
+                            entry.status.textContent = 'done';
+                            entry.card.classList.add('is-done');
+                            configureSubagentOpenButton(entry, payload);
+                        } catch (_) {
+                        }
+                    });
+
+                    es.addEventListener('subagent_error', (e) => {
+                        try {
+                            const payload = parseStreamPayload(e) || {};
+                            const entry = ensureSubagentCard(payload);
+                            entry.status.textContent = 'error';
+                            entry.card.classList.add('is-error');
+                            if (payload.errorText != null) {
+                                entry.text.textContent = String(payload.errorText);
                             }
                         } catch (_) {
                         }
@@ -1071,6 +1274,8 @@
                             const outputPreview = payload.outputPreview != null ? String(payload.outputPreview) : '';
                             const inputTruncated = Boolean(payload.inputTruncated);
                             const outputTruncated = Boolean(payload.outputTruncated);
+                            const subagentSessionId = payload.subagentSessionId != null && String(payload.subagentSessionId).trim() !== '' ? String(payload.subagentSessionId) : '';
+                            const subagentAgentName = payload.subagentAgentName != null ? String(payload.subagentAgentName) : '';
 
                             // ensure container exists on the row
                             let callsContainer = row.querySelector('.tool-calls');
@@ -1102,6 +1307,22 @@
 
                             const detailDiv = document.createElement('div');
                             detailDiv.className = 'tool-call-detail';
+
+                            if (toolName === 'task' && subagentSessionId) {
+                                const subagentDiv = document.createElement('div');
+                                subagentDiv.className = 'tool-call-subagent';
+
+                                const subagentButton = document.createElement('button');
+                                subagentButton.type = 'button';
+                                subagentButton.className = 'tool-call-subagent-button';
+                                subagentButton.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
+                                subagentButton.setAttribute('hx-target', '#chat-container');
+                                subagentButton.setAttribute('hx-swap', 'outerHTML');
+                                subagentButton.textContent = 'Open subagent: ' + (subagentAgentName || subagentSessionId);
+
+                                subagentDiv.appendChild(subagentButton);
+                                detailDiv.appendChild(subagentDiv);
+                            }
 
                             // Input section
                             const inSection = document.createElement('div');

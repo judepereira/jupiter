@@ -15,12 +15,12 @@ import com.judepereira.jupiter2.agent.tools.AgentTool;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter2.agent.tools.ToolRegistry;
+import com.judepereira.jupiter2.testsupport.SystemPromptTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 
 import java.nio.file.Path;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -163,14 +163,7 @@ public class CodingAgentHarnessAgentSelectionTest {
     }
 
     private static void assertSystemPrompt(String actual, String appendage, Path workspaceRoot) {
-        assertThat(actual).contains(
-                "You are Jupiter, a coding agent operating inside a single workspace.",
-                "Follow the user's request exactly, use tools when needed, keep changes minimal, and fail loudly when something is wrong.",
-                appendage,
-                "Working directory: " + workspaceRoot.toAbsolutePath().normalize(),
-                "Current date: " + LocalDate.now(),
-                "Operating system: Ubuntu Linux",
-                "Shell: bash");
+        assertThat(actual).isEqualTo(SystemPromptTestSupport.composeExpected(appendage, workspaceRoot));
     }
 
     private static final class RecordingModel implements AgentModelClient {

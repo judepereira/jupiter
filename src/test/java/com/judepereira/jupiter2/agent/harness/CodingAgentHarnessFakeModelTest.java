@@ -9,13 +9,13 @@ import com.judepereira.jupiter2.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter2.agent.tools.ToolRegistry;
 import com.judepereira.jupiter2.agent.tools.impl.WriteFileTool;
+import com.judepereira.jupiter2.testsupport.SystemPromptTestSupport;
 import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -341,12 +341,6 @@ public class CodingAgentHarnessFakeModelTest {
 
     private static void assertComposedSystemPrompt(String actual, String appendage, Path workspaceRoot) {
         assertNotNull(actual);
-        assertTrue(actual.contains("You are Jupiter, a coding agent operating inside a single workspace."));
-        assertTrue(actual.contains("Follow the user's request exactly, use tools when needed, keep changes minimal, and fail loudly when something is wrong."));
-        assertTrue(actual.contains(appendage));
-        assertTrue(actual.contains("Working directory: " + workspaceRoot.toAbsolutePath().normalize()));
-        assertTrue(actual.contains("Current date: " + LocalDate.now()));
-        assertTrue(actual.contains("Operating system: Ubuntu Linux"));
-        assertTrue(actual.contains("Shell: bash"));
+        assertEquals(SystemPromptTestSupport.composeExpected(appendage, workspaceRoot), actual);
     }
 }

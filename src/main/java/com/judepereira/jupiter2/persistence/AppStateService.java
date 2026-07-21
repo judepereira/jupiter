@@ -3,6 +3,7 @@ package com.judepereira.jupiter2.persistence;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter2.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
@@ -15,6 +16,7 @@ import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
+import com.judepereira.jupiter2.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallView;
 import com.judepereira.jupiter2.persistence.Persistence.WorkspaceView;
@@ -170,10 +172,7 @@ public class AppStateService {
             }
         }
 
-        repository.deleteChangedFilesBySession(sessionId);
-        repository.deleteToolCallTracesBySession(sessionId);
-        repository.deleteConversationMessagesBySession(sessionId);
-        repository.deleteSession(sessionId);
+        deleteSessionTree(sessionId);
     }
 
     @Transactional
@@ -200,10 +199,7 @@ public class AppStateService {
         }
 
         for (var session : repository.listSessionsByWorkspace(workspaceId)) {
-            repository.deleteChangedFilesBySession(session.id());
-            repository.deleteToolCallTracesBySession(session.id());
-            repository.deleteConversationMessagesBySession(session.id());
-            repository.deleteSession(session.id());
+            deleteSessionTree(session.id());
         }
         repository.deleteWorkspace(workspaceId);
     }
@@ -234,6 +230,9 @@ public class AppStateService {
     public void activateSession(long sessionId) {
         Instant now = Instant.now();
         var session = repository.findSession(sessionId);
+        if (session.hidden()) {
+            throw new IllegalStateException("Hidden subagent sessions cannot be activated: " + sessionId);
+        }
         var workspace = repository.findWorkspace(session.workspaceId());
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateSessionLastOpened(sessionId, now);
@@ -252,6 +251,23 @@ public class AppStateService {
         long position = repository.nextSessionPosition(workspaceId);
         long sessionId = createSessionInternal(workspaceId, Instant.now(), position, name);
         return toSessionView(repository.findSession(sessionId));
+    }
+
+    @Transactional
+    public long createHiddenSubagentSession(long parentSessionId, String parentToolCallId, AgentDefinition subagent) {
+        if (subagent == null) {
+            throw new IllegalStateException("Subagent definition is required");
+        }
+        var parentSession = repository.findSession(parentSessionId);
+        var workspace = repository.findWorkspace(parentSession.workspaceId());
+        Instant now = Instant.now();
+        long position = repository.nextSessionPosition(workspace.id());
+        long sessionId = repository.insertSession(workspace.id(), "Subagent: " + subagent.name(), position, now, false, ReviewSource.SESSION, null,
+                true, parentSessionId, parentToolCallId, subagent.id(), subagent.name());
+        repository.updateProjectLastOpened(workspace.projectId(), now);
+        repository.updateWorkspaceLastOpened(workspace.id(), now);
+        repository.updateSessionLastOpened(sessionId, now);
+        return sessionId;
     }
 
     public AppStateView loadViewData() {
@@ -560,6 +576,16 @@ public class AppStateService {
         return sessionId;
     }
 
+    private void deleteSessionTree(long sessionId) {
+        for (var child : repository.listChildSessionsByParentSession(sessionId)) {
+            deleteSessionTree(child.id());
+        }
+        repository.deleteChangedFilesBySession(sessionId);
+        repository.deleteToolCallTracesBySession(sessionId);
+        repository.deleteConversationMessagesBySession(sessionId);
+        repository.deleteSession(sessionId);
+    }
+
     private void runGitWorktreeAdd(Path projectRoot, Path worktreePath, String branchName, boolean createBranch) {
         String stdout = "";
         String stderr = "";
@@ -690,6 +716,15 @@ public class AppStateService {
         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
     }
 
+    public SubagentSessionDetailView loadSubagentSessionDetail(long sessionId) {
+        var session = repository.findSession(sessionId);
+        if (!session.hidden()) {
+            throw new IllegalStateException("Session is not a hidden subagent session: " + sessionId);
+        }
+        return new SubagentSessionDetailView(loadSessionDetail(sessionId), session.parentSessionId(), session.parentToolCallId(),
+                session.subagentAgentId(), session.subagentAgentName());
+    }
+
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId) {
         List<ToolCallView> toolCalls = repository.listToolCallTracesByAssistantMessage(message.id()).stream().map(this::toToolCallView).toList();
         return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(), toolCalls,
@@ -708,7 +743,35 @@ public class AppStateService {
         boolean[] outTr = new boolean[1];
         String inPreview = previewAndTruncate(input, 2000, inTr);
         String outPreview = previewAndTruncate(output, 2000, outTr);
-        return new ToolCallView(trace.toolName(), trace.success(), inPreview, outPreview, inTr[0], outTr[0]);
+        SubagentLinkInfo subagent = subagentLinkInfo(trace.machineSummary());
+        return new ToolCallView(trace.toolName(), trace.success(), inPreview, outPreview, inTr[0], outTr[0], subagent.subagentSessionId(), subagent.subagentAgentId(), subagent.subagentAgentName());
+    }
+
+    private SubagentLinkInfo subagentLinkInfo(Map<String, Object> machineSummary) {
+        if (machineSummary == null || machineSummary.isEmpty()) {
+            return new SubagentLinkInfo(null, null, null);
+        }
+        return new SubagentLinkInfo(asLong(machineSummary.get("subagentSessionId")), asString(machineSummary.get("subagentAgentId")), asString(machineSummary.get("subagentAgentName")));
+    }
+
+    private Long asLong(Object value) {
+        if (value instanceof Long l) {
+            return l;
+        }
+        if (value instanceof Integer i) {
+            return i.longValue();
+        }
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        if (value instanceof String s && !s.isBlank()) {
+            return Long.parseLong(s);
+        }
+        return null;
+    }
+
+    private String asString(Object value) {
+        return value instanceof String s && !s.isBlank() ? s : null;
     }
 
     private Message toModelMessage(AppStateRepository.ConversationMessageRow row) {
@@ -779,6 +842,8 @@ public class AppStateService {
     private static String publicId(String publicId) {
         return publicId == null || publicId.isBlank() ? UUID.randomUUID().toString() : publicId;
     }
+
+    private record SubagentLinkInfo(Long subagentSessionId, String subagentAgentId, String subagentAgentName) {}
 
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
         String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank() ? null : row.workspaceInitCommands();

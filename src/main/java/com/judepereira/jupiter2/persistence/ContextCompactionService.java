@@ -182,7 +182,8 @@ public class ContextCompactionService {
     }
 
     private int compactThreshold(int budget) {
-        return Math.max(1, budget - Math.max(512, budget / 10));
+        // 250k hardcoded, due to quality degradation. let compaction take care of this.
+        return Math.min(250_000, budget - Math.max(512, budget / 10));
     }
 
     private record TurnGroup(long turnId, List<AppStateRepository.ConversationMessageRow> rows) {}

@@ -1,8 +1,8 @@
 ---
 description: An apprentice to a seasoned software engineer.
-mode: subagent
+mode: agent
 model: openai/gpt-5.5
-reasoningEffort: medium
+reasoningEffort: high
 textVerbosity: low
 tools:
   "*": true
