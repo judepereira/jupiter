@@ -2,7 +2,12 @@ package com.judepereira.jupiter2.openai.oauth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties;
+import com.judepereira.jupiter2.persistence.AppStateRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.flywaydb.core.Flyway;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -14,6 +19,7 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +67,34 @@ public class OpenAiOAuthServiceTests {
             assertThat(reset.message()).isEqualTo("OpenAI is not connected.");
             assertThat(service.currentAccessToken()).isEmpty();
             assertThat(service.currentAccountId()).isEmpty();
+        }
+    }
+
+    @Test
+    public void persistsConnectedStateAndReloadsItInAFreshServiceInstance(@TempDir Path tempDir) throws Exception {
+        try (TestServer server = TestServer.start(); TestDatabase database = TestDatabase.open(tempDir)) {
+            OpenAiOAuthProperties properties = new OpenAiOAuthProperties();
+            properties.setIssuer(server.baseUrl());
+            properties.setClientId("client-123");
+
+            OpenAiOAuthService first = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository());
+            first.startDeviceAuthorization();
+            first.pollCurrentDeviceAuthorization();
+            first.pollCurrentDeviceAuthorization();
+
+            OpenAiOAuthService fresh = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository());
+            assertThat(fresh.currentView().connected()).isTrue();
+            assertThat(fresh.currentView().pending()).isFalse();
+            assertThat(fresh.currentAccessToken()).contains("access-123");
+            assertThat(fresh.currentAccountId()).contains("acct-123");
+
+            fresh.resetConnectionState();
+
+            OpenAiOAuthService afterLogout = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository());
+            assertThat(afterLogout.currentView().connected()).isFalse();
+            assertThat(afterLogout.currentView().pending()).isFalse();
+            assertThat(afterLogout.currentAccessToken()).isEmpty();
+            assertThat(afterLogout.currentAccountId()).isEmpty();
         }
     }
 
@@ -273,6 +307,23 @@ public class OpenAiOAuthServiceTests {
         @Override
         public void close() {
             server.stop(0);
+        }
+    }
+
+    private record TestDatabase(AppStateRepository repository) implements AutoCloseable {
+        static TestDatabase open(Path tempDir) {
+            DriverManagerDataSource dataSource = new DriverManagerDataSource();
+            dataSource.setDriverClassName("org.h2.Driver");
+            dataSource.setUrl("jdbc:h2:mem:openai_oauth_" + tempDir.getFileName() + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE");
+            dataSource.setUsername("sa");
+            dataSource.setPassword("");
+
+            Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+            return new TestDatabase(new AppStateRepository(new NamedParameterJdbcTemplate(dataSource)));
+        }
+
+        @Override
+        public void close() {
         }
     }
 }

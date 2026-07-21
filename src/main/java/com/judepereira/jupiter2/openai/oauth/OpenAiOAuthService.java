@@ -3,7 +3,9 @@ package com.judepereira.jupiter2.openai.oauth;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties;
+import com.judepereira.jupiter2.persistence.AppStateRepository;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -28,13 +30,21 @@ public class OpenAiOAuthService {
     private final OpenAiOAuthProperties properties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final AppStateRepository appStateRepository;
 
     private State state = State.empty();
 
     public OpenAiOAuthService(OpenAiOAuthProperties properties, ObjectMapper objectMapper, HttpClient httpClient) {
+        this(properties, objectMapper, httpClient, null);
+    }
+
+    @Autowired
+    public OpenAiOAuthService(OpenAiOAuthProperties properties, ObjectMapper objectMapper, HttpClient httpClient, AppStateRepository appStateRepository) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
+        this.appStateRepository = appStateRepository;
+        loadPersistedState();
     }
 
     public synchronized OpenAiOAuthView currentView() {
@@ -42,6 +52,7 @@ public class OpenAiOAuthService {
     }
 
     public synchronized OpenAiOAuthView resetConnectionState() {
+        clearPersistedState();
         state = State.empty();
         return toView(state);
     }
@@ -136,10 +147,41 @@ public class OpenAiOAuthService {
         );
 
         Optional<String> accountId = extractAccountId(token.idToken());
+        Instant expiresAt = Instant.now().plusSeconds(DEFAULT_EXPIRES_SECONDS);
 
-        state = new State(null, new Tokens(token.accessToken(), token.refreshToken(), token.idToken(), accountId, Instant.now().plusSeconds(DEFAULT_EXPIRES_SECONDS)),
+        persistConnectedState(token.accessToken(), token.refreshToken(), token.idToken(), accountId.orElse(null), expiresAt);
+        state = new State(null, new Tokens(token.accessToken(), token.refreshToken(), token.idToken(), accountId, expiresAt),
                 "OpenAI connected.");
         return toView(state);
+    }
+
+    private void loadPersistedState() {
+        if (appStateRepository == null) {
+            return;
+        }
+
+        appStateRepository.loadOpenAiOAuthState().ifPresent(row -> {
+            if (row.accessToken() == null || row.accessToken().isBlank()) {
+                state = State.empty();
+                return;
+            }
+            state = new State(null, new Tokens(row.accessToken(), row.refreshToken(), row.idToken(), Optional.ofNullable(row.accountId()).filter(accountId -> !accountId.isBlank()), row.expiresAt()),
+                    "OpenAI connected.");
+        });
+    }
+
+    private void persistConnectedState(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {
+        if (appStateRepository == null) {
+            return;
+        }
+        appStateRepository.updateOpenAiOAuthState(accessToken, refreshToken, idToken, accountId, expiresAt);
+    }
+
+    private void clearPersistedState() {
+        if (appStateRepository == null) {
+            return;
+        }
+        appStateRepository.clearOpenAiOAuthState();
     }
 
     private HttpResponse<String> postJson(URI uri, JsonNode body) {

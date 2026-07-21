@@ -18,7 +18,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-class AppStateRepository {
+public class AppStateRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -28,6 +28,26 @@ class AppStateRepository {
                 rs.getObject("active_workspace_id", Long.class),
                 rs.getObject("active_session_id", Long.class)
         ));
+    }
+
+    public Optional<OpenAiOAuthStateRow> loadOpenAiOAuthState() {
+        return queryOne("SELECT openai_access_token, openai_refresh_token, openai_id_token, openai_account_id, openai_expires_at FROM app_state WHERE id = 1",
+                new MapSqlParameterSource(), this::mapOpenAiOAuthState);
+    }
+
+    public void updateOpenAiOAuthState(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {
+        jdbc.update("UPDATE app_state SET openai_access_token = :accessToken, openai_refresh_token = :refreshToken, openai_id_token = :idToken, openai_account_id = :accountId, openai_expires_at = :expiresAt WHERE id = 1",
+                new MapSqlParameterSource()
+                        .addValue("accessToken", accessToken)
+                        .addValue("refreshToken", refreshToken)
+                        .addValue("idToken", idToken)
+                        .addValue("accountId", accountId)
+                        .addValue("expiresAt", Timestamp.from(expiresAt)));
+    }
+
+    public void clearOpenAiOAuthState() {
+        jdbc.update("UPDATE app_state SET openai_access_token = NULL, openai_refresh_token = NULL, openai_id_token = NULL, openai_account_id = NULL, openai_expires_at = NULL WHERE id = 1",
+                new MapSqlParameterSource());
     }
 
     void updateAppState(Long projectId, Long workspaceId, Long sessionId) {
@@ -450,6 +470,11 @@ class AppStateRepository {
                 rs.getString("thinking_level"), rs.getObject("compacted_through_turn_id", Long.class), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
+    private OpenAiOAuthStateRow mapOpenAiOAuthState(ResultSet rs, int rowNum) throws SQLException {
+        return new OpenAiOAuthStateRow(rs.getString("openai_access_token"), rs.getString("openai_refresh_token"), rs.getString("openai_id_token"),
+                rs.getString("openai_account_id"), timestampToInstant(rs.getTimestamp("openai_expires_at")));
+    }
+
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
         return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"), rs.getString("tool_name"),
                 rs.getBoolean("success"), rs.getString("args_json"), rs.getString("text_summary"), rs.getString("machine_summary_json"), timestampToInstant(rs.getTimestamp("created_at")));
@@ -464,6 +489,7 @@ class AppStateRepository {
     }
 
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}
+    public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
