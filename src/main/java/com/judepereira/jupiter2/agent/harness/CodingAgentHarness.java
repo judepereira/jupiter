@@ -68,7 +68,7 @@ public class CodingAgentHarness {
         List<Message> convo = new ArrayList<>();
         String systemPrompt = resolveSystemPrompt(request, agent);
         if (systemPrompt != null && !systemPrompt.isBlank()) {
-//            convo.add(new Message(Message.Role.SYSTEM, systemPrompt));
+            convo.add(new Message(Message.Role.SYSTEM, systemPrompt));
         }
         convo.addAll(request.getConversationHistory());
 

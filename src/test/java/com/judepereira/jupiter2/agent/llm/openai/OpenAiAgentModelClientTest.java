@@ -10,6 +10,8 @@ import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -29,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -85,6 +88,100 @@ public class OpenAiAgentModelClientTest {
         assertEquals("read_file", response.getToolCall().getToolName());
         assertEquals("notes.txt", response.getToolCall().getArguments().get("path"));
         verify(chatModel, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void api_key_mode_preserves_a_leading_system_message() {
+        AtomicReference<ChatRequest> capturedRequest = new AtomicReference<>();
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
+            capturedRequest.set(invocation.getArgument(0));
+            return ChatResponse.builder().aiMessage(AiMessage.from("assistant")).build();
+        });
+
+        RecordingClient client = new RecordingClient(chatModel, null);
+        var response = client.chat(
+                List.of(new Message(Message.Role.SYSTEM, "sys"), new Message(Message.Role.USER, "u")),
+                List.of()
+        );
+
+        assertEquals("assistant", response.getAssistantText());
+        assertInstanceOf(SystemMessage.class, capturedRequest.get().messages().get(0));
+        assertEquals("sys", ((SystemMessage) capturedRequest.get().messages().get(0)).text());
+        assertInstanceOf(UserMessage.class, capturedRequest.get().messages().get(1));
+        assertEquals("u", ((UserMessage) capturedRequest.get().messages().get(1)).singleText());
+    }
+
+    @Test
+    public void oauth_mode_rewrites_a_leading_system_message_to_user_message() {
+        AtomicReference<ChatRequest> capturedRequest = new AtomicReference<>();
+        OpenAiOAuthService oauthService = mock(OpenAiOAuthService.class);
+        when(oauthService.currentAccessToken()).thenReturn(Optional.of("oauth-access-token"));
+        when(oauthService.currentAccountId()).thenReturn(Optional.of("acct-123"));
+        OpenAiProperties openAiProperties = new OpenAiProperties();
+        openAiProperties.setApiKey("api-key-123");
+
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
+            capturedRequest.set(invocation.getArgument(0));
+            return ChatResponse.builder().aiMessage(AiMessage.from("oauth")).build();
+        });
+
+        class OAuthRecordingClient extends OpenAiAgentModelClient {
+            private OAuthRecordingClient() {
+                super(openAiProperties, new AgentProperties(), oauthService);
+            }
+
+            @Override
+            protected ChatModel buildChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+                return chatModel;
+            }
+        }
+
+        OAuthRecordingClient client = new OAuthRecordingClient();
+        var response = client.chat(
+                List.of(new Message(Message.Role.SYSTEM, "sys"), new Message(Message.Role.USER, "u")),
+                List.of()
+        );
+
+        assertEquals("oauth", response.getAssistantText());
+        assertInstanceOf(UserMessage.class, capturedRequest.get().messages().get(0));
+        assertEquals("sys", ((UserMessage) capturedRequest.get().messages().get(0)).singleText());
+        assertInstanceOf(UserMessage.class, capturedRequest.get().messages().get(1));
+        assertEquals("u", ((UserMessage) capturedRequest.get().messages().get(1)).singleText());
+        assertTrue(capturedRequest.get().messages().stream().noneMatch(SystemMessage.class::isInstance));
+        verify(oauthService, times(1)).currentAccessToken();
+        verify(oauthService, times(1)).currentAccountId();
+    }
+
+    @Test
+    public void base_overloads_construct_real_chat_and_streaming_models_without_recursing() {
+        class DirectConstructionClient extends OpenAiAgentModelClient {
+            private DirectConstructionClient() {
+                super(openAiProperties(), new AgentProperties());
+            }
+
+            private static OpenAiProperties openAiProperties() {
+                OpenAiProperties openAiProperties = new OpenAiProperties();
+                openAiProperties.setApiKey("api-key-123");
+                return openAiProperties;
+            }
+
+            private ChatModel chat(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+                return super.buildChatModel(modelName, credential, baseUrl, accountId);
+            }
+
+            private StreamingChatModel streaming(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+                return super.buildStreamingChatModel(modelName, credential, baseUrl, accountId);
+            }
+        }
+
+        DirectConstructionClient client = new DirectConstructionClient();
+
+        assertNotNull(client.chat("gpt-5.4", "api-key-123", "https://api.openai.com/v1", Optional.empty()));
+        assertNotNull(client.streaming("gpt-5.4", "api-key-123", "https://api.openai.com/v1", Optional.empty()));
+        assertNotNull(client.chat("gpt-5.4", "oauth-token", "https://chatgpt.com/backend-api/codex", Optional.of("acct-123")));
+        assertNotNull(client.streaming("gpt-5.4", "oauth-token", "https://chatgpt.com/backend-api/codex", Optional.of("acct-123")));
     }
 
     @Test

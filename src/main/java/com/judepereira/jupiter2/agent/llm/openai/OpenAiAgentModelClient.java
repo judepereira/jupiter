@@ -15,8 +15,6 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
-import dev.langchain4j.model.openai.OpenAiResponsesChatModel;
-import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel;
 import dev.langchain4j.http.client.HttpClient;
 import dev.langchain4j.http.client.HttpClientBuilder;
 import dev.langchain4j.http.client.HttpRequest;
@@ -25,6 +23,8 @@ import dev.langchain4j.http.client.jdk.JdkHttpClient;
 import dev.langchain4j.http.client.jdk.JdkHttpClientBuilder;
 import dev.langchain4j.http.client.sse.ServerSentEventListener;
 import dev.langchain4j.http.client.sse.ServerSentEventParser;
+import dev.langchain4j.model.openai.OpenAiResponsesChatModel;
+import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -76,9 +76,10 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     @Override
     public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
         String modelName = resolveModelName(options);
-        ChatRequest request = chatRequestFactory.create(modelName, conversation, tools, options);
+        ResolvedAuth auth = resolveAuth();
+        ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools, options);
         try {
-            return messageMapper.toModelResponse(chatModel(modelName).chat(request));
+            return messageMapper.toModelResponse(chatModel(modelName, auth).chat(request));
         } catch (Exception e) {
             throw new IllegalStateException("OpenAI request failed", e);
         }
@@ -87,7 +88,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     @Override
     public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options, Consumer<String> onDelta) {
         String modelName = resolveModelName(options);
-        ChatRequest request = chatRequestFactory.create(modelName, conversation, tools, options);
+        ResolvedAuth auth = resolveAuth();
+        ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools, options);
         AtomicReference<ModelResponse> response = new AtomicReference<>();
         AtomicReference<Throwable> error = new AtomicReference<>();
         AtomicReference<ToolCall> toolCall = new AtomicReference<>();
@@ -123,7 +125,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         };
 
         try {
-            streamingChatModel(modelName).chat(request, handler);
+            streamingChatModel(modelName, auth).chat(request, handler);
             done.await();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -148,12 +150,18 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private ChatModel chatModel(String modelName) {
-        ResolvedAuth auth = resolveAuth();
+        return chatModel(modelName, resolveAuth());
+    }
+
+    private ChatModel chatModel(String modelName, ResolvedAuth auth) {
         return chatModels.computeIfAbsent(cacheKey(modelName, auth), ignored -> buildChatModel(modelName, auth.credential(), auth.baseUrl(), auth.accountId()));
     }
 
     private StreamingChatModel streamingChatModel(String modelName) {
-        ResolvedAuth auth = resolveAuth();
+        return streamingChatModel(modelName, resolveAuth());
+    }
+
+    private StreamingChatModel streamingChatModel(String modelName, ResolvedAuth auth) {
         return streamingChatModels.computeIfAbsent(cacheKey(modelName, auth), ignored -> buildStreamingChatModel(modelName, auth.credential(), auth.baseUrl(), auth.accountId()));
     }
 
@@ -170,7 +178,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     protected ChatModel buildChatModel(String modelName, ResolvedAuth auth) {
-        OpenAiResponsesChatModel.Builder builder = OpenAiResponsesChatModel.builder()
+        var builder = OpenAiResponsesChatModel.builder()
                 .apiKey(auth.credential())
                 .modelName(modelName);
         if (auth.baseUrl() != null) {
@@ -195,7 +203,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     protected StreamingChatModel buildStreamingChatModel(String modelName, ResolvedAuth auth) {
-        OpenAiResponsesStreamingChatModel.Builder builder = OpenAiResponsesStreamingChatModel.builder()
+        var builder = OpenAiResponsesStreamingChatModel.builder()
                 .apiKey(auth.credential())
                 .modelName(modelName);
         if (auth.baseUrl() != null) {
@@ -205,6 +213,21 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             builder.httpClientBuilder(new ChatGPTAccountHeaderHttpClientBuilder(auth.accountId().get()));
         }
         return builder.build();
+    }
+
+    private List<Message> prepareConversation(List<Message> conversation, ResolvedAuth auth) {
+        if (conversation.isEmpty() || auth.mode() != AuthMode.CHATGPT) {
+            return conversation;
+        }
+
+        Message first = conversation.get(0);
+        if (first.getRole() != Message.Role.SYSTEM) {
+            return conversation;
+        }
+
+        List<Message> transformed = new java.util.ArrayList<>(conversation);
+        transformed.set(0, new Message(Message.Role.USER, first.getContent()));
+        return transformed;
     }
 
     private String resolveModelName(AgentModelOptions options) {
