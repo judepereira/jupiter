@@ -61,8 +61,8 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("id=\"chat-agent-select\"", "id=\"chat-model-select\"", "id=\"chat-thinking-select\"");
-        assertThat(html).contains("class=\"chat-message-meta\"", "class=\"chat-meta-chip\"", "Plan (plan)", "GPT-5.5", "HIGH");
-        assertThat(html).doesNotContain("Engineer", "Explore");
+        assertThat(html).contains("class=\"chat-message-meta\"", "class=\"chat-meta-chip\"", "Plan (plan)", "Engineer", "GPT-5.5", "HIGH");
+        assertThat(html).doesNotContain("Explore");
     }
 
     @Test

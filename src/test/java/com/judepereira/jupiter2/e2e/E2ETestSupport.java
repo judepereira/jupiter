@@ -1,10 +1,12 @@
 package com.judepereira.jupiter2.e2e;
 
 import com.judepereira.jupiter2.JupiterV2Application;
+import com.judepereira.jupiter2.testsupport.SQLiteTestSupport;
 import com.microsoft.playwright.Page;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import javax.sql.DataSource;
 
 import java.nio.file.Path;
 import java.nio.file.Files;
@@ -23,7 +25,7 @@ abstract class E2ETestSupport {
     }
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {
-        String jdbcUrl = "jdbc:h2:file:" + dbFile.toAbsolutePath().normalize() + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE";
+        String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize() + "?journal_mode=WAL&foreign_keys=on";
         Map<String, String> previousProperties = new HashMap<>();
         overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
         additionalProperties.forEach((key, value) -> overrideSystemProperty(previousProperties, key, value));
@@ -31,11 +33,8 @@ abstract class E2ETestSupport {
         Map<String, String> properties = new LinkedHashMap<>();
         properties.put("server.port", "0");
         properties.put("spring.datasource.url", jdbcUrl);
-        properties.put("spring.datasource.driver-class-name", "org.h2.Driver");
-        properties.put("spring.datasource.username", "sa");
-        properties.put("spring.datasource.password", "");
+        properties.put("spring.datasource.driver-class-name", "org.sqlite.JDBC");
         properties.put("spring.flyway.enabled", "true");
-        properties.put("spring.docker.compose.enabled", "false");
         properties.put("agent.workspace-root", fakeHome.toAbsolutePath().normalize().toString());
         properties.put("openai.api-key", "test");
         properties.putAll(additionalProperties);
@@ -48,6 +47,7 @@ abstract class E2ETestSupport {
         if (port == null) {
             throw new IllegalStateException("Missing local.server.port");
         }
+        SQLiteTestSupport.assertWalAndForeignKeysEnabled(context.getBean(DataSource.class));
         return new RunningApp(context, "http://localhost:" + port, () -> restoreSystemProperties(previousProperties));
     }
 

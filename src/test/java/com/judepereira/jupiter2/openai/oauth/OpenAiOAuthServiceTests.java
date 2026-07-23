@@ -3,11 +3,11 @@ package com.judepereira.jupiter2.openai.oauth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter2.persistence.AppStateRepository;
+import com.judepereira.jupiter2.testsupport.SQLiteTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.flywaydb.core.Flyway;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -312,13 +312,10 @@ public class OpenAiOAuthServiceTests {
 
     private record TestDatabase(AppStateRepository repository) implements AutoCloseable {
         static TestDatabase open(Path tempDir) {
-            DriverManagerDataSource dataSource = new DriverManagerDataSource();
-            dataSource.setDriverClassName("org.h2.Driver");
-            dataSource.setUrl("jdbc:h2:mem:openai_oauth_" + tempDir.getFileName() + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE");
-            dataSource.setUsername("sa");
-            dataSource.setPassword("");
+            var dataSource = SQLiteTestSupport.fileBackedDataSource(tempDir.resolve("sqlite-db/openai-oauth.db"));
 
             Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+            SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
             return new TestDatabase(new AppStateRepository(new NamedParameterJdbcTemplate(dataSource)));
         }
 

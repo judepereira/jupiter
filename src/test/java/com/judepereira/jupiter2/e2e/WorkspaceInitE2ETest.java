@@ -30,8 +30,8 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
     void workspaceInitCommandsRunWhenCreatingWorkspace(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = fakeHome.resolve("sample-repo");
-        Path dbFile = tempDir.resolve("h2db/jupiter");
-        Files.createDirectories(dbFile.getParent());
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
 
         initGitRepoWithInitialCommit(projectDir);
 
@@ -43,7 +43,7 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
         Path worktreeDir = fakeHome.resolve(".trees").resolve(projectDir.getFileName().toString()).resolve(branchName);
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
-            try (RunningApp app = startApp(fakeHome, dbFile, TestAppConfig.class);
+            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = browser.newContext()) {
                 Page page = context.newPage();
 

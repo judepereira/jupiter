@@ -24,9 +24,9 @@ public class AppStateRepository {
 
     AppStateRow loadAppState() {
         return jdbc.queryForObject("SELECT active_project_id, active_workspace_id, active_session_id FROM app_state WHERE id = 1", new MapSqlParameterSource(), (rs, rowNum) -> new AppStateRow(
-                rs.getObject("active_project_id", Long.class),
-                rs.getObject("active_workspace_id", Long.class),
-                rs.getObject("active_session_id", Long.class)
+                nullableLong(rs, "active_project_id"),
+                nullableLong(rs, "active_workspace_id"),
+                nullableLong(rs, "active_session_id")
         ));
     }
 
@@ -472,10 +472,10 @@ public class AppStateRepository {
     }
 
     private SessionRow mapSession(ResultSet rs, int rowNum) throws SQLException {
-        Long selectedChangedFileId = rs.getObject("selected_changed_file_id", Long.class);
+        Long selectedChangedFileId = nullableLong(rs, "selected_changed_file_id");
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
                 Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getBoolean("hidden"),
-                rs.getObject("parent_session_id", Long.class), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
+                nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
                 timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
     }
 
@@ -483,7 +483,7 @@ public class AppStateRepository {
         return new ConversationMessageRow(rs.getLong("id"), rs.getLong("session_id"), rs.getString("public_id"), rs.getString("role"), rs.getLong("turn_id"),
                 rs.getLong("sequence"), rs.getString("content"), rs.getString("tool_call_id"), rs.getString("tool_calls_json"), rs.getBoolean("show_in_chat"),
                 rs.getBoolean("include_in_model"), rs.getBoolean("pending"), rs.getString("agent_id"), rs.getString("agent_name"), rs.getString("model_id"),
-                rs.getString("thinking_level"), rs.getObject("compacted_through_turn_id", Long.class), timestampToInstant(rs.getTimestamp("created_at")));
+                rs.getString("thinking_level"), nullableLong(rs, "compacted_through_turn_id"), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private OpenAiOAuthStateRow mapOpenAiOAuthState(ResultSet rs, int rowNum) throws SQLException {
@@ -502,6 +502,11 @@ public class AppStateRepository {
 
     private static Instant timestampToInstant(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
+    }
+
+    private static Long nullableLong(ResultSet rs, String columnLabel) throws SQLException {
+        long value = rs.getLong(columnLabel);
+        return rs.wasNull() ? null : value;
     }
 
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}

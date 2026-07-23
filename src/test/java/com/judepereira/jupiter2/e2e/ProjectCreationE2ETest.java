@@ -29,15 +29,15 @@ class ProjectCreationE2ETest extends E2ETestSupport {
     void addProjectChatAndPersistenceSurviveRestart(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
-        Path dbFile = tempDir.resolve("h2db/jupiter");
-        Files.createDirectories(dbFile.getParent());
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
         Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "ProjectPersistencePlaywrightTest"));
 
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
-            try (RunningApp first = startApp(fakeHome, dbFile, TestAppConfig.class);
+            try (RunningApp first = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = browser.newContext()) {
                 Page page = context.newPage();
 
@@ -62,7 +62,7 @@ class ProjectCreationE2ETest extends E2ETestSupport {
                 captureScreenshot(page, screenshotsDir, "05-chat-response.png");
             }
 
-            try (RunningApp second = startApp(fakeHome, dbFile, TestAppConfig.class);
+            try (RunningApp second = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = browser.newContext()) {
                 Page page = context.newPage();
 

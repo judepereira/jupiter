@@ -16,15 +16,16 @@ import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter2.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter2.persistence.ContextCompactionService;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
 import org.flywaydb.core.Flyway;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -36,14 +37,17 @@ public final class TestAppStateSupport {
     }
 
     public static AppStateService appStateService() {
-        String dbName = "jupiter_" + UUID.randomUUID().toString().replace("-", "");
-        DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName("org.h2.Driver");
-        dataSource.setUrl("jdbc:h2:mem:" + dbName + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE");
-        dataSource.setUsername("sa");
-        dataSource.setPassword("");
+        Path dbFile;
+        try {
+            dbFile = Files.createTempDirectory("jupiter-app-state-").resolve("app-state.db");
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to create SQLite test database", e);
+        }
+
+        var dataSource = SQLiteTestSupport.fileBackedDataSource(dbFile);
 
         Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+        SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
 
         AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource));
         return new AppStateService(repository, new ObjectMapper());

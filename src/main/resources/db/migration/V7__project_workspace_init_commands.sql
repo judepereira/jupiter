@@ -1,1 +1,1 @@
-ALTER TABLE projects ADD workspace_init_commands TEXT NULL;
+ALTER TABLE projects ADD COLUMN workspace_init_commands TEXT NULL;

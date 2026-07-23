@@ -33,14 +33,14 @@ class SubagentTaskE2ETest extends E2ETestSupport {
     void taskTraceShowsSubagentStreamingPanelAndOpensTranscript(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
-        Path dbFile = tempDir.resolve("h2db/jupiter");
-        Files.createDirectories(dbFile.getParent());
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
 
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, dbFile, TestAppConfig.class);
+             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = browser.newContext()) {
 
             Page page = context.newPage();
@@ -49,17 +49,18 @@ class SubagentTaskE2ETest extends E2ETestSupport {
 
             openProject(page, "Alpha", projectDir);
 
-            assertThat(page.locator("#chat-agent-select option")).hasCount(1);
+            assertThat(page.locator("#chat-agent-select option")).hasCount(2);
             assertThat(page.locator("#chat-agent-select")).containsText("Plan");
+            assertThat(page.locator("#chat-agent-select")).containsText("Engineer");
 
             page.locator("#chat-input").fill("please use a task");
             page.locator("#chat-send-btn").click();
 
             page.locator(".subagent-activity").waitFor();
             assertThat(page.locator(".subagent-activity")).isVisible();
-            assertThat(page.locator(".subagent-activity__name")).hasText("Engineer");
+            assertThat(page.locator(".subagent-activity__name")).hasText("Explore");
             assertThat(page.locator(".subagent-activity__status")).hasText("done");
-            assertThat(page.locator(".subagent-activity__text")).containsText("Engineer subagent finished");
+            assertThat(page.locator(".subagent-activity__text")).containsText("Explore subagent finished");
             assertThat(page.locator(".subagent-activity .subagent-activity__open")).containsText("Open subagent");
 
             page.locator("#chat-messages-list > li .tool-calls > .tool-call > summary.tool-call-summary").first().click();
@@ -73,7 +74,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.evaluate("url => htmx.ajax('GET', url, { target: '#chat-container', swap: 'outerHTML' })", subagentHref);
             page.locator(".subagent-bar").waitFor();
             assertThat(page.locator(".subagent-bar")).isVisible();
-            assertThat(page.locator(".subagent-bar-name")).hasText("Engineer");
+            assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary task:");
             assertThat(page.locator("#chat-send-form")).hasCount(0);
 
@@ -81,7 +82,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-send-form").waitFor();
 
             assertThat(page.locator("#chat-send-form")).isVisible();
-            assertThat(page.locator("#chat-agent-select option")).hasCount(1);
+            assertThat(page.locator("#chat-agent-select option")).hasCount(2);
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
         } finally {
             if (previousHome == null) {
@@ -112,8 +113,8 @@ class SubagentTaskE2ETest extends E2ETestSupport {
 
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                if ("engineer".equals(request.getAgentId())) {
-                    listener.onTextDelta("Engineer subagent ");
+                if ("explore".equals(request.getAgentId())) {
+                    listener.onTextDelta("Explore subagent ");
                     listener.onTextDelta("working");
                     try {
                         Files.writeString(Path.of(request.getWorkspaceRoot(), "child.txt"), "hello from subagent\n");
@@ -127,23 +128,23 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                             "path", "child.txt"
                     ));
                     listener.onToolCallTrace(trace);
-                    AgentTurnResult result = new AgentTurnResult("Engineer subagent finished", List.of(trace));
+                    AgentTurnResult result = new AgentTurnResult("Explore subagent finished", List.of(trace));
                     listener.onComplete(result);
                     return result;
                 }
 
                 listener.onTextDelta("Primary task running");
                 ToolExecutionResult taskResult = taskTool.execute(Map.of(
-                        "agentId", "engineer",
+                        "agentId", "explore",
                         "task", "Inspect the task flow and report back.",
-                        "expectedOutput", "Engineer subagent finished"
+                        "expectedOutput", "Explore subagent finished"
                 ), new ToolExecutionContext(Path.of(request.getWorkspaceRoot()), false, false, 30,
                         request.getSessionId(), "task-1", com.judepereira.jupiter2.agent.catalog.AgentMode.AGENT, "task-1"));
 
                 ToolCallTrace trace = new ToolCallTrace("task-1", "task", Map.of(
-                        "agentId", "engineer",
+                        "agentId", "explore",
                         "task", "Inspect the task flow and report back.",
-                        "expectedOutput", "Engineer subagent finished"
+                        "expectedOutput", "Explore subagent finished"
                 ), true, taskResult.getText(), taskResult.getMachine());
                 listener.onToolCallTrace(trace);
                 listener.onTextDelta("Primary complete");

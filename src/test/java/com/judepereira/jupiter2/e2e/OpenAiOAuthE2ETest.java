@@ -39,8 +39,8 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
     void openaiSubscriptionDeviceFlowShowsDeviceCodeAndPollsUntilConnected(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
-        Path dbFile = tempDir.resolve("h2db/jupiter");
-        Files.createDirectories(dbFile.getParent());
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
 
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
@@ -48,7 +48,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
         try (TestServer server = TestServer.start();
              Playwright playwright = Playwright.create();
              Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, dbFile, Map.of(
+              RunningApp app = startApp(fakeHome, sqliteDbFile, Map.of(
                       "openai.oauth.issuer", server.baseUrl(),
                       "openai.oauth.client-id", "e2e-client"
                ), TestAppConfig.class);
@@ -121,8 +121,8 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
     void openaiSubscriptionPersistedStateIsRestoredInUiAfterRestart(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
-        Path dbFile = tempDir.resolve("h2db/jupiter");
-        Files.createDirectories(dbFile.getParent());
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
 
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
@@ -131,7 +131,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
              Playwright playwright = Playwright.create();
              Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
 
-            try (RunningApp first = startApp(fakeHome, dbFile, Map.of(
+            try (RunningApp first = startApp(fakeHome, sqliteDbFile, Map.of(
                     "openai.oauth.issuer", server.baseUrl(),
                     "openai.oauth.client-id", "e2e-client"
             ), TestAppConfig.class);
@@ -155,7 +155,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                 assertThat(server.tokenCalls.get()).isEqualTo(1);
             }
 
-            try (RunningApp second = startApp(fakeHome, dbFile, Map.of(
+            try (RunningApp second = startApp(fakeHome, sqliteDbFile, Map.of(
                     "openai.oauth.issuer", server.baseUrl(),
                     "openai.oauth.client-id", "e2e-client"
             ), TestAppConfig.class);

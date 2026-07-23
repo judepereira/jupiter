@@ -21,15 +21,15 @@ public class CatalogServicesTest {
         assertThat(service.list()).extracting(AgentDefinition::id)
                 .containsExactly("plan", "engineer", "explore");
         assertThat(service.listPrimaryAgents()).extracting(AgentDefinition::id)
-                .containsExactly("plan");
+                .containsExactly("plan", "engineer");
         assertThat(service.listSubagents()).extracting(AgentDefinition::id)
-                .containsExactly("engineer", "explore");
+                .containsExactly("explore");
         assertThat(service.defaultAgent().id()).isEqualTo("plan");
 
         AgentDefinition plan = service.getRequired("plan");
         assertThat(plan.allowWrite()).isFalse();
         assertThat(plan.allowCommand()).isFalse();
-        assertThat(plan.allowedTools()).containsExactly("list_files", "read_file", "search_code");
+        assertThat(plan.allowedTools()).containsExactly("list_files", "read_file", "search_code", "task");
         assertThat(plan.mode()).isEqualTo(AgentMode.AGENT);
         assertThat(plan.defaultModel()).isEqualTo("openai/gpt-5.5");
         assertThat(plan.defaultThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
@@ -41,12 +41,12 @@ public class CatalogServicesTest {
         assertThat(engineer.description()).isEqualTo("An apprentice to a seasoned software engineer.");
         assertThat(engineer.allowWrite()).isTrue();
         assertThat(engineer.allowCommand()).isTrue();
-        assertThat(engineer.mode()).isEqualTo(AgentMode.SUBAGENT);
-        assertThat(engineer.defaultThinkingLevel()).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(engineer.mode()).isEqualTo(AgentMode.AGENT);
+        assertThat(engineer.defaultThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(engineer.defaultModel()).isEqualTo("openai/gpt-5.5");
         assertThat(engineer.textVerbosity()).isEqualTo("low");
         assertThat(engineer.allowedTools()).containsExactly(
-                "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
+                "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command", "task");
         assertThat(engineer.systemPrompt()).isEqualTo(
                 "You are an apprentice to a seasoned software engineer. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
 
@@ -56,7 +56,7 @@ public class CatalogServicesTest {
         assertThat(explore.allowWrite()).isFalse();
         assertThat(explore.allowCommand()).isFalse();
         assertThat(explore.mode()).isEqualTo(AgentMode.SUBAGENT);
-        assertThat(explore.defaultThinkingLevel()).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(explore.defaultThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(explore.defaultModel()).isEqualTo("openai/gpt-5.4-mini");
         assertThat(explore.textVerbosity()).isEqualTo("low");
         assertThat(explore.allowedTools()).containsExactly("list_files", "read_file", "search_code");

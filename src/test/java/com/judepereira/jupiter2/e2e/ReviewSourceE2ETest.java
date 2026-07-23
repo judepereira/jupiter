@@ -35,8 +35,8 @@ class ReviewSourceE2ETest extends E2ETestSupport {
     void reviewSourceDropdownSwitchesBetweenSessionAndGitFiles(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = fakeHome.resolve("sample-repo");
-        Path dbFile = tempDir.resolve("h2db/jupiter");
-        Files.createDirectories(dbFile.getParent());
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
         Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "ReviewSourceE2ETest"));
 
         initGitRepoWithInitialCommit(projectDir);
@@ -46,7 +46,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
-            try (RunningApp app = startApp(fakeHome, dbFile, TestAppConfig.class);
+            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = browser.newContext()) {
                 Page page = context.newPage();
 
@@ -102,8 +102,8 @@ class ReviewSourceE2ETest extends E2ETestSupport {
     void reviewPanelFileEntriesToggleDiffVisibilityWithoutConsoleErrors(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = Files.createDirectories(fakeHome.resolve("sample-repo"));
-        Path dbFile = tempDir.resolve("h2db/jupiter");
-        Files.createDirectories(dbFile.getParent());
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
 
         initGitRepoWithInitialCommit(projectDir);
 
@@ -111,7 +111,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
-            try (RunningApp app = startApp(fakeHome, dbFile, TestAppConfig.class);
+            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = browser.newContext()) {
                 Page page = context.newPage();
                 List<String> consoleErrors = new java.util.concurrent.CopyOnWriteArrayList<>();

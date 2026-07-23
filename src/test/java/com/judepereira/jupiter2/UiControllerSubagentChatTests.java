@@ -50,7 +50,7 @@ public class UiControllerSubagentChatTests {
         assertThat(primaryView).isEqualTo("fragments/chat :: chat");
         assertThat(primaryModel.getAttribute("subagentView")).isEqualTo(false);
         assertThat((List<AgentDefinition>) primaryModel.getAttribute("agents")).extracting(AgentDefinition::id)
-                .containsExactly("plan");
+                .containsExactly("plan", "engineer");
 
         Model subagentModel = new ConcurrentModel();
         String subagentView = controller.loadSubagentChat(childSessionId, subagentModel);

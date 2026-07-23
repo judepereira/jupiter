@@ -114,7 +114,7 @@ public class CodingAgentHarnessAgentSelectionTest {
                 .satisfies(system -> assertSystemPrompt(system, agentDefinitions.getRequired("engineer").systemPrompt(), tmp));
         assertThat(model.capturedOptions().get(0).modelId()).isEqualTo("openai/gpt-5.5");
         assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.5");
-        assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(runCommand.executions).isEqualTo(1);
         assertThat(runCommand.lastContext).isNotNull();
         assertThat(runCommand.lastContext.isAllowWrite()).isTrue();
