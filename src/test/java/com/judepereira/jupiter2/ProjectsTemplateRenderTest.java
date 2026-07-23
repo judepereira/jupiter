@@ -138,7 +138,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null));
         context.setVariable("workspaces", List.of(
                 new Workspace(1L, "Default Workspace", "/repo"),
-                new Workspace(2L, "feature-workspace", "/repo/.trees/feature-workspace")));
+                new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace")));
         context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo"));
         context.setVariable("sessions", List.of(new Session(1L, "Session #1"), new Session(2L, "Session #2")));
         context.setVariable("activeSession", new Session(2L, "Session #2"));

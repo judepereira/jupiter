@@ -193,7 +193,11 @@ public class UiControllerTerminalTests {
         ConcurrentModel model = new ConcurrentModel();
         String view = controller.addWorkspace(branchName, "create", model);
 
-        Path worktreePath = projectRoot.toAbsolutePath().normalize().resolveSibling(".trees").resolve(branchName).toAbsolutePath().normalize();
+        Path worktreePath = projectRoot.toAbsolutePath().normalize().resolveSibling(".trees")
+                .resolve(projectRoot.getFileName().toString())
+                .resolve(branchName)
+                .toAbsolutePath()
+                .normalize();
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
         assertThat(terminalTabs(model)).extracting(TerminalTab::title, TerminalTab::active)
                 .containsExactly(org.assertj.core.api.Assertions.tuple("Workspace Init", true));

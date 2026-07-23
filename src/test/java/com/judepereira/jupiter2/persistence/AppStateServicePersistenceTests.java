@@ -219,7 +219,11 @@ public class AppStateServicePersistenceTests {
         long projectId = initial.activeProject().id();
 
         String branchName = "feature-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        Path worktreePath = projectPath.toAbsolutePath().normalize().resolveSibling(".trees").resolve(branchName).toAbsolutePath().normalize();
+        Path worktreePath = projectPath.toAbsolutePath().normalize().resolveSibling(".trees")
+                .resolve(projectPath.getFileName().toString())
+                .resolve(branchName)
+                .toAbsolutePath()
+                .normalize();
 
         WorkspaceView workspace = service.createWorkspace(projectId, branchName, true);
         AppStateView view = service.loadViewData();

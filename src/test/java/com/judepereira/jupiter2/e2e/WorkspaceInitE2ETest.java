@@ -40,7 +40,7 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
 
         String branchName = "feature-init-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String commands = "echo init-one\npwd\ntouch init-ran.txt";
-        Path worktreeDir = fakeHome.resolve(".trees").resolve(branchName);
+        Path worktreeDir = fakeHome.resolve(".trees").resolve(projectDir.getFileName().toString()).resolve(branchName);
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
             try (RunningApp app = startApp(fakeHome, dbFile, TestAppConfig.class);

@@ -81,7 +81,11 @@ public class AppStateService {
         }
 
         Path projectRoot = Path.of(project.normalizedPath());
-        Path worktreePath = projectRoot.resolveSibling(".trees").resolve(branchName).toAbsolutePath().normalize();
+        Path worktreePath = projectRoot.resolveSibling(".trees")
+                .resolve(projectRoot.getFileName().toString())
+                .resolve(branchName)
+                .toAbsolutePath()
+                .normalize();
         runGitWorktreeAdd(projectRoot, worktreePath, branchName, createBranch);
 
         long position = repository.nextWorkspacePosition(projectId);
