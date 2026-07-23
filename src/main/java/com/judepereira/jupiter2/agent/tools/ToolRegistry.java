@@ -6,7 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ToolRegistry {
-    private static final int MAX_OUTPUT_BYTES = 10 * 1024;
+    private static final int MAX_OUTPUT_BYTES = 1024;
     private final Map<String, AgentTool> tools = new HashMap<>();
 
     public void register(AgentTool tool) {
@@ -72,11 +72,11 @@ public class ToolRegistry {
 
     private static String suffixFor(String toolName) {
         return switch (toolName) {
-            case "read_file" -> "\n\n[tool_output_truncated: output exceeded 10 KiB. Use startLine/endLine to read a smaller range.]";
-            case "search_code" -> "\n\n[tool_output_truncated: output exceeded 10 KiB. Narrow path, include, or pattern.]";
-            case "list_files" -> "\n\n[tool_output_truncated: output exceeded 10 KiB. Narrow path or include.]";
-            case "run_command" -> "\n\n[tool_output_truncated: output exceeded 10 KiB. Refine the command or redirect full output to a file.]";
-            default -> "\n\n[tool_output_truncated: output exceeded 10 KiB.]";
+            case "read_file" -> "\n\n[tool_output_truncated: output exceeded 1 KiB. Use startLine/endLine to read a smaller range.]";
+            case "search_code" -> "\n\n[tool_output_truncated: output exceeded 1 KiB. Narrow path, include, or pattern.]";
+            case "list_files" -> "\n\n[tool_output_truncated: output exceeded 1 KiB. Narrow path or include.]";
+            case "run_command" -> "\n\n[tool_output_truncated: output exceeded 1 KiB. Refine the command or redirect full output to a file.]";
+            default -> "\n\n[tool_output_truncated: output exceeded 1 KiB.]";
         };
     }
 }
