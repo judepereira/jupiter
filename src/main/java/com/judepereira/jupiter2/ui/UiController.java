@@ -70,6 +70,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -95,7 +96,7 @@ public class UiController {
 
     @Qualifier("agentTaskExecutor")
     private final Executor agentExecutor;
-    private final ConcurrentMap<String, PendingStream> pendingStreams = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
@@ -195,9 +196,9 @@ public class UiController {
             String workspaceRoot = sessionDetail.workspaceRoot();
             List<Message> conversationHistory = new ArrayList<>();
             conversationHistory.addAll(appStateService.buildConversationHistory(session.id()));
-            pendingStreams.put(assistantId, new PendingStream(session.id(), workspaceRoot,
+            activeStreams.put(assistantId, new ActiveStream(new PendingStream(session.id(), workspaceRoot,
                     new AgentTurnRequest(null, conversationHistory, workspaceRoot,
-                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id())));
+                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id()))));
         }
 
         populateChatControlsModel(model, selected);
@@ -270,9 +271,9 @@ public class UiController {
 
     @GetMapping("/ui/chat/stream/{assistantId}")
     public SseEmitter streamChat(@PathVariable("assistantId") String assistantId) {
-        PendingStream pending = pendingStreams.remove(assistantId);
-        if (pending == null) {
-            SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = new SseEmitter(0L);
+        ActiveStream active = activeStreams.get(assistantId);
+        if (active == null || active.finished().get()) {
             try {
                 emitter.send(SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
             } catch (Exception ignored) {
@@ -281,53 +282,59 @@ public class UiController {
             return emitter;
         }
 
-        SseEmitter emitter = new SseEmitter(0L);
+        attachEmitter(active, emitter);
+        if (active.started().compareAndSet(false, true)) {
+            startActiveStream(assistantId, active, emitter);
+        }
 
-        Runnable task = () -> {
-            AtomicBoolean done = new AtomicBoolean(false);
-            StringBuilder accumulated = new StringBuilder();
+        return emitter;
+    }
 
-            try (SubagentTaskStreamBridge.Scope ignored = SubagentTaskStreamBridge.bind(buildSubagentStreamListener(emitter))) {
-                AgentStreamListener listener = new AgentStreamListener() {
-                    @Override
-                    public void onTextDelta(String delta) {
-                        try {
-                            if (delta == null) {
-                                return;
-                            }
-                            accumulated.append(delta);
-                            appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
-                            try {
-                                emitter.send(SseEmitter.event().name("delta").data(SseJson.writeValueAsString(Map.of("text", delta))));
-                            } catch (JsonProcessingException e) {
-                                emitter.send(SseEmitter.event().name("delta").data(delta));
-                            }
-                        } catch (Exception e) {
-                            onError(e);
+    private void startActiveStream(String assistantId, ActiveStream active, SseEmitter emitter) {
+        Runnable task = () -> runActiveStream(assistantId, active);
+        try {
+            if (agentExecutor instanceof ExecutorService service) {
+                service.submit(task);
+            } else {
+                agentExecutor.execute(task);
+            }
+        } catch (Exception e) {
+            active.started().set(false);
+            listenerStartFailed(active, assistantId, e, emitter);
+        }
+    }
+
+    private void runActiveStream(String assistantId, ActiveStream active) {
+        PendingStream pending = active.pendingStream();
+        AtomicBoolean completed = new AtomicBoolean(false);
+        StringBuilder accumulated = new StringBuilder();
+
+        try (SubagentTaskStreamBridge.Scope ignored = SubagentTaskStreamBridge.bind(buildSubagentStreamListener(active, assistantId))) {
+            AgentStreamListener listener = new AgentStreamListener() {
+                @Override
+                public void onTextDelta(String delta) {
+                    try {
+                        if (delta == null) {
+                            return;
                         }
+                        accumulated.append(delta);
+                        appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
+                        broadcastEvent(active, assistantId, "delta", Map.of("text", delta));
+                    } catch (Exception e) {
+                        onError(e);
                     }
+                }
 
                 @Override
                 public void onStatus(String status) {
-                    try {
-                        try {
-                            emitter.send(SseEmitter.event().name("status").data(SseJson.writeValueAsString(Map.of("status", status))));
-                        } catch (JsonProcessingException e) {
-                            emitter.send(SseEmitter.event().name("status").data(status));
-                        }
-                    } catch (Exception ignored) {
-                    }
+                    broadcastEvent(active, assistantId, "status", Map.of("status", status));
                 }
 
                 @Override
                 public void onToolCallTrace(ToolCallTrace trace) {
                     try {
                         ToolCallView v = toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
-                        try {
-                            emitter.send(SseEmitter.event().name("tool_call").data(SseJson.writeValueAsString(v)));
-                        } catch (JsonProcessingException e) {
-                            emitter.send(SseEmitter.event().name("tool_call").data(v.toString()));
-                        }
+                        broadcastEvent(active, assistantId, "tool_call", v);
                     } catch (Exception e) {
                         onError(e);
                     }
@@ -351,11 +358,7 @@ public class UiController {
                         return conversation;
                     }
 
-                    try {
-                        emitter.send(SseEmitter.event().name("context_compaction").data(SseJson.writeValueAsString(summary.get())));
-                    } catch (Exception e) {
-                        throw new IllegalStateException("Failed to send context compaction event", e);
-                    }
+                    broadcastEvent(active, assistantId, "context_compaction", summary.get());
 
                     return appStateService.buildConversationHistory(currentRequest.getSessionId());
                 }
@@ -367,16 +370,9 @@ public class UiController {
                         List<ToolCallTraceInput> traces = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
                         appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
                         processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
-                        try {
-                            emitter.send(SseEmitter.event().name("done").data(SseJson.writeValueAsString(Map.of("text", finalText))));
-                        } catch (JsonProcessingException e) {
-                            emitter.send(SseEmitter.event().name("done").data(finalText));
-                        }
+                        finalizeStreamSuccess(active, assistantId, finalText, completed);
                     } catch (Exception e) {
                         onError(e);
-                    } finally {
-                        done.set(true);
-                        emitter.complete();
                     }
                 }
 
@@ -386,37 +382,97 @@ public class UiController {
                         String normalizedMessage = normalizeProviderErrorMessage(e);
                         appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
                         log.error("Execution failure!", e);
-                        try {
-                            emitter.send(SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", normalizedMessage))));
-                        } catch (JsonProcessingException ex) {
-                            emitter.send(SseEmitter.event().name("error").data(normalizedMessage));
-                        }
+                        finalizeStreamError(active, assistantId, normalizedMessage, e, completed);
                     } catch (Exception ignored) {
-                    } finally {
-                        done.set(true);
-                        emitter.completeWithError(e);
                     }
                 }
             };
 
-                try {
-                    AgentTurnResult result = harness.runTurnStreaming(pending.request(), listener);
-                    if (!done.get()) {
-                        listener.onComplete(result);
-                    }
-                } catch (Exception e) {
-                    listener.onError(e);
+            try {
+                AgentTurnResult result = harness.runTurnStreaming(pending.request(), listener);
+                if (!completed.get()) {
+                    listener.onComplete(result);
                 }
+            } catch (Exception e) {
+                listener.onError(e);
             }
-        };
+        }
+    }
 
-        if (agentExecutor instanceof ExecutorService service) {
-            service.submit(task);
-        } else {
-            agentExecutor.execute(task);
+    private void listenerStartFailed(ActiveStream active, String assistantId, Exception e, SseEmitter emitter) {
+        try {
+            String normalizedMessage = normalizeProviderErrorMessage(e);
+            appStateService.failAssistantMessage(active.pendingStream().sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+            log.error("Execution failure!", e);
+            broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage));
+        } catch (Exception ignored) {
+        } finally {
+            active.finished().set(true);
+            activeStreams.remove(assistantId, active);
+            completeEmitters(active);
+            detachEmitter(active, emitter);
+        }
+    }
+
+    private void attachEmitter(ActiveStream active, SseEmitter emitter) {
+        active.emitters().add(emitter);
+        emitter.onCompletion(() -> detachEmitter(active, emitter));
+        emitter.onTimeout(() -> detachEmitter(active, emitter));
+        emitter.onError(ignored -> detachEmitter(active, emitter));
+    }
+
+    private void detachEmitter(ActiveStream active, SseEmitter emitter) {
+        active.emitters().remove(emitter);
+    }
+
+    private void broadcastEvent(ActiveStream active, String assistantId, String name, Object payload) {
+        for (SseEmitter emitter : active.emitters()) {
+            sendEventToEmitter(active, assistantId, emitter, name, payload);
+        }
+    }
+
+    private void sendEventToEmitter(ActiveStream active, String assistantId, SseEmitter emitter, String name, Object payload) {
+        try {
+            emitter.send(SseEmitter.event().name(name).data(SseJson.writeValueAsString(payload)));
+        } catch (Exception e) {
+            log.debug("Dropping disconnected SSE subscriber for assistant {}", assistantId, e);
+            detachEmitter(active, emitter);
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void finalizeStreamSuccess(ActiveStream active, String assistantId, String finalText, AtomicBoolean completed) {
+        if (!completed.compareAndSet(false, true)) {
+            return;
         }
 
-        return emitter;
+        active.finished().set(true);
+        activeStreams.remove(assistantId, active);
+        broadcastEvent(active, assistantId, "done", Map.of("text", finalText));
+        completeEmitters(active);
+    }
+
+    private void finalizeStreamError(ActiveStream active, String assistantId, String normalizedMessage, Exception e, AtomicBoolean completed) {
+        if (!completed.compareAndSet(false, true)) {
+            return;
+        }
+
+        active.finished().set(true);
+        activeStreams.remove(assistantId, active);
+        broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage));
+        completeEmitters(active);
+    }
+
+    private void completeEmitters(ActiveStream active) {
+        for (SseEmitter emitter : active.emitters()) {
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     @GetMapping("/ui/chat/primary")
@@ -1080,31 +1136,31 @@ public class UiController {
         return new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
     }
 
-    private SubagentTaskService.SubagentTaskStreamListener buildSubagentStreamListener(SseEmitter emitter) {
+    private SubagentTaskService.SubagentTaskStreamListener buildSubagentStreamListener(ActiveStream active, String assistantId) {
         return new SubagentTaskService.SubagentTaskStreamListener() {
             @Override
             public void onStarted(SubagentTaskService.SubagentTaskStarted event) {
-                sendSseEvent(emitter, "subagent_started", event);
+                broadcastEvent(active, assistantId, "subagent_started", event);
             }
 
             @Override
             public void onTextDelta(SubagentTaskService.SubagentTaskTextDelta event) {
-                sendSseEvent(emitter, "subagent_delta", event);
+                broadcastEvent(active, assistantId, "subagent_delta", event);
             }
 
             @Override
             public void onToolCall(SubagentTaskService.SubagentTaskToolCall event) {
-                sendSseEvent(emitter, "subagent_tool_call", event);
+                broadcastEvent(active, assistantId, "subagent_tool_call", event);
             }
 
             @Override
             public void onComplete(SubagentTaskService.SubagentTaskCompleted event) {
-                sendSseEvent(emitter, "subagent_done", event);
+                broadcastEvent(active, assistantId, "subagent_done", event);
             }
 
             @Override
             public void onError(SubagentTaskService.SubagentTaskError event) {
-                sendSseEvent(emitter, "subagent_error", event);
+                broadcastEvent(active, assistantId, "subagent_error", event);
             }
         };
     }
@@ -1177,7 +1233,14 @@ public class UiController {
     public record DirectoryEntry(String name, String path, boolean directory) {}
 
     private record ChatSelection(AgentDefinition selectedAgent, ModelDefinition selectedModel, ThinkingLevel selectedThinking,
-                                 AgentDefinition defaultAgent, ModelDefinition defaultModel, ThinkingLevel defaultThinking) {}
+                                  AgentDefinition defaultAgent, ModelDefinition defaultModel, ThinkingLevel defaultThinking) {}
 
     private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {}
+
+    private record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean started,
+                                AtomicBoolean finished) {
+        private ActiveStream(PendingStream pendingStream) {
+            this(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false));
+        }
+    }
 }

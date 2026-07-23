@@ -1,5 +1,5 @@
 <!doctype html>
-<div th:fragment="chat" id="chat-container" th:attr="hx-swap-oob=${shellRefresh} ? 'outerHTML' : null">
+<div th:fragment="chat" id="chat-container" th:attr="hx-swap-oob=${shellRefresh} ? 'outerHTML' : null, data-subagent-session-id=${subagentView ?: false} ? ${subagentSessionId} : null">
     <!-- HTMX polling attributes are applied to the messages list when hasPending is true -->
     <section id="chat" class="chat-shell">
         <div th:if="${subagentView ?: false}" class="subagent-bar">
@@ -13,7 +13,7 @@
             <ul id="chat-messages-list" th:fragment="messages">
                 <!-- iterate and inline the single-row markup so Thymeleaf doesn't evaluate a standalone fragment -->
                 <li th:each="m : ${chatMessages}"
-                    th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
+                    th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
                     th:classappend="${m.pending} ? 'pending' : ''">
                     <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
 

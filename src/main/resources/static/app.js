@@ -760,6 +760,140 @@
             }
         }
 
+        function getCurrentOpenSubagentSessionId() {
+            try {
+                const container = document.getElementById('chat-container');
+                const sessionId = container && container.dataset && container.dataset.subagentSessionId != null ? String(container.dataset.subagentSessionId).trim() : '';
+                return sessionId || '';
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function getOpenSubagentPendingRow(childSessionId) {
+            try {
+                if (!childSessionId) return null;
+                if (getCurrentOpenSubagentSessionId() !== String(childSessionId)) return null;
+                const list = document.getElementById('chat-messages-list');
+                if (!list) return null;
+                return list.querySelector('li[data-pending="true"]');
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function clearPendingChatRowState(row) {
+            if (!row) return;
+            row.classList.remove('pending');
+            row.removeAttribute('data-pending');
+            row.dataset.streamBound = '0';
+        }
+
+        function appendToolCallToChatRow(row, payload) {
+            try {
+                if (!row) return;
+
+                let callsContainer = row.querySelector('.tool-calls');
+                if (!callsContainer) {
+                    callsContainer = document.createElement('div');
+                    callsContainer.className = 'tool-calls';
+                    row.appendChild(callsContainer);
+                }
+
+                const details = document.createElement('details');
+                details.className = 'tool-call';
+
+                const summary = document.createElement('summary');
+                summary.className = 'tool-call-summary';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'tool-call-name';
+                nameSpan.textContent = payload && payload.toolName ? String(payload.toolName) : 'tool';
+
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'tool-call-status';
+                statusSpan.classList.add(payload && payload.success ? 'tool-call-status-success' : 'tool-call-status-failure');
+                statusSpan.textContent = payload && payload.success ? ' success' : ' failure';
+
+                summary.appendChild(nameSpan);
+                summary.appendChild(statusSpan);
+                details.appendChild(summary);
+
+                const detail = document.createElement('div');
+                detail.className = 'tool-call-detail';
+
+                const inputSection = document.createElement('section');
+                inputSection.className = 'tool-call-section';
+                const inputLabel = document.createElement('div');
+                inputLabel.className = 'tool-call-label';
+                inputLabel.textContent = 'Input';
+                const inputPre = document.createElement('pre');
+                inputPre.className = 'tool-call-pre';
+                inputPre.textContent = payload && payload.inputPreview ? String(payload.inputPreview) : '';
+                inputSection.appendChild(inputLabel);
+                inputSection.appendChild(inputPre);
+
+                const outputSection = document.createElement('section');
+                outputSection.className = 'tool-call-section';
+                const outputLabel = document.createElement('div');
+                outputLabel.className = 'tool-call-label';
+                outputLabel.textContent = 'Output';
+                const outputPre = document.createElement('pre');
+                outputPre.className = 'tool-call-pre';
+                outputPre.textContent = payload && payload.outputPreview ? String(payload.outputPreview) : '';
+                outputSection.appendChild(outputLabel);
+                outputSection.appendChild(outputPre);
+
+                detail.appendChild(inputSection);
+                detail.appendChild(outputSection);
+                details.appendChild(detail);
+                callsContainer.appendChild(details);
+            } catch (_) {
+            }
+        }
+
+        function updateOpenSubagentTranscript(payload, kind) {
+            try {
+                const childSessionId = payload && payload.childSessionId != null ? String(payload.childSessionId) : '';
+                const row = getOpenSubagentPendingRow(childSessionId);
+                if (!row) return;
+
+                const textSpan = row.querySelector('.chat-message-text');
+                if (!textSpan) return;
+
+                if (kind === 'delta') {
+                    if (payload && payload.delta != null) {
+                        const prevRaw = getRawChatMarkdown(textSpan);
+                        renderChatMarkdown(textSpan, prevRaw + String(payload.delta));
+                    }
+                    return;
+                }
+
+                if (kind === 'done') {
+                    if (payload && payload.finalText != null) {
+                        renderChatMarkdown(textSpan, String(payload.finalText));
+                    } else if (payload && payload.text != null) {
+                        renderChatMarkdown(textSpan, String(payload.text));
+                    }
+                    clearPendingChatRowState(row);
+                    return;
+                }
+
+                if (kind === 'error') {
+                    const errorText = payload && payload.errorText != null ? String(payload.errorText) : 'Subagent error';
+                    const prevRaw = getRawChatMarkdown(textSpan);
+                    renderChatMarkdown(textSpan, prevRaw + '\n[Error: ' + errorText + ']');
+                    clearPendingChatRowState(row);
+                    return;
+                }
+
+                if (kind === 'tool_call') {
+                    appendToolCallToChatRow(row, payload);
+                }
+            } catch (_) {
+            }
+        }
+
         // Streaming SSE binding: open EventSource for pending assistant rows.
         // We run after HTMX swaps/settles so newly swapped pending rows can start streaming.
         function bindPendingStreams() {
@@ -976,6 +1110,10 @@
                         entry.open.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(childSessionId));
                         entry.open.setAttribute('hx-target', '#chat-container');
                         entry.open.setAttribute('hx-swap', 'outerHTML');
+                        if (window.htmx && typeof window.htmx.process === 'function' && !entry.open.dataset.htmxProcessed) {
+                            window.htmx.process(entry.open);
+                            entry.open.dataset.htmxProcessed = 'true';
+                        }
                         const name = payload && payload.subagentAgentName ? String(payload.subagentAgentName) : childSessionId;
                         entry.open.replaceChildren(document.createTextNode('Open subagent: '), (() => {
                             const strong = document.createElement('strong');
@@ -1068,6 +1206,7 @@
                             if (payload.delta != null) {
                                 entry.text.textContent = (entry.text.textContent || '') + String(payload.delta);
                             }
+                            updateOpenSubagentTranscript(payload, 'delta');
                         } catch (_) {
                         }
                     });
@@ -1077,6 +1216,7 @@
                             const payload = parseStreamPayload(e) || {};
                             const entry = ensureSubagentCard(payload);
                             renderSubagentToolCall(entry, payload);
+                            updateOpenSubagentTranscript(payload, 'tool_call');
                         } catch (_) {
                         }
                     });
@@ -1091,6 +1231,7 @@
                             entry.status.textContent = 'done';
                             entry.card.classList.add('is-done');
                             configureSubagentOpenButton(entry, payload);
+                            updateOpenSubagentTranscript(payload, 'done');
                         } catch (_) {
                         }
                     });
@@ -1104,6 +1245,7 @@
                             if (payload.errorText != null) {
                                 entry.text.textContent = String(payload.errorText);
                             }
+                            updateOpenSubagentTranscript(payload, 'error');
                         } catch (_) {
                         }
                     });

@@ -19,11 +19,11 @@ public class CatalogServicesTest {
         AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
 
         assertThat(service.list()).extracting(AgentDefinition::id)
-                .containsExactly("plan", "engineer", "explore");
+                .containsExactly("plan", "engineer", "explore", "apprentice", "test");
         assertThat(service.listPrimaryAgents()).extracting(AgentDefinition::id)
                 .containsExactly("plan", "engineer");
         assertThat(service.listSubagents()).extracting(AgentDefinition::id)
-                .containsExactly("explore");
+                .containsExactly("explore", "apprentice", "test");
         assertThat(service.defaultAgent().id()).isEqualTo("plan");
 
         AgentDefinition plan = service.getRequired("plan");
@@ -33,12 +33,17 @@ public class CatalogServicesTest {
         assertThat(plan.mode()).isEqualTo(AgentMode.AGENT);
         assertThat(plan.defaultModel()).isEqualTo("openai/gpt-5.5");
         assertThat(plan.defaultThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
-        assertThat(plan.systemPrompt()).isEqualTo(
-                "You are Plan, a read-only workspace planning assistant. Inspect the repository, identify the relevant files, explain the safest implementation approach, and do not modify files or run commands.");
+        assertThat(plan.systemPrompt()).isEqualTo((
+                """
+                You're a planning expert. For the task at hand, plan it out thoroughly.
+                Use the Explore agent via the task tool to explore various files for you,
+                and summarise their findings. During the planning phase, you must consider
+                the complete impact of your proposal, and if you have any doubts, ask for clarification.
+                """).stripTrailing());
 
         AgentDefinition engineer = service.getRequired("engineer");
         assertThat(engineer.name()).isEqualTo("Engineer");
-        assertThat(engineer.description()).isEqualTo("An apprentice to a seasoned software engineer.");
+        assertThat(engineer.description()).isEqualTo("A seasoned software engineer.");
         assertThat(engineer.allowWrite()).isTrue();
         assertThat(engineer.allowCommand()).isTrue();
         assertThat(engineer.mode()).isEqualTo(AgentMode.AGENT);
@@ -48,7 +53,17 @@ public class CatalogServicesTest {
         assertThat(engineer.allowedTools()).containsExactly(
                 "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command", "task");
         assertThat(engineer.systemPrompt()).isEqualTo(
-                "You are an apprentice to a seasoned software engineer. Make the requested code changes directly, keep the diff minimal, and use workspace tools to inspect, edit, and run commands as needed.");
+                """
+                You're a seasoned software engineer. When a task is given to you, you break it down into smaller steps, and create a todo list.
+                Then, delegate each item in the todo list to the apprentice subagent. Let them implement the task.
+                When the subagent completes, continue on towards the next step. When running commands, you always write the output to a file, and then ask the
+                explore subagent to analyse that file. You do not read the output yourself, since your context will be polluted.
+
+                When it comes to testing, you delegate the task to the test subagent, who specialises in testing.
+                When a task is accomplished, you test code without asking by delegating it to the test subagent.
+
+                For all tasks, once you identify the action items, you delegate them to the apprentice subagent.
+                """);
 
         AgentDefinition explore = service.getRequired("explore");
         assertThat(explore.name()).isEqualTo("Explore");
@@ -60,8 +75,11 @@ public class CatalogServicesTest {
         assertThat(explore.defaultModel()).isEqualTo("openai/gpt-5.4-mini");
         assertThat(explore.textVerbosity()).isEqualTo("low");
         assertThat(explore.allowedTools()).containsExactly("list_files", "read_file", "search_code");
-        assertThat(explore.systemPrompt()).isEqualTo(
-                "You are Explore, a read-only codebase exploration subagent. Inspect the repository, find relevant files, symbols, and flows, and return concise findings with file, class, and method references. Do not edit files or run commands.");
+        assertThat(explore.systemPrompt()).isEqualTo((
+                """
+                You're an exploratory expert, who can explore the files and data available
+                to you in order to help others. Summarise your findings succinctly when done.
+                """).stripTrailing());
     }
 
     @Test
