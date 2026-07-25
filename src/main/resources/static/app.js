@@ -117,17 +117,12 @@
 
     function sanitizeBranchName(value) {
         return String(value || '')
-            .replace(/[\u0000-\u001f\u007f\\ ~^:?*[\s]+/g, '-')
+            .replace(/[\u0000-\u001f\u007f\\ ~^:?*\[\]\s]+/g, '-')
             .replace(/@\{/g, '-')
             .replace(/\.\.+/g, '-')
-            .replace(/\/+/g, '/')
             .replace(/(?:^|\/)\.lock(?=\/|$)/g, '-lock')
             .replace(/\.lock(?=\/|$)/g, '-lock')
-            .replace(/\.+(?=\/|$)/g, '')
-            .replace(/^-+/, '')
-            .replace(/-+$/, '')
-            .replace(/^\/+/g, '')
-            .replace(/\/+$/g, '');
+            .replace(/\.+(?=\/|$)/g, '-');
     }
 
     function sanitizeInput(input) {
