@@ -241,6 +241,81 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void creatingAWorkspaceAllowsSlashSeparatedGitBranchNames(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long projectId = service.loadViewData().activeProject().id();
+
+        String branchName = "feature/slash-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        Path worktreePath = projectPath.toAbsolutePath().normalize().resolveSibling(".trees")
+                .resolve(projectPath.getFileName().toString())
+                .resolve(branchName)
+                .toAbsolutePath()
+                .normalize();
+
+        WorkspaceView workspace = service.createWorkspace(projectId, branchName, true);
+
+        assertThat(workspace.name()).isEqualTo(branchName);
+        assertThat(workspace.path()).isEqualTo(worktreePath.toString());
+        assertThat(Files.exists(worktreePath)).isTrue();
+    }
+
+    @Test
+    public void creatingAWorkspaceRejectsInvalidNewBranchNameBeforePersistingWorkspace(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long projectId = initial.activeProject().id();
+
+        assertThatThrownBy(() -> service.createWorkspace(projectId, "feature unsafe", true))
+                .isInstanceOf(InvalidGitBranchNameException.class)
+                .hasMessageContaining("Invalid Git branch name");
+
+        AppStateView view = service.loadViewData();
+        assertThat(view.workspaces()).extracting(WorkspaceView::id)
+                .containsExactly(initial.activeWorkspace().id());
+        assertThat(view.sessions()).extracting(SessionView::id)
+                .containsExactly(initial.activeSession().id());
+    }
+
+    @Test
+    public void creatingAWorkspaceRejectsBlankNewBranchNameBeforePersistingWorkspace(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long projectId = initial.activeProject().id();
+
+        assertThatThrownBy(() -> service.createWorkspace(projectId, "   ", true))
+                .isInstanceOf(InvalidGitBranchNameException.class)
+                .hasMessageContaining("Branch name is required");
+
+        AppStateView view = service.loadViewData();
+        assertThat(view.workspaces()).extracting(WorkspaceView::id)
+                .containsExactly(initial.activeWorkspace().id());
+        assertThat(view.sessions()).extracting(SessionView::id)
+                .containsExactly(initial.activeSession().id());
+    }
+
+    @Test
+    public void checkingOutExistingBranchDoesNotUseNewBranchNameValidation(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long projectId = service.loadViewData().activeProject().id();
+
+        assertThatThrownBy(() -> service.createWorkspace(projectId, "feature unsafe", false))
+                .isInstanceOf(GitWorktreeException.class)
+                .isNotInstanceOf(InvalidGitBranchNameException.class);
+    }
+
+    @Test
     public void reviewSourceSwitchesBetweenSessionAndGitChangedFiles(@TempDir Path projectPath) throws Exception {
         initGitRepo(projectPath);
 

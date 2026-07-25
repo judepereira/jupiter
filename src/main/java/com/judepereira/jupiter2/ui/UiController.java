@@ -19,6 +19,7 @@ import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.persistence.ContextCompactionService;
 import com.judepereira.jupiter2.persistence.GitWorktreeException;
+import com.judepereira.jupiter2.persistence.InvalidGitBranchNameException;
 import com.judepereira.jupiter2.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter2.persistence.Persistence.ChangedFileView;
@@ -731,10 +732,28 @@ public class UiController {
                                Model model) {
         AppStateView view = appStateService.loadViewData();
         String trimmedBranchName = branchName.trim();
-        boolean createBranch = !"checkout".equalsIgnoreCase(branchMode);
+        BranchMode parsedBranchMode = BranchMode.fromValue(branchMode);
+        boolean createBranch = parsedBranchMode == BranchMode.CREATE;
 
         try {
             appStateService.createWorkspace(view.activeProject().id(), trimmedBranchName, createBranch);
+        } catch (InvalidGitBranchNameException e) {
+            if (createBranch) {
+                String gitOutput = e.gitOutput();
+                String body = e.getMessage();
+                if (gitOutput != null && !gitOutput.isBlank()) {
+                    body += "\n\n" + gitOutput;
+                }
+                systemBalloonService.publishError("Invalid Branch Name", body);
+                populateProjectModel(model, view);
+                populateSessionModel(model, view);
+                model.addAttribute("branchName", trimmedBranchName);
+                model.addAttribute("branchMode", parsedBranchMode.value());
+                model.addAttribute("createBranch", true);
+                model.addAttribute("modalOob", true);
+                return "fragments/projects :: workspaceModal";
+            }
+            throw e;
         } catch (GitWorktreeException e) {
             if (!createBranch) {
                 String gitOutput = e.lastGitOutputLines();
@@ -746,7 +765,7 @@ public class UiController {
                 populateProjectModel(model, view);
                 populateSessionModel(model, view);
                 model.addAttribute("branchName", trimmedBranchName);
-                model.addAttribute("branchMode", branchMode);
+                model.addAttribute("branchMode", parsedBranchMode.value());
                 model.addAttribute("createBranch", false);
                 model.addAttribute("modalOob", true);
                 return "fragments/projects :: workspaceModal";
@@ -1180,6 +1199,30 @@ public class UiController {
             return null;
         }
         return message.substring(start, end + 1);
+    }
+
+    private enum BranchMode {
+        CREATE("create"),
+        CHECKOUT("checkout");
+
+        private final String value;
+
+        BranchMode(String value) {
+            this.value = value;
+        }
+
+        String value() {
+            return value;
+        }
+
+        static BranchMode fromValue(String value) {
+            String normalized = value.trim().toLowerCase();
+            return switch (normalized) {
+                case "create" -> CREATE;
+                case "checkout" -> CHECKOUT;
+                default -> throw new IllegalArgumentException("Invalid branch mode: " + value);
+            };
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

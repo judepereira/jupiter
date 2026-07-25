@@ -318,16 +318,16 @@
             <br>
             <br>
             <form class="project-form workspace-form" hx-post="/ui/workspaces/add" hx-target="#shell" hx-swap="none">
-                <fieldset class="project-form-field workspace-mode-field">
+                <fieldset class="project-form-field workspace-mode-field" data-workspace-branch-mode-field>
                     <label class="workspace-mode-option">
-                        <input type="radio" name="branchMode" value="create" th:checked="${branchModeValue == 'create'}">
+                        <input type="radio" name="branchMode" value="create" data-workspace-branch-mode th:checked="${branchModeValue == 'create'}">
                         <span>
                             <small>Create a new branch</small>
                         </span>
                     </label>
 
                     <label class="workspace-mode-option">
-                        <input type="radio" name="branchMode" value="checkout" th:checked="${branchModeValue == 'checkout'}">
+                        <input type="radio" name="branchMode" value="checkout" data-workspace-branch-mode th:checked="${branchModeValue == 'checkout'}">
                         <span>
                             <small>Checkout an existing branch</small>
                         </span>
@@ -336,6 +336,7 @@
                 <label class="project-form-field">
                     <input type="text"
                            name="branchName"
+                           data-workspace-branch-name
                            autocomplete="off"
                            placeholder="Branch name"
                            required

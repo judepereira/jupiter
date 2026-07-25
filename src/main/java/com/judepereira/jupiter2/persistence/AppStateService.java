@@ -81,16 +81,24 @@ public class AppStateService {
             throw new IllegalStateException("Project is closed: " + projectId);
         }
 
+        String normalizedBranchName = branchName.trim();
+        if (createBranch) {
+            if (normalizedBranchName.isBlank()) {
+                throw new InvalidGitBranchNameException("Branch name is required", null);
+            }
+            validateGitBranchName(normalizedBranchName);
+        }
+
         Path projectRoot = Path.of(project.normalizedPath());
         Path worktreePath = projectRoot.resolveSibling(".trees")
                 .resolve(projectRoot.getFileName().toString())
-                .resolve(branchName)
+                .resolve(normalizedBranchName)
                 .toAbsolutePath()
                 .normalize();
-        runGitWorktreeAdd(projectRoot, worktreePath, branchName, createBranch);
+        runGitWorktreeAdd(projectRoot, worktreePath, normalizedBranchName, createBranch);
 
         long position = repository.nextWorkspacePosition(projectId);
-        long workspaceId = repository.insertWorkspace(projectId, branchName, worktreePath.toString(), position, now);
+        long workspaceId = repository.insertWorkspace(projectId, normalizedBranchName, worktreePath.toString(), position, now);
         createSessionInternal(workspaceId, now);
         return toWorkspaceView(repository.findWorkspace(workspaceId));
     }
@@ -615,6 +623,33 @@ public class AppStateService {
             }
             throw new GitWorktreeException("git worktree add failed", stdout, stderr, e);
         }
+    }
+
+    private void validateGitBranchName(String branchName) {
+        try {
+            Process process = new ProcessBuilder("git", "check-ref-format", "--branch", branchName)
+                    .start();
+            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new InvalidGitBranchNameException("Invalid Git branch name: " + branchName, gitOutput(stdout, stderr));
+            }
+        } catch (InvalidGitBranchNameException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to validate git branch name", e);
+        }
+    }
+
+    private String gitOutput(String stdout, String stderr) {
+        return List.of(nonBlank(stdout), nonBlank(stderr)).stream()
+                .filter(value -> !value.isBlank())
+                .collect(java.util.stream.Collectors.joining("\n"));
+    }
+
+    private String nonBlank(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private GitCloseStatus inspectGitCloseStatus(Path workspacePath) {
