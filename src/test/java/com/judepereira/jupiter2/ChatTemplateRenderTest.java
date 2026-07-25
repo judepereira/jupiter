@@ -128,6 +128,7 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat-response", context);
 
         assertThat(html.split("class=\"tool-call\"", -1)).hasSize(4);
+        assertThat(html.split("class=\"tool-call-call\"", -1)).hasSize(5);
         assertThat(html).contains("read (2)", "<span class=\"tool-call-name\">task</span>");
         assertThat(html.split(Pattern.quote("read (2)"), -1)).hasSize(2);
         assertThat(html.split(Pattern.quote("<span class=\"tool-call-name\">read</span>"), -1)).hasSize(2);
@@ -166,6 +167,7 @@ public class ChatTemplateRenderTest {
 
         long toolCallCount = html.split("class=\"tool-call\"", -1).length - 1;
         assertThat(toolCallCount).isEqualTo(4);
+        assertThat(html.split("class=\"tool-call-call\"", -1)).hasSize(6);
         assertThat(html.split(Pattern.quote("read (2)"), -1)).hasSize(2);
         assertThat(html).doesNotContain("task (2)");
         assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");

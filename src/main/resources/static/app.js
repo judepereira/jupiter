@@ -874,6 +874,22 @@
             }
         }
 
+        function getDirectToolCallChildren(parent, className) {
+            try {
+                return Array.from(parent && parent.children ? parent.children : []).filter(child => child && child.classList && child.classList.contains(className));
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function getToolCallGroups(container) {
+            return getDirectToolCallChildren(container, 'tool-call');
+        }
+
+        function isTaskToolCall(toolName) {
+            return String(toolName || '').trim() === 'task';
+        }
+
         function getToolCallContainer(target) {
             try {
                 if (!target) return null;
@@ -988,62 +1004,38 @@
 
                 const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
                 const key = toolCallKey(payload);
+                const groups = getToolCallGroups(container);
+                for (const group of groups) {
+                    const detail = getDirectToolCallChild(group, 'tool-call-detail');
+                    const callsContainer = detail ? getDirectToolCallChild(detail, 'tool-call-calls') : null;
+                    const entries = callsContainer ? getDirectToolCallChildren(callsContainer, 'tool-call-call') : [];
 
-                const entries = Array.from(container.children || []).filter(entry => entry && entry.classList && entry.classList.contains('tool-call'));
-                if (toolCallId) {
-                    const byId = entries.find(entry => entryHasToolCallId(entry, toolCallId));
-                    if (byId) return byId;
+                    if (toolCallId) {
+                        const byId = entries.find(entry => entry.dataset.toolCallId === toolCallId);
+                        if (byId) return byId;
+                    }
+
+                    if (key) {
+                        const byKey = entries.find(entry => entry.dataset.toolCallKey === key);
+                        if (byKey) return byKey;
+                    }
                 }
 
-                if (key) {
-                    const byKey = entries.find(entry => entryHasToolCallKey(entry, key));
-                    if (byKey) return byKey;
-                }
-
-                const last = entries[entries.length - 1] || null;
-                return last && canAppendToolCallEntry(last, payload) ? last : null;
+                return null;
             } catch (_) {
                 return null;
             }
         }
 
-        function ensureToolCallEntry(target, payload, processHtmxElementFn) {
+        function buildToolCallGroupRefs(group) {
             try {
-                const container = getToolCallContainer(target);
-                if (!container) return null;
+                if (!group) return null;
 
-                let details = findToolCallEntry(container, payload);
-                if (!details) {
-                    details = document.createElement('details');
-                    details.className = 'tool-call';
-                    container.appendChild(details);
-                }
-
-                const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
-                const toolName = normalizeToolCallName(payload && payload.toolName);
-                const key = toolCallKey(payload);
-                const existingIds = readToolCallValues(details, 'toolCallIds', 'toolCallId');
-                const existingKeys = readToolCallValues(details, 'toolCallKeys', 'toolCallKey');
-                const isNewCall = !(toolCallId ? existingIds.includes(toolCallId) : (key ? existingKeys.includes(key) : false));
-
-                if (toolCallId) {
-                    existingIds.push(toolCallId);
-                    writeToolCallValues(details, 'toolCallIds', existingIds);
-                    details.dataset.toolCallId = toolCallId;
-                }
-                if (key) {
-                    existingKeys.push(key);
-                    writeToolCallValues(details, 'toolCallKeys', existingKeys);
-                    details.dataset.toolCallKey = key;
-                }
-                details.dataset.toolCallGroupKind = toolCallGroupKind(toolName);
-                details.dataset.toolCallToolName = toolName;
-
-                let summary = getDirectToolCallChild(details, 'tool-call-summary');
+                let summary = getDirectToolCallChild(group, 'tool-call-summary');
                 if (!summary) {
                     summary = document.createElement('summary');
                     summary.className = 'tool-call-summary';
-                    details.appendChild(summary);
+                    group.appendChild(summary);
                 }
 
                 let nameSpan = summary.querySelector('.tool-call-name');
@@ -1052,7 +1044,6 @@
                     nameSpan.className = 'tool-call-name';
                     summary.appendChild(nameSpan);
                 }
-                nameSpan.textContent = toolName;
 
                 let statusSpan = summary.querySelector('.tool-call-status');
                 if (!statusSpan) {
@@ -1060,26 +1051,39 @@
                     statusSpan.className = 'tool-call-status';
                     summary.appendChild(statusSpan);
                 }
-
-                const summaryItems = appendToolCallSummaryItem(details, toolName, isNewCall);
-                nameSpan.textContent = toolCallSummaryText(summaryItems);
-
-                let detail = getDirectToolCallChild(details, 'tool-call-detail');
+                let detail = getDirectToolCallChild(group, 'tool-call-detail');
                 if (!detail) {
                     detail = document.createElement('div');
                     detail.className = 'tool-call-detail';
-                    details.appendChild(detail);
+                    group.appendChild(detail);
                 }
 
-                let subagent = getDirectToolCallChild(detail, 'tool-call-subagent') || detail.querySelector('.tool-call-subagent');
+                let callsContainer = getDirectToolCallChild(detail, 'tool-call-calls');
+                if (!callsContainer) {
+                    callsContainer = document.createElement('div');
+                    callsContainer.className = 'tool-call-calls';
+                    detail.appendChild(callsContainer);
+                }
+
+                return {group, summary, nameSpan, statusSpan, detail, callsContainer};
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function buildToolCallCallRefs(call, processHtmxElementFn) {
+            try {
+                if (!call) return null;
+
+                let subagent = getDirectToolCallChild(call, 'tool-call-subagent') || null;
                 let button = subagent ? subagent.querySelector('.tool-call-subagent-button') : null;
 
-                let inputSection = detail.querySelector('.tool-call-section[data-tool-call-field="input"]');
+                let inputSection = Array.from(call.children || []).find(child => child && child.classList && child.classList.contains('tool-call-section') && child.dataset.toolCallField === 'input') || null;
                 if (!inputSection) {
                     inputSection = document.createElement('section');
                     inputSection.className = 'tool-call-section';
                     inputSection.dataset.toolCallField = 'input';
-                    detail.appendChild(inputSection);
+                    call.appendChild(inputSection);
                 }
 
                 let inputLabel = inputSection.querySelector('.tool-call-label');
@@ -1097,12 +1101,12 @@
                     inputSection.appendChild(inputPre);
                 }
 
-                let outputSection = detail.querySelector('.tool-call-section[data-tool-call-field="output"]');
+                let outputSection = Array.from(call.children || []).find(child => child && child.classList && child.classList.contains('tool-call-section') && child.dataset.toolCallField === 'output') || null;
                 if (!outputSection) {
                     outputSection = document.createElement('section');
                     outputSection.className = 'tool-call-section';
                     outputSection.dataset.toolCallField = 'output';
-                    detail.appendChild(outputSection);
+                    call.appendChild(outputSection);
                 }
 
                 let outputLabel = outputSection.querySelector('.tool-call-label');
@@ -1120,26 +1124,158 @@
                     outputSection.appendChild(outputPre);
                 }
 
-                let nestedCalls = getDirectToolCallChild(detail, 'tool-calls');
+                let nestedCalls = getDirectToolCallChild(call, 'tool-calls');
                 if (!nestedCalls) {
                     nestedCalls = document.createElement('div');
                     nestedCalls.className = 'tool-calls';
-                    detail.appendChild(nestedCalls);
+                    call.appendChild(nestedCalls);
                 }
 
                 if (processHtmxElementFn) processHtmxElementFn(button);
 
-                return {details, summary, nameSpan, statusSpan, detail, subagent, button, inputPre, outputPre, nestedCalls};
+                return {details: call, detail: call, subagent, button, inputPre, outputPre, nestedCalls};
             } catch (_) {
                 return null;
             }
         }
 
-        function updateToolCallEntry(entry, payload, options) {
+        function refreshToolCallGroupSummary(groupRefs) {
+            try {
+                if (!groupRefs || !groupRefs.group) return;
+
+                const group = groupRefs.group;
+                const calls = groupRefs.callsContainer ? Array.from(groupRefs.callsContainer.children).filter(child => child && child.classList && child.classList.contains('tool-call-call')) : [];
+                const toolName = group.dataset.toolCallToolName || (calls[0] && calls[0].dataset && calls[0].dataset.toolCallToolName) || 'tool';
+                const count = calls.length;
+                const running = calls.some(call => call.dataset.toolCallState === 'running');
+                const success = count > 0 && calls.every(call => call.dataset.toolCallSuccess === 'true');
+                const state = running ? 'running' : (success ? 'done' : 'error');
+                const statusText = running ? 'running' : (success ? 'success' : 'failure');
+
+                group.dataset.toolCallToolName = toolName;
+                group.dataset.toolCallCount = String(count);
+                group.dataset.toolCallState = state;
+                group.dataset.toolCallSuccess = success ? 'true' : 'false';
+
+                if (groupRefs.nameSpan) {
+                    groupRefs.nameSpan.textContent = count > 1 ? toolName + ' (' + count + ')' : toolName;
+                }
+
+                if (groupRefs.statusSpan) {
+                    groupRefs.statusSpan.className = 'tool-call-status';
+                    if (state === 'running') {
+                        groupRefs.statusSpan.textContent = statusText;
+                    } else {
+                        if (success) groupRefs.statusSpan.classList.add('tool-call-status-success');
+                        else groupRefs.statusSpan.classList.add('tool-call-status-failure');
+                        groupRefs.statusSpan.textContent = statusText;
+                    }
+                }
+            } catch (_) {
+            }
+        }
+
+        function createToolCallGroup(container, toolName) {
+            try {
+                if (!container) return null;
+
+                const group = document.createElement('details');
+                group.className = 'tool-call';
+                group.dataset.toolCallToolName = toolName;
+                container.appendChild(group);
+
+                const refs = buildToolCallGroupRefs(group);
+                if (!refs) return null;
+
+                refs.nameSpan.textContent = toolName;
+                refs.statusSpan.textContent = 'running';
+                return refs;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function createToolCallCall(groupRefs, payload, processHtmxElementFn) {
+            try {
+                if (!groupRefs || !groupRefs.callsContainer) return null;
+
+                const call = document.createElement('div');
+                call.className = 'tool-call-call';
+                groupRefs.callsContainer.appendChild(call);
+
+                const refs = buildToolCallCallRefs(call, processHtmxElementFn);
+                if (!refs) return null;
+
+                const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
+                const toolName = payload && payload.toolName != null ? String(payload.toolName).trim() : 'tool';
+                const key = toolCallKey(payload);
+
+                if (toolCallId) refs.details.dataset.toolCallId = toolCallId;
+                if (key) refs.details.dataset.toolCallKey = key;
+                refs.details.dataset.toolCallToolName = toolName;
+                refs.details.dataset.toolCallState = 'running';
+                refs.details.dataset.toolCallSuccess = 'false';
+
+                refreshToolCallGroupSummary(groupRefs);
+                return {group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, detail: refs.detail, details: refs.details, subagent: refs.subagent, button: refs.button, inputPre: refs.inputPre, outputPre: refs.outputPre, nestedCalls: refs.nestedCalls};
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function buildToolCallEntry(entry, processHtmxElementFn) {
+            try {
+                if (!entry || !entry.classList || !entry.classList.contains('tool-call-call')) return null;
+                const group = entry.closest('details.tool-call');
+                const groupRefs = buildToolCallGroupRefs(group);
+                const callRefs = buildToolCallCallRefs(entry, processHtmxElementFn);
+                if (!groupRefs || !callRefs) return null;
+                return {group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, detail: callRefs.detail, details: callRefs.details, subagent: callRefs.subagent, button: callRefs.button, inputPre: callRefs.inputPre, outputPre: callRefs.outputPre, nestedCalls: callRefs.nestedCalls};
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function ensureToolCallEntry(target, payload, processHtmxElementFn) {
+            try {
+                const container = getToolCallContainer(target);
+                if (!container) return null;
+
+                const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
+                const toolName = payload && payload.toolName != null ? String(payload.toolName).trim() : 'tool';
+
+                const existing = buildToolCallEntry(findToolCallEntry(container, payload), processHtmxElementFn);
+                if (existing) {
+                    refreshToolCallGroupSummary({group: existing.group, summary: existing.summary, nameSpan: existing.nameSpan, statusSpan: existing.statusSpan, callsContainer: existing.group ? getDirectToolCallChild(getDirectToolCallChild(existing.group, 'tool-call-detail'), 'tool-call-calls') : null});
+                    return existing;
+                }
+
+                const groups = getToolCallGroups(container);
+                let groupRefs = null;
+                if (!isTaskToolCall(toolName) && groups.length > 0) {
+                    const lastGroup = groups[groups.length - 1];
+                    const lastToolName = lastGroup.dataset.toolCallToolName || (lastGroup.querySelector('.tool-call-name') ? lastGroup.querySelector('.tool-call-name').textContent.replace(/\s*\(\d+\)$/, '') : '');
+                    if (lastToolName === toolName) {
+                        groupRefs = buildToolCallGroupRefs(lastGroup);
+                    }
+                }
+
+                if (!groupRefs) {
+                    groupRefs = createToolCallGroup(container, toolName);
+                }
+
+                return createToolCallCall(groupRefs, payload, processHtmxElementFn);
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function updateToolCallEntry(entry, payload, options, processHtmxElementFn) {
             try {
                 if (!entry || !entry.details) return;
 
                 const details = entry.details;
+                const group = entry.group || details.closest('details.tool-call');
                 const toolName = options && options.toolName != null ? String(options.toolName) : (payload && payload.toolName != null ? String(payload.toolName) : 'tool');
                 const inputText = options && Object.prototype.hasOwnProperty.call(options, 'inputText') ? String(options.inputText ?? '') : toolCallInputText(payload);
                 const outputText = options && Object.prototype.hasOwnProperty.call(options, 'outputText') ? String(options.outputText ?? '') : toolCallOutputText(payload);
@@ -1149,7 +1285,10 @@
 
                 details.dataset.toolCallToolName = toolName;
                 details.dataset.toolCallState = state;
+                details.dataset.toolCallSuccess = success ? 'true' : 'false';
                 if (payload && payload.toolCallId != null) details.dataset.toolCallId = String(payload.toolCallId).trim();
+                const key = toolCallKey(payload);
+                if (key) details.dataset.toolCallKey = key;
 
                 entry.nameSpan.textContent = toolName;
                 entry.statusSpan.className = 'tool-call-status';
@@ -1196,6 +1335,11 @@
                         strong.textContent = name;
                         return strong;
                     })());
+                    if (processHtmxElementFn) processHtmxElementFn(entry.button);
+                }
+
+                if (group) {
+                    refreshToolCallGroupSummary({group: group, summary: entry.summary, nameSpan: entry.nameSpan, statusSpan: entry.statusSpan, callsContainer: getDirectToolCallChild(getDirectToolCallChild(group, 'tool-call-detail'), 'tool-call-calls')});
                 }
             } catch (_) {
             }
@@ -1205,7 +1349,7 @@
             try {
                 const entry = ensureToolCallEntry(target, payload, processHtmxElementFn);
                 if (!entry) return null;
-                updateToolCallEntry(entry, payload, options || {});
+                updateToolCallEntry(entry, payload, options || {}, processHtmxElementFn);
                 return entry;
             } catch (_) {
                 return null;
