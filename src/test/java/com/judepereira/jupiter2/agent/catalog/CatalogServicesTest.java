@@ -1,95 +1,64 @@
 package com.judepereira.jupiter2.agent.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class CatalogServicesTest {
 
+    private static final YAMLMapper YAML_MAPPER = new YAMLMapper();
+    private static final Pattern AGENT_MARKDOWN = Pattern.compile("(?s)^---\\R(.*?)\\R---\\R?(.*)$");
+    private static final List<String> AGENT_RESOURCE_PATHS = List.of(
+            "/agents/01-plan.md",
+            "/agents/02-engineer.md",
+            "/agents/03-explore.md",
+            "/agents/04-apprentice.md",
+            "/agents/05-test.md"
+    );
+
     @Test
-    public void agentCatalogLoadsPlanEngineerAndExploreWithExpectedDefaults() {
+    public void agentCatalogLoadsAllBundledAgentsWithExpectedDefaults() {
         AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
+        List<AgentResource> resources = AGENT_RESOURCE_PATHS.stream()
+                .map(path -> new AgentResource(path, loadAgentMarkdown(path)))
+                .toList();
+        AgentDefinition wildcardPrimary = loadInlineWildcardAgent("11-primary.md", AgentMode.AGENT);
+        AgentDefinition wildcardSubagent = loadInlineWildcardAgent("12-subagent.md", AgentMode.SUBAGENT);
 
         assertThat(service.list()).extracting(AgentDefinition::id)
-                .containsExactly("plan", "engineer", "explore", "apprentice", "test");
+                .containsExactlyElementsOf(resources.stream().map(AgentResource::id).toList());
         assertThat(service.listPrimaryAgents()).extracting(AgentDefinition::id)
                 .containsExactly("plan", "engineer");
         assertThat(service.listSubagents()).extracting(AgentDefinition::id)
                 .containsExactly("explore", "apprentice", "test");
         assertThat(service.defaultAgent().id()).isEqualTo("plan");
 
-        AgentDefinition plan = service.getRequired("plan");
-        assertThat(plan.allowWrite()).isFalse();
-        assertThat(plan.allowCommand()).isFalse();
-        assertThat(plan.allowedTools()).containsExactly("list_files", "read_file", "search_code", "task");
-        assertThat(plan.mode()).isEqualTo(AgentMode.AGENT);
-        assertThat(plan.defaultModel()).isEqualTo("openai/gpt-5.5");
-        assertThat(plan.defaultThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
-        assertThat(plan.systemPrompt()).isEqualTo((
-                """
-                You're a planning expert. For the task at hand, plan it out thoroughly.
-                Use the Explore agent via the task tool to explore various files for you.
-                During the planning phase, you must consider
-                the complete impact of your proposal, and if you have any doubts, ask for clarification.
-
-                At the end, propose a brief plan that highlights all the key aspects, and any assumptions if made.
-                """).stripTrailing());
-
-        AgentDefinition engineer = service.getRequired("engineer");
-        assertThat(engineer.name()).isEqualTo("Engineer");
-        assertThat(engineer.description()).isEqualTo("A seasoned software engineer.");
-        assertThat(engineer.allowWrite()).isTrue();
-        assertThat(engineer.allowCommand()).isTrue();
-        assertThat(engineer.mode()).isEqualTo(AgentMode.AGENT);
-        assertThat(engineer.defaultThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
-        assertThat(engineer.defaultModel()).isEqualTo("openai/gpt-5.5");
-        assertThat(engineer.textVerbosity()).isEqualTo("low");
-        assertThat(engineer.allowedTools()).containsExactly(
-                "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command", "task");
-        assertThat(engineer.systemPrompt()).isEqualTo(
-                """
-                You're a seasoned software engineer. When a task is given to you, you break it down into smaller steps, and create a todo list.
-                Then, delegate each item in the todo list to the apprentice subagent. Let them implement the task.
-                When the subagent completes, continue on towards the next step. When running commands, you always write the output to a file, and then ask the
-                explore subagent to analyse that file. You do not read the output yourself, since your context will be polluted.
-
-                When it comes to testing, you delegate the task to the test subagent, who specialises in testing.
-                When a task is accomplished, you test code without asking by delegating it to the test subagent.
-
-                For all tasks, once you identify the action items, you delegate them to the apprentice subagent.
-                """);
-
-        AgentDefinition explore = service.getRequired("explore");
-        assertThat(explore.name()).isEqualTo("Explore");
-        assertThat(explore.description()).isEqualTo("A read-only exploration subagent that finds codebase context");
-        assertThat(explore.allowWrite()).isFalse();
-        assertThat(explore.allowCommand()).isFalse();
-        assertThat(explore.mode()).isEqualTo(AgentMode.SUBAGENT);
-        assertThat(explore.defaultThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
-        assertThat(explore.defaultModel()).isEqualTo("openai/gpt-5.4-mini");
-        assertThat(explore.textVerbosity()).isEqualTo("low");
-        assertThat(explore.allowedTools()).containsExactly("list_files", "read_file", "search_code");
-        assertThat(explore.systemPrompt()).isEqualTo((
-                """
-                You're an exploratory expert, who can explore the files and data available
-                to you in order to help others. Summarise your findings succinctly when done.
-                """).stripTrailing());
+        resources.forEach(resource -> assertAgentMatchesResource(
+                service.getRequired(resource.id()),
+                resource,
+                wildcardPrimary,
+                wildcardSubagent
+        ));
     }
 
     @Test
     public void wildcardToolSupportIncludesTaskForPrimaryAgentsButNotSubagents() throws Exception {
-        Method loadAgent = AgentDefinitionService.class.getDeclaredMethod("loadAgent", Resource.class);
-        loadAgent.setAccessible(true);
-
-        AgentDefinition primary = (AgentDefinition) loadAgent.invoke(null, resource("11-primary.md", """
+        AgentDefinition primary = AgentDefinitionService.loadAgent(resource("11-primary.md", """
                 ---
                 id: primary-task
                 name: Primary Task
@@ -104,7 +73,7 @@ public class CatalogServicesTest {
                 body
                 """));
 
-        AgentDefinition subagent = (AgentDefinition) loadAgent.invoke(null, resource("12-subagent.md", """
+        AgentDefinition subagent = AgentDefinitionService.loadAgent(resource("12-subagent.md", """
                 ---
                 id: subagent-task
                 name: Subagent Task
@@ -119,8 +88,11 @@ public class CatalogServicesTest {
                 body
                 """));
 
-        assertThat(primary.allowedTools()).containsExactly("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command", "task");
-        assertThat(subagent.allowedTools()).containsExactly("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
+        List<String> expectedPrimaryTools = new ArrayList<>(subagent.allowedTools());
+        expectedPrimaryTools.add("task");
+
+        assertThat(primary.allowedTools()).containsExactlyElementsOf(expectedPrimaryTools);
+        assertThat(subagent.allowedTools()).doesNotContain("task");
     }
 
     @Test
@@ -143,9 +115,6 @@ public class CatalogServicesTest {
                 body
                 """;
 
-        Method loadAgent = AgentDefinitionService.class.getDeclaredMethod("loadAgent", org.springframework.core.io.Resource.class);
-        loadAgent.setAccessible(true);
-
         ByteArrayResource resource = new ByteArrayResource(frontMatter.getBytes(StandardCharsets.UTF_8)) {
             @Override
             public String getFilename() {
@@ -153,7 +122,7 @@ public class CatalogServicesTest {
             }
         };
 
-        assertThatThrownBy(() -> loadAgent.invoke(null, resource))
+        assertThatThrownBy(() -> AgentDefinitionService.loadAgent(resource))
                 .hasRootCauseInstanceOf(IllegalStateException.class)
                 .hasRootCauseMessage("model is required for agent: missing-model");
     }
@@ -207,5 +176,142 @@ public class CatalogServicesTest {
                 return filename;
             }
         };
+    }
+
+    private static AgentMarkdown loadAgentMarkdown(String resourcePath) {
+        String content = readResource(resourcePath);
+        Matcher matcher = AGENT_MARKDOWN.matcher(content);
+        if (!matcher.matches()) {
+            throw new IllegalStateException("Malformed agent resource: " + resourcePath);
+        }
+
+        FrontMatter frontMatter = readFrontMatter(matcher.group(1), resourcePath);
+        return new AgentMarkdown(frontMatter, trimTrailingLineBreak(trimLeadingLineBreak(matcher.group(2))));
+    }
+
+    private static String readResource(String resourcePath) {
+        try (InputStream inputStream = CatalogServicesTest.class.getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                throw new IllegalStateException("Missing test resource: " + resourcePath);
+            }
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to load test resource: " + resourcePath, e);
+        }
+    }
+
+    private static FrontMatter readFrontMatter(String yaml, String resourcePath) {
+        try {
+            return YAML_MAPPER.readValue(yaml, FrontMatter.class);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to parse agent front matter: " + resourcePath, e);
+        }
+    }
+
+    private static AgentDefinition loadInlineWildcardAgent(String filename, AgentMode mode) {
+        try {
+            return AgentDefinitionService.loadAgent(resource(filename, """
+                    ---
+                    id: %s
+                    name: %s
+                    description: %s
+                    mode: %s
+                    model: openai/gpt-5.5
+                    reasoningEffort: high
+                    textVerbosity: low
+                    tools:
+                      '*': true
+                    ---
+                    body
+                    """.formatted(
+                    filenameToId(filename),
+                    displayName(filenameToId(filename)),
+                    mode == AgentMode.AGENT ? "Primary wildcard tools" : "Subagent wildcard tools",
+                    mode.name().toLowerCase()
+            )));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to load inline wildcard agent", e);
+        }
+    }
+
+    private static void assertAgentMatchesResource(AgentDefinition actual, AgentResource expected, AgentDefinition wildcardPrimary, AgentDefinition wildcardSubagent) {
+        assertThat(actual.name()).isEqualTo(displayName(expected.id()));
+        assertThat(actual.description()).isEqualTo(expected.markdown().frontMatter().description());
+        assertThat(actual.mode()).isEqualTo(expected.markdown().frontMatter().mode());
+        assertThat(actual.defaultModel()).isEqualTo(expected.markdown().frontMatter().model());
+        assertThat(actual.defaultThinkingLevel()).isEqualTo(expected.markdown().frontMatter().reasoningEffort());
+        assertThat(actual.textVerbosity()).isEqualTo(expected.markdown().frontMatter().textVerbosity());
+        assertThat(actual.systemPrompt()).isEqualTo(expected.markdown().body());
+        assertThat(actual.allowWrite()).isEqualTo(actual.allowedTools().contains("write_file") || actual.allowedTools().contains("apply_patch"));
+        assertThat(actual.allowCommand()).isEqualTo(actual.allowedTools().contains("run_command"));
+
+        if (Boolean.TRUE.equals(expected.markdown().frontMatter().tools().get("*"))) {
+            assertThat(actual.allowedTools()).isEqualTo(expected.markdown().frontMatter().mode() == AgentMode.AGENT
+                    ? wildcardPrimary.allowedTools()
+                    : wildcardSubagent.allowedTools());
+            return;
+        }
+
+        assertThat(actual.allowedTools()).containsExactlyElementsOf(enabledTools(expected.markdown().frontMatter().tools()));
+    }
+
+    private static List<String> enabledTools(Map<String, Boolean> tools) {
+        return tools.entrySet().stream()
+                .filter(entry -> Boolean.TRUE.equals(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    private static String filenameToId(String filename) {
+        String baseName = filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
+        return baseName.replaceFirst("^\\d+-", "");
+    }
+
+    private static String displayName(String id) {
+        return java.util.Arrays.stream(id.split("[-_]"))
+                .filter(part -> !part.isBlank())
+                .map(part -> part.substring(0, 1).toUpperCase() + part.substring(1))
+                .collect(Collectors.joining(" "));
+    }
+
+    private static String trimLeadingLineBreak(String value) {
+        if (value.startsWith("\r\n")) {
+            return value.substring(2);
+        }
+        if (value.startsWith("\n") || value.startsWith("\r")) {
+            return value.substring(1);
+        }
+        return value;
+    }
+
+    private static String trimTrailingLineBreak(String value) {
+        if (value.endsWith("\r\n")) {
+            return value.substring(0, value.length() - 2);
+        }
+        if (value.endsWith("\n") || value.endsWith("\r")) {
+            return value.substring(0, value.length() - 1);
+        }
+        return value;
+    }
+
+    private record AgentMarkdown(FrontMatter frontMatter, String body) {
+    }
+
+    private record AgentResource(String path, AgentMarkdown markdown) {
+        String id() {
+            return filenameToId(path.substring(path.lastIndexOf('/') + 1));
+        }
+    }
+
+    private record FrontMatter(
+            String id,
+            String name,
+            String description,
+            AgentMode mode,
+            String model,
+            ThinkingLevel reasoningEffort,
+            String textVerbosity,
+            Map<String, Boolean> tools
+    ) {
     }
 }

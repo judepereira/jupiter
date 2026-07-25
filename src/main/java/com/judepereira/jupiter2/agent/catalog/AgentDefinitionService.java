@@ -1,6 +1,5 @@
 package com.judepereira.jupiter2.agent.catalog;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import org.springframework.core.io.Resource;
@@ -16,7 +15,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -93,7 +91,7 @@ public class AgentDefinitionService {
         }
     }
 
-    private static AgentDefinition loadAgent(Resource resource) {
+    static AgentDefinition loadAgent(Resource resource) {
         try (InputStream inputStream = resource.getInputStream()) {
             var content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
             var frontMatter = parseFrontMatter(resource, content);
