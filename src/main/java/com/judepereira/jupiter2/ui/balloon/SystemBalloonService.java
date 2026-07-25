@@ -7,6 +7,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Instant;
@@ -111,7 +112,9 @@ public class SystemBalloonService {
             try {
                 emitter.send(SseEmitter.event().name("balloon").data(payload));
             } catch (Exception e) {
-                log.error("Failed to send system balloon to SSE client", e);
+                if (!(e instanceof AsyncRequestNotUsableException)) {
+                    log.error("Failed to send system balloon to SSE client", e);
+                }
                 disconnect(emitter);
                 try {
                     emitter.completeWithError(e);

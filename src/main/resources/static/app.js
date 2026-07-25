@@ -890,33 +890,118 @@
             }
         }
 
+        const EXPLORATORY_TOOL_CALLS = new Set(['list_files', 'read_file', 'search_code']);
+
+        function normalizeToolCallName(name) {
+            return String(name == null ? '' : name).trim() || 'tool';
+        }
+
+        function toolCallGroupKind(toolName) {
+            if (toolName === 'task') return 'task';
+            if (EXPLORATORY_TOOL_CALLS.has(toolName)) return 'exploratory';
+            return 'other';
+        }
+
+        function parseToolCallList(value) {
+            if (!value) return [];
+            try {
+                const parsed = JSON.parse(value);
+                if (!Array.isArray(parsed)) return [];
+                return parsed.map(item => String(item).trim()).filter(Boolean);
+            } catch (_) {
+                return [String(value).trim()].filter(Boolean);
+            }
+        }
+
+        function readToolCallValues(entry, datasetKey, legacyKey) {
+            const values = parseToolCallList(entry && entry.dataset ? entry.dataset[datasetKey] : '');
+            const legacyValue = entry && entry.dataset ? String(entry.dataset[legacyKey] || '').trim() : '';
+            if (legacyValue && !values.includes(legacyValue)) values.push(legacyValue);
+            return values;
+        }
+
+        function writeToolCallValues(entry, datasetKey, values) {
+            entry.dataset[datasetKey] = JSON.stringify(Array.from(new Set(values.filter(Boolean))));
+        }
+
+        function toolCallSummaryText(items) {
+            return items.map(item => item.count > 1 ? item.name + ' (' + item.count + ')' : item.name).join(', ');
+        }
+
+        function readToolCallSummaryItems(details) {
+            try {
+                const raw = details && details.dataset ? details.dataset.toolCallSummaryItems : '';
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed)) return [];
+                return parsed.map(item => {
+                    const name = normalizeToolCallName(item && item.name);
+                    const count = Number(item && item.count);
+                    return {name, count: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1};
+                }).filter(item => item.name);
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function appendToolCallSummaryItem(details, toolName, isNewCall) {
+            const items = readToolCallSummaryItems(details);
+            if (!isNewCall) return items;
+            const last = items[items.length - 1];
+
+            if (last && last.name === toolName) {
+                items[items.length - 1] = {...last, count: last.count + 1};
+            } else {
+                items.push({name: toolName, count: 1});
+            }
+
+            details.dataset.toolCallSummaryItems = JSON.stringify(items);
+            return items;
+        }
+
+        function canAppendToolCallEntry(entry, payload) {
+            const existingName = normalizeToolCallName(entry && entry.dataset ? entry.dataset.toolCallToolName : '');
+            const nextName = normalizeToolCallName(payload && payload.toolName);
+            if (!existingName || !nextName) return false;
+
+            const existingKind = entry && entry.dataset && entry.dataset.toolCallGroupKind ? entry.dataset.toolCallGroupKind : toolCallGroupKind(existingName);
+            const nextKind = toolCallGroupKind(nextName);
+
+            if (existingKind === 'task' || nextKind === 'task') return existingName === nextName && nextKind === 'task';
+            if (existingKind === 'exploratory' && nextKind === 'exploratory') return true;
+            return existingName === nextName;
+        }
+
+        function entryHasToolCallId(entry, toolCallId) {
+            if (!entry || !toolCallId) return false;
+            return readToolCallValues(entry, 'toolCallIds', 'toolCallId').includes(toolCallId);
+        }
+
+        function entryHasToolCallKey(entry, key) {
+            if (!entry || !key) return false;
+            return readToolCallValues(entry, 'toolCallKeys', 'toolCallKey').includes(key);
+        }
+
         function findToolCallEntry(container, payload) {
             try {
                 if (!container) return null;
 
                 const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
                 const key = toolCallKey(payload);
-                const toolName = payload && payload.toolName != null ? String(payload.toolName).trim() : '';
 
                 const entries = Array.from(container.children || []).filter(entry => entry && entry.classList && entry.classList.contains('tool-call'));
                 if (toolCallId) {
-                    const byId = entries.find(entry => entry.dataset.toolCallId === toolCallId);
+                    const byId = entries.find(entry => entryHasToolCallId(entry, toolCallId));
                     if (byId) return byId;
                 }
 
                 if (key) {
-                    const byKey = entries.find(entry => entry.dataset.toolCallKey === key);
+                    const byKey = entries.find(entry => entryHasToolCallKey(entry, key));
                     if (byKey) return byKey;
                 }
 
-                if (toolName) {
-                    const running = entries.find(entry => entry.dataset.toolCallToolName === toolName && entry.dataset.toolCallState === 'running');
-                    if (running) return running;
-                    const byName = entries.find(entry => entry.dataset.toolCallToolName === toolName);
-                    if (byName) return byName;
-                }
-
-                return entries[0] || null;
+                const last = entries[entries.length - 1] || null;
+                return last && canAppendToolCallEntry(last, payload) ? last : null;
             } catch (_) {
                 return null;
             }
@@ -935,11 +1020,23 @@
                 }
 
                 const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
-                const toolName = payload && payload.toolName != null ? String(payload.toolName).trim() : 'tool';
+                const toolName = normalizeToolCallName(payload && payload.toolName);
                 const key = toolCallKey(payload);
+                const existingIds = readToolCallValues(details, 'toolCallIds', 'toolCallId');
+                const existingKeys = readToolCallValues(details, 'toolCallKeys', 'toolCallKey');
+                const isNewCall = !(toolCallId ? existingIds.includes(toolCallId) : (key ? existingKeys.includes(key) : false));
 
-                if (toolCallId) details.dataset.toolCallId = toolCallId;
-                if (key) details.dataset.toolCallKey = key;
+                if (toolCallId) {
+                    existingIds.push(toolCallId);
+                    writeToolCallValues(details, 'toolCallIds', existingIds);
+                    details.dataset.toolCallId = toolCallId;
+                }
+                if (key) {
+                    existingKeys.push(key);
+                    writeToolCallValues(details, 'toolCallKeys', existingKeys);
+                    details.dataset.toolCallKey = key;
+                }
+                details.dataset.toolCallGroupKind = toolCallGroupKind(toolName);
                 details.dataset.toolCallToolName = toolName;
 
                 let summary = getDirectToolCallChild(details, 'tool-call-summary');
@@ -963,6 +1060,9 @@
                     statusSpan.className = 'tool-call-status';
                     summary.appendChild(statusSpan);
                 }
+
+                const summaryItems = appendToolCallSummaryItem(details, toolName, isNewCall);
+                nameSpan.textContent = toolCallSummaryText(summaryItems);
 
                 let detail = getDirectToolCallChild(details, 'tool-call-detail');
                 if (!detail) {

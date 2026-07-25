@@ -1196,29 +1196,86 @@ public class UiController {
         }
     }
 
-    public record ToolCallGroupView(String toolName, boolean success, int count, List<ToolCallView> calls) {}
+    public record ToolCallGroupView(String toolName, String displayLabel, boolean success, int count, List<ToolCallView> calls) {}
 
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
+        private static final Set<String> EXPLORATORY_TOOL_NAMES = Set.of("list_files", "read_file", "search_code");
+
         public List<ToolCallGroupView> toolCallGroups() {
             if (toolCalls.isEmpty()) {
                 return List.of();
             }
 
             List<ToolCallGroupView> groups = new ArrayList<>();
-            ToolCallGroupView current = null;
+            List<ToolCallView> currentCalls = new ArrayList<>();
             for (ToolCallView call : toolCalls) {
-                if (current == null || !current.toolName().equals(call.toolName()) || "task".equals(call.toolName())) {
-                    current = new ToolCallGroupView(call.toolName(), call.success(), 1, List.of(call));
-                    groups.add(current);
+                if (currentCalls.isEmpty() || startsNewGroup(currentCalls.get(currentCalls.size() - 1), call)) {
+                    if (!currentCalls.isEmpty()) {
+                        groups.add(toGroup(currentCalls));
+                    }
+                    currentCalls = new ArrayList<>();
+                }
+
+                currentCalls.add(call);
+            }
+
+            if (!currentCalls.isEmpty()) {
+                groups.add(toGroup(currentCalls));
+            }
+
+            return List.copyOf(groups);
+        }
+
+        private boolean startsNewGroup(ToolCallView previous, ToolCallView current) {
+            if ("task".equals(previous.toolName()) || "task".equals(current.toolName())) {
+                return true;
+            }
+
+            if (isExploratory(previous.toolName()) && isExploratory(current.toolName())) {
+                return false;
+            }
+
+            return !previous.toolName().equals(current.toolName());
+        }
+
+        private boolean isExploratory(String toolName) {
+            return EXPLORATORY_TOOL_NAMES.contains(toolName);
+        }
+
+        private ToolCallGroupView toGroup(List<ToolCallView> calls) {
+            ToolCallView first = calls.get(0);
+            return new ToolCallGroupView(first.toolName(), displayLabel(calls), calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
+        }
+
+        private String displayLabel(List<ToolCallView> calls) {
+            StringBuilder label = new StringBuilder();
+            String currentToolName = calls.get(0).toolName();
+            int currentCount = 1;
+
+            for (int i = 1; i < calls.size(); i++) {
+                String nextToolName = calls.get(i).toolName();
+                if (currentToolName.equals(nextToolName)) {
+                    currentCount++;
                     continue;
                 }
 
-                List<ToolCallView> calls = new ArrayList<>(current.calls());
-                calls.add(call);
-                current = new ToolCallGroupView(current.toolName(), current.success() && call.success(), current.count() + 1, List.copyOf(calls));
-                groups.set(groups.size() - 1, current);
+                appendDisplaySegment(label, currentToolName, currentCount);
+                currentToolName = nextToolName;
+                currentCount = 1;
             }
-            return List.copyOf(groups);
+
+            appendDisplaySegment(label, currentToolName, currentCount);
+            return label.toString();
+        }
+
+        private void appendDisplaySegment(StringBuilder label, String toolName, int count) {
+            if (!label.isEmpty()) {
+                label.append(", ");
+            }
+            label.append(toolName);
+            if (count > 1) {
+                label.append(" (").append(count).append(")");
+            }
         }
     }
 

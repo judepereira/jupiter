@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 @Log4j2
 @ControllerAdvice(assignableTypes = UiController.class)
@@ -18,6 +19,9 @@ public class UiExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleUiException(Exception exception) {
+        if (exception instanceof AsyncRequestNotUsableException) {
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).body("");
+        }
         log.error("Unhandled exception servicing UI request", exception);
 
         String exceptionDetail = exception.getMessage();

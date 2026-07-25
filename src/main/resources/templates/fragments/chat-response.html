@@ -29,8 +29,7 @@
             <div th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls">
                 <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-id=${m.pending} ? ${group.calls[0].toolCallId} : null">
                     <summary class="tool-call-summary">
-                        <span class="tool-call-name"
-                              th:text="${group.count > 1 ? group.toolName + ' (' + group.count + ')' : group.toolName}"></span>
+                        <span class="tool-call-name" th:text="${group.displayLabel}"></span>
                         <span class="tool-call-status" th:classappend="${group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
                               th:text="${group.success} ? 'success' : 'failure'"></span>
                     </summary>
