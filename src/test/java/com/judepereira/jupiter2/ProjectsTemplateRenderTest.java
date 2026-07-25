@@ -221,8 +221,8 @@ public class ProjectsTemplateRenderTest {
 
         String html = engine.process("fragments/projects", context);
 
-        assertThat(html).contains("id=\"workspace-modal\"", "hx-post=\"/ui/workspaces/add\"", "name=\"branchName\"");
-        assertThat(html).contains("name=\"branchMode\" value=\"create\"", "name=\"branchMode\" value=\"checkout\"");
+        assertThat(html).contains("id=\"workspace-modal\"", "hx-post=\"/ui/workspaces/add\"", "name=\"branchName\"", "data-workspace-branch-name");
+        assertThat(html).contains("name=\"branchMode\" value=\"create\"", "name=\"branchMode\" value=\"checkout\"", "data-workspace-branch-mode");
         assertThat(html).contains("Create a new branch", "Checkout an existing branch");
     }
 
