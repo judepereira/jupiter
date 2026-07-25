@@ -36,9 +36,11 @@ public class CatalogServicesTest {
         assertThat(plan.systemPrompt()).isEqualTo((
                 """
                 You're a planning expert. For the task at hand, plan it out thoroughly.
-                Use the Explore agent via the task tool to explore various files for you,
-                and summarise their findings. During the planning phase, you must consider
+                Use the Explore agent via the task tool to explore various files for you.
+                During the planning phase, you must consider
                 the complete impact of your proposal, and if you have any doubts, ask for clarification.
+
+                At the end, propose a brief plan that highlights all the key aspects, and any assumptions if made.
                 """).stripTrailing());
 
         AgentDefinition engineer = service.getRequired("engineer");
