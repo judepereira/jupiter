@@ -971,7 +971,7 @@
                     details.appendChild(detail);
                 }
 
-                let subagent = getDirectToolCallChild(detail, 'tool-call-subagent');
+                let subagent = getDirectToolCallChild(detail, 'tool-call-subagent') || detail.querySelector('.tool-call-subagent');
                 let button = subagent ? subagent.querySelector('.tool-call-subagent-button') : null;
 
                 let inputSection = detail.querySelector('.tool-call-section[data-tool-call-field="input"]');

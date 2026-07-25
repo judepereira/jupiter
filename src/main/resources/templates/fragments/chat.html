@@ -24,7 +24,7 @@
                     </div>
 
                     <div th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls">
-                        <details th:each="group : ${m.toolCallGroups}" class="tool-call">
+                        <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-id=${m.pending} ? ${group.calls[0].toolCallId} : null">
                             <summary class="tool-call-summary">
                                 <span class="tool-call-name"
                                       th:text="${group.count > 1 ? group.toolName + ' (' + group.count + ')' : group.toolName}"></span>
@@ -33,7 +33,7 @@
                             </summary>
 
                             <div class="tool-call-detail">
-                                <div th:each="call : ${group.calls}" class="tool-call-call" th:attr="data-tool-call-id=${call.toolCallId}">
+                                <div th:each="call : ${group.calls}" class="tool-call-call">
                                     <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
                                         <button type="button"
                                                 class="tool-call-subagent-button"

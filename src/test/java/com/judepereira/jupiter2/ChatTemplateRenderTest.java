@@ -95,7 +95,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("data-tool-call-id=\"tool-call-1\"", "Open subagent:", "Engineer", "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).contains("Open subagent:", "Engineer", "hx-get=\"/ui/chat/subagent/42\"");
     }
 
     @Test
@@ -118,10 +118,10 @@ public class ChatTemplateRenderTest {
         context.setVariable("selectedFile", null);
         context.setVariable("newChatMessages", List.of(
                 new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", List.of(
-                        new UiController.ToolCallView("read", true, "read-1 input", "read-1 output", false, false, null, null, null),
-                        new UiController.ToolCallView("read", true, "read-2 input", "read-2 output", false, false, null, null, null),
-                        new UiController.ToolCallView("task", true, "task input", "task output", false, false, null, null, null),
-                        new UiController.ToolCallView("read", true, "read-3 input", "read-3 output", false, false, null, null, null)
+                        new UiController.ToolCallView("read-1", "read", true, "read-1 input", "read-1 output", false, false, null, null, null),
+                        new UiController.ToolCallView("read-2", "read", true, "read-2 input", "read-2 output", false, false, null, null, null),
+                        new UiController.ToolCallView("task-1", "task", true, "task input", "task output", false, false, null, null, null),
+                        new UiController.ToolCallView("read-3", "read", true, "read-3 input", "read-3 output", false, false, null, null, null)
                 ), null)
         ));
 
@@ -154,11 +154,11 @@ public class ChatTemplateRenderTest {
         context.setVariable("selectedFile", null);
         context.setVariable("newChatMessages", List.of(
                 new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", List.of(
-                        new UiController.ToolCallView("read", true, "read-1 input", "read-1 output", false, false, null, null, null),
-                        new UiController.ToolCallView("read", true, "read-2 input", "read-2 output", false, false, null, null, null),
-                        new UiController.ToolCallView("task", true, "task-1 input", "task-1 output", false, false, 41L, "engineer-1", "Engineer 1"),
-                        new UiController.ToolCallView("task", true, "task-2 input", "task-2 output", false, false, 42L, "engineer-2", "Engineer 2"),
-                        new UiController.ToolCallView("read", true, "read-3 input", "read-3 output", false, false, null, null, null)
+                        new UiController.ToolCallView("read-1", "read", true, "read-1 input", "read-1 output", false, false, null, null, null),
+                        new UiController.ToolCallView("read-2", "read", true, "read-2 input", "read-2 output", false, false, null, null, null),
+                        new UiController.ToolCallView("task-1", "task", true, "task-1 input", "task-1 output", false, false, 41L, "engineer-1", "Engineer 1"),
+                        new UiController.ToolCallView("task-2", "task", true, "task-2 input", "task-2 output", false, false, 42L, "engineer-2", "Engineer 2"),
+                        new UiController.ToolCallView("read-3", "read", true, "read-3 input", "read-3 output", false, false, null, null, null)
                 ), null)
         ));
 
@@ -253,7 +253,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat", context);
 
-        assertThat(html).contains("class=\"tool-call\"", "data-tool-call-id=\"tool-call-1\"", "Open subagent:", "Engineer",
+        assertThat(html).contains("class=\"tool-call\"", "Open subagent:", "Engineer",
                 "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("subagent-activities");
     }
