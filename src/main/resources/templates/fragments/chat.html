@@ -24,7 +24,7 @@
                     </div>
 
                     <div th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls">
-                        <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-id=${m.pending} ? ${group.calls[0].toolCallId} : null">
+                        <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}">
                             <summary class="tool-call-summary">
                                 <span class="tool-call-name"
                                       th:text="${group.count > 1 ? group.toolName + ' (' + group.count + ')' : group.toolName}"></span>
@@ -33,28 +33,32 @@
                             </summary>
 
                             <div class="tool-call-detail">
-                                <div th:each="call : ${group.calls}" class="tool-call-call">
-                                    <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
-                                        <button type="button"
-                                                class="tool-call-subagent-button"
-                                                th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                            Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
-                                        </button>
+                                <div class="tool-call-calls">
+                                    <div th:each="call : ${group.calls}"
+                                         class="tool-call-call"
+                                         th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
+                                        <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
+                                            <button type="button"
+                                                    class="tool-call-subagent-button"
+                                                    th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                                Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                                            </button>
+                                        </div>
+
+                                        <section class="tool-call-section" data-tool-call-field="input">
+                                            <div class="tool-call-label">Input
+                                                <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
+                                            </div>
+                                            <pre class="tool-call-pre" th:text="${call.inputPreview}"></pre>
+                                        </section>
+
+                                        <section class="tool-call-section" data-tool-call-field="output">
+                                            <div class="tool-call-label">Output
+                                                <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
+                                            </div>
+                                            <pre class="tool-call-pre" th:text="${call.outputPreview}"></pre>
+                                        </section>
                                     </div>
-
-                                    <section class="tool-call-section">
-                                        <div class="tool-call-label">Input
-                                            <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
-                                        </div>
-                                        <pre class="tool-call-pre" th:text="${call.inputPreview}"></pre>
-                                    </section>
-
-                                    <section class="tool-call-section">
-                                        <div class="tool-call-label">Output
-                                            <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
-                                        </div>
-                                        <pre class="tool-call-pre" th:text="${call.outputPreview}"></pre>
-                                    </section>
                                 </div>
                             </div>
                         </details>
