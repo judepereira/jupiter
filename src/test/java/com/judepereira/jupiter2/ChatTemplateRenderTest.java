@@ -17,6 +17,7 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
 import java.util.Locale;
 import java.util.List;
 
@@ -95,6 +96,80 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat-response", context);
 
         assertThat(html).contains("data-tool-call-id=\"tool-call-1\"", "Open subagent:", "Engineer", "hx-get=\"/ui/chat/subagent/42\"");
+    }
+
+    @Test
+    public void chatResponseFragmentGroupsOnlyContiguousToolCalls() {
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("reviewSource", null);
+        context.setVariable("selectedFile", null);
+        context.setVariable("newChatMessages", List.of(
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", List.of(
+                        new UiController.ToolCallView("read", true, "read-1 input", "read-1 output", false, false, null, null, null),
+                        new UiController.ToolCallView("read", true, "read-2 input", "read-2 output", false, false, null, null, null),
+                        new UiController.ToolCallView("task", true, "task input", "task output", false, false, null, null, null),
+                        new UiController.ToolCallView("read", true, "read-3 input", "read-3 output", false, false, null, null, null)
+                ), null)
+        ));
+
+        String html = engine.process("fragments/chat-response", context);
+
+        assertThat(html.split("class=\"tool-call\"", -1)).hasSize(4);
+        assertThat(html).contains("read (2)", "<span class=\"tool-call-name\">task</span>");
+        assertThat(html.split(Pattern.quote("read (2)"), -1)).hasSize(2);
+        assertThat(html.split(Pattern.quote("<span class=\"tool-call-name\">read</span>"), -1)).hasSize(2);
+        assertThat(html).contains("read-1 input", "read-1 output", "read-2 input", "read-2 output", "task input", "task output", "read-3 input", "read-3 output");
+    }
+
+    @Test
+    public void chatResponseFragmentDoesNotCollapseConsecutiveTaskToolCalls() {
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("reviewSource", null);
+        context.setVariable("selectedFile", null);
+        context.setVariable("newChatMessages", List.of(
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", List.of(
+                        new UiController.ToolCallView("read", true, "read-1 input", "read-1 output", false, false, null, null, null),
+                        new UiController.ToolCallView("read", true, "read-2 input", "read-2 output", false, false, null, null, null),
+                        new UiController.ToolCallView("task", true, "task-1 input", "task-1 output", false, false, 41L, "engineer-1", "Engineer 1"),
+                        new UiController.ToolCallView("task", true, "task-2 input", "task-2 output", false, false, 42L, "engineer-2", "Engineer 2"),
+                        new UiController.ToolCallView("read", true, "read-3 input", "read-3 output", false, false, null, null, null)
+                ), null)
+        ));
+
+        String html = engine.process("fragments/chat-response", context);
+
+        long toolCallCount = html.split("class=\"tool-call\"", -1).length - 1;
+        assertThat(toolCallCount).isEqualTo(4);
+        assertThat(html.split(Pattern.quote("read (2)"), -1)).hasSize(2);
+        assertThat(html).doesNotContain("task (2)");
+        assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");
+        assertThat(html).contains("Open subagent: <strong>Engineer 1</strong>", "Open subagent: <strong>Engineer 2</strong>");
     }
 
     @Test

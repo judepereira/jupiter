@@ -818,7 +818,6 @@
             const toolName = payload && payload.toolName != null ? String(payload.toolName) : '';
             return [toolName, toolCallInputText(payload)].join('\u001f');
         }
-
         function toolCallInputText(payload) {
             try {
                 if (!payload) return '';
