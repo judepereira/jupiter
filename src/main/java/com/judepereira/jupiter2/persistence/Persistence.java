@@ -35,6 +35,10 @@ public final class Persistence {
     public record ChangedFileView(String key, ReviewSource source, Integer id, String path, String diff) {
     }
 
+    public record SubagentActivityView(long childSessionId, String parentToolCallId, String subagentAgentName,
+                                       String status, String previewText) {
+    }
+
     public record SessionDetailView(List<ChatMessageView> chatMessages, List<ChangedFileView> changedFiles, boolean reviewPanelOpen,
                                     ReviewSource reviewSource, ChangedFileView selectedFile, String workspaceRoot) {
     }

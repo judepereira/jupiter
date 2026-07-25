@@ -16,6 +16,7 @@ import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
+import com.judepereira.jupiter2.persistence.Persistence.SubagentActivityView;
 import com.judepereira.jupiter2.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallView;
@@ -729,11 +730,36 @@ public class AppStateService {
                 session.subagentAgentId(), session.subagentAgentName());
     }
 
+    public List<SubagentActivityView> listSubagentActivities(long parentSessionId) {
+        return repository.listChildSessionsByParentSession(parentSessionId).stream()
+                .map(child -> toSubagentActivityView(child, loadSessionDetail(child.id())))
+                .toList();
+    }
+
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId) {
         List<ToolCallView> toolCalls = repository.listToolCallTracesByAssistantMessage(message.id()).stream().map(this::toToolCallView).toList();
         return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(), toolCalls,
                 message.agentId() == null && message.agentName() == null && message.modelId() == null && message.thinkingLevel() == null ? null :
                         new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel()));
+    }
+
+    private SubagentActivityView toSubagentActivityView(AppStateRepository.SessionRow session, SessionDetailView detail) {
+        List<ChatMessageView> messages = detail.chatMessages();
+        boolean running = messages.stream().anyMatch(ChatMessageView::pending);
+        String status;
+        if (running) {
+            status = "running";
+        } else if (messages.stream().anyMatch(message -> "assistant".equals(message.role()) && message.text() != null && message.text().startsWith("Agent execution failed:"))) {
+            status = "error";
+        } else {
+            status = "done";
+        }
+        String previewText = messages.stream()
+                .filter(message -> "assistant".equals(message.role()) || "user".equals(message.role()))
+                .reduce((first, second) -> second)
+                .map(message -> message.text() == null ? "" : message.text())
+                .orElse("");
+        return new SubagentActivityView(session.id(), session.parentToolCallId(), session.subagentAgentName(), status, previewText);
     }
 
     private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace) {

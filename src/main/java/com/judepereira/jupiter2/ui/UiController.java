@@ -29,6 +29,7 @@ import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
+import com.judepereira.jupiter2.persistence.Persistence.SubagentActivityView;
 import com.judepereira.jupiter2.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
@@ -62,6 +63,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -368,9 +370,9 @@ public class UiController {
                     try {
                         String finalText = result.getFinalText() == null ? "" : result.getFinalText();
                         List<ToolCallTraceInput> traces = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
-                        appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
+                        ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
                         processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
-                        finalizeStreamSuccess(active, assistantId, finalText, completed);
+                        finalizeStreamSuccess(active, assistantId, completedMessage, completed);
                     } catch (Exception e) {
                         onError(e);
                     }
@@ -437,21 +439,17 @@ public class UiController {
         } catch (Exception e) {
             log.debug("Dropping disconnected SSE subscriber for assistant {}", assistantId, e);
             detachEmitter(active, emitter);
-            try {
-                emitter.complete();
-            } catch (Exception ignored) {
-            }
         }
     }
 
-    private void finalizeStreamSuccess(ActiveStream active, String assistantId, String finalText, AtomicBoolean completed) {
+    private void finalizeStreamSuccess(ActiveStream active, String assistantId, ChatMessageView completedMessage, AtomicBoolean completed) {
         if (!completed.compareAndSet(false, true)) {
             return;
         }
 
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
-        broadcastEvent(active, assistantId, "done", Map.of("text", finalText));
+        broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls()));
         completeEmitters(active);
     }
 
@@ -473,6 +471,7 @@ public class UiController {
             } catch (Exception ignored) {
             }
         }
+        active.emitters().clear();
     }
 
     @GetMapping("/ui/chat/primary")
@@ -483,7 +482,7 @@ public class UiController {
         }
 
         populateChatControlsModel(model, defaultChatSelection());
-        populateChatModel(model, view.activeSessionDetail().chatMessages(), false, null, null, null);
+        populateChatModel(model, view.activeSessionDetail().chatMessages(), appStateService.listSubagentActivities(view.activeSession().id()), false, null, null, null);
         return "fragments/chat :: chat";
     }
 
@@ -500,7 +499,7 @@ public class UiController {
         }
 
         populateChatControlsModel(model, defaultChatSelection());
-        populateChatModel(model, subagent.sessionDetail().chatMessages(), true, subagent.subagentAgentName(), subagent.subagentAgentId(), sessionId);
+        populateChatModel(model, subagent.sessionDetail().chatMessages(), List.of(), true, subagent.subagentAgentName(), subagent.subagentAgentId(), sessionId);
         return "fragments/chat :: chat";
     }
 
@@ -878,6 +877,11 @@ public class UiController {
         TerminalPanelState terminalState = view.activeWorkspace() == null ? new TerminalPanelState("none", List.of(), null, false) : terminalStateService.snapshot(view.activeWorkspace().id());
         if (session == null) {
             model.addAttribute("chatMessages", List.of());
+            model.addAttribute("subagentActivities", List.of());
+            model.addAttribute("unmatchedSubagentActivities", List.of());
+            model.addAttribute("hasUnmatchedSubagentActivities", false);
+            model.addAttribute("messageSubagentActivitySessionIds", Map.of());
+            model.addAttribute("subagentView", false);
             model.addAttribute("changedFiles", List.of());
             model.addAttribute("reviewPanelOpen", false);
             model.addAttribute("reviewSource", null);
@@ -896,6 +900,8 @@ public class UiController {
 
         boolean hasPending = detail.chatMessages().stream().anyMatch(ChatMessageView::pending);
         model.addAttribute("chatMessages", detail.chatMessages().stream().map(this::toChatMessage).toList());
+        populateSubagentActivityModel(model, detail.chatMessages(), appStateService.listSubagentActivities(session.id()), false);
+        model.addAttribute("subagentView", false);
         model.addAttribute("changedFiles", detail.changedFiles().stream().map(this::toChangedFile).toList());
         model.addAttribute("reviewPanelOpen", detail.reviewPanelOpen());
         model.addAttribute("reviewSource", detail.reviewSource());
@@ -911,16 +917,64 @@ public class UiController {
         model.addAttribute("panelMode", terminalState.bottomPanelMode());
     }
 
-    private void populateChatModel(Model model, List<ChatMessageView> chatMessages, boolean subagentView, String subagentAgentName, String subagentAgentId,
-                                   Long subagentSessionId) {
+    private void populateChatModel(Model model, List<ChatMessageView> chatMessages, List<SubagentActivityView> subagentActivities, boolean subagentView, String subagentAgentName, String subagentAgentId,
+                                    Long subagentSessionId) {
         model.addAttribute("chatMessages", chatMessages.stream().map(this::toChatMessage).toList());
         model.addAttribute("hasPending", chatMessages.stream().anyMatch(ChatMessageView::pending));
+        populateSubagentActivityModel(model, chatMessages, subagentActivities, subagentView);
         model.addAttribute("reviewOob", false);
         model.addAttribute("shellRefresh", false);
         model.addAttribute("subagentView", subagentView);
         model.addAttribute("subagentAgentName", subagentAgentName);
         model.addAttribute("subagentAgentId", subagentAgentId);
         model.addAttribute("subagentSessionId", subagentSessionId);
+    }
+
+    private void populateSubagentActivityModel(Model model, List<ChatMessageView> chatMessages, List<SubagentActivityView> subagentActivities, boolean subagentView) {
+        List<ChatMessageView> safeChatMessages = chatMessages == null ? List.of() : chatMessages;
+        List<SubagentActivityView> safeSubagentActivities = subagentActivities == null ? List.of() : subagentActivities;
+        List<SubagentActivityView> visibleSubagentActivities = subagentView ? List.of() : safeSubagentActivities;
+        List<SubagentActivityView> unmatched = subagentView ? List.of() : unmatchedSubagentActivities(safeChatMessages, safeSubagentActivities);
+        model.addAttribute("subagentActivities", visibleSubagentActivities);
+        model.addAttribute("unmatchedSubagentActivities", unmatched);
+        model.addAttribute("hasUnmatchedSubagentActivities", !unmatched.isEmpty());
+        model.addAttribute("messageSubagentActivitySessionIds", messageSubagentActivitySessionIds(safeChatMessages));
+    }
+
+    private Map<String, Set<Long>> messageSubagentActivitySessionIds(List<ChatMessageView> chatMessages) {
+        Map<String, Set<Long>> sessionIdsByMessageId = new HashMap<>();
+        for (ChatMessageView message : chatMessages) {
+            if (message.toolCalls() == null || message.toolCalls().isEmpty()) {
+                continue;
+            }
+
+            Set<Long> sessionIds = new HashSet<>();
+            for (com.judepereira.jupiter2.persistence.Persistence.ToolCallView toolCall : message.toolCalls()) {
+                if (toolCall != null && toolCall.subagentSessionId() != null) {
+                    sessionIds.add(toolCall.subagentSessionId());
+                }
+            }
+
+            if (!sessionIds.isEmpty()) {
+                sessionIdsByMessageId.put(message.id(), sessionIds);
+            }
+        }
+        return sessionIdsByMessageId;
+    }
+
+    private List<SubagentActivityView> unmatchedSubagentActivities(List<ChatMessageView> chatMessages, List<SubagentActivityView> subagentActivities) {
+        Set<Long> matchedSubagentSessionIds = new HashSet<>();
+        for (ChatMessageView message : chatMessages) {
+            if (message.toolCalls() == null) {
+                continue;
+            }
+            for (com.judepereira.jupiter2.persistence.Persistence.ToolCallView toolCall : message.toolCalls()) {
+                if (toolCall != null && toolCall.subagentSessionId() != null) {
+                    matchedSubagentSessionIds.add(toolCall.subagentSessionId());
+                }
+            }
+        }
+        return subagentActivities.stream().filter(activity -> !matchedSubagentSessionIds.contains(activity.childSessionId())).toList();
     }
 
     private boolean isTerminalPanelOpen(AppStateView view) {
@@ -945,6 +999,16 @@ public class UiController {
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
+        if (view.activeSession() == null || view.activeSessionDetail() == null) {
+            model.addAttribute("subagentActivities", List.of());
+            model.addAttribute("unmatchedSubagentActivities", List.of());
+            model.addAttribute("hasUnmatchedSubagentActivities", false);
+            model.addAttribute("messageSubagentActivitySessionIds", Map.of());
+        } else {
+            List<ChatMessageView> chatMessages = view.activeSessionDetail().chatMessages();
+            List<SubagentActivityView> subagentActivities = appStateService.listSubagentActivities(view.activeSession().id());
+            populateSubagentActivityModel(model, chatMessages, subagentActivities, false);
+        }
         populateChatControlsModel(model, defaultChatSelection());
     }
 
@@ -1163,14 +1227,6 @@ public class UiController {
                 broadcastEvent(active, assistantId, "subagent_error", event);
             }
         };
-    }
-
-    private void sendSseEvent(SseEmitter emitter, String name, Object payload) {
-        try {
-            emitter.send(SseEmitter.event().name(name).data(SseJson.writeValueAsString(payload)));
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to send SSE event: " + name, e);
-        }
     }
 
     private String directoryDisplayName(Path path) {

@@ -199,6 +199,77 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         }
     }
 
+    @Test
+    void backToPrimaryKeepsSubagentAffordanceAndToolButtonRemainsClickable(@TempDir Path tempDir) throws Exception {
+        TestAppConfig.reset();
+        TestAppConfig.blockSubagentTurn();
+
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        String previousHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+
+        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = browser.newContext()) {
+
+            Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+
+            openProject(page, "Alpha", projectDir);
+            page.locator("#chat-input").fill("please use a task");
+            page.locator("#chat-send-btn").click();
+
+            TestAppConfig.awaitSubagentStarted();
+            page.locator(".subagent-activity").waitFor();
+            assertThat(page.locator(".subagent-activity")).isVisible();
+            assertThat(page.locator(".subagent-activity__status")).hasText("running");
+
+            page.locator(".subagent-activity .subagent-activity__open").click();
+            page.locator(".subagent-bar").waitFor();
+            assertThat(page.locator(".subagent-bar")).isVisible();
+            assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
+            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).contains("Explore subagent");
+
+            page.locator(".subagent-back-button").click();
+            page.locator("#chat-send-form").waitFor();
+            assertThat(page.locator("#chat-send-form")).isVisible();
+            page.locator(".subagent-activity").waitFor();
+            assertThat(page.locator(".subagent-activity")).isVisible();
+            org.assertj.core.api.Assertions.assertThat((Number) page.locator(".subagent-activity .subagent-activity__open")
+                    .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
+                    .isEqualTo(1);
+            assertThat(page.locator(".subagent-activity .subagent-activity__open")).containsText("Open subagent");
+
+            TestAppConfig.releaseSubagentTurn();
+            TestAppConfig.awaitSubagentCompleted();
+
+            org.assertj.core.api.Assertions.assertThat((Number) page.locator(".subagent-activity .subagent-activity__open")
+                    .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
+                    .isEqualTo(1);
+
+            var taskToolCallSummary = page.locator("#chat-messages-list > li > .tool-calls > .tool-call > summary.tool-call-summary").first();
+            taskToolCallSummary.click();
+            var taskSubagentButton = page.locator("#chat-messages-list > li > .tool-calls > .tool-call > .tool-call-detail > .tool-call-subagent > .tool-call-subagent-button").first();
+            assertThat(taskSubagentButton).isVisible();
+            taskSubagentButton.click();
+            page.locator(".subagent-bar").waitFor();
+            assertThat(page.locator(".subagent-bar")).isVisible();
+            assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
+        } finally {
+            TestAppConfig.reset();
+            if (previousHome == null) {
+                System.clearProperty("user.home");
+            } else {
+                System.setProperty("user.home", previousHome);
+            }
+        }
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     static class TestAppConfig {
 

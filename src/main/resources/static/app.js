@@ -760,6 +760,60 @@
             }
         }
 
+        let primaryChatRefreshTimer = null;
+        const PRIMARY_CHAT_REFRESH_DELAY_MS = 850;
+
+        function getVisiblePendingChatRow() {
+            try {
+                const list = document.getElementById('chat-messages-list');
+                if (!list) return null;
+                return Array.from(list.querySelectorAll('li[data-pending="true"]')).find(row => row && row.getClientRects && row.getClientRects().length > 0) || null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function isVisibleNode(node) {
+            return Boolean(node && node.getClientRects && node.getClientRects().length > 0);
+        }
+
+        function shouldRefreshPrimaryChat() {
+            try {
+                const container = document.getElementById('chat-container');
+                if (!container) return false;
+                const sessionId = container.dataset && container.dataset.subagentSessionId != null ? String(container.dataset.subagentSessionId).trim() : '';
+                if (sessionId) return false;
+
+                const list = document.getElementById('chat-messages-list');
+                if (!list) return false;
+
+                const visibleActivity = Array.from(list.querySelectorAll('.subagent-activity')).some(isVisibleNode);
+                if (!visibleActivity) return false;
+
+                const directParentTaskToolCall = list.querySelector(
+                    ':scope > li > .tool-calls > .tool-call > summary.tool-call-summary, ' +
+                    ':scope > li > .tool-calls > .tool-call .tool-call-subagent-button'
+                );
+                if (directParentTaskToolCall) return false;
+
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+
+        function schedulePrimaryChatRefresh() {
+            if (primaryChatRefreshTimer != null) return;
+            if (!shouldRefreshPrimaryChat()) return;
+
+            primaryChatRefreshTimer = window.setTimeout(() => {
+                primaryChatRefreshTimer = null;
+                if (!shouldRefreshPrimaryChat()) return;
+                if (!window.htmx || typeof window.htmx.ajax !== 'function') return;
+                window.htmx.ajax('GET', '/ui/chat/primary', {target: '#chat-container', swap: 'outerHTML'});
+            }, PRIMARY_CHAT_REFRESH_DELAY_MS);
+        }
+
         function getCurrentOpenSubagentSessionId() {
             try {
                 const container = document.getElementById('chat-container');
@@ -782,6 +836,31 @@
             }
         }
 
+        const activePendingStreams = new Map();
+
+        function clearPendingStream(assistantId, source) {
+            if (activePendingStreams.get(assistantId) === source) {
+                activePendingStreams.delete(assistantId);
+            }
+        }
+
+        function getLiveChatRow(assistantId) {
+            try {
+                if (!assistantId) return null;
+                const list = document.getElementById('chat-messages-list');
+                if (!list) return null;
+                const candidates = Array.from(list.querySelectorAll('li[data-id="' + assistantId + '"]'));
+                const visibleCandidates = candidates.filter(row => row && row.getClientRects && row.getClientRects().length > 0);
+                const visiblePendingCandidates = visibleCandidates.filter(row => row.dataset.pending === 'true');
+                if (visiblePendingCandidates.length > 0) return visiblePendingCandidates[0];
+                if (visibleCandidates.length > 0) return visibleCandidates[0];
+                const pendingCandidates = candidates.filter(row => row.dataset.pending === 'true');
+                return pendingCandidates[0] || candidates[0] || null;
+            } catch (_) {
+                return null;
+            }
+        }
+
         function clearPendingChatRowState(row) {
             if (!row) return;
             row.classList.remove('pending');
@@ -789,9 +868,21 @@
             row.dataset.streamBound = '0';
         }
 
-        function appendToolCallToChatRow(row, payload) {
+        function toolCallKey(payload) {
+            const toolName = payload && payload.toolName != null ? String(payload.toolName) : '';
+            const inputPreview = payload && payload.inputPreview != null ? String(payload.inputPreview) : '';
+            const outputPreview = payload && payload.outputPreview != null ? String(payload.outputPreview) : '';
+            const subagentSessionId = payload && payload.subagentSessionId != null ? String(payload.subagentSessionId) : '';
+            return [toolName, inputPreview, outputPreview, subagentSessionId].join('\u001f');
+        }
+
+        function appendToolCallToChatRow(row, payload, processHtmxElementFn) {
             try {
                 if (!row) return;
+
+                const toolName = payload && payload.toolName != null ? String(payload.toolName) : '';
+                const subagentSessionId = payload && payload.subagentSessionId != null ? String(payload.subagentSessionId).trim() : '';
+                const subagentAgentName = payload && payload.subagentAgentName != null ? String(payload.subagentAgentName) : '';
 
                 let callsContainer = row.querySelector('.tool-calls');
                 if (!callsContainer) {
@@ -800,8 +891,16 @@
                     row.appendChild(callsContainer);
                 }
 
+                const key = toolCallKey(payload);
+                if (key && Array.from(callsContainer.querySelectorAll('.tool-call')).some(details => details.dataset.toolCallKey === key)) {
+                    return;
+                }
+
                 const details = document.createElement('details');
                 details.className = 'tool-call';
+                if (key) {
+                    details.dataset.toolCallKey = key;
+                }
 
                 const summary = document.createElement('summary');
                 summary.className = 'tool-call-summary';
@@ -821,6 +920,30 @@
 
                 const detail = document.createElement('div');
                 detail.className = 'tool-call-detail';
+
+                if (toolName === 'task' && subagentSessionId) {
+                    const subagent = document.createElement('div');
+                    subagent.className = 'tool-call-subagent';
+
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'tool-call-subagent-button';
+                    button.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
+                    button.setAttribute('hx-target', '#chat-container');
+                    button.setAttribute('hx-swap', 'outerHTML');
+                    button.replaceChildren(
+                        document.createTextNode('Open subagent: '),
+                        (() => {
+                            const strong = document.createElement('strong');
+                            strong.textContent = subagentAgentName || subagentSessionId;
+                            return strong;
+                        })()
+                    );
+
+                    subagent.appendChild(button);
+                    detail.appendChild(subagent);
+                    if (processHtmxElementFn) processHtmxElementFn(button);
+                }
 
                 const inputSection = document.createElement('section');
                 inputSection.className = 'tool-call-section';
@@ -902,9 +1025,18 @@
                 if (!list) return;
                 const rows = list.querySelectorAll('li[data-pending="true"]');
                 rows.forEach(row => {
+                    const assistantId = row.dataset.id != null ? String(row.dataset.id) : '';
+                    if (!assistantId) return;
                     if (row.dataset.streamBound === '1') return; // already bound
                     const url = row.dataset.streamUrl;
                     if (!url) return;
+                    const existingSource = activePendingStreams.get(assistantId);
+                    if (existingSource) {
+                        try {
+                            existingSource.close();
+                        } catch (_) {
+                        }
+                    }
                     row.dataset.streamBound = '1';
 
                     // Buffer incoming deltas and batch DOM writes
@@ -914,9 +1046,15 @@
                     let rafPending = false;
                     let flushTimer = null;
                     let lastFlushTime = 0;
-                    const textSpan = row.querySelector('.chat-message-text');
+                    const currentRow = () => getLiveChatRow(assistantId);
+
+                    function currentTextSpan() {
+                        const liveRow = currentRow();
+                        return liveRow ? liveRow.querySelector('.chat-message-text') : null;
+                    }
 
                     function flushBuffer() {
+                        const textSpan = currentTextSpan();
                         if (!textSpan) return;
                         // If nothing to flush, clear any pending timers/state and return
                         if (buffer.length === 0) {
@@ -1010,7 +1148,7 @@
                     }
 
                     const es = new EventSource(url);
-                    row._es = es;
+                    activePendingStreams.set(assistantId, es);
                     const subagentActivities = new Map();
 
                     // Helper to parse SSE payloads that may be JSON {text:...} or legacy raw strings
@@ -1027,17 +1165,37 @@
                         return {text: raw};
                     }
 
+                    function processHtmxElement(element) {
+                        if (!element || (element.dataset && element.dataset.htmxProcessed === 'true')) return;
+                        try {
+                            if (window.htmx && typeof window.htmx.process === 'function') {
+                                window.htmx.process(element);
+                            }
+                        } catch (_) {
+                        }
+                        try {
+                            element.dataset.htmxProcessed = 'true';
+                        } catch (_) {
+                        }
+                    }
+
+                    function renderToolCallToRow(row, payload) {
+                        appendToolCallToChatRow(row, payload, processHtmxElement);
+                    }
+
                     function ensureSubagentActivityContainer() {
-                        let container = row.querySelector('.subagent-activities');
+                        const liveRow = currentRow();
+                        const targetRow = liveRow && liveRow.isConnected ? liveRow : row;
+                        let container = targetRow.querySelector('.subagent-activities');
                         if (container) return container;
 
                         container = document.createElement('div');
                         container.className = 'subagent-activities';
-                        const toolCalls = row.querySelector('.tool-calls');
-                        if (toolCalls && toolCalls.parentNode === row) {
-                            row.insertBefore(container, toolCalls);
+                        const toolCalls = targetRow.querySelector('.tool-calls');
+                        if (toolCalls && toolCalls.parentNode === targetRow) {
+                            targetRow.insertBefore(container, toolCalls);
                         } else {
-                            row.appendChild(container);
+                            targetRow.appendChild(container);
                         }
                         return container;
                     }
@@ -1051,17 +1209,104 @@
                         return agentId || 'subagent';
                     }
 
+                    function subagentCardMatches(card, key, childSessionId) {
+                        return card && (card.dataset.subagentKey === key || (childSessionId && card.dataset.childSessionId === childSessionId));
+                    }
+
+                    function preferredSubagentCard(cards, key, childSessionId) {
+                        if (cards.length === 0) return null;
+
+                        if (childSessionId) {
+                            const childMatches = cards.filter(card => card.dataset.childSessionId === childSessionId);
+                            const persistedMatch = childMatches.find(card => card.dataset.subagentKey && card.dataset.subagentKey !== childSessionId);
+                            if (persistedMatch) return persistedMatch;
+                            if (childMatches.length > 0) return childMatches[0];
+                        }
+
+                        const keyMatch = cards.find(card => card.dataset.subagentKey === key);
+                        return keyMatch || cards[0];
+                    }
+
                     function ensureSubagentCard(payload) {
                         const key = subagentKey(payload || {});
-                        let entry = subagentActivities.get(key);
-                        if (entry) return entry;
-
+                        const parentToolCallId = payload && payload.parentToolCallId != null ? String(payload.parentToolCallId) : '';
                         const container = ensureSubagentActivityContainer();
-                        const card = document.createElement('div');
+                        const childSessionId = payload && payload.childSessionId != null ? String(payload.childSessionId) : '';
+                        const matchingCards = Array.from(container.querySelectorAll('.subagent-activity')).filter(candidate => subagentCardMatches(candidate, key, childSessionId));
+                        let card = preferredSubagentCard(matchingCards, key, childSessionId);
+                        let entry = null;
+
+                        if (!card) {
+                            const existingEntry = subagentActivities.get(key);
+                            if (existingEntry && existingEntry.card && existingEntry.card.isConnected && existingEntry.card.closest('.subagent-activities') === container) {
+                                card = existingEntry.card;
+                            }
+                        }
+
+                        if (card) {
+                            for (const candidate of matchingCards) {
+                                if (candidate !== card) candidate.remove();
+                            }
+
+                            let status = card.querySelector('.subagent-activity__status');
+                            if (!status) {
+                                status = document.createElement('span');
+                                status.className = 'subagent-activity__status';
+                                card.appendChild(status);
+                            }
+
+                            let open = card.querySelector('.subagent-activity__open');
+                            if (!open) {
+                                open = document.createElement('button');
+                                open.type = 'button';
+                                open.className = 'tool-call-subagent-button subagent-activity__open';
+                                open.textContent = 'Open subagent';
+                                card.appendChild(open);
+                            }
+
+                            let text = card.querySelector('.subagent-activity__text');
+                            let body = card.querySelector('.subagent-activity__body');
+                            if (!body) {
+                                body = document.createElement('div');
+                                body.className = 'subagent-activity__body';
+                                if (open && open.parentNode === card) {
+                                    card.insertBefore(body, open.nextSibling);
+                                } else {
+                                    card.appendChild(body);
+                                }
+                            }
+                            if (!text) {
+                                text = document.createElement('div');
+                                text.className = 'subagent-activity__text';
+                                body.appendChild(text);
+                            } else if (text.parentNode !== body) {
+                                body.appendChild(text);
+                            }
+
+                            let toolCalls = card.querySelector('.tool-calls.subagent-activity__tools');
+                            if (!toolCalls) {
+                                toolCalls = document.createElement('div');
+                                toolCalls.className = 'tool-calls subagent-activity__tools';
+                                body.appendChild(toolCalls);
+                            } else if (toolCalls.parentNode !== body) {
+                                body.appendChild(toolCalls);
+                            }
+
+                            if (!card.dataset.subagentKey || card.dataset.subagentKey === key || card.dataset.subagentKey === childSessionId) {
+                                card.dataset.subagentKey = parentToolCallId || key;
+                            }
+                            if (childSessionId) card.dataset.childSessionId = childSessionId;
+
+                            entry = {card, status, text, toolCalls, open};
+                            subagentActivities.set(key, entry);
+                            return entry;
+                        }
+
+                        card = document.createElement('div');
                         card.className = 'subagent-activity';
-                        card.dataset.subagentKey = key;
-                        if (payload && payload.childSessionId != null) {
-                            card.dataset.childSessionId = String(payload.childSessionId);
+                        card.dataset.subagentKey = parentToolCallId || key;
+                        if (childSessionId) {
+                            card.dataset.childSessionId = childSessionId;
                         }
 
                         const header = document.createElement('div');
@@ -1110,10 +1355,7 @@
                         entry.open.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(childSessionId));
                         entry.open.setAttribute('hx-target', '#chat-container');
                         entry.open.setAttribute('hx-swap', 'outerHTML');
-                        if (window.htmx && typeof window.htmx.process === 'function' && !entry.open.dataset.htmxProcessed) {
-                            window.htmx.process(entry.open);
-                            entry.open.dataset.htmxProcessed = 'true';
-                        }
+                        processHtmxElement(entry.open);
                         const name = payload && payload.subagentAgentName ? String(payload.subagentAgentName) : childSessionId;
                         entry.open.replaceChildren(document.createTextNode('Open subagent: '), (() => {
                             const strong = document.createElement('strong');
@@ -1195,6 +1437,7 @@
                             if (payload.task != null) {
                                 entry.text.textContent = String(payload.task);
                             }
+                            schedulePrimaryChatRefresh();
                         } catch (_) {
                         }
                     });
@@ -1207,6 +1450,7 @@
                                 entry.text.textContent = (entry.text.textContent || '') + String(payload.delta);
                             }
                             updateOpenSubagentTranscript(payload, 'delta');
+                            schedulePrimaryChatRefresh();
                         } catch (_) {
                         }
                     });
@@ -1217,6 +1461,7 @@
                             const entry = ensureSubagentCard(payload);
                             renderSubagentToolCall(entry, payload);
                             updateOpenSubagentTranscript(payload, 'tool_call');
+                            schedulePrimaryChatRefresh();
                         } catch (_) {
                         }
                     });
@@ -1232,6 +1477,7 @@
                             entry.card.classList.add('is-done');
                             configureSubagentOpenButton(entry, payload);
                             updateOpenSubagentTranscript(payload, 'done');
+                            schedulePrimaryChatRefresh();
                         } catch (_) {
                         }
                     });
@@ -1246,6 +1492,7 @@
                                 entry.text.textContent = String(payload.errorText);
                             }
                             updateOpenSubagentTranscript(payload, 'error');
+                            schedulePrimaryChatRefresh();
                         } catch (_) {
                         }
                     });
@@ -1254,7 +1501,8 @@
                         try {
                             const payload = parseStreamPayload(e);
                             const st = (payload && payload.status != null) ? payload.status : (e.data || '');
-                            if (st) row.title = st;
+                            const liveRow = currentRow();
+                            if (st && liveRow) liveRow.title = st;
                         } catch (_) {
                         }
                     });
@@ -1330,6 +1578,7 @@
                             // If payload contains authoritative final text, use it to
                             // correct any missed/duplicated chunks. Only replace if
                             // it actually differs to avoid unnecessary reflows.
+                            const textSpan = currentTextSpan();
                             if (payload && payload.text != null && textSpan) {
                                 try {
                                     const currentRaw = getRawChatMarkdown(textSpan);
@@ -1363,16 +1612,27 @@
                                 flushBuffer();
                             }
 
+                            if (payload && Array.isArray(payload.toolCalls) && payload.toolCalls.length > 0) {
+                                const doneRow = currentRow();
+                                if (doneRow) {
+                                    payload.toolCalls.forEach(toolCall => renderToolCallToRow(doneRow, toolCall));
+                                }
+                            }
+
                             // mark non-pending
-                            row.classList.remove('pending');
-                            row.removeAttribute('data-pending');
-                            row.dataset.streamBound = '0';
+                            const liveRow = currentRow();
+                            if (liveRow) {
+                                liveRow.classList.remove('pending');
+                                liveRow.removeAttribute('data-pending');
+                                liveRow.dataset.streamBound = '0';
+                            }
                         } catch (_) {
                         }
                         try {
                             es.close();
                         } catch (_) {
                         }
+                        clearPendingStream(assistantId, es);
                         // remove stream-local listener when stream completes
                         removeStreamScrollListener();
                     });
@@ -1381,6 +1641,7 @@
                         try {
                             const payload = parseStreamPayload(e);
                             const data = (payload && payload.message) ? payload.message : ((e && e.data) ? e.data : 'Stream error');
+                            const textSpan = currentTextSpan();
                             if (textSpan) {
                                 try {
                                     const prevRaw = getRawChatMarkdown(textSpan);
@@ -1392,15 +1653,19 @@
                                     }
                                 }
                             }
-                            row.classList.remove('pending');
-                            row.removeAttribute('data-pending');
-                            row.dataset.streamBound = '0';
+                            const liveRow = currentRow();
+                            if (liveRow) {
+                                liveRow.classList.remove('pending');
+                                liveRow.removeAttribute('data-pending');
+                                liveRow.dataset.streamBound = '0';
+                            }
                         } catch (_) {
                         }
                         try {
                             es.close();
                         } catch (_) {
                         }
+                        clearPendingStream(assistantId, es);
                         // remove stream-local listener on error as well
                         removeStreamScrollListener();
                     });
@@ -1419,95 +1684,9 @@
                             const subagentSessionId = payload.subagentSessionId != null && String(payload.subagentSessionId).trim() !== '' ? String(payload.subagentSessionId) : '';
                             const subagentAgentName = payload.subagentAgentName != null ? String(payload.subagentAgentName) : '';
 
-                            // ensure container exists on the row
-                            let callsContainer = row.querySelector('.tool-calls');
-                            if (!callsContainer) {
-                                callsContainer = document.createElement('div');
-                                callsContainer.className = 'tool-calls';
-                                row.appendChild(callsContainer);
-                            }
-
-                            // build details block
-                            const details = document.createElement('details');
-                            details.className = 'tool-call';
-
-                            const summary = document.createElement('summary');
-                            summary.className = 'tool-call-summary';
-
-                            const nameSpan = document.createElement('span');
-                            nameSpan.className = 'tool-call-name';
-                            nameSpan.textContent = toolName || 'tool';
-
-                            const statusSpan = document.createElement('span');
-                            statusSpan.className = 'tool-call-status';
-                            if (success) statusSpan.classList.add('tool-call-status-success'); else statusSpan.classList.add('tool-call-status-failure');
-                            statusSpan.textContent = success ? ' success' : ' failure';
-
-                            summary.appendChild(nameSpan);
-                            summary.appendChild(statusSpan);
-                            details.appendChild(summary);
-
-                            const detailDiv = document.createElement('div');
-                            detailDiv.className = 'tool-call-detail';
-
-                            if (toolName === 'task' && subagentSessionId) {
-                                const subagentDiv = document.createElement('div');
-                                subagentDiv.className = 'tool-call-subagent';
-
-                                const subagentButton = document.createElement('button');
-                                subagentButton.type = 'button';
-                                subagentButton.className = 'tool-call-subagent-button';
-                                subagentButton.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
-                                subagentButton.setAttribute('hx-target', '#chat-container');
-                                subagentButton.setAttribute('hx-swap', 'outerHTML');
-                                subagentButton.textContent = 'Open subagent: ' + (subagentAgentName || subagentSessionId);
-
-                                subagentDiv.appendChild(subagentButton);
-                                detailDiv.appendChild(subagentDiv);
-                            }
-
-                            // Input section
-                            const inSection = document.createElement('div');
-                            inSection.className = 'tool-call-section';
-                            const inLabel = document.createElement('span');
-                            inLabel.className = 'tool-call-label';
-                            inLabel.textContent = 'Input:';
-                            const inPre = document.createElement('pre');
-                            inPre.className = 'tool-call-pre';
-                            inPre.textContent = inputPreview;
-                            inSection.appendChild(inLabel);
-                            inSection.appendChild(inPre);
-                            if (inputTruncated) {
-                                const tr = document.createElement('span');
-                                tr.className = 'tool-call-truncated';
-                                tr.textContent = ' (truncated)';
-                                inSection.appendChild(tr);
-                            }
-
-                            // Output section
-                            const outSection = document.createElement('div');
-                            outSection.className = 'tool-call-section';
-                            const outLabel = document.createElement('span');
-                            outLabel.className = 'tool-call-label';
-                            outLabel.textContent = 'Output:';
-                            const outPre = document.createElement('pre');
-                            outPre.className = 'tool-call-pre';
-                            outPre.textContent = outputPreview;
-                            outSection.appendChild(outLabel);
-                            outSection.appendChild(outPre);
-                            if (outputTruncated) {
-                                const tr2 = document.createElement('span');
-                                tr2.className = 'tool-call-truncated';
-                                tr2.textContent = ' (truncated)';
-                                outSection.appendChild(tr2);
-                            }
-
-                            detailDiv.appendChild(inSection);
-                            detailDiv.appendChild(outSection);
-                            details.appendChild(detailDiv);
-
-                            // Append to container
-                            callsContainer.appendChild(details);
+                            const liveRow = currentRow();
+                            if (!liveRow) return;
+                            renderToolCallToRow(liveRow, payload);
 
                             // Preserve streaming scroll behavior: if this stream was sticking
                             // to bottom, ensure we remain pinned after appending.
@@ -1542,6 +1721,7 @@
                             removeStreamScrollListener();
                         } catch (_) {
                         }
+                        clearPendingStream(assistantId, es);
                     });
 
                     // Install a stream-local scroll listener so we can track live user intent
@@ -1612,6 +1792,7 @@
                 const liveList = document.getElementById('chat-messages-list');
                 const base = liveList ? liveList : (target && target.querySelector && target.querySelector('.chat-message-text') ? target : document);
                 Promise.resolve().then(() => renderAllChatMarkdown(base));
+                Promise.resolve().then(schedulePrimaryChatRefresh);
             } catch (_) {
             }
         }, true);
@@ -1621,6 +1802,7 @@
                 const liveList = document.getElementById('chat-messages-list');
                 const base = liveList ? liveList : (target && target.querySelector && target.querySelector('.chat-message-text') ? target : document);
                 Promise.resolve().then(() => renderAllChatMarkdown(base));
+                Promise.resolve().then(schedulePrimaryChatRefresh);
             } catch (_) {
             }
         }, true);

@@ -1,5 +1,5 @@
 <!doctype html>
-<div th:fragment="chat" id="chat-container" th:attr="hx-swap-oob=${shellRefresh} ? 'outerHTML' : null, data-subagent-session-id=${subagentView ?: false} ? ${subagentSessionId} : null">
+<div th:fragment="chat" id="chat-container" th:attr="hx-swap-oob=${shellRefresh ?: false} ? 'outerHTML' : null, data-subagent-session-id=${subagentView ?: false} ? ${subagentSessionId} : null">
     <!-- HTMX polling attributes are applied to the messages list when hasPending is true -->
     <section id="chat" class="chat-shell">
         <div th:if="${subagentView ?: false}" class="subagent-bar">
@@ -55,6 +55,38 @@
                                 </section>
                             </div>
                         </details>
+                    </div>
+
+                    <div th:if="${m.role == 'assistant' and !(subagentView ?: false) and (((messageSubagentActivitySessionIds != null) and (messageSubagentActivitySessionIds[m.id] != null)) or (m.pending and (hasUnmatchedSubagentActivities ?: false)))}"
+                          class="subagent-activities">
+                        <div th:each="activity : ${subagentActivities}"
+                              th:if="${messageSubagentActivitySessionIds != null and messageSubagentActivitySessionIds[m.id] != null and messageSubagentActivitySessionIds[m.id].contains(activity.childSessionId)}"
+                              class="subagent-activity"
+                              th:attr="data-subagent-key=${activity.parentToolCallId != null ? activity.parentToolCallId : activity.childSessionId}, data-child-session-id=${activity.childSessionId}">
+                            <span class="subagent-activity__name" th:text="${activity.subagentAgentName}"></span>
+                            <span class="subagent-activity__status" th:text="${activity.status}"></span>
+                            <button type="button"
+                                    class="subagent-activity__open"
+                                    th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${activity.childSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                Open subagent
+                            </button>
+                            <div class="subagent-activity__text" th:text="${activity.previewText}"></div>
+                        </div>
+
+                        <div th:if="${m.pending}" >
+                            <div th:each="activity : ${unmatchedSubagentActivities}"
+                                 class="subagent-activity"
+                                 th:attr="data-subagent-key=${activity.parentToolCallId != null ? activity.parentToolCallId : activity.childSessionId}, data-child-session-id=${activity.childSessionId}">
+                                <span class="subagent-activity__name" th:text="${activity.subagentAgentName}"></span>
+                                <span class="subagent-activity__status" th:text="${activity.status}"></span>
+                                <button type="button"
+                                        class="subagent-activity__open"
+                                        th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${activity.childSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                    Open subagent
+                                </button>
+                                <div class="subagent-activity__text" th:text="${activity.previewText}"></div>
+                            </div>
+                        </div>
                     </div>
                 </li>
             </ul>

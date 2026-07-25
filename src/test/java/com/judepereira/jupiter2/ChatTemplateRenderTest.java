@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
+import com.judepereira.jupiter2.persistence.Persistence.SubagentActivityView;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,9 @@ import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Map;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,6 +47,8 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("reviewPanelOpen", false);
         context.setVariable("subagentView", false);
+        context.setVariable("subagentActivities", List.of());
+        context.setVariable("unmatchedSubagentActivities", List.of());
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
@@ -86,6 +91,8 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
+        context.setVariable("subagentActivities", List.of());
+        context.setVariable("unmatchedSubagentActivities", List.of());
         context.setVariable("newChatMessages", List.of(
                 new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
                         List.of(new UiController.ToolCallView("task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
@@ -119,6 +126,8 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
+        context.setVariable("subagentActivities", List.of());
+        context.setVariable("unmatchedSubagentActivities", List.of());
         context.setVariable("subagentView", true);
         context.setVariable("subagentAgentName", "Engineer");
         context.setVariable("subagentAgentId", "engineer");
@@ -139,6 +148,52 @@ public class ChatTemplateRenderTest {
         assertThat(html).contains("subagent-bar", "subagent-back-button", "Engineer", "Primary task:", "child final");
         assertThat(html).doesNotContain("id=\"chat-send-form\"");
         assertThat(html).doesNotContain("id=\"chat-agent-select\"");
+    }
+
+    @Test
+    public void chatFragmentRendersServerSideSubagentActivityCard() {
+        AgentDefinitionService agentService = new AgentDefinitionService(new ObjectMapper());
+        var modelService = ModelCatalogTestSupport.modelCatalogService();
+
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("hasPending", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("subagentView", false);
+        context.setVariable("subagentActivities", List.of(new SubagentActivityView(42L, "parent-tool-call", "Engineer", "done", "child final")));
+        context.setVariable("unmatchedSubagentActivities", List.of());
+        context.setVariable("hasUnmatchedSubagentActivities", false);
+        context.setVariable("messageSubagentActivitySessionIds", Map.of("assistant-1", Set.of(42L)));
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("reviewSource", null);
+        context.setVariable("selectedFile", null);
+        context.setVariable("chatMessages", List.of(
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
+                        List.of(new UiController.ToolCallView("task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
+                                42L, "engineer", "Engineer")), null)
+        ));
+        context.setVariable("agents", agentService.listPrimaryAgents());
+        context.setVariable("models", modelService.list());
+        context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
+        context.setVariable("selectedAgent", agentService.getRequired("plan"));
+        context.setVariable("selectedModel", modelService.getRequired("openai/gpt-5.5"));
+        context.setVariable("selectedThinking", ThinkingLevel.HIGH);
+
+        String html = engine.process("fragments/chat", context);
+
+        assertThat(html).contains("subagent-activities", "subagent-activity", "subagent-activity__name", "subagent-activity__status",
+                "subagent-activity__open", "subagent-activity__text", "Engineer", "done", "child final", "data-child-session-id=\"42\"",
+                "hx-get=\"/ui/chat/subagent/42\"");
     }
 
     private static WebContext webContext() {

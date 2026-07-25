@@ -566,6 +566,7 @@ input:focus, textarea:focus {
     border-radius: 10px;
     background: #eef4ff;
     color: var(--rail-fg);
+    margin-bottom: 8px;
 }
 
 .subagent-activities {
