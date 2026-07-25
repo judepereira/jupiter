@@ -1881,6 +1881,24 @@ input:focus, textarea:focus {
     gap: 8px;
 }
 
+.tool-call-calls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tool-call-call {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tool-call-call + .tool-call-call {
+    padding-top: 8px;
+    margin-top: 8px;
+    border-top: 1px solid #e6eef6;
+}
+
 .tool-call-section {
     display: flex;
     flex-direction: column;

@@ -1216,9 +1216,33 @@ public class UiController {
     private record ProviderError(String message) {}
 
     public record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                               Long subagentSessionId, String subagentAgentId, String subagentAgentName) {}
+                                Long subagentSessionId, String subagentAgentId, String subagentAgentName) {}
 
-    public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {}
+    public record ToolCallGroupView(String toolName, boolean success, int count, List<ToolCallView> calls) {}
+
+    public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
+        public List<ToolCallGroupView> toolCallGroups() {
+            if (toolCalls.isEmpty()) {
+                return List.of();
+            }
+
+            List<ToolCallGroupView> groups = new ArrayList<>();
+            ToolCallGroupView current = null;
+            for (ToolCallView call : toolCalls) {
+                if (current == null || !current.toolName().equals(call.toolName())) {
+                    current = new ToolCallGroupView(call.toolName(), call.success(), 1, List.of(call));
+                    groups.add(current);
+                    continue;
+                }
+
+                List<ToolCallView> calls = new ArrayList<>(current.calls());
+                calls.add(call);
+                current = new ToolCallGroupView(current.toolName(), current.success() && call.success(), current.count() + 1, List.copyOf(calls));
+                groups.set(groups.size() - 1, current);
+            }
+            return List.copyOf(groups);
+        }
+    }
 
     public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
 

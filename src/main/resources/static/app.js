@@ -789,7 +789,155 @@
             row.dataset.streamBound = '0';
         }
 
-        function appendToolCallToChatRow(row, payload) {
+        function toolNameFromPayload(payload) {
+            return payload && payload.toolName ? String(payload.toolName) : 'tool';
+        }
+
+        function findLastToolCallGroup(container, toolName) {
+            if (!container) return null;
+            const last = container.lastElementChild;
+            if (!last || !last.classList || !last.classList.contains('tool-call')) return null;
+            return last.dataset.toolName === toolName ? last : null;
+        }
+
+        function updateToolCallGroupCount(details, count) {
+            if (!details) return;
+            const toolName = details.dataset.toolName || 'tool';
+            const name = details.querySelector('.tool-call-name');
+            details.dataset.toolCallCount = String(count);
+            if (name) {
+                name.textContent = count > 1 ? (toolName + ' (' + count + ')') : toolName;
+            }
+        }
+
+        function updateToolCallGroupStatus(details, payload) {
+            if (!details) return;
+            const status = details.querySelector('.tool-call-status');
+            if (!status) return;
+            const calls = details.querySelectorAll('.tool-call-call');
+            const success = Array.from(calls).every(call => call.dataset.success !== 'false');
+            status.classList.remove('tool-call-status-success', 'tool-call-status-failure');
+            status.classList.add(success ? 'tool-call-status-success' : 'tool-call-status-failure');
+            status.textContent = success ? ' success' : ' failure';
+        }
+
+        function createToolCallCall(payload, options) {
+            const opts = options || {};
+            const call = document.createElement('div');
+            call.className = 'tool-call-call';
+            call.dataset.success = payload && payload.success ? 'true' : 'false';
+
+            const toolName = toolNameFromPayload(payload);
+            const inputPreview = payload && payload.inputPreview != null ? String(payload.inputPreview) : '';
+            const outputPreview = payload && payload.outputPreview != null ? String(payload.outputPreview) : '';
+            const inputTruncated = Boolean(payload && payload.inputTruncated);
+            const outputTruncated = Boolean(payload && payload.outputTruncated);
+            const subagentSessionId = payload && payload.subagentSessionId != null && String(payload.subagentSessionId).trim() !== '' ? String(payload.subagentSessionId) : '';
+            const subagentAgentName = payload && payload.subagentAgentName != null ? String(payload.subagentAgentName) : '';
+
+            if (toolName === 'task' && subagentSessionId) {
+                const subagentDiv = document.createElement('div');
+                subagentDiv.className = 'tool-call-subagent';
+
+                const subagentButton = document.createElement('button');
+                subagentButton.type = 'button';
+                subagentButton.className = 'tool-call-subagent-button';
+                subagentButton.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
+                subagentButton.setAttribute('hx-target', '#chat-container');
+                subagentButton.setAttribute('hx-swap', 'outerHTML');
+                subagentButton.textContent = 'Open subagent: ' + (subagentAgentName || subagentSessionId);
+
+                subagentDiv.appendChild(subagentButton);
+                call.appendChild(subagentDiv);
+            }
+
+            const inputSection = document.createElement('section');
+            inputSection.className = 'tool-call-section';
+            const inputLabel = document.createElement(opts.labelTagName || 'div');
+            inputLabel.className = 'tool-call-label';
+            inputLabel.textContent = opts.inputLabelText || 'Input';
+            const inputPre = document.createElement('pre');
+            inputPre.className = 'tool-call-pre';
+            inputPre.textContent = inputPreview;
+            inputSection.appendChild(inputLabel);
+            inputSection.appendChild(inputPre);
+            if (opts.includeTruncated && inputTruncated) {
+                const tr = document.createElement('span');
+                tr.className = 'tool-call-truncated';
+                tr.textContent = ' (truncated)';
+                inputSection.appendChild(tr);
+            }
+
+            const outputSection = document.createElement('section');
+            outputSection.className = 'tool-call-section';
+            const outputLabel = document.createElement(opts.labelTagName || 'div');
+            outputLabel.className = 'tool-call-label';
+            outputLabel.textContent = opts.outputLabelText || 'Output';
+            const outputPre = document.createElement('pre');
+            outputPre.className = 'tool-call-pre';
+            outputPre.textContent = outputPreview;
+            outputSection.appendChild(outputLabel);
+            outputSection.appendChild(outputPre);
+            if (opts.includeTruncated && outputTruncated) {
+                const tr2 = document.createElement('span');
+                tr2.className = 'tool-call-truncated';
+                tr2.textContent = ' (truncated)';
+                outputSection.appendChild(tr2);
+            }
+
+            call.appendChild(inputSection);
+            call.appendChild(outputSection);
+            return call;
+        }
+
+        function appendGroupedToolCall(container, payload, options) {
+            if (!container) return;
+
+            const toolName = toolNameFromPayload(payload);
+            const existing = findLastToolCallGroup(container, toolName);
+            if (existing) {
+                const calls = existing.querySelector('.tool-call-calls');
+                if (!calls) return;
+                calls.appendChild(createToolCallCall(payload, options));
+                updateToolCallGroupCount(existing, Number(existing.dataset.toolCallCount || '1') + 1);
+                updateToolCallGroupStatus(existing, payload);
+                return;
+            }
+
+            const details = document.createElement('details');
+            details.className = 'tool-call' + ((options && options.extraClassName) ? (' ' + options.extraClassName) : '');
+            details.dataset.toolName = toolName;
+            details.dataset.toolCallCount = '1';
+
+            const summary = document.createElement('summary');
+            summary.className = 'tool-call-summary';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'tool-call-name';
+            nameSpan.textContent = toolName;
+
+            const statusSpan = document.createElement('span');
+            statusSpan.className = 'tool-call-status';
+            statusSpan.classList.add(payload && payload.success ? 'tool-call-status-success' : 'tool-call-status-failure');
+            statusSpan.textContent = payload && payload.success ? ' success' : ' failure';
+
+            summary.appendChild(nameSpan);
+            summary.appendChild(statusSpan);
+            details.appendChild(summary);
+
+            const detail = document.createElement('div');
+            detail.className = 'tool-call-detail';
+
+            const calls = document.createElement('div');
+            calls.className = 'tool-call-calls';
+            calls.appendChild(createToolCallCall(payload, options));
+
+            detail.appendChild(calls);
+            details.appendChild(detail);
+            container.appendChild(details);
+        }
+
+        function appendToolCallToChatRow(row, payload, options) {
             try {
                 if (!row) return;
 
@@ -800,54 +948,7 @@
                     row.appendChild(callsContainer);
                 }
 
-                const details = document.createElement('details');
-                details.className = 'tool-call';
-
-                const summary = document.createElement('summary');
-                summary.className = 'tool-call-summary';
-
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'tool-call-name';
-                nameSpan.textContent = payload && payload.toolName ? String(payload.toolName) : 'tool';
-
-                const statusSpan = document.createElement('span');
-                statusSpan.className = 'tool-call-status';
-                statusSpan.classList.add(payload && payload.success ? 'tool-call-status-success' : 'tool-call-status-failure');
-                statusSpan.textContent = payload && payload.success ? ' success' : ' failure';
-
-                summary.appendChild(nameSpan);
-                summary.appendChild(statusSpan);
-                details.appendChild(summary);
-
-                const detail = document.createElement('div');
-                detail.className = 'tool-call-detail';
-
-                const inputSection = document.createElement('section');
-                inputSection.className = 'tool-call-section';
-                const inputLabel = document.createElement('div');
-                inputLabel.className = 'tool-call-label';
-                inputLabel.textContent = 'Input';
-                const inputPre = document.createElement('pre');
-                inputPre.className = 'tool-call-pre';
-                inputPre.textContent = payload && payload.inputPreview ? String(payload.inputPreview) : '';
-                inputSection.appendChild(inputLabel);
-                inputSection.appendChild(inputPre);
-
-                const outputSection = document.createElement('section');
-                outputSection.className = 'tool-call-section';
-                const outputLabel = document.createElement('div');
-                outputLabel.className = 'tool-call-label';
-                outputLabel.textContent = 'Output';
-                const outputPre = document.createElement('pre');
-                outputPre.className = 'tool-call-pre';
-                outputPre.textContent = payload && payload.outputPreview ? String(payload.outputPreview) : '';
-                outputSection.appendChild(outputLabel);
-                outputSection.appendChild(outputPre);
-
-                detail.appendChild(inputSection);
-                detail.appendChild(outputSection);
-                details.appendChild(detail);
-                callsContainer.appendChild(details);
+                appendGroupedToolCall(callsContainer, payload, options || {});
             } catch (_) {
             }
         }
@@ -1124,53 +1225,9 @@
 
                     function renderSubagentToolCall(entry, payload) {
                         if (!entry) return;
-                        const details = document.createElement('details');
-                        details.className = 'tool-call subagent-tool-call';
-
-                        const summary = document.createElement('summary');
-                        summary.className = 'tool-call-summary';
-
-                        const name = document.createElement('span');
-                        name.className = 'tool-call-name';
-                        name.textContent = payload && payload.toolName ? String(payload.toolName) : 'tool';
-
-                        const status = document.createElement('span');
-                        status.className = 'tool-call-status ' + ((payload && payload.success) ? 'tool-call-status-success' : 'tool-call-status-failure');
-                        status.textContent = (payload && payload.success) ? ' success' : ' failure';
-
-                        summary.appendChild(name);
-                        summary.appendChild(status);
-                        details.appendChild(summary);
-
-                        const detail = document.createElement('div');
-                        detail.className = 'tool-call-detail';
-
-                        const inputSection = document.createElement('section');
-                        inputSection.className = 'tool-call-section';
-                        const inputLabel = document.createElement('div');
-                        inputLabel.className = 'tool-call-label';
-                        inputLabel.textContent = 'Input';
-                        const inputPre = document.createElement('pre');
-                        inputPre.className = 'tool-call-pre';
-                        inputPre.textContent = payload && payload.inputPreview ? String(payload.inputPreview) : '';
-                        inputSection.appendChild(inputLabel);
-                        inputSection.appendChild(inputPre);
-
-                        const outputSection = document.createElement('section');
-                        outputSection.className = 'tool-call-section';
-                        const outputLabel = document.createElement('div');
-                        outputLabel.className = 'tool-call-label';
-                        outputLabel.textContent = 'Output';
-                        const outputPre = document.createElement('pre');
-                        outputPre.className = 'tool-call-pre';
-                        outputPre.textContent = payload && payload.outputPreview ? String(payload.outputPreview) : '';
-                        outputSection.appendChild(outputLabel);
-                        outputSection.appendChild(outputPre);
-
-                        detail.appendChild(inputSection);
-                        detail.appendChild(outputSection);
-                        details.appendChild(detail);
-                        entry.toolCalls.appendChild(details);
+                        appendGroupedToolCall(entry.toolCalls, payload, {
+                            extraClassName: 'subagent-tool-call'
+                        });
                     }
 
                     es.addEventListener('delta', (e) => {
@@ -1409,105 +1466,12 @@
                     es.addEventListener('tool_call', (e) => {
                         try {
                             const payload = parseStreamPayload(e) || {};
-                            // payload expected: {toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated}
-                            const toolName = payload.toolName != null ? String(payload.toolName) : '';
-                            const success = Boolean(payload.success);
-                            const inputPreview = payload.inputPreview != null ? String(payload.inputPreview) : '';
-                            const outputPreview = payload.outputPreview != null ? String(payload.outputPreview) : '';
-                            const inputTruncated = Boolean(payload.inputTruncated);
-                            const outputTruncated = Boolean(payload.outputTruncated);
-                            const subagentSessionId = payload.subagentSessionId != null && String(payload.subagentSessionId).trim() !== '' ? String(payload.subagentSessionId) : '';
-                            const subagentAgentName = payload.subagentAgentName != null ? String(payload.subagentAgentName) : '';
-
-                            // ensure container exists on the row
-                            let callsContainer = row.querySelector('.tool-calls');
-                            if (!callsContainer) {
-                                callsContainer = document.createElement('div');
-                                callsContainer.className = 'tool-calls';
-                                row.appendChild(callsContainer);
-                            }
-
-                            // build details block
-                            const details = document.createElement('details');
-                            details.className = 'tool-call';
-
-                            const summary = document.createElement('summary');
-                            summary.className = 'tool-call-summary';
-
-                            const nameSpan = document.createElement('span');
-                            nameSpan.className = 'tool-call-name';
-                            nameSpan.textContent = toolName || 'tool';
-
-                            const statusSpan = document.createElement('span');
-                            statusSpan.className = 'tool-call-status';
-                            if (success) statusSpan.classList.add('tool-call-status-success'); else statusSpan.classList.add('tool-call-status-failure');
-                            statusSpan.textContent = success ? ' success' : ' failure';
-
-                            summary.appendChild(nameSpan);
-                            summary.appendChild(statusSpan);
-                            details.appendChild(summary);
-
-                            const detailDiv = document.createElement('div');
-                            detailDiv.className = 'tool-call-detail';
-
-                            if (toolName === 'task' && subagentSessionId) {
-                                const subagentDiv = document.createElement('div');
-                                subagentDiv.className = 'tool-call-subagent';
-
-                                const subagentButton = document.createElement('button');
-                                subagentButton.type = 'button';
-                                subagentButton.className = 'tool-call-subagent-button';
-                                subagentButton.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
-                                subagentButton.setAttribute('hx-target', '#chat-container');
-                                subagentButton.setAttribute('hx-swap', 'outerHTML');
-                                subagentButton.textContent = 'Open subagent: ' + (subagentAgentName || subagentSessionId);
-
-                                subagentDiv.appendChild(subagentButton);
-                                detailDiv.appendChild(subagentDiv);
-                            }
-
-                            // Input section
-                            const inSection = document.createElement('div');
-                            inSection.className = 'tool-call-section';
-                            const inLabel = document.createElement('span');
-                            inLabel.className = 'tool-call-label';
-                            inLabel.textContent = 'Input:';
-                            const inPre = document.createElement('pre');
-                            inPre.className = 'tool-call-pre';
-                            inPre.textContent = inputPreview;
-                            inSection.appendChild(inLabel);
-                            inSection.appendChild(inPre);
-                            if (inputTruncated) {
-                                const tr = document.createElement('span');
-                                tr.className = 'tool-call-truncated';
-                                tr.textContent = ' (truncated)';
-                                inSection.appendChild(tr);
-                            }
-
-                            // Output section
-                            const outSection = document.createElement('div');
-                            outSection.className = 'tool-call-section';
-                            const outLabel = document.createElement('span');
-                            outLabel.className = 'tool-call-label';
-                            outLabel.textContent = 'Output:';
-                            const outPre = document.createElement('pre');
-                            outPre.className = 'tool-call-pre';
-                            outPre.textContent = outputPreview;
-                            outSection.appendChild(outLabel);
-                            outSection.appendChild(outPre);
-                            if (outputTruncated) {
-                                const tr2 = document.createElement('span');
-                                tr2.className = 'tool-call-truncated';
-                                tr2.textContent = ' (truncated)';
-                                outSection.appendChild(tr2);
-                            }
-
-                            detailDiv.appendChild(inSection);
-                            detailDiv.appendChild(outSection);
-                            details.appendChild(detailDiv);
-
-                            // Append to container
-                            callsContainer.appendChild(details);
+                            appendToolCallToChatRow(row, payload, {
+                                inputLabelText: 'Input:',
+                                outputLabelText: 'Output:',
+                                labelTagName: 'span',
+                                includeTruncated: true
+                            });
 
                             // Preserve streaming scroll behavior: if this stream was sticking
                             // to bottom, ensure we remain pinned after appending.
