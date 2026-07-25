@@ -1229,7 +1229,7 @@ public class UiController {
             List<ToolCallGroupView> groups = new ArrayList<>();
             ToolCallGroupView current = null;
             for (ToolCallView call : toolCalls) {
-                if (current == null || !current.toolName().equals(call.toolName())) {
+                if (current == null || !current.toolName().equals(call.toolName()) || "task".equals(call.toolName())) {
                     current = new ToolCallGroupView(call.toolName(), call.success(), 1, List.of(call));
                     groups.add(current);
                     continue;

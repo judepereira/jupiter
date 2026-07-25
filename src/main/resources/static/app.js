@@ -795,6 +795,7 @@
 
         function findLastToolCallGroup(container, toolName) {
             if (!container) return null;
+            if (toolName === 'task') return null;
             const last = container.lastElementChild;
             if (!last || !last.classList || !last.classList.contains('tool-call')) return null;
             return last.dataset.toolName === toolName ? last : null;
