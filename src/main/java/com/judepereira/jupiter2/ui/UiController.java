@@ -13,8 +13,6 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
-import com.judepereira.jupiter2.agent.task.SubagentTaskService;
-import com.judepereira.jupiter2.agent.task.SubagentTaskStreamBridge;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.tools.impl.FileUtils;
@@ -29,7 +27,6 @@ import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
-import com.judepereira.jupiter2.persistence.Persistence.SubagentActivityView;
 import com.judepereira.jupiter2.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
@@ -63,7 +60,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -311,93 +307,106 @@ public class UiController {
         AtomicBoolean completed = new AtomicBoolean(false);
         StringBuilder accumulated = new StringBuilder();
 
-        try (SubagentTaskStreamBridge.Scope ignored = SubagentTaskStreamBridge.bind(buildSubagentStreamListener(active, assistantId))) {
-            AgentStreamListener listener = new AgentStreamListener() {
-                @Override
-                public void onTextDelta(String delta) {
-                    try {
-                        if (delta == null) {
-                            return;
-                        }
-                        accumulated.append(delta);
-                        appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
-                        broadcastEvent(active, assistantId, "delta", Map.of("text", delta));
-                    } catch (Exception e) {
-                        onError(e);
+        AgentStreamListener listener = new AgentStreamListener() {
+            @Override
+            public void onTextDelta(String delta) {
+                try {
+                    if (delta == null) {
+                        return;
                     }
+                    accumulated.append(delta);
+                    appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
+                    broadcastEvent(active, assistantId, "delta", Map.of("text", delta));
+                } catch (Exception e) {
+                    onError(e);
                 }
-
-                @Override
-                public void onStatus(String status) {
-                    broadcastEvent(active, assistantId, "status", Map.of("status", status));
-                }
-
-                @Override
-                public void onToolCallTrace(ToolCallTrace trace) {
-                    try {
-                        ToolCallView v = toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
-                        broadcastEvent(active, assistantId, "tool_call", v);
-                    } catch (Exception e) {
-                        onError(e);
-                    }
-                }
-
-                @Override
-                public List<Message> onBeforeModelRequest(AgentTurnRequest currentRequest, List<Message> conversation) {
-                    if (currentRequest.getSessionId() == null) {
-                        return conversation;
-                    }
-
-                    AgentDefinition requestAgent = resolveRequestAgent(currentRequest);
-                    ModelDefinition requestModel = resolveRequestModel(currentRequest, requestAgent);
-                    ThinkingLevel requestThinking = currentRequest.getThinkingLevel() != null
-                            ? currentRequest.getThinkingLevel()
-                            : (requestAgent == null ? null : requestAgent.defaultThinkingLevel());
-
-                    Optional<ChatMessageView> summary = contextCompactionService.compactIfNeeded(currentRequest.getSessionId(), requestAgent,
-                            requestModel, requestThinking, pending.workspaceRoot(), null);
-                    if (summary.isEmpty()) {
-                        return conversation;
-                    }
-
-                    broadcastEvent(active, assistantId, "context_compaction", summary.get());
-
-                    return appStateService.buildConversationHistory(currentRequest.getSessionId());
-                }
-
-                @Override
-                public void onComplete(AgentTurnResult result) {
-                    try {
-                        String finalText = result.getFinalText() == null ? "" : result.getFinalText();
-                        List<ToolCallTraceInput> traces = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
-                        ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
-                        processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
-                        finalizeStreamSuccess(active, assistantId, completedMessage, completed);
-                    } catch (Exception e) {
-                        onError(e);
-                    }
-                }
-
-                @Override
-                public void onError(Exception e) {
-                    try {
-                        String normalizedMessage = normalizeProviderErrorMessage(e);
-                        appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
-                        log.error("Execution failure!", e);
-                        finalizeStreamError(active, assistantId, normalizedMessage, e, completed);
-                    } catch (Exception ignored) {
-                    }
-                }
-            };
-
-            try {
-                AgentTurnResult result = harness.runTurnStreaming(pending.request(), listener);
-                if (!completed.get()) {
-                    listener.onComplete(result);
-                }
-            } catch (Exception e) {
-                listener.onError(e);
             }
+
+            @Override
+            public void onStatus(String status) {
+                broadcastEvent(active, assistantId, "status", Map.of("status", status));
+            }
+
+            @Override
+            public void onToolCallStarted(ToolCallTrace trace) {
+                broadcastEvent(active, assistantId, "tool_call_started", trace);
+            }
+
+            @Override
+            public void onToolCallProgress(String toolCallId, String toolName, String eventName, Object payload) {
+                broadcastEvent(active, assistantId, "tool_call_progress", Map.of(
+                        "toolCallId", toolCallId,
+                        "toolName", toolName,
+                        "eventName", eventName,
+                        "payload", payload
+                ));
+            }
+
+            @Override
+            public void onToolCallTrace(ToolCallTrace trace) {
+                try {
+                    ToolCallView v = toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
+                    broadcastEvent(active, assistantId, "tool_call", v);
+                } catch (Exception e) {
+                    onError(e);
+                }
+            }
+
+            @Override
+            public List<Message> onBeforeModelRequest(AgentTurnRequest currentRequest, List<Message> conversation) {
+                if (currentRequest.getSessionId() == null) {
+                    return conversation;
+                }
+
+                AgentDefinition requestAgent = resolveRequestAgent(currentRequest);
+                ModelDefinition requestModel = resolveRequestModel(currentRequest, requestAgent);
+                ThinkingLevel requestThinking = currentRequest.getThinkingLevel() != null
+                        ? currentRequest.getThinkingLevel()
+                        : (requestAgent == null ? null : requestAgent.defaultThinkingLevel());
+
+                Optional<ChatMessageView> summary = contextCompactionService.compactIfNeeded(currentRequest.getSessionId(), requestAgent,
+                        requestModel, requestThinking, pending.workspaceRoot(), null);
+                if (summary.isEmpty()) {
+                    return conversation;
+                }
+
+                broadcastEvent(active, assistantId, "context_compaction", summary.get());
+
+                return appStateService.buildConversationHistory(currentRequest.getSessionId());
+            }
+
+            @Override
+            public void onComplete(AgentTurnResult result) {
+                try {
+                    String finalText = result.getFinalText() == null ? "" : result.getFinalText();
+                    List<ToolCallTraceInput> traces = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
+                    ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
+                    processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
+                    finalizeStreamSuccess(active, assistantId, completedMessage, completed);
+                } catch (Exception e) {
+                    onError(e);
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                try {
+                    String normalizedMessage = normalizeProviderErrorMessage(e);
+                    appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+                    log.error("Execution failure!", e);
+                    finalizeStreamError(active, assistantId, normalizedMessage, e, completed);
+                } catch (Exception ignored) {
+                }
+            }
+        };
+
+        try {
+            AgentTurnResult result = harness.runTurnStreaming(pending.request(), listener);
+            if (!completed.get()) {
+                listener.onComplete(result);
+            }
+        } catch (Exception e) {
+            listener.onError(e);
         }
     }
 
@@ -482,7 +491,7 @@ public class UiController {
         }
 
         populateChatControlsModel(model, defaultChatSelection());
-        populateChatModel(model, view.activeSessionDetail().chatMessages(), appStateService.listSubagentActivities(view.activeSession().id()), false, null, null, null);
+        populateChatModel(model, view.activeSessionDetail().chatMessages(), false, null, null, null);
         return "fragments/chat :: chat";
     }
 
@@ -499,7 +508,7 @@ public class UiController {
         }
 
         populateChatControlsModel(model, defaultChatSelection());
-        populateChatModel(model, subagent.sessionDetail().chatMessages(), List.of(), true, subagent.subagentAgentName(), subagent.subagentAgentId(), sessionId);
+        populateChatModel(model, subagent.sessionDetail().chatMessages(), true, subagent.subagentAgentName(), subagent.subagentAgentId(), sessionId);
         return "fragments/chat :: chat";
     }
 
@@ -877,10 +886,6 @@ public class UiController {
         TerminalPanelState terminalState = view.activeWorkspace() == null ? new TerminalPanelState("none", List.of(), null, false) : terminalStateService.snapshot(view.activeWorkspace().id());
         if (session == null) {
             model.addAttribute("chatMessages", List.of());
-            model.addAttribute("subagentActivities", List.of());
-            model.addAttribute("unmatchedSubagentActivities", List.of());
-            model.addAttribute("hasUnmatchedSubagentActivities", false);
-            model.addAttribute("messageSubagentActivitySessionIds", Map.of());
             model.addAttribute("subagentView", false);
             model.addAttribute("changedFiles", List.of());
             model.addAttribute("reviewPanelOpen", false);
@@ -900,7 +905,6 @@ public class UiController {
 
         boolean hasPending = detail.chatMessages().stream().anyMatch(ChatMessageView::pending);
         model.addAttribute("chatMessages", detail.chatMessages().stream().map(this::toChatMessage).toList());
-        populateSubagentActivityModel(model, detail.chatMessages(), appStateService.listSubagentActivities(session.id()), false);
         model.addAttribute("subagentView", false);
         model.addAttribute("changedFiles", detail.changedFiles().stream().map(this::toChangedFile).toList());
         model.addAttribute("reviewPanelOpen", detail.reviewPanelOpen());
@@ -917,64 +921,16 @@ public class UiController {
         model.addAttribute("panelMode", terminalState.bottomPanelMode());
     }
 
-    private void populateChatModel(Model model, List<ChatMessageView> chatMessages, List<SubagentActivityView> subagentActivities, boolean subagentView, String subagentAgentName, String subagentAgentId,
+    private void populateChatModel(Model model, List<ChatMessageView> chatMessages, boolean subagentView, String subagentAgentName, String subagentAgentId,
                                     Long subagentSessionId) {
         model.addAttribute("chatMessages", chatMessages.stream().map(this::toChatMessage).toList());
         model.addAttribute("hasPending", chatMessages.stream().anyMatch(ChatMessageView::pending));
-        populateSubagentActivityModel(model, chatMessages, subagentActivities, subagentView);
         model.addAttribute("reviewOob", false);
         model.addAttribute("shellRefresh", false);
         model.addAttribute("subagentView", subagentView);
         model.addAttribute("subagentAgentName", subagentAgentName);
         model.addAttribute("subagentAgentId", subagentAgentId);
         model.addAttribute("subagentSessionId", subagentSessionId);
-    }
-
-    private void populateSubagentActivityModel(Model model, List<ChatMessageView> chatMessages, List<SubagentActivityView> subagentActivities, boolean subagentView) {
-        List<ChatMessageView> safeChatMessages = chatMessages == null ? List.of() : chatMessages;
-        List<SubagentActivityView> safeSubagentActivities = subagentActivities == null ? List.of() : subagentActivities;
-        List<SubagentActivityView> visibleSubagentActivities = subagentView ? List.of() : safeSubagentActivities;
-        List<SubagentActivityView> unmatched = subagentView ? List.of() : unmatchedSubagentActivities(safeChatMessages, safeSubagentActivities);
-        model.addAttribute("subagentActivities", visibleSubagentActivities);
-        model.addAttribute("unmatchedSubagentActivities", unmatched);
-        model.addAttribute("hasUnmatchedSubagentActivities", !unmatched.isEmpty());
-        model.addAttribute("messageSubagentActivitySessionIds", messageSubagentActivitySessionIds(safeChatMessages));
-    }
-
-    private Map<String, Set<Long>> messageSubagentActivitySessionIds(List<ChatMessageView> chatMessages) {
-        Map<String, Set<Long>> sessionIdsByMessageId = new HashMap<>();
-        for (ChatMessageView message : chatMessages) {
-            if (message.toolCalls() == null || message.toolCalls().isEmpty()) {
-                continue;
-            }
-
-            Set<Long> sessionIds = new HashSet<>();
-            for (com.judepereira.jupiter2.persistence.Persistence.ToolCallView toolCall : message.toolCalls()) {
-                if (toolCall != null && toolCall.subagentSessionId() != null) {
-                    sessionIds.add(toolCall.subagentSessionId());
-                }
-            }
-
-            if (!sessionIds.isEmpty()) {
-                sessionIdsByMessageId.put(message.id(), sessionIds);
-            }
-        }
-        return sessionIdsByMessageId;
-    }
-
-    private List<SubagentActivityView> unmatchedSubagentActivities(List<ChatMessageView> chatMessages, List<SubagentActivityView> subagentActivities) {
-        Set<Long> matchedSubagentSessionIds = new HashSet<>();
-        for (ChatMessageView message : chatMessages) {
-            if (message.toolCalls() == null) {
-                continue;
-            }
-            for (com.judepereira.jupiter2.persistence.Persistence.ToolCallView toolCall : message.toolCalls()) {
-                if (toolCall != null && toolCall.subagentSessionId() != null) {
-                    matchedSubagentSessionIds.add(toolCall.subagentSessionId());
-                }
-            }
-        }
-        return subagentActivities.stream().filter(activity -> !matchedSubagentSessionIds.contains(activity.childSessionId())).toList();
     }
 
     private boolean isTerminalPanelOpen(AppStateView view) {
@@ -999,16 +955,6 @@ public class UiController {
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
-        if (view.activeSession() == null || view.activeSessionDetail() == null) {
-            model.addAttribute("subagentActivities", List.of());
-            model.addAttribute("unmatchedSubagentActivities", List.of());
-            model.addAttribute("hasUnmatchedSubagentActivities", false);
-            model.addAttribute("messageSubagentActivitySessionIds", Map.of());
-        } else {
-            List<ChatMessageView> chatMessages = view.activeSessionDetail().chatMessages();
-            List<SubagentActivityView> subagentActivities = appStateService.listSubagentActivities(view.activeSession().id());
-            populateSubagentActivityModel(model, chatMessages, subagentActivities, false);
-        }
         populateChatControlsModel(model, defaultChatSelection());
     }
 
@@ -1171,8 +1117,8 @@ public class UiController {
     }
 
     private ToolCallView toToolCallView(com.judepereira.jupiter2.persistence.Persistence.ToolCallView view) {
-        return new ToolCallView(view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated(),
-                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName());
+        return new ToolCallView(view.toolCallId(), view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated(),
+                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status());
     }
 
     private ChangedFile toChangedFile(ChangedFileView view) {
@@ -1198,35 +1144,6 @@ public class UiController {
 
     private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
         return new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
-    }
-
-    private SubagentTaskService.SubagentTaskStreamListener buildSubagentStreamListener(ActiveStream active, String assistantId) {
-        return new SubagentTaskService.SubagentTaskStreamListener() {
-            @Override
-            public void onStarted(SubagentTaskService.SubagentTaskStarted event) {
-                broadcastEvent(active, assistantId, "subagent_started", event);
-            }
-
-            @Override
-            public void onTextDelta(SubagentTaskService.SubagentTaskTextDelta event) {
-                broadcastEvent(active, assistantId, "subagent_delta", event);
-            }
-
-            @Override
-            public void onToolCall(SubagentTaskService.SubagentTaskToolCall event) {
-                broadcastEvent(active, assistantId, "subagent_tool_call", event);
-            }
-
-            @Override
-            public void onComplete(SubagentTaskService.SubagentTaskCompleted event) {
-                broadcastEvent(active, assistantId, "subagent_done", event);
-            }
-
-            @Override
-            public void onError(SubagentTaskService.SubagentTaskError event) {
-                broadcastEvent(active, assistantId, "subagent_error", event);
-            }
-        };
     }
 
     private String directoryDisplayName(Path path) {
@@ -1271,8 +1188,13 @@ public class UiController {
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ProviderError(String message) {}
 
-    public record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                               Long subagentSessionId, String subagentAgentId, String subagentAgentName) {}
+    public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
+        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                            Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null);
+        }
+    }
 
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {}
 

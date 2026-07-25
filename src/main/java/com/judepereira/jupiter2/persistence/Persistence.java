@@ -22,8 +22,12 @@ public final class Persistence {
     public record SessionView(long id, String name) {
     }
 
-    public record ToolCallView(String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                              Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
+    public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
+        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                            Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null);
+        }
     }
 
     public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel) {
@@ -33,10 +37,6 @@ public final class Persistence {
     }
 
     public record ChangedFileView(String key, ReviewSource source, Integer id, String path, String diff) {
-    }
-
-    public record SubagentActivityView(long childSessionId, String parentToolCallId, String subagentAgentName,
-                                       String status, String previewText) {
     }
 
     public record SessionDetailView(List<ChatMessageView> chatMessages, List<ChangedFileView> changedFiles, boolean reviewPanelOpen,

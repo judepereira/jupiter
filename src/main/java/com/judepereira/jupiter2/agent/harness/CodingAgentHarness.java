@@ -153,6 +153,7 @@ public class CodingAgentHarness {
                         continue;
                     }
                     listener.onStatus("calling_tool:" + toolName);
+                    listener.onToolCallStarted(new ToolCallTrace(toolCallId, toolName, args, false, "", Map.of()));
                     // execute tool
                     try {
                         ToolExecutionContext execCtx = new ToolExecutionContext(execCtxTemplate.getWorkspaceRoot(),
@@ -162,7 +163,8 @@ public class CodingAgentHarness {
                                 execCtxTemplate.getSessionId(),
                                 execCtxTemplate.getAgentId(),
                                 execCtxTemplate.getAgentMode(),
-                                toolCallId);
+                                toolCallId,
+                                (eventName, payload) -> listener.onToolCallProgress(toolCallId, toolName, eventName, payload));
                         ToolExecutionResult result = registry.executeByName(toolName, args, execCtx);
                         String toolText = result.getText() == null ? "" : result.getText();
                         convo.add(new Message(Message.Role.TOOL, toolText, toolCallId));

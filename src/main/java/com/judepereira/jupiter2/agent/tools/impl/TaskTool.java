@@ -5,7 +5,6 @@ import com.judepereira.jupiter2.agent.catalog.AgentMode;
 import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter2.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter2.agent.task.SubagentTaskService;
-import com.judepereira.jupiter2.agent.task.SubagentTaskStreamBridge;
 import com.judepereira.jupiter2.agent.tools.AgentTool;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionResult;
@@ -64,7 +63,32 @@ public class TaskTool implements AgentTool {
                     agentId,
                     task,
                     expectedOutput
-            ), SubagentTaskStreamBridge.current());
+            ), new SubagentTaskService.SubagentTaskStreamListener() {
+                @Override
+                public void onStarted(SubagentTaskService.SubagentTaskStarted event) {
+                    context.getProgressSink().emit("subagent_started", event);
+                }
+
+                @Override
+                public void onTextDelta(SubagentTaskService.SubagentTaskTextDelta event) {
+                    context.getProgressSink().emit("subagent_delta", event);
+                }
+
+                @Override
+                public void onToolCall(SubagentTaskService.SubagentTaskToolCall event) {
+                    context.getProgressSink().emit("subagent_tool_call", event);
+                }
+
+                @Override
+                public void onComplete(SubagentTaskService.SubagentTaskCompleted event) {
+                    context.getProgressSink().emit("subagent_done", event);
+                }
+
+                @Override
+                public void onError(SubagentTaskService.SubagentTaskError event) {
+                    context.getProgressSink().emit("subagent_error", event);
+                }
+            });
 
             Map<String, Object> machine = new LinkedHashMap<>();
             machine.put("subagentSessionId", result.childSessionId());

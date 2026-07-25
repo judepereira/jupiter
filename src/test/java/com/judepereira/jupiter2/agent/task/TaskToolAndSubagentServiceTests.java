@@ -12,6 +12,7 @@ import com.judepereira.jupiter2.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter2.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter2.agent.tools.ToolExecutionResult;
+import com.judepereira.jupiter2.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter2.agent.tools.impl.TaskTool;
 import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
@@ -89,7 +90,7 @@ public class TaskToolAndSubagentServiceTests {
     }
 
     @Test
-    public void taskToolStreamsSubagentLifecycleThroughTheBridge(@TempDir Path workspaceRoot) {
+    public void taskToolStreamsSubagentLifecycleThroughTheToolProgressSink(@TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long parentSessionId = appStateService.loadViewData().activeSession().id();
@@ -115,40 +116,27 @@ public class TaskToolAndSubagentServiceTests {
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         List<String> events = new ArrayList<>();
-        try (var scope = SubagentTaskStreamBridge.bind(new SubagentTaskService.SubagentTaskStreamListener() {
-            @Override
-            public void onStarted(SubagentTaskService.SubagentTaskStarted event) {
-                events.add("started:" + event.subagentAgentName());
+        ToolProgressSink sink = (eventName, payload) -> {
+            switch (eventName) {
+                case "subagent_started" -> events.add("started:" + ((SubagentTaskService.SubagentTaskStarted) payload).subagentAgentName());
+                case "subagent_delta" -> events.add("delta:" + ((SubagentTaskService.SubagentTaskTextDelta) payload).delta());
+                case "subagent_tool_call" -> {
+                    SubagentTaskService.SubagentTaskToolCall event = (SubagentTaskService.SubagentTaskToolCall) payload;
+                    events.add("tool_call:" + event.toolName() + ":" + event.outputPreview());
+                }
+                case "subagent_done" -> events.add("done:" + ((SubagentTaskService.SubagentTaskCompleted) payload).finalText());
+                case "subagent_error" -> events.add("error:" + ((SubagentTaskService.SubagentTaskError) payload).errorText());
+                default -> throw new IllegalStateException("Unexpected event: " + eventName);
             }
+        };
 
-            @Override
-            public void onTextDelta(SubagentTaskService.SubagentTaskTextDelta event) {
-                events.add("delta:" + event.delta());
-            }
+        ToolExecutionResult result = taskTool.execute(Map.of(
+                "agentId", "engineer",
+                "task", "write a file",
+                "expectedOutput", "child final"
+        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", sink));
 
-            @Override
-            public void onToolCall(SubagentTaskService.SubagentTaskToolCall event) {
-                events.add("tool_call:" + event.toolName() + ":" + event.outputPreview());
-            }
-
-            @Override
-            public void onComplete(SubagentTaskService.SubagentTaskCompleted event) {
-                events.add("done:" + event.finalText());
-            }
-
-            @Override
-            public void onError(SubagentTaskService.SubagentTaskError event) {
-                events.add("error:" + event.errorText());
-            }
-        })) {
-            ToolExecutionResult result = taskTool.execute(Map.of(
-                    "agentId", "engineer",
-                    "task", "write a file",
-                    "expectedOutput", "child final"
-            ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call"));
-
-            assertThat(result.isSuccess()).isTrue();
-        }
+        assertThat(result.isSuccess()).isTrue();
 
         assertThat(events).containsExactly(
                 "started:Engineer",

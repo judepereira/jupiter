@@ -23,6 +23,10 @@ public interface AgentStreamListener {
 
     default void onToolCallTrace(ToolCallTrace trace) {}
 
+    default void onToolCallStarted(ToolCallTrace trace) {}
+
+    default void onToolCallProgress(String toolCallId, String toolName, String eventName, Object payload) {}
+
     default List<Message> onBeforeModelRequest(AgentTurnRequest request, List<Message> conversation) {
         return conversation;
     }

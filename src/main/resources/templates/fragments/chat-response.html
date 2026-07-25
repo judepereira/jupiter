@@ -27,11 +27,11 @@
             </div>
 
             <div th:if="${m.toolCalls != null and !#lists.isEmpty(m.toolCalls)}" class="tool-calls">
-                <details th:each="call : ${m.toolCalls}" class="tool-call">
+                <details th:each="call : ${m.toolCalls}" class="tool-call" th:attr="data-tool-call-id=${call.toolCallId}" th:with="toolCallStatus=${call.status != null ? call.status : (call.success ? 'success' : 'failure')}">
                     <summary class="tool-call-summary">
                         <span class="tool-call-name" th:text="${call.toolName}"></span>
-                        <span class="tool-call-status" th:classappend="${call.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
-                              th:text="${call.success} ? 'success' : 'failure'"></span>
+                        <span class="tool-call-status" th:classappend="${toolCallStatus == 'success'} ? ' tool-call-status-success' : (${toolCallStatus == 'failure'} ? ' tool-call-status-failure' : ' tool-call-status-running')"
+                              th:text="${toolCallStatus}"></span>
                     </summary>
 
             <div class="tool-call-detail">

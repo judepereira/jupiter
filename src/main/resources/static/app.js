@@ -760,60 +760,6 @@
             }
         }
 
-        let primaryChatRefreshTimer = null;
-        const PRIMARY_CHAT_REFRESH_DELAY_MS = 850;
-
-        function getVisiblePendingChatRow() {
-            try {
-                const list = document.getElementById('chat-messages-list');
-                if (!list) return null;
-                return Array.from(list.querySelectorAll('li[data-pending="true"]')).find(row => row && row.getClientRects && row.getClientRects().length > 0) || null;
-            } catch (_) {
-                return null;
-            }
-        }
-
-        function isVisibleNode(node) {
-            return Boolean(node && node.getClientRects && node.getClientRects().length > 0);
-        }
-
-        function shouldRefreshPrimaryChat() {
-            try {
-                const container = document.getElementById('chat-container');
-                if (!container) return false;
-                const sessionId = container.dataset && container.dataset.subagentSessionId != null ? String(container.dataset.subagentSessionId).trim() : '';
-                if (sessionId) return false;
-
-                const list = document.getElementById('chat-messages-list');
-                if (!list) return false;
-
-                const visibleActivity = Array.from(list.querySelectorAll('.subagent-activity')).some(isVisibleNode);
-                if (!visibleActivity) return false;
-
-                const directParentTaskToolCall = list.querySelector(
-                    ':scope > li > .tool-calls > .tool-call > summary.tool-call-summary, ' +
-                    ':scope > li > .tool-calls > .tool-call .tool-call-subagent-button'
-                );
-                if (directParentTaskToolCall) return false;
-
-                return true;
-            } catch (_) {
-                return false;
-            }
-        }
-
-        function schedulePrimaryChatRefresh() {
-            if (primaryChatRefreshTimer != null) return;
-            if (!shouldRefreshPrimaryChat()) return;
-
-            primaryChatRefreshTimer = window.setTimeout(() => {
-                primaryChatRefreshTimer = null;
-                if (!shouldRefreshPrimaryChat()) return;
-                if (!window.htmx || typeof window.htmx.ajax !== 'function') return;
-                window.htmx.ajax('GET', '/ui/chat/primary', {target: '#chat-container', swap: 'outerHTML'});
-            }, PRIMARY_CHAT_REFRESH_DELAY_MS);
-        }
-
         function getCurrentOpenSubagentSessionId() {
             try {
                 const container = document.getElementById('chat-container');
@@ -870,108 +816,300 @@
 
         function toolCallKey(payload) {
             const toolName = payload && payload.toolName != null ? String(payload.toolName) : '';
-            const inputPreview = payload && payload.inputPreview != null ? String(payload.inputPreview) : '';
-            const outputPreview = payload && payload.outputPreview != null ? String(payload.outputPreview) : '';
-            const subagentSessionId = payload && payload.subagentSessionId != null ? String(payload.subagentSessionId) : '';
-            return [toolName, inputPreview, outputPreview, subagentSessionId].join('\u001f');
+            return [toolName, toolCallInputText(payload)].join('\u001f');
         }
 
-        function appendToolCallToChatRow(row, payload, processHtmxElementFn) {
+        function toolCallInputText(payload) {
             try {
-                if (!row) return;
+                if (!payload) return '';
+                const preview = payload.inputPreview != null ? String(payload.inputPreview) : '';
+                if (preview.trim()) return preview;
 
-                const toolName = payload && payload.toolName != null ? String(payload.toolName) : '';
-                const subagentSessionId = payload && payload.subagentSessionId != null ? String(payload.subagentSessionId).trim() : '';
-                const subagentAgentName = payload && payload.subagentAgentName != null ? String(payload.subagentAgentName) : '';
-
-                let callsContainer = row.querySelector('.tool-calls');
-                if (!callsContainer) {
-                    callsContainer = document.createElement('div');
-                    callsContainer.className = 'tool-calls';
-                    row.appendChild(callsContainer);
+                const args = payload.args;
+                if (args == null) return '';
+                if (typeof args === 'string') return args;
+                if (typeof args === 'object') {
+                    for (const key of ['input', 'task', 'message', 'prompt', 'text']) {
+                        if (args[key] != null && String(args[key]).trim()) return String(args[key]);
+                    }
+                    try {
+                        return JSON.stringify(args, null, 2);
+                    } catch (_) {
+                        return String(args);
+                    }
                 }
-
-                const key = toolCallKey(payload);
-                if (key && Array.from(callsContainer.querySelectorAll('.tool-call')).some(details => details.dataset.toolCallKey === key)) {
-                    return;
-                }
-
-                const details = document.createElement('details');
-                details.className = 'tool-call';
-                if (key) {
-                    details.dataset.toolCallKey = key;
-                }
-
-                const summary = document.createElement('summary');
-                summary.className = 'tool-call-summary';
-
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'tool-call-name';
-                nameSpan.textContent = payload && payload.toolName ? String(payload.toolName) : 'tool';
-
-                const statusSpan = document.createElement('span');
-                statusSpan.className = 'tool-call-status';
-                statusSpan.classList.add(payload && payload.success ? 'tool-call-status-success' : 'tool-call-status-failure');
-                statusSpan.textContent = payload && payload.success ? ' success' : ' failure';
-
-                summary.appendChild(nameSpan);
-                summary.appendChild(statusSpan);
-                details.appendChild(summary);
-
-                const detail = document.createElement('div');
-                detail.className = 'tool-call-detail';
-
-                if (toolName === 'task' && subagentSessionId) {
-                    const subagent = document.createElement('div');
-                    subagent.className = 'tool-call-subagent';
-
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.className = 'tool-call-subagent-button';
-                    button.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
-                    button.setAttribute('hx-target', '#chat-container');
-                    button.setAttribute('hx-swap', 'outerHTML');
-                    button.replaceChildren(
-                        document.createTextNode('Open subagent: '),
-                        (() => {
-                            const strong = document.createElement('strong');
-                            strong.textContent = subagentAgentName || subagentSessionId;
-                            return strong;
-                        })()
-                    );
-
-                    subagent.appendChild(button);
-                    detail.appendChild(subagent);
-                    if (processHtmxElementFn) processHtmxElementFn(button);
-                }
-
-                const inputSection = document.createElement('section');
-                inputSection.className = 'tool-call-section';
-                const inputLabel = document.createElement('div');
-                inputLabel.className = 'tool-call-label';
-                inputLabel.textContent = 'Input';
-                const inputPre = document.createElement('pre');
-                inputPre.className = 'tool-call-pre';
-                inputPre.textContent = payload && payload.inputPreview ? String(payload.inputPreview) : '';
-                inputSection.appendChild(inputLabel);
-                inputSection.appendChild(inputPre);
-
-                const outputSection = document.createElement('section');
-                outputSection.className = 'tool-call-section';
-                const outputLabel = document.createElement('div');
-                outputLabel.className = 'tool-call-label';
-                outputLabel.textContent = 'Output';
-                const outputPre = document.createElement('pre');
-                outputPre.className = 'tool-call-pre';
-                outputPre.textContent = payload && payload.outputPreview ? String(payload.outputPreview) : '';
-                outputSection.appendChild(outputLabel);
-                outputSection.appendChild(outputPre);
-
-                detail.appendChild(inputSection);
-                detail.appendChild(outputSection);
-                details.appendChild(detail);
-                callsContainer.appendChild(details);
+                return String(args);
             } catch (_) {
+                return '';
+            }
+        }
+
+        function toolCallStatusText(state, success) {
+            if (state === 'running') return 'running';
+            if (state === 'done') return 'done';
+            if (state === 'error') return 'error';
+            return success ? 'success' : 'failure';
+        }
+
+        function toolCallOutputText(payload) {
+            try {
+                if (!payload) return '';
+                const value = payload.outputPreview != null ? payload.outputPreview
+                    : (payload.finalText != null ? payload.finalText
+                        : (payload.textSummary != null ? payload.textSummary
+                            : (payload.machineSummary != null ? payload.machineSummary
+                                : (payload.text != null ? payload.text : (payload.errorText != null ? payload.errorText : '')))));
+                if (value == null) return '';
+                if (typeof value === 'string') return value;
+                return JSON.stringify(value, null, 2);
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function getDirectToolCallChild(parent, className) {
+            try {
+                return Array.from(parent && parent.children ? parent.children : []).find(child => child && child.classList && child.classList.contains(className)) || null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function getToolCallContainer(target) {
+            try {
+                if (!target) return null;
+                if (target.classList && target.classList.contains('tool-calls')) return target;
+                let container = getDirectToolCallChild(target, 'tool-calls');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.className = 'tool-calls';
+                    target.appendChild(container);
+                }
+                return container;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function findToolCallEntry(container, payload) {
+            try {
+                if (!container) return null;
+
+                const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
+                const key = toolCallKey(payload);
+                const toolName = payload && payload.toolName != null ? String(payload.toolName).trim() : '';
+
+                const entries = Array.from(container.children || []).filter(entry => entry && entry.classList && entry.classList.contains('tool-call'));
+                if (toolCallId) {
+                    const byId = entries.find(entry => entry.dataset.toolCallId === toolCallId);
+                    if (byId) return byId;
+                }
+
+                if (key) {
+                    const byKey = entries.find(entry => entry.dataset.toolCallKey === key);
+                    if (byKey) return byKey;
+                }
+
+                if (toolName) {
+                    const running = entries.find(entry => entry.dataset.toolCallToolName === toolName && entry.dataset.toolCallState === 'running');
+                    if (running) return running;
+                    const byName = entries.find(entry => entry.dataset.toolCallToolName === toolName);
+                    if (byName) return byName;
+                }
+
+                return entries[0] || null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function ensureToolCallEntry(target, payload, processHtmxElementFn) {
+            try {
+                const container = getToolCallContainer(target);
+                if (!container) return null;
+
+                let details = findToolCallEntry(container, payload);
+                if (!details) {
+                    details = document.createElement('details');
+                    details.className = 'tool-call';
+                    container.appendChild(details);
+                }
+
+                const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
+                const toolName = payload && payload.toolName != null ? String(payload.toolName).trim() : 'tool';
+                const key = toolCallKey(payload);
+
+                if (toolCallId) details.dataset.toolCallId = toolCallId;
+                if (key) details.dataset.toolCallKey = key;
+                details.dataset.toolCallToolName = toolName;
+
+                let summary = getDirectToolCallChild(details, 'tool-call-summary');
+                if (!summary) {
+                    summary = document.createElement('summary');
+                    summary.className = 'tool-call-summary';
+                    details.appendChild(summary);
+                }
+
+                let nameSpan = summary.querySelector('.tool-call-name');
+                if (!nameSpan) {
+                    nameSpan = document.createElement('span');
+                    nameSpan.className = 'tool-call-name';
+                    summary.appendChild(nameSpan);
+                }
+                nameSpan.textContent = toolName;
+
+                let statusSpan = summary.querySelector('.tool-call-status');
+                if (!statusSpan) {
+                    statusSpan = document.createElement('span');
+                    statusSpan.className = 'tool-call-status';
+                    summary.appendChild(statusSpan);
+                }
+
+                let detail = getDirectToolCallChild(details, 'tool-call-detail');
+                if (!detail) {
+                    detail = document.createElement('div');
+                    detail.className = 'tool-call-detail';
+                    details.appendChild(detail);
+                }
+
+                let subagent = getDirectToolCallChild(detail, 'tool-call-subagent');
+                let button = subagent ? subagent.querySelector('.tool-call-subagent-button') : null;
+
+                let inputSection = detail.querySelector('.tool-call-section[data-tool-call-field="input"]');
+                if (!inputSection) {
+                    inputSection = document.createElement('section');
+                    inputSection.className = 'tool-call-section';
+                    inputSection.dataset.toolCallField = 'input';
+                    detail.appendChild(inputSection);
+                }
+
+                let inputLabel = inputSection.querySelector('.tool-call-label');
+                if (!inputLabel) {
+                    inputLabel = document.createElement('div');
+                    inputLabel.className = 'tool-call-label';
+                    inputSection.appendChild(inputLabel);
+                }
+                inputLabel.textContent = 'Input';
+
+                let inputPre = inputSection.querySelector('.tool-call-pre');
+                if (!inputPre) {
+                    inputPre = document.createElement('pre');
+                    inputPre.className = 'tool-call-pre';
+                    inputSection.appendChild(inputPre);
+                }
+
+                let outputSection = detail.querySelector('.tool-call-section[data-tool-call-field="output"]');
+                if (!outputSection) {
+                    outputSection = document.createElement('section');
+                    outputSection.className = 'tool-call-section';
+                    outputSection.dataset.toolCallField = 'output';
+                    detail.appendChild(outputSection);
+                }
+
+                let outputLabel = outputSection.querySelector('.tool-call-label');
+                if (!outputLabel) {
+                    outputLabel = document.createElement('div');
+                    outputLabel.className = 'tool-call-label';
+                    outputSection.appendChild(outputLabel);
+                }
+                outputLabel.textContent = 'Output';
+
+                let outputPre = outputSection.querySelector('.tool-call-pre');
+                if (!outputPre) {
+                    outputPre = document.createElement('pre');
+                    outputPre.className = 'tool-call-pre';
+                    outputSection.appendChild(outputPre);
+                }
+
+                let nestedCalls = getDirectToolCallChild(detail, 'tool-calls');
+                if (!nestedCalls) {
+                    nestedCalls = document.createElement('div');
+                    nestedCalls.className = 'tool-calls';
+                    detail.appendChild(nestedCalls);
+                }
+
+                if (processHtmxElementFn) processHtmxElementFn(button);
+
+                return {details, summary, nameSpan, statusSpan, detail, subagent, button, inputPre, outputPre, nestedCalls};
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function updateToolCallEntry(entry, payload, options) {
+            try {
+                if (!entry || !entry.details) return;
+
+                const details = entry.details;
+                const toolName = options && options.toolName != null ? String(options.toolName) : (payload && payload.toolName != null ? String(payload.toolName) : 'tool');
+                const inputText = options && Object.prototype.hasOwnProperty.call(options, 'inputText') ? String(options.inputText ?? '') : toolCallInputText(payload);
+                const outputText = options && Object.prototype.hasOwnProperty.call(options, 'outputText') ? String(options.outputText ?? '') : toolCallOutputText(payload);
+                const state = options && options.state != null ? String(options.state) : (payload && payload.success != null ? (payload.success ? 'done' : 'error') : 'running');
+                const statusText = options && options.statusText != null ? String(options.statusText) : toolCallStatusText(state, payload && payload.success);
+                const success = options && options.success != null ? Boolean(options.success) : Boolean(payload && payload.success);
+
+                details.dataset.toolCallToolName = toolName;
+                details.dataset.toolCallState = state;
+                if (payload && payload.toolCallId != null) details.dataset.toolCallId = String(payload.toolCallId).trim();
+
+                entry.nameSpan.textContent = toolName;
+                entry.statusSpan.className = 'tool-call-status';
+                if (state === 'done' || success) entry.statusSpan.classList.add('tool-call-status-success');
+                if (state === 'error' || (payload && payload.success === false)) entry.statusSpan.classList.add('tool-call-status-failure');
+                entry.statusSpan.textContent = statusText;
+
+                if (Object.prototype.hasOwnProperty.call(options || {}, 'inputText')) {
+                    entry.inputPre.textContent = inputText;
+                } else if (!entry.inputPre.textContent && inputText) {
+                    entry.inputPre.textContent = inputText;
+                }
+
+                if (Object.prototype.hasOwnProperty.call(options || {}, 'outputText')) {
+                    entry.outputPre.textContent = outputText;
+                } else if (outputText && !entry.outputPre.textContent) {
+                    entry.outputPre.textContent = outputText;
+                }
+
+                if (options && options.appendOutputText != null) {
+                    entry.outputPre.textContent = (entry.outputPre.textContent || '') + String(options.appendOutputText);
+                }
+
+                const subagentSessionId = options && options.subagentSessionId != null ? String(options.subagentSessionId) : (payload && payload.subagentSessionId != null ? String(payload.subagentSessionId) : '');
+                if (subagentSessionId) {
+                    const name = options && options.subagentAgentName != null ? String(options.subagentAgentName) : (payload && payload.subagentAgentName != null ? String(payload.subagentAgentName) : (payload && payload.name != null ? String(payload.name) : subagentSessionId));
+                    if (!entry.subagent) {
+                        entry.subagent = document.createElement('div');
+                        entry.subagent.className = 'tool-call-subagent';
+                        entry.detail.insertBefore(entry.subagent, getDirectToolCallChild(entry.detail, 'tool-call-section') || getDirectToolCallChild(entry.detail, 'tool-calls') || null);
+                    }
+                    if (!entry.button) {
+                        entry.button = document.createElement('button');
+                        entry.button.type = 'button';
+                        entry.button.className = 'tool-call-subagent-button';
+                        entry.subagent.appendChild(entry.button);
+                    }
+                    entry.subagent.dataset.childSessionId = subagentSessionId;
+                    entry.button.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
+                    entry.button.setAttribute('hx-target', '#chat-container');
+                    entry.button.setAttribute('hx-swap', 'outerHTML');
+                    entry.button.replaceChildren(document.createTextNode('Open subagent: '), (() => {
+                        const strong = document.createElement('strong');
+                        strong.textContent = name;
+                        return strong;
+                    })());
+                }
+            } catch (_) {
+            }
+        }
+
+        function appendToolCallToChatRow(target, payload, processHtmxElementFn, options) {
+            try {
+                const entry = ensureToolCallEntry(target, payload, processHtmxElementFn);
+                if (!entry) return null;
+                updateToolCallEntry(entry, payload, options || {});
+                return entry;
+            } catch (_) {
+                return null;
             }
         }
 
@@ -988,6 +1126,13 @@
                     if (payload && payload.delta != null) {
                         const prevRaw = getRawChatMarkdown(textSpan);
                         renderChatMarkdown(textSpan, prevRaw + String(payload.delta));
+                    }
+                    return;
+                }
+
+                if (kind === 'started') {
+                    if (payload && payload.task != null) {
+                        renderChatMarkdown(textSpan, String(payload.task));
                     }
                     return;
                 }
@@ -1149,7 +1294,6 @@
 
                     const es = new EventSource(url);
                     activePendingStreams.set(assistantId, es);
-                    const subagentActivities = new Map();
 
                     // Helper to parse SSE payloads that may be JSON {text:...} or legacy raw strings
                     function parseStreamPayload(e) {
@@ -1179,242 +1323,6 @@
                         }
                     }
 
-                    function renderToolCallToRow(row, payload) {
-                        appendToolCallToChatRow(row, payload, processHtmxElement);
-                    }
-
-                    function ensureSubagentActivityContainer() {
-                        const liveRow = currentRow();
-                        const targetRow = liveRow && liveRow.isConnected ? liveRow : row;
-                        let container = targetRow.querySelector('.subagent-activities');
-                        if (container) return container;
-
-                        container = document.createElement('div');
-                        container.className = 'subagent-activities';
-                        const toolCalls = targetRow.querySelector('.tool-calls');
-                        if (toolCalls && toolCalls.parentNode === targetRow) {
-                            targetRow.insertBefore(container, toolCalls);
-                        } else {
-                            targetRow.appendChild(container);
-                        }
-                        return container;
-                    }
-
-                    function subagentKey(payload) {
-                        const childSessionId = payload && payload.childSessionId != null ? String(payload.childSessionId) : '';
-                        if (childSessionId) return childSessionId;
-                        const parentToolCallId = payload && payload.parentToolCallId != null ? String(payload.parentToolCallId) : '';
-                        if (parentToolCallId) return parentToolCallId;
-                        const agentId = payload && payload.subagentAgentId != null ? String(payload.subagentAgentId) : '';
-                        return agentId || 'subagent';
-                    }
-
-                    function subagentCardMatches(card, key, childSessionId) {
-                        return card && (card.dataset.subagentKey === key || (childSessionId && card.dataset.childSessionId === childSessionId));
-                    }
-
-                    function preferredSubagentCard(cards, key, childSessionId) {
-                        if (cards.length === 0) return null;
-
-                        if (childSessionId) {
-                            const childMatches = cards.filter(card => card.dataset.childSessionId === childSessionId);
-                            const persistedMatch = childMatches.find(card => card.dataset.subagentKey && card.dataset.subagentKey !== childSessionId);
-                            if (persistedMatch) return persistedMatch;
-                            if (childMatches.length > 0) return childMatches[0];
-                        }
-
-                        const keyMatch = cards.find(card => card.dataset.subagentKey === key);
-                        return keyMatch || cards[0];
-                    }
-
-                    function ensureSubagentCard(payload) {
-                        const key = subagentKey(payload || {});
-                        const parentToolCallId = payload && payload.parentToolCallId != null ? String(payload.parentToolCallId) : '';
-                        const container = ensureSubagentActivityContainer();
-                        const childSessionId = payload && payload.childSessionId != null ? String(payload.childSessionId) : '';
-                        const matchingCards = Array.from(container.querySelectorAll('.subagent-activity')).filter(candidate => subagentCardMatches(candidate, key, childSessionId));
-                        let card = preferredSubagentCard(matchingCards, key, childSessionId);
-                        let entry = null;
-
-                        if (!card) {
-                            const existingEntry = subagentActivities.get(key);
-                            if (existingEntry && existingEntry.card && existingEntry.card.isConnected && existingEntry.card.closest('.subagent-activities') === container) {
-                                card = existingEntry.card;
-                            }
-                        }
-
-                        if (card) {
-                            for (const candidate of matchingCards) {
-                                if (candidate !== card) candidate.remove();
-                            }
-
-                            let status = card.querySelector('.subagent-activity__status');
-                            if (!status) {
-                                status = document.createElement('span');
-                                status.className = 'subagent-activity__status';
-                                card.appendChild(status);
-                            }
-
-                            let open = card.querySelector('.subagent-activity__open');
-                            if (!open) {
-                                open = document.createElement('button');
-                                open.type = 'button';
-                                open.className = 'tool-call-subagent-button subagent-activity__open';
-                                open.textContent = 'Open subagent';
-                                card.appendChild(open);
-                            }
-
-                            let text = card.querySelector('.subagent-activity__text');
-                            let body = card.querySelector('.subagent-activity__body');
-                            if (!body) {
-                                body = document.createElement('div');
-                                body.className = 'subagent-activity__body';
-                                if (open && open.parentNode === card) {
-                                    card.insertBefore(body, open.nextSibling);
-                                } else {
-                                    card.appendChild(body);
-                                }
-                            }
-                            if (!text) {
-                                text = document.createElement('div');
-                                text.className = 'subagent-activity__text';
-                                body.appendChild(text);
-                            } else if (text.parentNode !== body) {
-                                body.appendChild(text);
-                            }
-
-                            let toolCalls = card.querySelector('.tool-calls.subagent-activity__tools');
-                            if (!toolCalls) {
-                                toolCalls = document.createElement('div');
-                                toolCalls.className = 'tool-calls subagent-activity__tools';
-                                body.appendChild(toolCalls);
-                            } else if (toolCalls.parentNode !== body) {
-                                body.appendChild(toolCalls);
-                            }
-
-                            if (!card.dataset.subagentKey || card.dataset.subagentKey === key || card.dataset.subagentKey === childSessionId) {
-                                card.dataset.subagentKey = parentToolCallId || key;
-                            }
-                            if (childSessionId) card.dataset.childSessionId = childSessionId;
-
-                            entry = {card, status, text, toolCalls, open};
-                            subagentActivities.set(key, entry);
-                            return entry;
-                        }
-
-                        card = document.createElement('div');
-                        card.className = 'subagent-activity';
-                        card.dataset.subagentKey = parentToolCallId || key;
-                        if (childSessionId) {
-                            card.dataset.childSessionId = childSessionId;
-                        }
-
-                        const header = document.createElement('div');
-                        header.className = 'subagent-activity__header';
-
-                        const name = document.createElement('strong');
-                        name.className = 'subagent-activity__name';
-                        name.textContent = payload && payload.subagentAgentName ? String(payload.subagentAgentName) : 'subagent';
-
-                        const status = document.createElement('span');
-                        status.className = 'subagent-activity__status';
-                        status.textContent = 'running';
-
-                        const open = document.createElement('button');
-                        open.type = 'button';
-                        open.className = 'tool-call-subagent-button subagent-activity__open';
-                        open.textContent = 'Open subagent';
-
-                        header.appendChild(name);
-                        header.appendChild(status);
-                        header.appendChild(open);
-
-                        const body = document.createElement('div');
-                        body.className = 'subagent-activity__body';
-
-                        const text = document.createElement('pre');
-                        text.className = 'subagent-activity__text';
-
-                        const toolCalls = document.createElement('div');
-                        toolCalls.className = 'tool-calls subagent-activity__tools';
-
-                        body.appendChild(text);
-                        body.appendChild(toolCalls);
-                        card.appendChild(header);
-                        card.appendChild(body);
-                        container.appendChild(card);
-
-                        entry = {card, status, text, toolCalls, open};
-                        subagentActivities.set(key, entry);
-                        return entry;
-                    }
-
-                    function configureSubagentOpenButton(entry, payload) {
-                        const childSessionId = payload && payload.childSessionId != null ? String(payload.childSessionId) : '';
-                        if (!entry || !childSessionId) return;
-                        entry.open.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(childSessionId));
-                        entry.open.setAttribute('hx-target', '#chat-container');
-                        entry.open.setAttribute('hx-swap', 'outerHTML');
-                        processHtmxElement(entry.open);
-                        const name = payload && payload.subagentAgentName ? String(payload.subagentAgentName) : childSessionId;
-                        entry.open.replaceChildren(document.createTextNode('Open subagent: '), (() => {
-                            const strong = document.createElement('strong');
-                            strong.textContent = name;
-                            return strong;
-                        })());
-                    }
-
-                    function renderSubagentToolCall(entry, payload) {
-                        if (!entry) return;
-                        const details = document.createElement('details');
-                        details.className = 'tool-call subagent-tool-call';
-
-                        const summary = document.createElement('summary');
-                        summary.className = 'tool-call-summary';
-
-                        const name = document.createElement('span');
-                        name.className = 'tool-call-name';
-                        name.textContent = payload && payload.toolName ? String(payload.toolName) : 'tool';
-
-                        const status = document.createElement('span');
-                        status.className = 'tool-call-status ' + ((payload && payload.success) ? 'tool-call-status-success' : 'tool-call-status-failure');
-                        status.textContent = (payload && payload.success) ? ' success' : ' failure';
-
-                        summary.appendChild(name);
-                        summary.appendChild(status);
-                        details.appendChild(summary);
-
-                        const detail = document.createElement('div');
-                        detail.className = 'tool-call-detail';
-
-                        const inputSection = document.createElement('section');
-                        inputSection.className = 'tool-call-section';
-                        const inputLabel = document.createElement('div');
-                        inputLabel.className = 'tool-call-label';
-                        inputLabel.textContent = 'Input';
-                        const inputPre = document.createElement('pre');
-                        inputPre.className = 'tool-call-pre';
-                        inputPre.textContent = payload && payload.inputPreview ? String(payload.inputPreview) : '';
-                        inputSection.appendChild(inputLabel);
-                        inputSection.appendChild(inputPre);
-
-                        const outputSection = document.createElement('section');
-                        outputSection.className = 'tool-call-section';
-                        const outputLabel = document.createElement('div');
-                        outputLabel.className = 'tool-call-label';
-                        outputLabel.textContent = 'Output';
-                        const outputPre = document.createElement('pre');
-                        outputPre.className = 'tool-call-pre';
-                        outputPre.textContent = payload && payload.outputPreview ? String(payload.outputPreview) : '';
-                        outputSection.appendChild(outputLabel);
-                        outputSection.appendChild(outputPre);
-
-                        detail.appendChild(inputSection);
-                        detail.appendChild(outputSection);
-                        details.appendChild(detail);
-                        entry.toolCalls.appendChild(details);
-                    }
-
                     es.addEventListener('delta', (e) => {
                         try {
                             const payload = parseStreamPayload(e);
@@ -1428,71 +1336,114 @@
                         }
                     });
 
-                    es.addEventListener('subagent_started', (e) => {
+                    es.addEventListener('tool_call_started', (e) => {
                         try {
                             const payload = parseStreamPayload(e) || {};
-                            const entry = ensureSubagentCard(payload);
-                            configureSubagentOpenButton(entry, payload);
-                            entry.status.textContent = 'running';
-                            if (payload.task != null) {
-                                entry.text.textContent = String(payload.task);
-                            }
-                            schedulePrimaryChatRefresh();
+                            const liveRow = currentRow();
+                            if (!liveRow) return;
+                            appendToolCallToChatRow(liveRow, payload, processHtmxElement, {
+                                state: 'running',
+                                statusText: 'running',
+                                success: false,
+                                inputText: toolCallInputText(payload),
+                                outputText: toolCallOutputText(payload)
+                            });
                         } catch (_) {
                         }
                     });
 
-                    es.addEventListener('subagent_delta', (e) => {
+                    es.addEventListener('tool_call_progress', (e) => {
                         try {
-                            const payload = parseStreamPayload(e) || {};
-                            const entry = ensureSubagentCard(payload);
-                            if (payload.delta != null) {
-                                entry.text.textContent = (entry.text.textContent || '') + String(payload.delta);
-                            }
-                            updateOpenSubagentTranscript(payload, 'delta');
-                            schedulePrimaryChatRefresh();
-                        } catch (_) {
-                        }
-                    });
+                            const event = parseStreamPayload(e) || {};
+                            const payload = event.payload || {};
+                            const liveRow = currentRow();
+                            if (!liveRow) return;
 
-                    es.addEventListener('subagent_tool_call', (e) => {
-                        try {
-                            const payload = parseStreamPayload(e) || {};
-                            const entry = ensureSubagentCard(payload);
-                            renderSubagentToolCall(entry, payload);
-                            updateOpenSubagentTranscript(payload, 'tool_call');
-                            schedulePrimaryChatRefresh();
-                        } catch (_) {
-                        }
-                    });
-
-                    es.addEventListener('subagent_done', (e) => {
-                        try {
-                            const payload = parseStreamPayload(e) || {};
-                            const entry = ensureSubagentCard(payload);
-                            if (payload.finalText != null) {
-                                entry.text.textContent = String(payload.finalText);
+                            if (event.eventName === 'subagent_started') {
+                                appendToolCallToChatRow(liveRow, {
+                                    toolCallId: event.toolCallId,
+                                    toolName: event.toolName,
+                                    inputPreview: toolCallInputText(payload) || payload.task || '',
+                                    subagentSessionId: payload.childSessionId,
+                                    subagentAgentName: payload.subagentAgentName
+                                }, processHtmxElement, {
+                                    state: 'running',
+                                    statusText: 'running',
+                                    success: false,
+                                    outputText: payload.task != null ? String(payload.task) : '',
+                                    subagentSessionId: payload.childSessionId,
+                                    subagentAgentName: payload.subagentAgentName
+                                });
+                                updateOpenSubagentTranscript(payload, 'started');
+                                return;
                             }
-                            entry.status.textContent = 'done';
-                            entry.card.classList.add('is-done');
-                            configureSubagentOpenButton(entry, payload);
-                            updateOpenSubagentTranscript(payload, 'done');
-                            schedulePrimaryChatRefresh();
-                        } catch (_) {
-                        }
-                    });
 
-                    es.addEventListener('subagent_error', (e) => {
-                        try {
-                            const payload = parseStreamPayload(e) || {};
-                            const entry = ensureSubagentCard(payload);
-                            entry.status.textContent = 'error';
-                            entry.card.classList.add('is-error');
-                            if (payload.errorText != null) {
-                                entry.text.textContent = String(payload.errorText);
+                            if (event.eventName === 'subagent_delta') {
+                                const entry = appendToolCallToChatRow(liveRow, {
+                                    toolCallId: event.toolCallId,
+                                    toolName: event.toolName,
+                                    inputPreview: toolCallInputText(payload) || payload.task || ''
+                                }, processHtmxElement, {state: 'running', statusText: 'running', success: false});
+                                if (entry && entry.outputPre && payload.delta != null) {
+                                    entry.outputPre.textContent = (entry.outputPre.textContent || '') + String(payload.delta);
+                                }
+                                updateOpenSubagentTranscript(payload, 'delta');
+                                return;
                             }
-                            updateOpenSubagentTranscript(payload, 'error');
-                            schedulePrimaryChatRefresh();
+
+                            if (event.eventName === 'subagent_tool_call') {
+                                const parentEntry = appendToolCallToChatRow(liveRow, {
+                                    toolCallId: event.toolCallId,
+                                    toolName: event.toolName,
+                                    inputPreview: toolCallInputText(payload) || payload.task || ''
+                                }, processHtmxElement, {state: 'running', statusText: 'running', success: false});
+                                if (parentEntry && parentEntry.nestedCalls) {
+                                    appendToolCallToChatRow(parentEntry.nestedCalls, payload, processHtmxElement, {
+                                        state: payload.success ? 'done' : 'error',
+                                        statusText: payload.success ? 'success' : 'failure',
+                                        success: Boolean(payload.success)
+                                    });
+                                }
+                                updateOpenSubagentTranscript(payload, 'tool_call');
+                                return;
+                            }
+
+                            if (event.eventName === 'subagent_done') {
+                                appendToolCallToChatRow(liveRow, {
+                                    toolCallId: event.toolCallId,
+                                    toolName: event.toolName,
+                                    inputPreview: toolCallInputText(payload) || payload.task || '',
+                                    subagentSessionId: payload.childSessionId,
+                                    subagentAgentName: payload.subagentAgentName
+                                }, processHtmxElement, {
+                                    state: 'done',
+                                    statusText: 'done',
+                                    success: true,
+                                    outputText: payload.finalText != null ? String(payload.finalText) : '',
+                                    subagentSessionId: payload.childSessionId,
+                                    subagentAgentName: payload.subagentAgentName
+                                });
+                                updateOpenSubagentTranscript(payload, 'done');
+                                return;
+                            }
+
+                            if (event.eventName === 'subagent_error') {
+                                appendToolCallToChatRow(liveRow, {
+                                    toolCallId: event.toolCallId,
+                                    toolName: event.toolName,
+                                    inputPreview: toolCallInputText(payload) || payload.task || '',
+                                    subagentSessionId: payload.childSessionId,
+                                    subagentAgentName: payload.subagentAgentName
+                                }, processHtmxElement, {
+                                    state: 'error',
+                                    statusText: 'error',
+                                    success: false,
+                                    outputText: payload.errorText != null ? String(payload.errorText) : '',
+                                    subagentSessionId: payload.childSessionId,
+                                    subagentAgentName: payload.subagentAgentName
+                                });
+                                updateOpenSubagentTranscript(payload, 'error');
+                            }
                         } catch (_) {
                         }
                     });
@@ -1615,7 +1566,12 @@
                             if (payload && Array.isArray(payload.toolCalls) && payload.toolCalls.length > 0) {
                                 const doneRow = currentRow();
                                 if (doneRow) {
-                                    payload.toolCalls.forEach(toolCall => renderToolCallToRow(doneRow, toolCall));
+                                    payload.toolCalls.forEach(toolCall => appendToolCallToChatRow(doneRow, toolCall, processHtmxElement, {
+                                        state: toolCall.success ? 'done' : 'error',
+                                        statusText: toolCall.success ? 'success' : 'failure',
+                                        success: Boolean(toolCall.success),
+                                        outputText: toolCallOutputText(toolCall)
+                                    }));
                                 }
                             }
 
@@ -1674,19 +1630,14 @@
                     es.addEventListener('tool_call', (e) => {
                         try {
                             const payload = parseStreamPayload(e) || {};
-                            // payload expected: {toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated}
-                            const toolName = payload.toolName != null ? String(payload.toolName) : '';
-                            const success = Boolean(payload.success);
-                            const inputPreview = payload.inputPreview != null ? String(payload.inputPreview) : '';
-                            const outputPreview = payload.outputPreview != null ? String(payload.outputPreview) : '';
-                            const inputTruncated = Boolean(payload.inputTruncated);
-                            const outputTruncated = Boolean(payload.outputTruncated);
-                            const subagentSessionId = payload.subagentSessionId != null && String(payload.subagentSessionId).trim() !== '' ? String(payload.subagentSessionId) : '';
-                            const subagentAgentName = payload.subagentAgentName != null ? String(payload.subagentAgentName) : '';
-
                             const liveRow = currentRow();
                             if (!liveRow) return;
-                            renderToolCallToRow(liveRow, payload);
+                            appendToolCallToChatRow(liveRow, payload, processHtmxElement, {
+                                state: payload.success ? 'done' : 'error',
+                                statusText: payload.success ? 'success' : 'failure',
+                                success: Boolean(payload.success),
+                                outputText: toolCallOutputText(payload)
+                            });
 
                             // Preserve streaming scroll behavior: if this stream was sticking
                             // to bottom, ensure we remain pinned after appending.
@@ -1792,7 +1743,6 @@
                 const liveList = document.getElementById('chat-messages-list');
                 const base = liveList ? liveList : (target && target.querySelector && target.querySelector('.chat-message-text') ? target : document);
                 Promise.resolve().then(() => renderAllChatMarkdown(base));
-                Promise.resolve().then(schedulePrimaryChatRefresh);
             } catch (_) {
             }
         }, true);
@@ -1802,7 +1752,6 @@
                 const liveList = document.getElementById('chat-messages-list');
                 const base = liveList ? liveList : (target && target.querySelector && target.querySelector('.chat-message-text') ? target : document);
                 Promise.resolve().then(() => renderAllChatMarkdown(base));
-                Promise.resolve().then(schedulePrimaryChatRefresh);
             } catch (_) {
             }
         }, true);

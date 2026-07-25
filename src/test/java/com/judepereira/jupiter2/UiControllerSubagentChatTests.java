@@ -10,7 +10,6 @@ import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
-import com.judepereira.jupiter2.persistence.Persistence.SubagentActivityView;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter2.terminal.TerminalManager;
@@ -50,8 +49,9 @@ public class UiControllerSubagentChatTests {
 
         assertThat(primaryView).isEqualTo("fragments/chat :: chat");
         assertThat(primaryModel.getAttribute("subagentView")).isEqualTo(false);
-        assertThat((List<SubagentActivityView>) primaryModel.getAttribute("subagentActivities")).hasSize(1);
-        assertThat((List<SubagentActivityView>) primaryModel.getAttribute("unmatchedSubagentActivities")).hasSize(1);
+        assertThat(primaryModel.getAttribute("subagentAgentName")).isNull();
+        assertThat(primaryModel.getAttribute("subagentAgentId")).isNull();
+        assertThat(primaryModel.getAttribute("subagentSessionId")).isNull();
         assertThat((List<AgentDefinition>) primaryModel.getAttribute("agents")).extracting(AgentDefinition::id)
                 .containsExactly("plan", "engineer");
 
@@ -60,8 +60,8 @@ public class UiControllerSubagentChatTests {
 
         assertThat(subagentView).isEqualTo("fragments/chat :: chat");
         assertThat(subagentModel.getAttribute("subagentView")).isEqualTo(true);
-        assertThat((List<SubagentActivityView>) subagentModel.getAttribute("subagentActivities")).isEmpty();
         assertThat(subagentModel.getAttribute("subagentAgentName")).isEqualTo("Engineer");
+        assertThat(subagentModel.getAttribute("subagentAgentId")).isEqualTo("engineer");
         assertThat(subagentModel.getAttribute("subagentSessionId")).isEqualTo(childSessionId);
         assertThat((List<UiController.ChatMessage>) subagentModel.getAttribute("chatMessages")).extracting(UiController.ChatMessage::text)
                 .contains("Primary task:\nwrite a file", "child final");
@@ -71,8 +71,8 @@ public class UiControllerSubagentChatTests {
 
         assertThat(backView).isEqualTo("fragments/chat :: chat");
         assertThat(backModel.getAttribute("subagentView")).isEqualTo(false);
-        assertThat((List<SubagentActivityView>) backModel.getAttribute("subagentActivities")).hasSize(1);
         assertThat(backModel.getAttribute("subagentAgentName")).isNull();
+        assertThat(backModel.getAttribute("subagentAgentId")).isNull();
         assertThat(backModel.getAttribute("subagentSessionId")).isNull();
     }
 

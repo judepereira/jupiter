@@ -60,20 +60,20 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-input").fill("please use a task");
             page.locator("#chat-send-btn").click();
 
-            page.locator(".subagent-activity").waitFor();
-            assertThat(page.locator(".subagent-activity")).isVisible();
-            assertThat(page.locator(".subagent-activity__name")).hasText("Explore");
-            assertThat(page.locator(".subagent-activity__status")).hasText("done");
-            assertThat(page.locator(".subagent-activity__text")).containsText("Explore subagent finished");
-            assertThat(page.locator(".subagent-activity .subagent-activity__open")).containsText("Open subagent");
+            var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call[data-tool-call-id='task-1']");
+            taskToolCall.waitFor();
+            assertThat(taskToolCall).isVisible();
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-name")).hasText("task");
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-status")).hasText("success");
 
-            page.locator("#chat-messages-list > li .tool-calls > .tool-call > summary.tool-call-summary").first().click();
-            page.locator(".subagent-activity .subagent-activity__open").waitFor();
-            assertThat(page.locator(".subagent-activity .subagent-activity__open")).containsText("Open subagent");
+            taskToolCall.locator(":scope > summary.tool-call-summary").click();
+            var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
+            taskSubagentButton.waitFor();
+            assertThat(taskSubagentButton).containsText("Open subagent");
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).doesNotContain("Primary task:");
 
-            String subagentHref = page.locator("#chat-messages-list > li .tool-calls > .tool-call > .tool-call-detail > .tool-call-subagent > .tool-call-subagent-button").getAttribute("hx-get");
+            String subagentHref = taskSubagentButton.getAttribute("hx-get");
             org.assertj.core.api.Assertions.assertThat(subagentHref).contains("/ui/chat/subagent/");
             page.evaluate("url => htmx.ajax('GET', url, { target: '#chat-container', swap: 'outerHTML' })", subagentHref);
             page.locator(".subagent-bar").waitFor();
@@ -173,12 +173,16 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-send-btn").click();
 
             TestAppConfig.awaitSubagentStarted();
-            page.locator(".subagent-activity").waitFor();
-            assertThat(page.locator(".subagent-activity__status")).hasText("running");
-            assertThat(page.locator(".subagent-activity__name")).hasText("Explore");
-            assertThat(page.locator(".subagent-activity__text")).containsText("Explore subagent");
+            var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call[data-tool-call-id='task-1']");
+            taskToolCall.waitFor();
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-name")).hasText("task");
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-status")).hasText("running");
+            taskToolCall.locator(":scope > summary.tool-call-summary").click();
+            var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
+            taskSubagentButton.waitFor();
+            assertThat(taskSubagentButton).containsText("Open subagent: Explore");
 
-            page.locator(".subagent-activity .subagent-activity__open").click();
+            taskSubagentButton.click();
             page.locator(".subagent-bar").waitFor();
             assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
             String subagentText = page.locator("#chat-container").innerText();
@@ -225,11 +229,15 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-send-btn").click();
 
             TestAppConfig.awaitSubagentStarted();
-            page.locator(".subagent-activity").waitFor();
-            assertThat(page.locator(".subagent-activity")).isVisible();
-            assertThat(page.locator(".subagent-activity__status")).hasText("running");
+            var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call[data-tool-call-id='task-1']");
+            taskToolCall.waitFor();
+            assertThat(taskToolCall).isVisible();
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-status")).hasText("running");
 
-            page.locator(".subagent-activity .subagent-activity__open").click();
+            taskToolCall.locator(":scope > summary.tool-call-summary").click();
+            var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
+            taskSubagentButton.waitFor();
+            taskSubagentButton.click();
             page.locator(".subagent-bar").waitFor();
             assertThat(page.locator(".subagent-bar")).isVisible();
             assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
@@ -238,23 +246,22 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator(".subagent-back-button").click();
             page.locator("#chat-send-form").waitFor();
             assertThat(page.locator("#chat-send-form")).isVisible();
-            page.locator(".subagent-activity").waitFor();
-            assertThat(page.locator(".subagent-activity")).isVisible();
-            org.assertj.core.api.Assertions.assertThat((Number) page.locator(".subagent-activity .subagent-activity__open")
+            taskToolCall.waitFor();
+            assertThat(taskToolCall).isVisible();
+            org.assertj.core.api.Assertions.assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
                     .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
                     .isEqualTo(1);
-            assertThat(page.locator(".subagent-activity .subagent-activity__open")).containsText("Open subagent");
+            assertThat(taskToolCall.locator(".tool-call-subagent-button")).containsText("Open subagent");
 
             TestAppConfig.releaseSubagentTurn();
             TestAppConfig.awaitSubagentCompleted();
 
-            org.assertj.core.api.Assertions.assertThat((Number) page.locator(".subagent-activity .subagent-activity__open")
+            org.assertj.core.api.Assertions.assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
                     .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
                     .isEqualTo(1);
 
-            var taskToolCallSummary = page.locator("#chat-messages-list > li > .tool-calls > .tool-call > summary.tool-call-summary").first();
+            var taskToolCallSummary = taskToolCall.locator(":scope > summary.tool-call-summary");
             taskToolCallSummary.click();
-            var taskSubagentButton = page.locator("#chat-messages-list > li > .tool-calls > .tool-call > .tool-call-detail > .tool-call-subagent > .tool-call-subagent-button").first();
             assertThat(taskSubagentButton).isVisible();
             taskSubagentButton.click();
             page.locator(".subagent-bar").waitFor();
@@ -370,12 +377,20 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                     control.started.countDown();
                     awaitRelease(control.release);
                 }
+                Map<String, Object> taskArgs = Map.of(
+                        "agentId", "explore",
+                        "task", "Inspect the task flow and report back.",
+                        "expectedOutput", "Explore subagent finished"
+                );
+                listener.onStatus("calling_tool:task");
+                listener.onToolCallStarted(new ToolCallTrace("task-1", "task", taskArgs, false, "", Map.of()));
                 ToolExecutionResult taskResult = taskTool.execute(Map.of(
                         "agentId", "explore",
                         "task", "Inspect the task flow and report back.",
                         "expectedOutput", "Explore subagent finished"
                 ), new ToolExecutionContext(Path.of(request.getWorkspaceRoot()), false, false, 30,
-                        request.getSessionId(), "task-1", com.judepereira.jupiter2.agent.catalog.AgentMode.AGENT, "task-1"));
+                        request.getSessionId(), "task-1", com.judepereira.jupiter2.agent.catalog.AgentMode.AGENT, "task-1",
+                        (eventName, payload) -> listener.onToolCallProgress("task-1", "task", eventName, payload)));
 
                 ToolCallTrace trace = new ToolCallTrace("task-1", "task", Map.of(
                         "agentId", "explore",

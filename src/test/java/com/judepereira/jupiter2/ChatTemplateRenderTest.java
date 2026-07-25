@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
-import com.judepereira.jupiter2.persistence.Persistence.SubagentActivityView;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
@@ -19,9 +18,7 @@ import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import java.util.Map;
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,8 +44,6 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("reviewPanelOpen", false);
         context.setVariable("subagentView", false);
-        context.setVariable("subagentActivities", List.of());
-        context.setVariable("unmatchedSubagentActivities", List.of());
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
@@ -91,17 +86,15 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("subagentActivities", List.of());
-        context.setVariable("unmatchedSubagentActivities", List.of());
         context.setVariable("newChatMessages", List.of(
                 new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
-                        List.of(new UiController.ToolCallView("task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
+                        List.of(new UiController.ToolCallView("tool-call-1", "task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
                                 42L, "engineer", "Engineer")), null)
         ));
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("Open subagent:", "Engineer", "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).contains("data-tool-call-id=\"tool-call-1\"", "Open subagent:", "Engineer", "hx-get=\"/ui/chat/subagent/42\"");
     }
 
     @Test
@@ -126,8 +119,6 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("subagentActivities", List.of());
-        context.setVariable("unmatchedSubagentActivities", List.of());
         context.setVariable("subagentView", true);
         context.setVariable("subagentAgentName", "Engineer");
         context.setVariable("subagentAgentId", "engineer");
@@ -151,7 +142,7 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
-    public void chatFragmentRendersServerSideSubagentActivityCard() {
+    public void chatFragmentRendersCompletedTaskToolCallWithOpenSubagentButton() {
         AgentDefinitionService agentService = new AgentDefinitionService(new ObjectMapper());
         var modelService = ModelCatalogTestSupport.modelCatalogService();
 
@@ -170,16 +161,12 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewOob", false);
         context.setVariable("reviewPanelOpen", false);
         context.setVariable("subagentView", false);
-        context.setVariable("subagentActivities", List.of(new SubagentActivityView(42L, "parent-tool-call", "Engineer", "done", "child final")));
-        context.setVariable("unmatchedSubagentActivities", List.of());
-        context.setVariable("hasUnmatchedSubagentActivities", false);
-        context.setVariable("messageSubagentActivitySessionIds", Map.of("assistant-1", Set.of(42L)));
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
         context.setVariable("chatMessages", List.of(
                 new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
-                        List.of(new UiController.ToolCallView("task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
+                        List.of(new UiController.ToolCallView("tool-call-1", "task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
                                 42L, "engineer", "Engineer")), null)
         ));
         context.setVariable("agents", agentService.listPrimaryAgents());
@@ -191,9 +178,9 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat", context);
 
-        assertThat(html).contains("subagent-activities", "subagent-activity", "subagent-activity__name", "subagent-activity__status",
-                "subagent-activity__open", "subagent-activity__text", "Engineer", "done", "child final", "data-child-session-id=\"42\"",
+        assertThat(html).contains("class=\"tool-call\"", "data-tool-call-id=\"tool-call-1\"", "Open subagent:", "Engineer",
                 "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).doesNotContain("subagent-activities");
     }
 
     private static WebContext webContext() {
@@ -205,4 +192,5 @@ public class ChatTemplateRenderTest {
         request.setRequestURI("/");
         return new WebContext(application.buildExchange(request, new MockHttpServletResponse()), Locale.US);
     }
+
 }

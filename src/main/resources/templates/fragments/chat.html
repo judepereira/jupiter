@@ -24,11 +24,11 @@
                     </div>
 
                     <div th:if="${m.toolCalls != null and !#lists.isEmpty(m.toolCalls)}" class="tool-calls">
-                        <details th:each="call : ${m.toolCalls}" class="tool-call">
+                        <details th:each="call : ${m.toolCalls}" class="tool-call" th:attr="data-tool-call-id=${call.toolCallId}" th:with="toolCallStatus=${call.status != null ? call.status : (call.success ? 'success' : 'failure')}">
                             <summary class="tool-call-summary">
                                 <span class="tool-call-name" th:text="${call.toolName}"></span>
-                                <span class="tool-call-status" th:classappend="${call.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
-                                      th:text="${call.success} ? 'success' : 'failure'"></span>
+                                <span class="tool-call-status" th:classappend="${toolCallStatus == 'success'} ? ' tool-call-status-success' : (${toolCallStatus == 'failure'} ? ' tool-call-status-failure' : ' tool-call-status-running')"
+                                      th:text="${toolCallStatus}"></span>
                             </summary>
 
                             <div class="tool-call-detail">
@@ -57,37 +57,6 @@
                         </details>
                     </div>
 
-                    <div th:if="${m.role == 'assistant' and !(subagentView ?: false) and (((messageSubagentActivitySessionIds != null) and (messageSubagentActivitySessionIds[m.id] != null)) or (m.pending and (hasUnmatchedSubagentActivities ?: false)))}"
-                          class="subagent-activities">
-                        <div th:each="activity : ${subagentActivities}"
-                              th:if="${messageSubagentActivitySessionIds != null and messageSubagentActivitySessionIds[m.id] != null and messageSubagentActivitySessionIds[m.id].contains(activity.childSessionId)}"
-                              class="subagent-activity"
-                              th:attr="data-subagent-key=${activity.parentToolCallId != null ? activity.parentToolCallId : activity.childSessionId}, data-child-session-id=${activity.childSessionId}">
-                            <span class="subagent-activity__name" th:text="${activity.subagentAgentName}"></span>
-                            <span class="subagent-activity__status" th:text="${activity.status}"></span>
-                            <button type="button"
-                                    class="subagent-activity__open"
-                                    th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${activity.childSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                Open subagent
-                            </button>
-                            <div class="subagent-activity__text" th:text="${activity.previewText}"></div>
-                        </div>
-
-                        <div th:if="${m.pending}" >
-                            <div th:each="activity : ${unmatchedSubagentActivities}"
-                                 class="subagent-activity"
-                                 th:attr="data-subagent-key=${activity.parentToolCallId != null ? activity.parentToolCallId : activity.childSessionId}, data-child-session-id=${activity.childSessionId}">
-                                <span class="subagent-activity__name" th:text="${activity.subagentAgentName}"></span>
-                                <span class="subagent-activity__status" th:text="${activity.status}"></span>
-                                <button type="button"
-                                        class="subagent-activity__open"
-                                        th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${activity.childSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                    Open subagent
-                                </button>
-                                <div class="subagent-activity__text" th:text="${activity.previewText}"></div>
-                            </div>
-                        </div>
-                    </div>
                 </li>
             </ul>
         </div>

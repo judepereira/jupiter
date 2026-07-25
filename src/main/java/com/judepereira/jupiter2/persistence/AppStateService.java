@@ -16,7 +16,6 @@ import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter2.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.SessionView;
-import com.judepereira.jupiter2.persistence.Persistence.SubagentActivityView;
 import com.judepereira.jupiter2.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallView;
@@ -33,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -344,27 +344,28 @@ public class AppStateService {
 
         long sequence = repository.nextToolCallTraceSequence(sessionId);
         String toolCallId = trace.toolCallId() == null || trace.toolCallId().isBlank() ? String.valueOf(sequence) : trace.toolCallId();
+        ToolCallTraceInput normalizedTrace = new ToolCallTraceInput(toolCallId, trace.toolName(), trace.args(), trace.success(), trace.textSummary(), trace.machineSummary());
         List<ToolCallPayload> payloads = toolCallPayloads(assistantMessage.toolCallsJson());
         if (payloads.stream().anyMatch(payload -> toolCallId.equals(payload.toolCallId()))) {
-            return traceToView(trace);
+            return traceToView(normalizedTrace);
         }
 
-        String argsJson = json(trace.args());
-        String machineSummaryJson = json(trace.machineSummary());
-        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, trace.toolName(), trace.success(), argsJson, trace.textSummary(), machineSummaryJson, now);
-        payloads.add(new ToolCallPayload(toolCallId, trace.toolName(), trace.args()));
+        String argsJson = json(normalizedTrace.args());
+        String machineSummaryJson = json(normalizedTrace.machineSummary());
+        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(), machineSummaryJson, now);
+        payloads.add(new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()));
         repository.updateMessageToolCalls(assistantMessage.id(), json(payloads));
 
         long assistantToolCallSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant", assistantMessage.turnId(), assistantToolCallSequence,
-                "", null, json(List.of(new ToolCallPayload(toolCallId, trace.toolName(), trace.args()))), false, true, false,
+                "", null, json(List.of(new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()))), false, true, false,
                 assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), null, now);
 
         long toolResultSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,
-                trace.textSummary() == null ? "" : trace.textSummary(), toolCallId, null, false, true, false, now);
+                normalizedTrace.textSummary() == null ? "" : normalizedTrace.textSummary(), toolCallId, null, false, true, false, now);
 
-        return traceToView(trace);
+        return traceToView(normalizedTrace);
     }
 
     @Transactional
@@ -710,7 +711,8 @@ public class AppStateService {
     public SessionDetailView loadSessionDetail(long sessionId) {
         var session = repository.findSession(sessionId);
         var workspace = repository.findWorkspace(session.workspaceId());
-        var messages = repository.listVisibleMessagesBySession(sessionId).stream().map(message -> toChatMessageView(message, sessionId)).toList();
+        var messages = applySyntheticSubagentToolCalls(sessionId,
+                repository.listVisibleMessagesBySession(sessionId).stream().map(message -> toChatMessageView(message, sessionId)).toList());
         ReviewSource reviewSource = session.reviewSource();
         List<ChangedFileView> files = reviewSource == ReviewSource.GIT
                 ? listGitChangedFiles(Path.of(workspace.normalizedPath())).stream().map(this::toChangedFileView).toList()
@@ -719,6 +721,51 @@ public class AppStateService {
                 ? null
                 : session.selectedChangedFileId() == null ? null : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
+    }
+
+    private List<ChatMessageView> applySyntheticSubagentToolCalls(long parentSessionId, List<ChatMessageView> messages) {
+        int pendingAssistantIndex = -1;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            var message = messages.get(i);
+            if (message.pending() && "assistant".equals(message.role())) {
+                pendingAssistantIndex = i;
+                break;
+            }
+        }
+        if (pendingAssistantIndex < 0) {
+            return messages;
+        }
+
+        Set<String> existingToolCallIds = new java.util.HashSet<>();
+        for (var message : messages) {
+            for (var toolCall : message.toolCalls()) {
+                if (toolCall.toolCallId() != null && !toolCall.toolCallId().isBlank()) {
+                    existingToolCallIds.add(toolCall.toolCallId());
+                }
+            }
+        }
+
+        List<ToolCallView> syntheticToolCalls = new ArrayList<>();
+        for (var childSession : repository.listChildSessionsByParentSession(parentSessionId)) {
+            String parentToolCallId = childSession.parentToolCallId();
+            if (!childSession.hidden() || parentToolCallId == null || parentToolCallId.isBlank() || existingToolCallIds.contains(parentToolCallId)) {
+                continue;
+            }
+            syntheticToolCalls.add(new ToolCallView(parentToolCallId, "task", true, "", "running", false, false,
+                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running"));
+        }
+
+        if (syntheticToolCalls.isEmpty()) {
+            return messages;
+        }
+
+        ArrayList<ChatMessageView> updated = new ArrayList<>(messages);
+        ChatMessageView pendingAssistant = messages.get(pendingAssistantIndex);
+        ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(pendingAssistant.toolCalls());
+        mergedToolCalls.addAll(syntheticToolCalls);
+        updated.set(pendingAssistantIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
+                pendingAssistant.id(), mergedToolCalls, pendingAssistant.metadata()));
+        return updated;
     }
 
     public SubagentSessionDetailView loadSubagentSessionDetail(long sessionId) {
@@ -730,40 +777,21 @@ public class AppStateService {
                 session.subagentAgentId(), session.subagentAgentName());
     }
 
-    public List<SubagentActivityView> listSubagentActivities(long parentSessionId) {
-        return repository.listChildSessionsByParentSession(parentSessionId).stream()
-                .map(child -> toSubagentActivityView(child, loadSessionDetail(child.id())))
-                .toList();
-    }
-
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId) {
-        List<ToolCallView> toolCalls = repository.listToolCallTracesByAssistantMessage(message.id()).stream().map(this::toToolCallView).toList();
+        List<ToolCallPayload> payloads = toolCallPayloads(message.toolCallsJson());
+        List<AppStateRepository.ToolCallTraceRow> traces = repository.listToolCallTracesByAssistantMessage(message.id());
+        List<ToolCallView> toolCalls = new ArrayList<>(traces.size());
+        for (int i = 0; i < traces.size(); i++) {
+            String toolCallId = i < payloads.size() ? payloads.get(i).toolCallId() : null;
+            toolCalls.add(toToolCallView(traces.get(i), toolCallId));
+        }
         return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(), toolCalls,
                 message.agentId() == null && message.agentName() == null && message.modelId() == null && message.thinkingLevel() == null ? null :
                         new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel()));
     }
 
-    private SubagentActivityView toSubagentActivityView(AppStateRepository.SessionRow session, SessionDetailView detail) {
-        List<ChatMessageView> messages = detail.chatMessages();
-        boolean running = messages.stream().anyMatch(ChatMessageView::pending);
-        String status;
-        if (running) {
-            status = "running";
-        } else if (messages.stream().anyMatch(message -> "assistant".equals(message.role()) && message.text() != null && message.text().startsWith("Agent execution failed:"))) {
-            status = "error";
-        } else {
-            status = "done";
-        }
-        String previewText = messages.stream()
-                .filter(message -> "assistant".equals(message.role()) || "user".equals(message.role()))
-                .reduce((first, second) -> second)
-                .map(message -> message.text() == null ? "" : message.text())
-                .orElse("");
-        return new SubagentActivityView(session.id(), session.parentToolCallId(), session.subagentAgentName(), status, previewText);
-    }
-
-    private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace) {
-        return traceToView(new ToolCallTraceInput(null, trace.toolName(), readMap(trace.argsJson()), trace.success(), trace.textSummary(), readMap(trace.machineSummaryJson())));
+    private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace, String toolCallId) {
+        return traceToView(new ToolCallTraceInput(toolCallId, trace.toolName(), readMap(trace.argsJson()), trace.success(), trace.textSummary(), readMap(trace.machineSummaryJson())));
     }
 
     private ToolCallView traceToView(ToolCallTraceInput trace) {
@@ -774,7 +802,8 @@ public class AppStateService {
         String inPreview = previewAndTruncate(input, 2000, inTr);
         String outPreview = previewAndTruncate(output, 2000, outTr);
         SubagentLinkInfo subagent = subagentLinkInfo(trace.machineSummary());
-        return new ToolCallView(trace.toolName(), trace.success(), inPreview, outPreview, inTr[0], outTr[0], subagent.subagentSessionId(), subagent.subagentAgentId(), subagent.subagentAgentName());
+        return new ToolCallView(trace.toolCallId(), trace.toolName(), trace.success(), inPreview, outPreview, inTr[0], outTr[0], subagent.subagentSessionId(),
+                subagent.subagentAgentId(), subagent.subagentAgentName(), null);
     }
 
     private SubagentLinkInfo subagentLinkInfo(Map<String, Object> machineSummary) {
