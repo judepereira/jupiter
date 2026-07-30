@@ -416,6 +416,9 @@
         // so we can keep them pinned when pending->final replacements preserve
         // message count but change heights. Cleared after a swap settles.
         let wasNearBottomBeforeSwap = false;
+        let primaryChatScrollState = null;
+        let primaryChatScrollRestorePending = false;
+        let subagentScrollRestoreBound = false;
         // Ensure we add the textarea clear listener only once across re-inits
         let htmxAfterOnLoadBound = false;
 
@@ -477,7 +480,6 @@
                 try {
                     const history = document.getElementById('chat-history');
                     if (!history) return false;
-                    // Consider "near bottom" to be within 48px of the max scroll
                     const max = history.scrollHeight - history.clientHeight;
                     const cur = history.scrollTop;
                     if (!Number.isFinite(max) || !Number.isFinite(cur)) return false;
@@ -485,6 +487,78 @@
                 } catch (_) {
                     return false;
                 }
+            }
+
+            function capturePrimaryChatScrollState() {
+                try {
+                    if (getCurrentOpenSubagentSessionId()) return;
+                    const history = document.getElementById('chat-history');
+                    if (!history) return;
+                    const max = Math.max(0, history.scrollHeight - history.clientHeight);
+                    const scrollTop = history.scrollTop;
+                    const bottomOffset = Math.max(0, max - scrollTop);
+                    primaryChatScrollState = {
+                        scrollTop: scrollTop,
+                        bottomOffset: bottomOffset,
+                        nearBottom: bottomOffset <= 48
+                    };
+                    primaryChatScrollRestorePending = false;
+                } catch (_) {
+                }
+            }
+
+            function restorePrimaryChatScrollState() {
+                try {
+                    if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
+                    const history = document.getElementById('chat-history');
+                    if (!history) return;
+                    requestAnimationFrame(() => requestAnimationFrame(() => {
+                        try {
+                            const max = Math.max(0, history.scrollHeight - history.clientHeight);
+                            const target = primaryChatScrollState.nearBottom
+                                ? max
+                                : Math.min(Math.max(primaryChatScrollState.scrollTop, 0), max);
+                            history.scrollTop = target;
+                            primaryChatScrollRestorePending = false;
+                        } catch (_) {
+                        }
+                    }));
+                } catch (_) {
+                }
+            }
+
+            function bindSubagentScrollListeners() {
+                if (subagentScrollRestoreBound) return;
+                subagentScrollRestoreBound = true;
+
+                document.addEventListener('click', function (evt) {
+                    try {
+                        const target = evt && evt.target;
+                        const subagentButton = target && target.closest ? target.closest('.tool-call-subagent-button') : null;
+                        if (subagentButton) {
+                            capturePrimaryChatScrollState();
+                            return;
+                        }
+                        const backButton = target && target.closest ? target.closest('.subagent-back-button') : null;
+                        if (backButton && primaryChatScrollState) {
+                            primaryChatScrollRestorePending = true;
+                        }
+                    } catch (_) {
+                    }
+                }, true);
+
+                document.body.addEventListener('htmx:afterSettle', function (evt) {
+                    try {
+                        const detail = evt && evt.detail;
+                        const target = detail && detail.target;
+                        const path = (detail && detail.path) || (detail && detail.requestConfig && detail.requestConfig.path) || (detail && detail.xhr && detail.xhr.responseURL) || '';
+                        if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
+                        if (!path.includes('/ui/chat/primary')) return;
+                        if (!target || target.id !== 'chat-container') return;
+                        restorePrimaryChatScrollState();
+                    } catch (_) {
+                    }
+                }, true);
             }
 
             // Before-swap listener records whether the user was near bottom.
@@ -537,6 +611,7 @@
             document.body.addEventListener('htmx:beforeSwap', htmxBeforeSwapListener, true);
             document.body.addEventListener('htmx:afterSwap', htmxChatListener, true);
             document.body.addEventListener('htmx:afterSettle', htmxChatListener, true);
+            bindSubagentScrollListeners();
         }
 
         function getChatSelectOption(select) {
