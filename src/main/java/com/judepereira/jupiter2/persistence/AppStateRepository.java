@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 @RequiredArgsConstructor
@@ -185,6 +186,15 @@ public class AppStateRepository {
                 new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
     }
 
+    Set<Long> listUnreadWorkspaceIds(long projectId) {
+        return Set.copyOf(jdbc.queryForList("""
+                SELECT DISTINCT s.workspace_id
+                FROM sessions s
+                JOIN workspaces w ON w.id = s.workspace_id
+                WHERE w.project_id = :projectId AND s.hidden = FALSE AND s.unread = TRUE
+                """, new MapSqlParameterSource("projectId", projectId), Long.class));
+    }
+
     List<SessionRow> listChildSessionsByParentSession(long parentSessionId) {
         return jdbc.query("SELECT * FROM sessions WHERE parent_session_id = :parentSessionId ORDER BY position ASC",
                 new MapSqlParameterSource("parentSessionId", parentSessionId), this::mapSession);
@@ -238,6 +248,25 @@ public class AppStateRepository {
     void updateSessionLastOpened(long sessionId, Instant now) {
         jdbc.update("UPDATE sessions SET last_opened_at = :lastOpenedAt WHERE id = :sessionId",
                 new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("lastOpenedAt", Timestamp.from(now)));
+    }
+
+    void updateSessionUnread(long sessionId, boolean unread) {
+        jdbc.update("UPDATE sessions SET unread = :unread WHERE id = :sessionId",
+                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("unread", unread));
+    }
+
+    void updateWorkspaceSessionsUnread(long workspaceId, boolean unread) {
+        jdbc.update("UPDATE sessions SET unread = :unread WHERE workspace_id = :workspaceId AND hidden = FALSE",
+                new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("unread", unread));
+    }
+
+    void updateProjectSessionsUnread(long projectId, boolean unread) {
+        jdbc.update("""
+                UPDATE sessions
+                SET unread = :unread
+                WHERE hidden = FALSE
+                  AND workspace_id IN (SELECT id FROM workspaces WHERE project_id = :projectId)
+                """, new MapSqlParameterSource().addValue("projectId", projectId).addValue("unread", unread));
     }
 
     void updateSessionReviewState(long sessionId, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId) {
@@ -474,7 +503,7 @@ public class AppStateRepository {
     private SessionRow mapSession(ResultSet rs, int rowNum) throws SQLException {
         Long selectedChangedFileId = nullableLong(rs, "selected_changed_file_id");
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
-                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getBoolean("hidden"),
+                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getBoolean("unread"), rs.getBoolean("hidden"),
                 nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
                 timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
     }
@@ -514,7 +543,7 @@ public class AppStateRepository {
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
-                      boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
+                      boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
                       Instant createdAt, Instant lastOpenedAt) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant createdAt) {}

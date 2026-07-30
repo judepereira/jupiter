@@ -790,6 +790,21 @@
             }
         }
 
+        function refreshWorkspaceRail() {
+            const rail = document.getElementById('workspace-session-rail');
+            if (!rail) return;
+            fetch('/ui/workspaces/rail', {headers: {'HX-Request': 'true'}})
+                .then(response => {
+                    if (!response.ok) throw new Error('Workspace rail refresh failed');
+                    return response.text();
+                })
+                .then(html => {
+                    rail.outerHTML = html;
+                    if (window.htmx) window.htmx.process(document.getElementById('workspace-session-rail'));
+                })
+                .catch(error => console.error(error));
+        }
+
         function getLiveChatRow(assistantId) {
             try {
                 if (!assistantId) return null;
@@ -1588,6 +1603,7 @@
                         } catch (_) {
                         }
                         clearPendingStream(assistantId, es);
+                        refreshWorkspaceRail();
                         // remove stream-local listener when stream completes
                         removeStreamScrollListener();
                     });
@@ -1621,6 +1637,7 @@
                         } catch (_) {
                         }
                         clearPendingStream(assistantId, es);
+                        refreshWorkspaceRail();
                         // remove stream-local listener on error as well
                         removeStreamScrollListener();
                     });
