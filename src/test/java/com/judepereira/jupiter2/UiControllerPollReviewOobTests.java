@@ -69,16 +69,16 @@ public class UiControllerPollReviewOobTests {
         // call stream endpoint which will run same-thread executor in test constructor
         var emitter = ctrl.streamChat(assistantId);
         assertThat(emitter).isNotNull();
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
-        // after streaming completes, index should reflect changed files and review open
-        Model m2 = new ConcurrentModel();
-        ctrl.index(m2);
-        Boolean reviewOpen = (Boolean) ((ConcurrentModel)m2).getAttribute("reviewPanelOpen");
+        // wait for review state and changed files to be persisted before asserting
+        ConcurrentModel m2 = TestAppStateSupport.awaitReviewPanelAndChangedFiles(ctrl);
+        Boolean reviewOpen = (Boolean) m2.getAttribute("reviewPanelOpen");
         assertThat(reviewOpen).isTrue();
-        List<?> changed = (List<?>) ((ConcurrentModel)m2).getAttribute("changedFiles");
+        List<?> changed = (List<?>) m2.getAttribute("changedFiles");
         assertThat(changed).isNotEmpty();
         // selected file should be set
-        Object sel = ((ConcurrentModel)m2).getAttribute("selectedFile");
+        Object sel = m2.getAttribute("selectedFile");
         assertThat(sel).isNotNull();
     }
 

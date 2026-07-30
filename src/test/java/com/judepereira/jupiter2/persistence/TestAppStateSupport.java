@@ -25,7 +25,11 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
+
+import org.springframework.ui.ConcurrentModel;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -70,7 +74,65 @@ public final class TestAppStateSupport {
         });
         AppStateService appStateService = appStateService();
         return new UiController(harness, properties, appStateService, terminalManager, new TerminalStateService(),
-                modelCatalogService, new SystemBalloonService(new ObjectMapper()), contextCompactionService(appStateService), Runnable::run);
+                modelCatalogService, new SystemBalloonService(new ObjectMapper()), contextCompactionService(appStateService));
+    }
+
+    public static UiController.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {
+        return awaitChatMessage(controller, assistantId, message -> !message.pending());
+    }
+
+    public static ConcurrentModel awaitReviewPanelAndChangedFiles(UiController controller) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        ConcurrentModel lastSeen = null;
+        while (System.nanoTime() < deadline) {
+            ConcurrentModel model = new ConcurrentModel();
+            controller.index(model);
+            lastSeen = model;
+            Boolean reviewPanelOpen = (Boolean) model.getAttribute("reviewPanelOpen");
+            List<?> changedFiles = (List<?>) model.getAttribute("changedFiles");
+            if (Boolean.TRUE.equals(reviewPanelOpen) && changedFiles != null && !changedFiles.isEmpty()) {
+                return model;
+            }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while waiting for review panel and changed files", e);
+            }
+        }
+        throw new IllegalStateException("Timed out waiting for review panel and changed files" + (lastSeen == null ? "" : ": " + lastSeen));
+    }
+
+    private static UiController.ChatMessage awaitChatMessage(UiController controller, String messageId, Predicate<UiController.ChatMessage> condition) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        UiController.ChatMessage lastSeen = null;
+        while (System.nanoTime() < deadline) {
+            UiController.ChatMessage message = currentChatMessage(controller, messageId);
+            if (message != null) {
+                lastSeen = message;
+                if (condition.test(message)) {
+                    return message;
+                }
+            }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while waiting for chat message " + messageId, e);
+            }
+        }
+        throw new IllegalStateException("Timed out waiting for chat message " + messageId + (lastSeen == null ? "" : ": " + lastSeen));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static UiController.ChatMessage currentChatMessage(UiController controller, String messageId) {
+        ConcurrentModel model = new ConcurrentModel();
+        controller.index(model);
+        List<UiController.ChatMessage> messages = (List<UiController.ChatMessage>) model.getAttribute("chatMessages");
+        if (messages == null) {
+            return null;
+        }
+        return messages.stream().filter(message -> messageId.equals(message.id())).findFirst().orElse(null);
     }
 
     public static ContextCompactionService contextCompactionService(AppStateService appStateService) {

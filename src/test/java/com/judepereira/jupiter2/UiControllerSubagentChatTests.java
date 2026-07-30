@@ -88,6 +88,6 @@ public class UiControllerSubagentChatTests {
         var contextCompactionService = TestAppStateSupport.contextCompactionService(appStateService);
         var openAiOAuthService = new com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient());
         return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, balloonService, terminalManager,
-                terminalStateService, openAiOAuthService, contextCompactionService, Runnable::run, "test");
+                terminalStateService, openAiOAuthService, contextCompactionService, "test");
     }
 }

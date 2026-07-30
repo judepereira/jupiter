@@ -35,8 +35,7 @@ class UiControllerInvalidCheckoutBranchTests {
                 new TerminalStateService(),
                 ModelCatalogTestSupport.modelCatalogService(),
                 balloonService,
-                TestAppStateSupport.contextCompactionService(appStateService),
-                Runnable::run);
+                TestAppStateSupport.contextCompactionService(appStateService));
 
         ConcurrentModel addProject = new ConcurrentModel();
         controller.addProject("Alpha", projectRoot.toString(), addProject);

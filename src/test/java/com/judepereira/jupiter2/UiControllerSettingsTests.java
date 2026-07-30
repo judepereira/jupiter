@@ -16,7 +16,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
 
 import java.nio.file.Path;
-import java.util.concurrent.Executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -100,14 +99,13 @@ public class UiControllerSettingsTests {
         AgentProperties properties = new AgentProperties();
         properties.setWorkspaceRoot(workspaceRoot.toAbsolutePath().normalize().toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
-        Executor executor = Runnable::run;
         OpenAiOAuthService openAiOAuthService = mock(OpenAiOAuthService.class);
 
         return new TestContext(appStateService,
                 openAiOAuthService,
                 new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter2.agent.catalog.AgentDefinitionService(new ObjectMapper()),
                         ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper()), terminalManager,
-                        new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), executor, "test"));
+                        new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), "test"));
     }
 
     private record TestContext(AppStateService appStateService, OpenAiOAuthService openAiOAuthService, UiController controller) {
