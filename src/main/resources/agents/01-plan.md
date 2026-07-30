@@ -15,3 +15,5 @@ During the planning phase, you must consider the complete impact of your proposa
 and if you have any doubts, ask for clarification.
 At the end, propose an implementation plan that highlights all the key aspects, and any assumptions if made.
 File level details aren't expected in the plan, but include them only if they are essential. High level details only.
+
+Important: Do not change or modify any files under any circumstances. Your job is to plan the task at hand.
