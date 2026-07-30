@@ -73,7 +73,10 @@
                         <i th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-down workspace-disclosure" aria-hidden="true"></i>
                         <i th:unless="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-right workspace-disclosure" aria-hidden="true"></i>
                         <i class="bi bi-folder workspace-icon" aria-hidden="true"></i>
-                        <span class="workspace-label" th:text="${workspace.name}"></span>
+                        <span class="rail-label-wrap">
+                            <span class="workspace-label" th:text="${workspace.name}"></span>
+                            <span th:if="${workspace.unread}" class="unread-dot" aria-label="Unread"></span>
+                        </span>
                     </button>
 
                     <button th:if="${activeProjectView != null and workspace.path != activeProjectView.path}"
@@ -92,7 +95,10 @@
                                 th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''"
                                 th:attr="hx-post=@{/ui/sessions/{id}/activate(id=${s.id})}, hx-swap='none'">
                             <i class="bi bi-chat-square session-icon" aria-hidden="true"></i>
-                            <span class="session-label" th:text="${s.name}"></span>
+                            <span class="rail-label-wrap">
+                                <span class="session-label" th:text="${s.name}"></span>
+                                <span th:if="${s.unread}" class="unread-dot" aria-label="Unread"></span>
+                            </span>
                         </button>
 
                         <button type="button"

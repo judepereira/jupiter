@@ -16,10 +16,10 @@ public final class Persistence {
     public record ProjectView(long id, String name, String path, String workspaceInitCommands) {
     }
 
-    public record WorkspaceView(long id, String name, String path) {
+    public record WorkspaceView(long id, String name, String path, boolean unread) {
     }
 
-    public record SessionView(long id, String name) {
+    public record SessionView(long id, String name, boolean unread) {
     }
 
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,

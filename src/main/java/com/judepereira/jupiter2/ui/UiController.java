@@ -894,6 +894,13 @@ public class UiController {
         return "fragments/projects :: newSessionForm";
     }
 
+    @GetMapping("/ui/workspaces/rail")
+    public String workspaceRail(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        return "fragments/projects :: workspaceRail";
+    }
+
     @GetMapping("/ui/sessions/new/button")
     public String newSessionButton() {
         return "fragments/projects :: newSessionButton";
@@ -1149,7 +1156,7 @@ public class UiController {
     }
 
     private Workspace toWorkspace(WorkspaceView view) {
-        return view == null ? null : new Workspace(view.id(), view.name(), view.path());
+        return view == null ? null : new Workspace(view.id(), view.name(), view.path(), view.unread());
     }
 
     private WorkspaceAction toWorkspaceAction(ProjectView activeProject, WorkspaceView workspace) {
@@ -1158,7 +1165,7 @@ public class UiController {
     }
 
     private Session toSession(SessionView view) {
-        return view == null ? null : new Session(view.id(), view.name());
+        return view == null ? null : new Session(view.id(), view.name(), view.unread());
     }
 
     private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
@@ -1326,11 +1333,19 @@ public class UiController {
 
     public record Project(long id, String name, String path, String workspaceInitCommands) {}
 
-    public record Workspace(long id, String name, String path) {}
+    public record Workspace(long id, String name, String path, boolean unread) {
+        public Workspace(long id, String name, String path) {
+            this(id, name, path, false);
+        }
+    }
 
     public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
 
-    public record Session(long id, String name) {}
+    public record Session(long id, String name, boolean unread) {
+        public Session(long id, String name) {
+            this(id, name, false);
+        }
+    }
 
     public record DirectoryEntry(String name, String path, boolean directory) {}
 

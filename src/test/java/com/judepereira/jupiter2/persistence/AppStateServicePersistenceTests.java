@@ -63,6 +63,45 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void completedInactiveTurnsMarkOnlyThatSessionAndWorkspaceUnread(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long workspaceId = initial.activeWorkspace().id();
+        long sessionOneId = initial.activeSession().id();
+        service.createSession(workspaceId, "Feature work");
+        long sessionTwoId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn inactiveTurn = service.appendUserMessageAndPendingAssistant(sessionOneId, "hello from inactive session");
+        service.appendToolCallTrace(sessionOneId, inactiveTurn.assistantMessage().id(),
+                new ToolCallTraceInput("tool-1", "read_file", Map.of("path", "README.md"), true, "read README", Map.of()));
+
+        AppStateView afterToolCall = service.loadViewData();
+        assertThat(afterToolCall.sessions()).extracting(SessionView::id, SessionView::unread)
+                .containsExactly(tuple(sessionOneId, false), tuple(sessionTwoId, false));
+        assertThat(afterToolCall.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
+                .containsExactly(tuple(workspaceId, false));
+
+        service.completeAssistantMessage(sessionOneId, inactiveTurn.assistantMessage().id(), "reply one", List.of());
+
+        AppStateView afterComplete = service.loadViewData();
+        assertThat(afterComplete.sessions()).extracting(SessionView::id, SessionView::unread)
+                .containsExactly(tuple(sessionOneId, true), tuple(sessionTwoId, false));
+        assertThat(afterComplete.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
+                .containsExactly(tuple(workspaceId, true));
+
+        service.activateSession(sessionOneId);
+
+        AppStateView afterActivate = service.loadViewData();
+        assertThat(afterActivate.activeSession().id()).isEqualTo(sessionOneId);
+        assertThat(afterActivate.sessions()).extracting(SessionView::id, SessionView::unread)
+                .containsExactly(tuple(sessionOneId, false), tuple(sessionTwoId, false));
+        assertThat(afterActivate.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
+                .containsExactly(tuple(workspaceId, false));
+    }
+
+    @Test
     public void creatingASecondSessionActivatesItAndKeepsChatHistoriesIsolated(@TempDir Path projectPath) {
         AppStateService service = TestAppStateSupport.appStateService();
 

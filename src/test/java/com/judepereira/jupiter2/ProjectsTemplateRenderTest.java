@@ -137,10 +137,10 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null)));
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null));
         context.setVariable("workspaces", List.of(
-                new Workspace(1L, "Default Workspace", "/repo"),
+                new Workspace(1L, "Default Workspace", "/repo", true),
                 new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace")));
-        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo"));
-        context.setVariable("sessions", List.of(new Session(1L, "Session #1"), new Session(2L, "Session #2")));
+        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo", true));
+        context.setVariable("sessions", List.of(new Session(1L, "Session #1", true), new Session(2L, "Session #2")));
         context.setVariable("activeSession", new Session(2L, "Session #2"));
         context.setVariable("selectedName", "");
         context.setVariable("selectedPath", "");
@@ -163,6 +163,7 @@ public class ProjectsTemplateRenderTest {
         assertThat(html).doesNotContain("hx-post=\"/ui/workspaces/1/close\"");
         assertThat(html).contains("bi-chevron-down workspace-disclosure", "bi-chevron-right workspace-disclosure");
         assertThat(html).contains("Session #1", "Session #2");
+        assertThat(html.split("class=\"unread-dot\" aria-label=\"Unread\"", -1)).hasSizeGreaterThanOrEqualTo(3);
     }
 
     @Test
