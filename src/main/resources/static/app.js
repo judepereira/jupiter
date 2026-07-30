@@ -470,10 +470,11 @@
         let primaryChatScrollState = null;
         let primaryChatScrollRestorePending = false;
         let subagentScrollRestoreBound = false;
+        let sessionChangeScrollRestoreBound = false;
         // Ensure we add the textarea clear listener only once across re-inits
         let htmxAfterOnLoadBound = false;
 
-        function scrollChatToBottom() {
+        function scrollChatToBottom(after) {
             try {
                 const history = document.getElementById('chat-history');
                 const list = document.getElementById('chat-messages-list');
@@ -483,6 +484,7 @@
                     // Defensive: only set when it actually would move
                     const target = history.scrollHeight - history.clientHeight;
                     if (Number.isFinite(target)) history.scrollTop = target;
+                    if (typeof after === 'function') after();
                 });
             } catch (_) { /* defensive */
             }
@@ -578,6 +580,45 @@
                 }
             }
 
+            function getHtmxRequestPath(evt) {
+                try {
+                    const detail = evt && evt.detail;
+                    return (detail && detail.path) || (detail && detail.requestConfig && detail.requestConfig.path) || (detail && detail.xhr && detail.xhr.responseURL) || '';
+                } catch (_) {
+                    return '';
+                }
+            }
+
+            function isSessionActivationOrAddPath(path) {
+                const value = String(path || '');
+                return value.includes('/ui/sessions/add') || /\/ui\/sessions\/[^/?#]+\/activate(?:[/?#]|$)/.test(value);
+            }
+
+            function focusChatInput() {
+                try {
+                    const textarea = document.getElementById('chat-input');
+                    if (!textarea) return;
+                    try {
+                        textarea.focus({preventScroll: true});
+                    } catch (_) {
+                        textarea.focus();
+                    }
+                } catch (_) {
+                }
+            }
+
+            function syncChatAfterSessionChange() {
+                try {
+                    const list = document.getElementById('chat-messages-list');
+                    const history = document.getElementById('chat-history');
+                    if (!list || !history) return;
+                    scrollChatToBottom(() => focusChatInput());
+                    lastMessageCount = list.children ? list.children.length : 0;
+                    wasNearBottomBeforeSwap = false;
+                } catch (_) {
+                }
+            }
+
             function bindSubagentScrollListeners() {
                 if (subagentScrollRestoreBound) return;
                 subagentScrollRestoreBound = true;
@@ -602,11 +643,25 @@
                     try {
                         const detail = evt && evt.detail;
                         const target = detail && detail.target;
-                        const path = (detail && detail.path) || (detail && detail.requestConfig && detail.requestConfig.path) || (detail && detail.xhr && detail.xhr.responseURL) || '';
+                        const path = getHtmxRequestPath(evt);
                         if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
                         if (!path.includes('/ui/chat/primary')) return;
                         if (!target || target.id !== 'chat-container') return;
                         restorePrimaryChatScrollState();
+                    } catch (_) {
+                    }
+                }, true);
+            }
+
+            function bindSessionChangeScrollListeners() {
+                if (sessionChangeScrollRestoreBound) return;
+                sessionChangeScrollRestoreBound = true;
+
+                document.body.addEventListener('htmx:afterSettle', function (evt) {
+                    try {
+                        const path = getHtmxRequestPath(evt);
+                        if (!isSessionActivationOrAddPath(path)) return;
+                        Promise.resolve().then(syncChatAfterSessionChange);
                     } catch (_) {
                     }
                 }, true);
@@ -663,6 +718,7 @@
             document.body.addEventListener('htmx:afterSwap', htmxChatListener, true);
             document.body.addEventListener('htmx:afterSettle', htmxChatListener, true);
             bindSubagentScrollListeners();
+            bindSessionChangeScrollListeners();
         }
 
         function getChatSelectOption(select) {
