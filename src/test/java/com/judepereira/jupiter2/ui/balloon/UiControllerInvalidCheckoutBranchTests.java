@@ -3,6 +3,7 @@ package com.judepereira.jupiter2.ui.balloon;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
@@ -17,9 +18,62 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class UiControllerInvalidCheckoutBranchTests {
+
+    @Test
+    void invalidNewBranchNameKeepsStateAndPublishesValidationBalloon(@TempDir Path projectRoot) throws Exception {
+        initGitRepo(projectRoot);
+
+        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper());
+        var appStateService = TestAppStateSupport.appStateService();
+        UiController controller = controller(projectRoot, appStateService, balloonService);
+
+        ConcurrentModel addProject = new ConcurrentModel();
+        controller.addProject("Alpha", projectRoot.toString(), addProject);
+
+        var project = activeProject(addProject);
+        var workspace = activeWorkspace(addProject);
+        var session = activeSession(addProject);
+
+        ConcurrentModel model = new ConcurrentModel();
+        String view = controller.addWorkspace(" feature unsafe ", "create", model);
+
+        assertThat(view).isEqualTo("fragments/projects :: workspaceModal");
+        assertThat(model.getAttribute("branchName")).isEqualTo("feature unsafe");
+        assertThat(model.getAttribute("branchMode")).isEqualTo("create");
+        assertThat(model.getAttribute("createBranch")).isEqualTo(true);
+        assertThat(model.getAttribute("modalOob")).isEqualTo(true);
+        assertThat(activeProject(model).id()).isEqualTo(project.id());
+        assertThat(activeWorkspace(model).id()).isEqualTo(workspace.id());
+        assertThat(activeSession(model).id()).isEqualTo(session.id());
+        assertThat(workspaces(model)).containsExactlyElementsOf(workspaces(addProject));
+        assertThat(sessions(model)).containsExactlyElementsOf(sessions(addProject));
+        assertThat(balloonService.publishedBalloons()).hasSize(1);
+        SystemBalloon balloon = balloonService.publishedBalloons().get(0);
+        assertThat(balloon.type()).isEqualTo(SystemBalloon.Type.ERROR);
+        assertThat(balloon.title()).isEqualTo("Invalid Branch Name");
+        assertThat(balloon.body()).contains("Invalid Git branch name");
+        assertThat(balloon.body()).contains("feature unsafe");
+    }
+
+    @Test
+    void invalidBranchModeThrowsIllegalArgumentException(@TempDir Path projectRoot) throws Exception {
+        initGitRepo(projectRoot);
+
+        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper());
+        var appStateService = TestAppStateSupport.appStateService();
+        UiController controller = controller(projectRoot, appStateService, balloonService);
+
+        ConcurrentModel addProject = new ConcurrentModel();
+        controller.addProject("Alpha", projectRoot.toString(), addProject);
+
+        assertThatThrownBy(() -> controller.addWorkspace("feature-safe", "toggle", new ConcurrentModel()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid branch mode: toggle");
+    }
 
     @Test
     void invalidExistingBranchCheckoutKeepsStateAndPublishesGitErrorBalloon(@TempDir Path projectRoot) throws Exception {
@@ -27,15 +81,7 @@ class UiControllerInvalidCheckoutBranchTests {
 
         SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper());
         var appStateService = TestAppStateSupport.appStateService();
-        UiController controller = new UiController(
-                mock(CodingAgentHarness.class),
-                agentProperties(projectRoot),
-                appStateService,
-                mock(TerminalManager.class),
-                new TerminalStateService(),
-                ModelCatalogTestSupport.modelCatalogService(),
-                balloonService,
-                TestAppStateSupport.contextCompactionService(appStateService));
+        UiController controller = controller(projectRoot, appStateService, balloonService);
 
         ConcurrentModel addProject = new ConcurrentModel();
         controller.addProject("Alpha", projectRoot.toString(), addProject);
@@ -64,6 +110,18 @@ class UiControllerInvalidCheckoutBranchTests {
         assertThat(balloon.body()).contains("Could not check out existing Git branch");
         assertThat(balloon.body()).contains("missing-branch");
         assertThat(balloon.body()).contains("fatal: invalid reference: missing-branch");
+    }
+
+    private static UiController controller(Path projectRoot, AppStateService appStateService, SystemBalloonService balloonService) {
+        return new UiController(
+                mock(CodingAgentHarness.class),
+                agentProperties(projectRoot),
+                appStateService,
+                mock(TerminalManager.class),
+                new TerminalStateService(),
+                ModelCatalogTestSupport.modelCatalogService(),
+                balloonService,
+                TestAppStateSupport.contextCompactionService(appStateService));
     }
 
     private static AgentProperties agentProperties(Path workspaceRoot) {
