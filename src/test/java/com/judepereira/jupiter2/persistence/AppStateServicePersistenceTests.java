@@ -28,12 +28,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -64,7 +66,8 @@ public class AppStateServicePersistenceTests {
 
     @Test
     public void completedInactiveTurnsMarkOnlyThatSessionAndWorkspaceUnread(@TempDir Path projectPath) {
-        AppStateService service = TestAppStateSupport.appStateService();
+        AtomicReference<Object> publishedEvent = new AtomicReference<>();
+        AppStateService service = TestAppStateSupport.appStateService(event -> publishedEvent.set(event));
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         AppStateView initial = service.loadViewData();
@@ -90,6 +93,7 @@ public class AppStateServicePersistenceTests {
                 .containsExactly(tuple(sessionOneId, true), tuple(sessionTwoId, false));
         assertThat(afterComplete.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
                 .containsExactly(tuple(workspaceId, true));
+        assertThat(publishedEvent.get()).hasToString("SessionMarkedUnreadEvent[sessionId=" + sessionOneId + "]");
 
         service.activateSession(sessionOneId);
 
@@ -99,6 +103,43 @@ public class AppStateServicePersistenceTests {
                 .containsExactly(tuple(sessionOneId, false), tuple(sessionTwoId, false));
         assertThat(afterActivate.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
                 .containsExactly(tuple(workspaceId, false));
+    }
+
+    @Test
+    public void activeHiddenAndAlreadyUnreadSessionsDoNotPublishUnreadEvents(@TempDir Path projectPath) {
+        AtomicReference<Object> publishedEvent = new AtomicReference<>();
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> publishedEvent.set(event));
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long workspaceId = initial.activeWorkspace().id();
+        long activeSessionId = initial.activeSession().id();
+
+        QueuedChatTurn activeTurn = service.appendUserMessageAndPendingAssistant(activeSessionId, "active user");
+        service.completeAssistantMessage(activeSessionId, activeTurn.assistantMessage().id(), "active reply", List.of());
+        assertThat(publishedEvent.get()).isNull();
+        assertThat(service.loadViewData().sessions()).filteredOn(session -> session.id() == activeSessionId)
+                .singleElement().satisfies(session -> assertThat(session.unread()).isFalse());
+
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        long hiddenSessionId = service.createHiddenSubagentSession(activeSessionId, "parent-tool-call", subagent);
+        QueuedChatTurn hiddenTurn = service.appendUserMessageAndPendingAssistant(hiddenSessionId, "hidden user");
+        service.completeAssistantMessage(hiddenSessionId, hiddenTurn.assistantMessage().id(), "hidden reply", List.of());
+        assertThat(publishedEvent.get()).isNull();
+        assertThat(repository.findSession(hiddenSessionId).unread()).isFalse();
+        assertThat(repository.findSession(hiddenSessionId).hidden()).isTrue();
+
+        service.createSession(workspaceId, "Already unread");
+        long unreadSessionId = service.loadViewData().activeSession().id();
+        service.activateSession(activeSessionId);
+        repository.updateSessionUnread(unreadSessionId, true);
+        QueuedChatTurn unreadTurn = service.appendUserMessageAndPendingAssistant(unreadSessionId, "unread user");
+        service.completeAssistantMessage(unreadSessionId, unreadTurn.assistantMessage().id(), "unread reply", List.of());
+        assertThat(publishedEvent.get()).isNull();
+        assertThat(repository.findSession(unreadSessionId).unread()).isTrue();
     }
 
     @Test

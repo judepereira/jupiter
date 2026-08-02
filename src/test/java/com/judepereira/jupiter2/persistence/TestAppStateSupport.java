@@ -20,6 +20,7 @@ import com.judepereira.jupiter2.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter2.persistence.ContextCompactionService;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
 import org.flywaydb.core.Flyway;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import java.nio.file.Files;
@@ -37,6 +38,18 @@ public final class TestAppStateSupport {
     }
 
     public static AppStateService appStateService() {
+        return appStateContext(new ApplicationEventPublisher() {
+            @Override
+            public void publishEvent(Object event) {
+            }
+        }).service();
+    }
+
+    public static AppStateService appStateService(ApplicationEventPublisher applicationEventPublisher) {
+        return appStateContext(applicationEventPublisher).service();
+    }
+
+    public static AppStateTestContext appStateContext(ApplicationEventPublisher applicationEventPublisher) {
         Path dbFile;
         try {
             dbFile = Files.createTempDirectory("jupiter-app-state-").resolve("app-state.db");
@@ -50,8 +63,11 @@ public final class TestAppStateSupport {
         SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
 
         AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource));
-        return new AppStateService(repository, new ObjectMapper());
+        AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher);
+        return new AppStateTestContext(service, repository);
     }
+
+    public record AppStateTestContext(AppStateService service, AppStateRepository repository) {}
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
         return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService());

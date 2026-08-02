@@ -987,6 +987,25 @@
                 .catch(error => console.error(error));
         }
 
+        if (!window.__workspaceRailRefreshSource) {
+            let workspaceRailRefreshTimer = null;
+
+            const scheduleWorkspaceRailRefresh = () => {
+                if (workspaceRailRefreshTimer) return;
+                workspaceRailRefreshTimer = window.setTimeout(() => {
+                    workspaceRailRefreshTimer = null;
+                    refreshWorkspaceRail();
+                }, 50);
+            };
+
+            const workspaceRailRefreshSource = new EventSource('/ui/workspaces/rail/stream');
+            window.__workspaceRailRefreshSource = workspaceRailRefreshSource;
+            workspaceRailRefreshSource.addEventListener('workspace-rail-refresh', scheduleWorkspaceRailRefresh);
+            workspaceRailRefreshSource.addEventListener('error', error => {
+                console.error('Workspace rail stream error', error);
+            });
+        }
+
         function getLiveChatRow(assistantId) {
             try {
                 if (!assistantId) return null;

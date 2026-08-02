@@ -21,6 +21,7 @@ import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallView;
 import com.judepereira.jupiter2.persistence.Persistence.WorkspaceView;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,7 @@ public class AppStateService {
 
     private final AppStateRepository repository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
     public SessionView ensureChatSession(String defaultWorkspaceRoot) {
@@ -578,10 +580,18 @@ public class AppStateService {
     }
 
     private void markUnreadIfInactive(long sessionId) {
-        var appState = repository.loadAppState();
-        if (appState.activeSessionId() == null || appState.activeSessionId() != sessionId) {
-            repository.updateSessionUnread(sessionId, true);
+        var session = repository.findSession(sessionId);
+        if (session.hidden() || session.unread()) {
+            return;
         }
+
+        var appState = repository.loadAppState();
+        if (appState.activeSessionId() != null && appState.activeSessionId() == sessionId) {
+            return;
+        }
+
+        repository.updateSessionUnread(sessionId, true);
+        applicationEventPublisher.publishEvent(new SessionMarkedUnreadEvent(sessionId));
     }
 
     private long createSessionInternal(long workspaceId, Instant now) {

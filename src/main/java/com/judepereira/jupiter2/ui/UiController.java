@@ -39,6 +39,7 @@ import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalPanelState;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,6 +91,7 @@ public class UiController {
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
     private final SystemBalloonService systemBalloonService;
+    private final WorkspaceRailRefreshService workspaceRailRefreshService;
     private final OpenAiOAuthService openAiOAuthService;
     private final String appVersion;
 
@@ -99,29 +101,52 @@ public class UiController {
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
-                        ModelCatalogService modelCatalogService, ContextCompactionService contextCompactionService, Executor agentExecutor) {
-        this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                new SystemBalloonService(new ObjectMapper()), terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()), contextCompactionService,
-                agentExecutor, DEFAULT_APP_VERSION);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        TerminalManager terminalManager, TerminalStateService terminalStateService,
                         ModelCatalogService modelCatalogService, SystemBalloonService systemBalloonService,
                         ContextCompactionService contextCompactionService, Executor agentExecutor) {
         this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                systemBalloonService, terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()), contextCompactionService,
-                agentExecutor, DEFAULT_APP_VERSION);
+                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
+                contextCompactionService, agentExecutor, DEFAULT_APP_VERSION);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
+                        Executor agentExecutor, String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService,
+                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
+                contextCompactionService, agentExecutor, appVersion);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, Executor agentExecutor) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService,
+                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, agentExecutor, DEFAULT_APP_VERSION);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, Executor agentExecutor, String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService,
+                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, agentExecutor, appVersion);
     }
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService, ContextCompactionService contextCompactionService,
-                        @Qualifier("agentTaskExecutor") Executor agentExecutor,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, @Qualifier("agentTaskExecutor") Executor agentExecutor,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -132,20 +157,10 @@ public class UiController {
         this.systemBalloonService = systemBalloonService;
         this.terminalManager = terminalManager;
         this.terminalStateService = terminalStateService;
+        this.workspaceRailRefreshService = workspaceRailRefreshService;
         this.openAiOAuthService = openAiOAuthService;
         this.agentExecutor = agentExecutor;
         this.appVersion = appVersion;
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
-                        Executor agentExecutor, String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
-                contextCompactionService, agentExecutor, appVersion);
     }
 
     @GetMapping("/")
@@ -516,6 +531,11 @@ public class UiController {
     @GetMapping("/ui/system-balloons/stream")
     public SseEmitter systemBalloonStream() {
         return systemBalloonService.connect();
+    }
+
+    @GetMapping("/ui/workspaces/rail/stream")
+    public SseEmitter workspaceRailStream() {
+        return workspaceRailRefreshService.connect();
     }
 
     @PostMapping("/ui/review/toggle")
