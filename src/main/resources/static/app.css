@@ -76,6 +76,12 @@ input:focus, textarea:focus {
     color: #ffffff;
 }
 
+.app-switcher-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+
 .project-tabs {
     display: flex;
     gap: 6px;

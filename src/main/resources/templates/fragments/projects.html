@@ -2,7 +2,10 @@
 <th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}">
     <header id="top-bar" class="top-bar" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
         <div class="app-switcher" aria-hidden="true">
-            <i class="bi bi-braces-asterisk"></i>
+            <img class="app-switcher-icon"
+                 src="/icons/jupiter/favicon-32x32.png"
+                 srcset="/icons/jupiter/favicon-32x32.png 1x, /icons/jupiter/favicon-64x64.png 2x"
+                 alt="">
         </div>
 
         <nav class="project-tabs" aria-label="Projects">
