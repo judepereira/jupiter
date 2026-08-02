@@ -9,7 +9,7 @@ public class AgentProperties {
     /** provider name, e.g. "openai" */
     private String provider = "openai";
     private String model = "gpt-5.4";
-    private int maxIterations = 100;
+    private int maxIterations = 1_000;
     private int commandTimeoutSeconds = 60;
     private String workspaceRoot = ".";
     private Tooling tooling = new Tooling();

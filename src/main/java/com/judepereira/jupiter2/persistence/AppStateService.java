@@ -21,6 +21,7 @@ import com.judepereira.jupiter2.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter2.persistence.Persistence.ToolCallView;
 import com.judepereira.jupiter2.persistence.Persistence.WorkspaceView;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +45,7 @@ public class AppStateService {
 
     private final AppStateRepository repository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
     public SessionView ensureChatSession(String defaultWorkspaceRoot) {
@@ -145,6 +148,7 @@ public class AppStateService {
             return;
         }
         repository.updateSessionLastOpened(session.id(), now);
+        repository.updateSessionUnread(session.id(), false);
         repository.updateAppState(workspace.projectId(), workspaceId, session.id());
     }
 
@@ -249,6 +253,7 @@ public class AppStateService {
         var workspace = repository.findWorkspace(session.workspaceId());
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateSessionLastOpened(sessionId, now);
+        repository.updateSessionUnread(sessionId, false);
         repository.updateWorkspaceLastOpened(workspace.id(), now);
         repository.updateAppState(workspace.projectId(), workspace.id(), sessionId);
     }
@@ -287,8 +292,10 @@ public class AppStateService {
         var appState = repository.loadAppState();
         List<ProjectView> projects = repository.listVisibleProjects().stream().map(this::toProjectView).toList();
         ProjectView activeProject = appState.activeProjectId() == null ? null : toProjectView(repository.findProject(appState.activeProjectId()));
-        List<WorkspaceView> workspaces = activeProject == null ? List.of() : repository.listWorkspacesByProject(activeProject.id()).stream().map(this::toWorkspaceView).toList();
-        WorkspaceView activeWorkspace = appState.activeWorkspaceId() == null ? null : toWorkspaceView(repository.findWorkspace(appState.activeWorkspaceId()));
+        Set<Long> unreadWorkspaceIds = activeProject == null ? Set.of() : repository.listUnreadWorkspaceIds(activeProject.id());
+        Function<AppStateRepository.WorkspaceRow, WorkspaceView> workspaceMapper = row -> toWorkspaceView(row, unreadWorkspaceIds.contains(row.id()));
+        List<WorkspaceView> workspaces = activeProject == null ? List.of() : repository.listWorkspacesByProject(activeProject.id()).stream().map(workspaceMapper).toList();
+        WorkspaceView activeWorkspace = appState.activeWorkspaceId() == null ? null : workspaceMapper.apply(repository.findWorkspace(appState.activeWorkspaceId()));
         List<SessionView> sessions = activeWorkspace == null ? List.of() : repository.listSessionsByWorkspace(activeWorkspace.id()).stream().map(this::toSessionView).toList();
         SessionView activeSession = appState.activeSessionId() == null ? null : toSessionView(repository.findSession(appState.activeSessionId()));
         SessionDetailView sessionDetail = activeSession == null ? null : loadSessionDetail(activeSession.id());
@@ -387,6 +394,7 @@ public class AppStateService {
         }
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true);
+        markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
 
@@ -401,6 +409,7 @@ public class AppStateService {
         }
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), errorText, false, false);
+        markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
 
@@ -566,7 +575,23 @@ public class AppStateService {
             return;
         }
         repository.updateSessionLastOpened(session.id(), now);
+        repository.updateSessionUnread(session.id(), false);
         repository.updateAppState(projectId, workspace.id(), session.id());
+    }
+
+    private void markUnreadIfInactive(long sessionId) {
+        var session = repository.findSession(sessionId);
+        if (session.hidden() || session.unread()) {
+            return;
+        }
+
+        var appState = repository.loadAppState();
+        if (appState.activeSessionId() != null && appState.activeSessionId() == sessionId) {
+            return;
+        }
+
+        repository.updateSessionUnread(sessionId, true);
+        applicationEventPublisher.publishEvent(new SessionMarkedUnreadEvent(sessionId));
     }
 
     private long createSessionInternal(long workspaceId, Instant now) {
@@ -945,11 +970,15 @@ public class AppStateService {
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {
-        return new WorkspaceView(row.id(), row.name(), row.normalizedPath());
+        return toWorkspaceView(row, false);
+    }
+
+    private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row, boolean unread) {
+        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), unread);
     }
 
     private SessionView toSessionView(AppStateRepository.SessionRow row) {
-        return new SessionView(row.id(), row.name());
+        return new SessionView(row.id(), row.name(), row.unread());
     }
 
     private ChangedFileView toChangedFileView(AppStateRepository.ChangedFileRow row) {

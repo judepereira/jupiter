@@ -779,13 +779,30 @@ input:focus, textarea:focus {
 .session-icon {
 }
 
+.rail-label-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .workspace-label,
 .session-label {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.unread-dot {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.16);
 }
 
 .workspace-label {

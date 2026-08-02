@@ -39,6 +39,7 @@ import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalPanelState;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -87,6 +88,7 @@ public class UiController {
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
     private final SystemBalloonService systemBalloonService;
+    private final WorkspaceRailRefreshService workspaceRailRefreshService;
     private final OpenAiOAuthService openAiOAuthService;
     private final String appVersion;
 
@@ -96,9 +98,9 @@ public class UiController {
                         TerminalManager terminalManager, TerminalStateService terminalStateService,
                         ModelCatalogService modelCatalogService, ContextCompactionService contextCompactionService) {
         this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                new SystemBalloonService(new ObjectMapper()), terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()), contextCompactionService,
-                DEFAULT_APP_VERSION);
+                new SystemBalloonService(new ObjectMapper()), new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
+                contextCompactionService, DEFAULT_APP_VERSION);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -106,16 +108,18 @@ public class UiController {
                         ModelCatalogService modelCatalogService, SystemBalloonService systemBalloonService,
                         ContextCompactionService contextCompactionService) {
         this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                systemBalloonService, terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()), contextCompactionService,
-                DEFAULT_APP_VERSION);
+                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
+                contextCompactionService, DEFAULT_APP_VERSION);
     }
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService, ContextCompactionService contextCompactionService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -126,8 +130,19 @@ public class UiController {
         this.systemBalloonService = systemBalloonService;
         this.terminalManager = terminalManager;
         this.terminalStateService = terminalStateService;
+        this.workspaceRailRefreshService = workspaceRailRefreshService;
         this.openAiOAuthService = openAiOAuthService;
         this.appVersion = appVersion;
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                new WorkspaceRailRefreshService(), terminalManager, terminalStateService, openAiOAuthService,
+                contextCompactionService, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -136,7 +151,7 @@ public class UiController {
                         TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                terminalManager, terminalStateService,
+                new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
                 new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
                 contextCompactionService, appVersion);
     }
@@ -505,6 +520,11 @@ public class UiController {
     @GetMapping("/ui/system-balloons/stream")
     public SseEmitter systemBalloonStream() {
         return systemBalloonService.connect();
+    }
+
+    @GetMapping("/ui/workspaces/rail/stream")
+    public SseEmitter workspaceRailStream() {
+        return workspaceRailRefreshService.connect();
     }
 
     @PostMapping("/ui/review/toggle")
@@ -883,6 +903,13 @@ public class UiController {
         return "fragments/projects :: newSessionForm";
     }
 
+    @GetMapping("/ui/workspaces/rail")
+    public String workspaceRail(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        return "fragments/projects :: workspaceRail";
+    }
+
     @GetMapping("/ui/sessions/new/button")
     public String newSessionButton() {
         return "fragments/projects :: newSessionButton";
@@ -1138,7 +1165,7 @@ public class UiController {
     }
 
     private Workspace toWorkspace(WorkspaceView view) {
-        return view == null ? null : new Workspace(view.id(), view.name(), view.path());
+        return view == null ? null : new Workspace(view.id(), view.name(), view.path(), view.unread());
     }
 
     private WorkspaceAction toWorkspaceAction(ProjectView activeProject, WorkspaceView workspace) {
@@ -1147,7 +1174,7 @@ public class UiController {
     }
 
     private Session toSession(SessionView view) {
-        return view == null ? null : new Session(view.id(), view.name());
+        return view == null ? null : new Session(view.id(), view.name(), view.unread());
     }
 
     private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
@@ -1315,11 +1342,19 @@ public class UiController {
 
     public record Project(long id, String name, String path, String workspaceInitCommands) {}
 
-    public record Workspace(long id, String name, String path) {}
+    public record Workspace(long id, String name, String path, boolean unread) {
+        public Workspace(long id, String name, String path) {
+            this(id, name, path, false);
+        }
+    }
 
     public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
 
-    public record Session(long id, String name) {}
+    public record Session(long id, String name, boolean unread) {
+        public Session(long id, String name) {
+            this(id, name, false);
+        }
+    }
 
     public record DirectoryEntry(String name, String path, boolean directory) {}
 
