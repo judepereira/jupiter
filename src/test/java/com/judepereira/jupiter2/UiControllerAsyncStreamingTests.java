@@ -9,6 +9,7 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.persistence.ContextCompactionService;
 import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.ui.UiController;
@@ -17,6 +18,7 @@ import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.Model;
@@ -253,7 +255,9 @@ public class UiControllerAsyncStreamingTests {
             }
         };
         UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
-                new SystemBalloonService(new ObjectMapper()), mock(TerminalManager.class), new TerminalStateService(),
+                new SystemBalloonService(new ObjectMapper()), new com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService(),
+                mock(TerminalManager.class), new TerminalStateService(),
+                new com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
                 contextCompactionService, "0.0.1-SNAPSHOT");
 
         for (int i = 1; i <= 7; i++) {
@@ -403,7 +407,9 @@ public class UiControllerAsyncStreamingTests {
         };
 
         UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                new SystemBalloonService(new ObjectMapper()), mock(TerminalManager.class), new TerminalStateService(),
+                new SystemBalloonService(new ObjectMapper()), new com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService(),
+                mock(TerminalManager.class), new TerminalStateService(),
+                new com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
                 contextCompactionService, "0.0.1-SNAPSHOT");
 
         Model sendModel = new ConcurrentModel();

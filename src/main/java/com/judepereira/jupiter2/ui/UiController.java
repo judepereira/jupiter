@@ -55,7 +55,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
-import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,25 +93,6 @@ public class UiController {
 
     private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
 
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        TerminalManager terminalManager, TerminalStateService terminalStateService,
-                        ModelCatalogService modelCatalogService, ContextCompactionService contextCompactionService) {
-        this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                new SystemBalloonService(new ObjectMapper()), new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
-                contextCompactionService, DEFAULT_APP_VERSION);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        TerminalManager terminalManager, TerminalStateService terminalStateService,
-                        ModelCatalogService modelCatalogService, SystemBalloonService systemBalloonService,
-                        ContextCompactionService contextCompactionService) {
-        this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
-                contextCompactionService, DEFAULT_APP_VERSION);
-    }
-
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
@@ -133,27 +113,6 @@ public class UiController {
         this.workspaceRailRefreshService = workspaceRailRefreshService;
         this.openAiOAuthService = openAiOAuthService;
         this.appVersion = appVersion;
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                new WorkspaceRailRefreshService(), terminalManager, terminalStateService, openAiOAuthService,
-                contextCompactionService, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
-                contextCompactionService, appVersion);
     }
 
     @GetMapping("/")

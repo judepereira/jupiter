@@ -14,11 +14,13 @@ import com.judepereira.jupiter2.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
-import com.judepereira.jupiter2.ui.UiController;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
+import com.judepereira.jupiter2.persistence.ContextCompactionService;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter2.testsupport.SQLiteTestSupport;
-import com.judepereira.jupiter2.persistence.ContextCompactionService;
+import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import org.flywaydb.core.Flyway;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -89,8 +91,16 @@ public final class TestAppStateSupport {
             return new TerminalHandle("terminal-" + n, (String) invocation.getArgument(1));
         });
         AppStateService appStateService = appStateService();
-        return new UiController(harness, properties, appStateService, terminalManager, new TerminalStateService(),
-                modelCatalogService, new SystemBalloonService(new ObjectMapper()), contextCompactionService(appStateService));
+        return new UiController(harness, properties, appStateService,
+                new com.judepereira.jupiter2.agent.catalog.AgentDefinitionService(new ObjectMapper()),
+                modelCatalogService,
+                new SystemBalloonService(new ObjectMapper()),
+                new WorkspaceRailRefreshService(),
+                terminalManager,
+                new TerminalStateService(),
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
+                contextCompactionService(appStateService),
+                "0.0.1-SNAPSHOT");
     }
 
     public static UiController.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {

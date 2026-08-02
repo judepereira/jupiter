@@ -3,14 +3,15 @@ package com.judepereira.jupiter2;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
-import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
@@ -103,9 +104,16 @@ public class UiControllerSettingsTests {
 
         return new TestContext(appStateService,
                 openAiOAuthService,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter2.agent.catalog.AgentDefinitionService(new ObjectMapper()),
-                        ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper()), terminalManager,
-                        new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), "test"));
+                new UiController(mock(CodingAgentHarness.class), properties, appStateService,
+                        new com.judepereira.jupiter2.agent.catalog.AgentDefinitionService(new ObjectMapper()),
+                        ModelCatalogTestSupport.modelCatalogService(),
+                        new SystemBalloonService(new ObjectMapper()),
+                        new WorkspaceRailRefreshService(),
+                        terminalManager,
+                        new TerminalStateService(),
+                        openAiOAuthService,
+                        TestAppStateSupport.contextCompactionService(appStateService),
+                        "test"));
     }
 
     private record TestContext(AppStateService appStateService, OpenAiOAuthService openAiOAuthService, UiController controller) {
