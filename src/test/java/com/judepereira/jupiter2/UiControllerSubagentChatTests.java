@@ -7,6 +7,7 @@ import com.judepereira.jupiter2.agent.catalog.AgentMode;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
@@ -16,6 +17,7 @@ import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
@@ -87,7 +89,8 @@ public class UiControllerSubagentChatTests {
         var balloonService = new SystemBalloonService(new ObjectMapper());
         var contextCompactionService = TestAppStateSupport.contextCompactionService(appStateService);
         var openAiOAuthService = new com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient());
-        return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, balloonService, terminalManager,
-                terminalStateService, openAiOAuthService, contextCompactionService, Runnable::run, "test");
+        return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, balloonService,
+                new WorkspaceRailRefreshService(), terminalManager, terminalStateService, openAiOAuthService,
+                contextCompactionService, "test");
     }
 }

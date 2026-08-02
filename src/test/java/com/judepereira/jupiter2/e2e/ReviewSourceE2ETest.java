@@ -85,7 +85,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                         response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         outsideFileButton::click);
 
-                assertTrue((Boolean) outsideFileButton.evaluate("el => el.classList.contains('active')"));
+                assertThat(outsideFileButton).containsClass("active");
                 assertThat(page.locator("#diff-content")).containsText("outside git change");
                 captureScreenshot(page, screenshotsDir, "03-git-file-selected.png");
             }

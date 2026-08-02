@@ -3,12 +3,14 @@ package com.judepereira.jupiter2.ui.balloon;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
@@ -117,12 +119,15 @@ class UiControllerInvalidCheckoutBranchTests {
                 mock(CodingAgentHarness.class),
                 agentProperties(projectRoot),
                 appStateService,
-                mock(TerminalManager.class),
-                new TerminalStateService(),
+                new com.judepereira.jupiter2.agent.catalog.AgentDefinitionService(new ObjectMapper()),
                 ModelCatalogTestSupport.modelCatalogService(),
                 balloonService,
+                new WorkspaceRailRefreshService(),
+                mock(TerminalManager.class),
+                new TerminalStateService(),
+                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
                 TestAppStateSupport.contextCompactionService(appStateService),
-                Runnable::run);
+                "0.0.1-SNAPSHOT");
     }
 
     private static AgentProperties agentProperties(Path workspaceRoot) {

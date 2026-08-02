@@ -327,12 +327,16 @@ public class UiControllerProjectsAndDirectoryTests {
         controller.activateProject(firstProjectId, new ConcurrentModel());
         ConcurrentModel firstSend = new ConcurrentModel();
         controller.sendMessage("alpha", firstSend, null);
-        controller.streamChat(assistantId(firstSend));
+        String firstAssistantId = assistantId(firstSend);
+        controller.streamChat(firstAssistantId);
+        TestAppStateSupport.awaitAssistantCompletion(controller, firstAssistantId);
 
         controller.activateProject(secondProjectId, new ConcurrentModel());
         ConcurrentModel secondSend = new ConcurrentModel();
         controller.sendMessage("beta", secondSend, null);
-        controller.streamChat(assistantId(secondSend));
+        String secondAssistantId = assistantId(secondSend);
+        controller.streamChat(secondAssistantId);
+        TestAppStateSupport.awaitAssistantCompletion(controller, secondAssistantId);
 
         assertThat(harness.requests).hasSize(2);
         assertThat(harness.requests.get(0).getSystemPrompt()).isNull();

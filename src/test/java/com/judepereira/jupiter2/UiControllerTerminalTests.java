@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
 import com.judepereira.jupiter2.terminal.TerminalHandle;
 import com.judepereira.jupiter2.terminal.TerminalManager;
@@ -12,6 +13,7 @@ import com.judepereira.jupiter2.terminal.TerminalTab;
 import com.judepereira.jupiter2.ui.UiController;
 import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
@@ -21,7 +23,6 @@ import java.nio.file.Path;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -332,8 +333,7 @@ public class UiControllerTerminalTests {
                 TestAppStateSupport.appStateService(),
                 new TerminalStateService(),
                 terminalManager,
-                properties,
-                Runnable::run);
+                properties);
     }
 
     private static void initGitRepo(Path projectPath) throws IOException, InterruptedException {
@@ -379,13 +379,19 @@ public class UiControllerTerminalTests {
             com.judepereira.jupiter2.persistence.AppStateService appStateService,
             TerminalStateService terminalStateService,
             TerminalManager terminalManager,
-            AgentProperties properties,
-            Executor executor) {
+            AgentProperties properties) {
 
             private UiController controller() {
-            return new UiController(mock(CodingAgentHarness.class), properties, appStateService, terminalManager, terminalStateService,
-                    ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper()),
-                    TestAppStateSupport.contextCompactionService(appStateService), executor);
+            return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
+                    new com.judepereira.jupiter2.agent.catalog.AgentDefinitionService(new ObjectMapper()),
+                    ModelCatalogTestSupport.modelCatalogService(),
+                    new SystemBalloonService(new ObjectMapper()),
+                    new WorkspaceRailRefreshService(),
+                    terminalManager,
+                    terminalStateService,
+                    new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
+                    TestAppStateSupport.contextCompactionService(appStateService),
+                    "0.0.1-SNAPSHOT");
             }
         }
 }

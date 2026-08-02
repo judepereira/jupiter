@@ -9,6 +9,7 @@ import com.judepereira.jupiter2.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter2.agent.llm.dto.Message;
+import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.persistence.ContextCompactionService;
 import com.judepereira.jupiter2.persistence.AppStateService;
 import com.judepereira.jupiter2.ui.UiController;
@@ -17,6 +18,7 @@ import com.judepereira.jupiter2.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter2.terminal.TerminalManager;
 import com.judepereira.jupiter2.terminal.TerminalStateService;
 import com.judepereira.jupiter2.ui.balloon.SystemBalloonService;
+import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.Model;
@@ -106,13 +108,21 @@ public class UiControllerAsyncStreamingTests {
         props.setWorkspaceRoot(tmp.toString());
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
-        Model m1 = new ConcurrentModel();
-        ctrl.sendMessage("first", m1, null);
-        ctrl.streamChat(assistantId((ConcurrentModel) m1));
+        {
+            Model m1 = new ConcurrentModel();
+            ctrl.sendMessage("first", m1, null);
+            String assistantId = assistantId((ConcurrentModel) m1);
+            ctrl.streamChat(assistantId);
+            TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
+        }
 
-        Model m2 = new ConcurrentModel();
-        ctrl.sendMessage("second", m2, null);
-        ctrl.streamChat(assistantId((ConcurrentModel) m2));
+        {
+            Model m2 = new ConcurrentModel();
+            ctrl.sendMessage("second", m2, null);
+            String assistantId = assistantId((ConcurrentModel) m2);
+            ctrl.streamChat(assistantId);
+            TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
+        }
 
         assertThat(fake.requests).hasSize(2);
         assertThat(fake.requests.get(0).getSystemPrompt())
@@ -149,7 +159,9 @@ public class UiControllerAsyncStreamingTests {
 
         Model model = new ConcurrentModel();
         ctrl.sendMessage("go", "engineer", "openai/gpt-5.5-pro", "LOW", model, null);
-        ctrl.streamChat(assistantId((ConcurrentModel) model));
+        String assistantId = assistantId((ConcurrentModel) model);
+        ctrl.streamChat(assistantId);
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
         assertThat(fake.requests).hasSize(1);
         AgentTurnRequest request = fake.requests.get(0);
@@ -243,18 +255,24 @@ public class UiControllerAsyncStreamingTests {
             }
         };
         UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
-                new SystemBalloonService(new ObjectMapper()), mock(TerminalManager.class), new TerminalStateService(),
-                contextCompactionService, Runnable::run, "0.0.1-SNAPSHOT");
+                new SystemBalloonService(new ObjectMapper()), new com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService(),
+                mock(TerminalManager.class), new TerminalStateService(),
+                new com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
+                contextCompactionService, "0.0.1-SNAPSHOT");
 
         for (int i = 1; i <= 7; i++) {
             Model model = new ConcurrentModel();
             ctrl.sendMessage("turn-" + i + " " + "u".repeat(800), model, null);
-            ctrl.streamChat(assistantId((ConcurrentModel) model));
+            String assistantId = assistantId((ConcurrentModel) model);
+            ctrl.streamChat(assistantId);
+            TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
         }
 
         Model compacted = new ConcurrentModel();
         ctrl.sendMessage("turn-8 " + "u".repeat(800), compacted, null);
-        ctrl.streamChat(assistantId((ConcurrentModel) compacted));
+        String assistantId = assistantId((ConcurrentModel) compacted);
+        ctrl.streamChat(assistantId);
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
         assertThat(fake.requests).isNotEmpty();
         AgentTurnRequest lastRequest = fake.requests.getLast();
@@ -389,12 +407,16 @@ public class UiControllerAsyncStreamingTests {
         };
 
         UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                new SystemBalloonService(new ObjectMapper()), mock(TerminalManager.class), new TerminalStateService(),
-                contextCompactionService, Runnable::run, "0.0.1-SNAPSHOT");
+                new SystemBalloonService(new ObjectMapper()), new com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService(),
+                mock(TerminalManager.class), new TerminalStateService(),
+                new com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
+                contextCompactionService, "0.0.1-SNAPSHOT");
 
         Model sendModel = new ConcurrentModel();
         ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);
-        ctrl.streamChat(assistantId((ConcurrentModel) sendModel));
+        String assistantId = assistantId((ConcurrentModel) sendModel);
+        ctrl.streamChat(assistantId);
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
         assertThat(model.conversations).hasSize(2);
         List<String> second = render(model.conversations.get(1));
@@ -460,6 +482,7 @@ public class UiControllerAsyncStreamingTests {
         // run stream
         var emitter = ctrl.streamChat(assistantId);
         assertThat(emitter).isNotNull();
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
         // after streaming completes, index should reflect final assistant text
         Model m2 = new ConcurrentModel();
@@ -545,6 +568,7 @@ public class UiControllerAsyncStreamingTests {
         final String finalAssistantId = assistantId;
 
         ctrl.streamChat(assistantId);
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
         Model afterModel = new ConcurrentModel();
         ctrl.index(afterModel);

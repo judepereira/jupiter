@@ -43,7 +43,6 @@ import com.judepereira.jupiter2.ui.rail.WorkspaceRailRefreshService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -56,7 +55,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
-import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -71,8 +69,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Log4j2
@@ -95,50 +91,7 @@ public class UiController {
     private final OpenAiOAuthService openAiOAuthService;
     private final String appVersion;
 
-    @Qualifier("agentTaskExecutor")
-    private final Executor agentExecutor;
     private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        TerminalManager terminalManager, TerminalStateService terminalStateService,
-                        ModelCatalogService modelCatalogService, SystemBalloonService systemBalloonService,
-                        ContextCompactionService contextCompactionService, Executor agentExecutor) {
-        this(harness, agentProperties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
-                contextCompactionService, agentExecutor, DEFAULT_APP_VERSION);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, ContextCompactionService contextCompactionService,
-                        Executor agentExecutor, String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService,
-                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
-                new OpenAiOAuthService(new com.judepereira.jupiter2.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
-                contextCompactionService, agentExecutor, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, Executor agentExecutor) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService,
-                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, agentExecutor, DEFAULT_APP_VERSION);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, Executor agentExecutor, String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService,
-                systemBalloonService, new WorkspaceRailRefreshService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, agentExecutor, appVersion);
-    }
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -146,7 +99,7 @@ public class UiController {
                         SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, @Qualifier("agentTaskExecutor") Executor agentExecutor,
+                        ContextCompactionService contextCompactionService,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -159,7 +112,6 @@ public class UiController {
         this.terminalStateService = terminalStateService;
         this.workspaceRailRefreshService = workspaceRailRefreshService;
         this.openAiOAuthService = openAiOAuthService;
-        this.agentExecutor = agentExecutor;
         this.appVersion = appVersion;
     }
 
@@ -305,15 +257,11 @@ public class UiController {
     }
 
     private void startActiveStream(String assistantId, ActiveStream active, SseEmitter emitter) {
-        Runnable task = () -> runActiveStream(assistantId, active);
         try {
-            if (agentExecutor instanceof ExecutorService service) {
-                service.submit(task);
-            } else {
-                agentExecutor.execute(task);
-            }
-        } catch (Exception e) {
+            Thread.startVirtualThread(() -> runActiveStream(assistantId, active));
+        } catch (Throwable t) {
             active.started().set(false);
+            Exception e = t instanceof Exception exception ? exception : new RuntimeException(t);
             listenerStartFailed(active, assistantId, e, emitter);
         }
     }
