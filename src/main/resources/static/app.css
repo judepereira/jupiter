@@ -73,7 +73,11 @@ input:focus, textarea:focus {
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: #ffffff;
+    cursor: pointer;
 }
 
 .project-tabs {
@@ -1393,6 +1397,99 @@ input:focus, textarea:focus {
 
     .terminal-shell {
         min-height: 0;
+    }
+}
+
+@media (max-width: 600px) {
+    #shell.shell-root,
+    #shell.shell-root.review-open,
+    #shell.shell-root.review-closed {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) minmax(0, 32vh) auto;
+    }
+
+    .left-panel,
+    .review-panel,
+    .terminal-panel,
+    #bottom-panel {
+        grid-column: 1;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .left-panel {
+        grid-row: 1;
+    }
+
+    .review-panel {
+        grid-row: 2;
+        margin: 8px 0 0 0;
+    }
+
+    .terminal-panel,
+    #bottom-panel {
+        grid-row: 3;
+        height: 220px;
+        margin: 0 0 8px 0;
+    }
+
+    .left-rail {
+        position: fixed;
+        top: var(--topbar-height);
+        left: 0;
+        bottom: var(--bottom-nav-height);
+        width: 80vw;
+        max-width: none;
+        z-index: 1700;
+        transform: translateX(-100%);
+        transition: transform 180ms ease;
+        box-shadow: 18px 0 40px rgba(2, 12, 32, 0.28);
+        will-change: transform;
+    }
+
+    body.mobile-left-rail-open .left-rail {
+        transform: translateX(0);
+    }
+
+    body.mobile-left-rail-open::before {
+        content: "";
+        position: fixed;
+        inset: var(--topbar-height) 0 var(--bottom-nav-height) 0;
+        background: rgba(6, 23, 51, 0.48);
+        z-index: 1650;
+        pointer-events: auto;
+    }
+
+    .project-tabs {
+        gap: 4px;
+        margin-left: 10px;
+        padding-bottom: 2px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+    }
+
+    .project-tab-group,
+    .project-tab-add {
+        flex: 0 0 auto;
+    }
+
+    .project-tab-group {
+        max-width: none;
+        min-width: max-content;
+        overflow: visible;
+    }
+
+    .project-tab {
+        flex: 0 0 auto;
+        gap: 8px;
+    }
+
+    .project-tab-label {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: nowrap;
     }
 }
 

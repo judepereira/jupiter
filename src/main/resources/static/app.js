@@ -454,6 +454,98 @@
         }, true);
     })();
 
+    // Mobile left-rail controller for the topbar switcher and off-canvas rail.
+    (function () {
+        if (window.__mobileLeftRailControllerBound) return;
+        window.__mobileLeftRailControllerBound = true;
+
+        const mobilePhoneQuery = window.matchMedia('(max-width: 600px)');
+
+        function isMobilePhoneViewport() {
+            return mobilePhoneQuery.matches;
+        }
+
+        function isMobileLeftRailOpen() {
+            return document.body.classList.contains('mobile-left-rail-open');
+        }
+
+        function getAppSwitcherButtons() {
+            return document.querySelectorAll('.app-switcher');
+        }
+
+        function syncAppSwitcherState() {
+            const expanded = isMobileLeftRailOpen() ? 'true' : 'false';
+            getAppSwitcherButtons().forEach(button => {
+                button.setAttribute('aria-expanded', expanded);
+            });
+        }
+
+        function openMobileLeftRail() {
+            if (!isMobilePhoneViewport()) return;
+            document.body.classList.add('mobile-left-rail-open');
+            syncAppSwitcherState();
+        }
+
+        function closeMobileLeftRail() {
+            if (!isMobileLeftRailOpen()) {
+                syncAppSwitcherState();
+                return;
+            }
+            document.body.classList.remove('mobile-left-rail-open');
+            syncAppSwitcherState();
+        }
+
+        function toggleMobileLeftRail() {
+            if (!isMobilePhoneViewport()) return;
+            if (isMobileLeftRailOpen()) {
+                closeMobileLeftRail();
+            } else {
+                openMobileLeftRail();
+            }
+        }
+
+        function isLeftRailInteractiveTarget(target) {
+            return !!(target && target.closest && target.closest('#left-rail .workspace-item, #left-rail .session-item'));
+        }
+
+        document.addEventListener('click', event => {
+            const switcher = event.target && event.target.closest ? event.target.closest('.app-switcher') : null;
+            if (switcher) {
+                if (!isMobilePhoneViewport()) return;
+                event.preventDefault();
+                toggleMobileLeftRail();
+                return;
+            }
+
+            if (!isMobilePhoneViewport() || !isMobileLeftRailOpen()) return;
+            if (isLeftRailInteractiveTarget(event.target)) {
+                closeMobileLeftRail();
+                return;
+            }
+
+            const rail = document.getElementById('left-rail');
+            if (rail && rail.contains(event.target)) return;
+            closeMobileLeftRail();
+        }, true);
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && isMobileLeftRailOpen()) {
+                closeMobileLeftRail();
+            }
+        }, true);
+
+        mobilePhoneQuery.addEventListener('change', () => {
+            if (!isMobilePhoneViewport()) {
+                closeMobileLeftRail();
+                return;
+            }
+            syncAppSwitcherState();
+        });
+
+        document.body.addEventListener('htmx:afterSwap', syncAppSwitcherState, true);
+        syncAppSwitcherState();
+    })();
+
     // Chat composer logic: kept outside the divider-guard so it runs even when
     // divider or shell are absent (HTMX swaps may only render chat fragments).
     (function () {

@@ -1,129 +1,0 @@
-[INFO] Scanning for projects...
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-parent/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 474/807 BProgress (1): 807 B                       Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-parent/4.0.8-SNAPSHOT/maven-metadata.xml (807 B at 1.4 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-dependencies/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 474/805 BProgress (1): 805 B                       Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-dependencies/4.0.8-SNAPSHOT/maven-metadata.xml (805 B at 7.2 kB/s)
-[INFO] 
-[INFO] ----------------------< com.judepereira:jupiter2 >----------------------
-[INFO] Building jupiter-v2 0.0.1-SNAPSHOT
-[INFO]   from pom.xml
-[INFO] --------------------------------[ jar ]---------------------------------
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-maven-plugin/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.0 kBProgress (1): 1.9/2.0 kBProgress (1): 2.0 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-maven-plugin/4.0.8-SNAPSHOT/maven-metadata.xml (2.0 kB at 17 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-flyway/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-flyway/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 20 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-logging/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-logging/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-autoconfigure/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-autoconfigure/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 20 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-jdbc/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-jdbc/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-jdbc/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-jdbc/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-sql/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-sql/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-transaction/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-transaction/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-persistence/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-persistence/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-flyway/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-flyway/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-restclient/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-restclient/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-jackson/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-jackson/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-jackson/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-jackson/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-restclient/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-restclient/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-http-client/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-http-client/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-http-converter/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-http-converter/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-thymeleaf/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-thymeleaf/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-thymeleaf/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-thymeleaf/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-websocket/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-websocket/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-webmvc/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-webmvc/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-tomcat/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-tomcat/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-tomcat-runtime/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-tomcat-runtime/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-tomcat/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-tomcat/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-web-server/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-web-server/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-webmvc/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-webmvc/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-servlet/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-servlet/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-websocket/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-websocket/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-devtools/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-devtools/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-flyway-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-flyway-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-test-autoconfigure/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-test-autoconfigure/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-jdbc-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-jdbc-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-jdbc-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-jdbc-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-restclient-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-restclient-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-jackson-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-jackson-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-restclient-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-restclient-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-thymeleaf-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-thymeleaf-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-webmvc-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-starter-webmvc-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 22 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-webmvc-test/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-webmvc-test/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-Downloading from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-resttestclient/4.0.8-SNAPSHOT/maven-metadata.xml
-Progress (1): 0.5/2.4 kBProgress (1): 1.9/2.4 kBProgress (1): 2.4 kB                        Downloaded from spring-snapshots: https://repo.spring.io/snapshot/org/springframework/boot/spring-boot-resttestclient/4.0.8-SNAPSHOT/maven-metadata.xml (2.4 kB at 21 kB/s)
-[INFO] 
-[INFO] --- resources:3.3.1:resources (default-resources) @ jupiter2 ---
-[INFO] Copying 1 resource from src/main/resources to target/classes
-[INFO] Copying 39 resources from src/main/resources to target/classes
-[INFO] 
-[INFO] --- compiler:3.14.1:compile (default-compile) @ jupiter2 ---
-[INFO] Nothing to compile - all classes are up to date.
-[INFO] 
-[INFO] --- resources:3.3.1:testResources (default-testResources) @ jupiter2 ---
-[INFO] Copying 2 resources from src/test/resources to target/test-classes
-[INFO] 
-[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ jupiter2 ---
-[INFO] Nothing to compile - all classes are up to date.
-[INFO] 
-[INFO] --- surefire:3.5.6:test (default-test) @ jupiter2 ---
-[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
-[INFO] 
-[INFO] -------------------------------------------------------
-[INFO]  T E S T S
-[INFO] -------------------------------------------------------
-[INFO] Running com.judepereira.jupiter2.e2e.SubagentTaskE2ETest
-[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 8.095 s -- in com.judepereira.jupiter2.e2e.SubagentTaskE2ETest
-[INFO] 
-[INFO] Results:
-[INFO] 
-[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
-[INFO] 
-[INFO] ------------------------------------------------------------------------
-[INFO] BUILD SUCCESS
-[INFO] ------------------------------------------------------------------------
-[INFO] Total time:  15.105 s
-[INFO] Finished at: 2026-08-03T06:42:58+02:00
-[INFO] ------------------------------------------------------------------------

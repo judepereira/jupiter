@@ -1,9 +1,14 @@
 <!doctype html>
 <th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}">
     <header id="top-bar" class="top-bar" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
-        <div class="app-switcher" aria-hidden="true">
-            <i class="bi bi-braces-asterisk"></i>
-        </div>
+        <button type="button"
+                class="app-switcher"
+                aria-controls="left-rail"
+                aria-expanded="false"
+                aria-label="Toggle workspace rail"
+                title="Toggle workspace rail">
+            <i class="bi bi-braces-asterisk" aria-hidden="true"></i>
+        </button>
 
         <nav class="project-tabs" aria-label="Projects">
 <!--            <button th:if="${#lists.isEmpty(projectList)}" type="button" class="project-tab project-tab-empty" disabled>-->

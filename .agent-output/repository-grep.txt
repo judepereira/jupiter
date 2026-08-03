@@ -1,7 +1,0 @@
-184:    Optional<ConversationMessageRow> findLatestPendingAssistantMessage(long sessionId) {
-239:                       Long parentAssistantMessageId) {
-241:                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, created_at, last_opened_at)
-242:                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :createdAt, :lastOpenedAt)
-255:                .addValue("parentAssistantMessageId", parentAssistantMessageId)
-531:                nullableLong(rs, "parent_assistant_message_id"), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
-570:                      Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt) {}
