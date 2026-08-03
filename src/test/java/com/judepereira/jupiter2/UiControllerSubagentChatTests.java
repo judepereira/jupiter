@@ -9,6 +9,7 @@ import com.judepereira.jupiter2.agent.config.AgentProperties;
 import com.judepereira.jupiter2.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter2.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter2.persistence.AppStateService;
+import com.judepereira.jupiter2.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter2.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter2.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter2.persistence.TestAppStateSupport;
@@ -72,10 +73,51 @@ public class UiControllerSubagentChatTests {
         String backView = controller.loadPrimaryChat(backModel);
 
         assertThat(backView).isEqualTo("fragments/chat :: chat");
+        assertThat(backModel.getAttribute("selectedAgent")).isEqualTo(backModel.getAttribute("defaultAgent"));
+        assertThat(backModel.getAttribute("selectedModel")).isEqualTo(backModel.getAttribute("defaultModel"));
+        assertThat(backModel.getAttribute("selectedThinking")).isEqualTo(backModel.getAttribute("defaultThinking"));
         assertThat(backModel.getAttribute("subagentView")).isEqualTo(false);
         assertThat(backModel.getAttribute("subagentAgentName")).isNull();
         assertThat(backModel.getAttribute("subagentAgentId")).isNull();
         assertThat(backModel.getAttribute("subagentSessionId")).isNull();
+    }
+
+    @Test
+    public void loadPrimaryChatPrefersLatestAssistantMetadataForPrimaryControls(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5-pro", "HIGH");
+        appStateService.appendVisibleSystemMessage(sessionId, "summary one");
+        appStateService.appendVisibleSystemMessage(sessionId, "summary two");
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
+        appStateService.completeAssistantMessage(sessionId, "assistant-1", "done", List.of());
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        controller.loadPrimaryChat(model);
+
+        assertThat(((com.judepereira.jupiter2.agent.catalog.AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
+        assertThat(((com.judepereira.jupiter2.agent.catalog.ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
+    }
+
+    @Test
+    public void indexUsesLatestAssistantMetadataForActiveSessionControls(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5-pro", "HIGH");
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
+        appStateService.completeAssistantMessage(sessionId, "assistant-1", "done", List.of());
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        controller.index(model);
+
+        assertThat(((com.judepereira.jupiter2.agent.catalog.AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
+        assertThat(((com.judepereira.jupiter2.agent.catalog.ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.5-pro");
     }
 
     private static UiController controller(AppStateService appStateService, Path workspaceRoot) {
