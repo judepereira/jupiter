@@ -151,7 +151,7 @@ public class UiController {
     @GetMapping("/")
     public String index(Model model) {
         AppStateView view = appStateService.loadViewData();
-        populateChatControlsModel(model, defaultChatSelection());
+        populateChatControlsModel(model, activeChatSelection(view));
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         return "index";
@@ -491,7 +491,7 @@ public class UiController {
             throw new IllegalStateException("No active primary session");
         }
 
-        populateChatControlsModel(model, defaultChatSelection());
+        populateChatControlsModel(model, activeChatSelection(view));
         populateChatModel(model, view.activeSessionDetail().chatMessages(), false, null, null, null);
         return "fragments/chat :: chat";
     }
@@ -981,7 +981,37 @@ public class UiController {
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
-        populateChatControlsModel(model, defaultChatSelection());
+        populateChatControlsModel(model, activeChatSelection(view));
+    }
+
+    private ChatSelection activeChatSelection(AppStateView view) {
+        if (view != null && view.activeSessionDetail() != null) {
+            ChatSelection selection = latestAssistantChatSelection(view.activeSessionDetail());
+            if (selection != null) {
+                return selection;
+            }
+        }
+        return defaultChatSelection();
+    }
+
+    private ChatSelection latestAssistantChatSelection(SessionDetailView detail) {
+        if (detail == null) {
+            return null;
+        }
+        for (int i = detail.chatMessages().size() - 1; i >= 0; i--) {
+            ChatMessageView message = detail.chatMessages().get(i);
+            if (!"assistant".equals(message.role()) || message.metadata() == null) {
+                continue;
+            }
+            ChatMessageMetadata metadata = message.metadata();
+            AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
+            ModelDefinition selectedModel = modelCatalogService.resolveOrDefault(metadata.modelId());
+            ThinkingLevel selectedThinking = resolveThinkingLevelOrDefault(metadata.thinkingLevel(), selectedAgent.defaultThinkingLevel());
+            AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+            ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
+            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+        }
+        return null;
     }
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {
@@ -1009,6 +1039,18 @@ public class UiController {
         ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank() ? selectedAgent.defaultThinkingLevel() : ThinkingLevel.fromValue(thinkingLevel);
         ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
         return new ChatSelection(selectedAgent, selectedModel, selectedThinking, defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+    }
+
+    private ThinkingLevel resolveThinkingLevelOrDefault(String value, ThinkingLevel fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return ThinkingLevel.fromValue(value);
+        } catch (IllegalArgumentException e) {
+            log.warn("Ignoring stale chat thinking level metadata '{}'; using {}", value, fallback);
+            return fallback;
+        }
     }
 
     private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {

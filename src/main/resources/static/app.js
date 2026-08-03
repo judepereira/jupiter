@@ -771,7 +771,7 @@
             agentSelect.addEventListener('change', () => syncChatDefaults(form));
             modelSelect.addEventListener('change', () => updateChatQualitySummary(form));
             thinkingSelect.addEventListener('change', () => updateChatQualitySummary(form));
-            syncChatDefaults(form);
+            updateChatQualitySummary(form);
         }
 
         function resizeChatTextarea(textarea) {
