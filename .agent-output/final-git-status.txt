@@ -1,0 +1,6 @@
+ M src/main/java/com/judepereira/jupiter2/persistence/AppStateRepository.java
+ M src/main/java/com/judepereira/jupiter2/persistence/AppStateService.java
+ M src/test/java/com/judepereira/jupiter2/persistence/AppStateServicePersistenceTests.java
+?? .agent-output/
+?? src/main/resources/db/migration/V11__tool_call_traces_tool_call_id.sql
+?? src/main/resources/db/migration/V12__sessions_parent_assistant_message_id.sql
