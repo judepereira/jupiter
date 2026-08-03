@@ -1,0 +1,355 @@
+diff --git a/src/main/java/com/judepereira/jupiter2/persistence/AppStateRepository.java b/src/main/java/com/judepereira/jupiter2/persistence/AppStateRepository.java
+index 331b9a6..a83dac7 100644
+--- a/src/main/java/com/judepereira/jupiter2/persistence/AppStateRepository.java
++++ b/src/main/java/com/judepereira/jupiter2/persistence/AppStateRepository.java
+@@ -181,6 +181,16 @@ public class AppStateRepository {
+         return queryRequired("SELECT * FROM sessions WHERE id = :id", new MapSqlParameterSource("id", sessionId), this::mapSession, "session " + sessionId);
+     }
+ 
++    Optional<ConversationMessageRow> findLatestPendingAssistantMessage(long sessionId) {
++        return queryOne("""
++                SELECT *
++                FROM conversation_messages
++                WHERE session_id = :sessionId AND role = 'assistant' AND pending = TRUE
++                ORDER BY sequence DESC
++                LIMIT 1
++                """, new MapSqlParameterSource("sessionId", sessionId), this::mapConversationMessage);
++    }
++
+     List<SessionRow> listSessionsByWorkspace(long workspaceId) {
+         return jdbc.query("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND hidden = FALSE ORDER BY position ASC",
+                 new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
+@@ -221,14 +231,15 @@ public class AppStateRepository {
+ 
+     long insertSession(long workspaceId, String name, long position, Instant now, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource,
+                        Long selectedChangedFileId) {
+-        return insertSession(workspaceId, name, position, now, reviewPanelOpen, reviewSource, selectedChangedFileId, false, null, null, null, null);
++        return insertSession(workspaceId, name, position, now, reviewPanelOpen, reviewSource, selectedChangedFileId, false, null, null, null, null, null);
+     }
+ 
+     long insertSession(long workspaceId, String name, long position, Instant now, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource,
+-                       Long selectedChangedFileId, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName) {
++                       Long selectedChangedFileId, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
++                       Long parentAssistantMessageId) {
+         return insertAndReturnId("""
+-                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, created_at, last_opened_at)
+-                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :createdAt, :lastOpenedAt)
++                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, created_at, last_opened_at)
++                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :createdAt, :lastOpenedAt)
+                 """, params -> params
+                 .addValue("workspaceId", workspaceId)
+                 .addValue("name", name)
+@@ -241,6 +252,7 @@ public class AppStateRepository {
+                 .addValue("parentToolCallId", parentToolCallId)
+                 .addValue("subagentAgentId", subagentAgentId)
+                 .addValue("subagentAgentName", subagentAgentName)
++                .addValue("parentAssistantMessageId", parentAssistantMessageId)
+                 .addValue("createdAt", Timestamp.from(now))
+                 .addValue("lastOpenedAt", Timestamp.from(now)));
+     }
+@@ -394,14 +406,15 @@ public class AppStateRepository {
+         jdbc.update("DELETE FROM sessions WHERE id = :sessionId", new MapSqlParameterSource("sessionId", sessionId));
+     }
+ 
+-    long insertToolCallTrace(long sessionId, long assistantMessageId, long sequence, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant now) {
++    long insertToolCallTrace(long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant now) {
+         return insertAndReturnId("""
+-                INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_name, success, args_json, text_summary, machine_summary_json, created_at)
+-                VALUES (:sessionId, :assistantMessageId, :sequence, :toolName, :success, :argsJson, :textSummary, :machineSummaryJson, :createdAt)
++                INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_call_id, tool_name, success, args_json, text_summary, machine_summary_json, created_at)
++                VALUES (:sessionId, :assistantMessageId, :sequence, :toolCallId, :toolName, :success, :argsJson, :textSummary, :machineSummaryJson, :createdAt)
+                 """, params -> params
+                 .addValue("sessionId", sessionId)
+                 .addValue("assistantMessageId", assistantMessageId)
+                 .addValue("sequence", sequence)
++                .addValue("toolCallId", toolCallId)
+                 .addValue("toolName", toolName)
+                 .addValue("success", success)
+                 .addValue("argsJson", argsJson)
+@@ -420,6 +433,16 @@ public class AppStateRepository {
+                 new MapSqlParameterSource("assistantMessageId", assistantMessageId), this::mapToolCallTrace);
+     }
+ 
++    boolean existsToolCallTraceBySessionAndToolCallId(long sessionId, String toolCallId) {
++        return queryOne("""
++                SELECT 1
++                FROM tool_call_traces
++                WHERE session_id = :sessionId AND tool_call_id = :toolCallId
++                LIMIT 1
++                """, new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("toolCallId", toolCallId),
++                (rs, rowNum) -> 1).isPresent();
++    }
++
+     long nextChangedFilePosition(long sessionId) {
+         Long value = jdbc.queryForObject("SELECT COALESCE(MAX(position), 0) + 1 FROM changed_files WHERE session_id = :sessionId",
+                 new MapSqlParameterSource("sessionId", sessionId), Long.class);
+@@ -505,7 +528,7 @@ public class AppStateRepository {
+         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
+                 Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getBoolean("unread"), rs.getBoolean("hidden"),
+                 nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
+-                timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
++                nullableLong(rs, "parent_assistant_message_id"), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
+     }
+ 
+     private ConversationMessageRow mapConversationMessage(ResultSet rs, int rowNum) throws SQLException {
+@@ -521,8 +544,8 @@ public class AppStateRepository {
+     }
+ 
+     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
+-        return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"), rs.getString("tool_name"),
+-                rs.getBoolean("success"), rs.getString("args_json"), rs.getString("text_summary"), rs.getString("machine_summary_json"), timestampToInstant(rs.getTimestamp("created_at")));
++        return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"), rs.getString("tool_call_id"),
++                rs.getString("tool_name"), rs.getBoolean("success"), rs.getString("args_json"), rs.getString("text_summary"), rs.getString("machine_summary_json"), timestampToInstant(rs.getTimestamp("created_at")));
+     }
+ 
+     private ChangedFileRow mapChangedFile(ResultSet rs, int rowNum) throws SQLException {
+@@ -544,9 +567,9 @@ public class AppStateRepository {
+     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
+     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
+                       boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
+-                      Instant createdAt, Instant lastOpenedAt) {}
++                      Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt) {}
+     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
+                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant createdAt) {}
+-    record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}
++    record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}
+     record ChangedFileRow(long id, long sessionId, String path, String diff, long position, Instant createdAt) {}
+ }
+diff --git a/src/main/java/com/judepereira/jupiter2/persistence/AppStateService.java b/src/main/java/com/judepereira/jupiter2/persistence/AppStateService.java
+index 35a4a4c..3666e15 100644
+--- a/src/main/java/com/judepereira/jupiter2/persistence/AppStateService.java
++++ b/src/main/java/com/judepereira/jupiter2/persistence/AppStateService.java
+@@ -278,10 +278,11 @@ public class AppStateService {
+         }
+         var parentSession = repository.findSession(parentSessionId);
+         var workspace = repository.findWorkspace(parentSession.workspaceId());
++        Long parentAssistantMessageId = repository.findLatestPendingAssistantMessage(parentSessionId).map(AppStateRepository.ConversationMessageRow::id).orElse(null);
+         Instant now = Instant.now();
+         long position = repository.nextSessionPosition(workspace.id());
+         long sessionId = repository.insertSession(workspace.id(), "Subagent: " + subagent.name(), position, now, false, ReviewSource.SESSION, null,
+-                true, parentSessionId, parentToolCallId, subagent.id(), subagent.name());
++                true, parentSessionId, parentToolCallId, subagent.id(), subagent.name(), parentAssistantMessageId);
+         repository.updateProjectLastOpened(workspace.projectId(), now);
+         repository.updateWorkspaceLastOpened(workspace.id(), now);
+         repository.updateSessionLastOpened(sessionId, now);
+@@ -367,7 +368,7 @@ public class AppStateService {
+ 
+         String argsJson = json(normalizedTrace.args());
+         String machineSummaryJson = json(normalizedTrace.machineSummary());
+-        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(), machineSummaryJson, now);
++        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolCallId(), normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(), machineSummaryJson, now);
+         payloads.add(new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()));
+         repository.updateMessageToolCalls(assistantMessage.id(), json(payloads));
+ 
+@@ -771,8 +772,9 @@ public class AppStateService {
+     public SessionDetailView loadSessionDetail(long sessionId) {
+         var session = repository.findSession(sessionId);
+         var workspace = repository.findWorkspace(session.workspaceId());
+-        var messages = applySyntheticSubagentToolCalls(sessionId,
+-                repository.listVisibleMessagesBySession(sessionId).stream().map(message -> toChatMessageView(message, sessionId)).toList());
++        List<AppStateRepository.ConversationMessageRow> visibleMessages = repository.listVisibleMessagesBySession(sessionId);
++        List<ChatMessageView> messages = visibleMessages.stream().map(message -> toChatMessageView(message, sessionId)).toList();
++        messages = applySyntheticSubagentToolCalls(sessionId, visibleMessages, messages);
+         ReviewSource reviewSource = session.reviewSource();
+         List<ChangedFileView> files = reviewSource == ReviewSource.GIT
+                 ? listGitChangedFiles(Path.of(workspace.normalizedPath())).stream().map(this::toChangedFileView).toList()
+@@ -783,16 +785,21 @@ public class AppStateService {
+         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
+     }
+ 
+-    private List<ChatMessageView> applySyntheticSubagentToolCalls(long parentSessionId, List<ChatMessageView> messages) {
+-        int pendingAssistantIndex = -1;
+-        for (int i = messages.size() - 1; i >= 0; i--) {
+-            var message = messages.get(i);
++    private List<ChatMessageView> applySyntheticSubagentToolCalls(long parentSessionId, List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
++        if (messages.isEmpty()) {
++            return messages;
++        }
++
++        Map<Long, Integer> pendingAssistantIndexByMessageId = new java.util.HashMap<>();
++        int latestPendingAssistantIndex = -1;
++        for (int i = 0; i < messages.size(); i++) {
++            ChatMessageView message = messages.get(i);
+             if (message.pending() && "assistant".equals(message.role())) {
+-                pendingAssistantIndex = i;
+-                break;
++                pendingAssistantIndexByMessageId.put(visibleMessages.get(i).id(), i);
++                latestPendingAssistantIndex = i;
+             }
+         }
+-        if (pendingAssistantIndex < 0) {
++        if (latestPendingAssistantIndex < 0) {
+             return messages;
+         }
+ 
+@@ -805,26 +812,51 @@ public class AppStateService {
+             }
+         }
+ 
+-        List<ToolCallView> syntheticToolCalls = new ArrayList<>();
++        Map<Integer, List<ToolCallView>> syntheticByMessageIndex = new java.util.HashMap<>();
++        List<ToolCallView> legacySyntheticToolCalls = new ArrayList<>();
+         for (var childSession : repository.listChildSessionsByParentSession(parentSessionId)) {
++            if (!childSession.hidden()) {
++                continue;
++            }
+             String parentToolCallId = childSession.parentToolCallId();
+-            if (!childSession.hidden() || parentToolCallId == null || parentToolCallId.isBlank() || existingToolCallIds.contains(parentToolCallId)) {
++            if (parentToolCallId == null || parentToolCallId.isBlank() || existingToolCallIds.contains(parentToolCallId)) {
+                 continue;
+             }
+-            syntheticToolCalls.add(new ToolCallView(parentToolCallId, "task", true, "", "running", false, false,
+-                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running"));
++            ToolCallView syntheticToolCall = new ToolCallView(parentToolCallId, "task", true, "", "running", false, false,
++                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running");
++            Long parentAssistantMessageId = childSession.parentAssistantMessageId();
++            if (parentAssistantMessageId != null) {
++                Integer messageIndex = pendingAssistantIndexByMessageId.get(parentAssistantMessageId);
++                if (messageIndex != null) {
++                    syntheticByMessageIndex.computeIfAbsent(messageIndex, ignored -> new ArrayList<>()).add(syntheticToolCall);
++                }
++                continue;
++            }
++            if (!repository.existsToolCallTraceBySessionAndToolCallId(parentSessionId, parentToolCallId)) {
++                legacySyntheticToolCalls.add(syntheticToolCall);
++            }
+         }
+ 
+-        if (syntheticToolCalls.isEmpty()) {
++        if (syntheticByMessageIndex.isEmpty() && legacySyntheticToolCalls.isEmpty()) {
+             return messages;
+         }
+ 
+         ArrayList<ChatMessageView> updated = new ArrayList<>(messages);
+-        ChatMessageView pendingAssistant = messages.get(pendingAssistantIndex);
+-        ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(pendingAssistant.toolCalls());
+-        mergedToolCalls.addAll(syntheticToolCalls);
+-        updated.set(pendingAssistantIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
+-                pendingAssistant.id(), mergedToolCalls, pendingAssistant.metadata()));
++        for (var entry : syntheticByMessageIndex.entrySet()) {
++            ChatMessageView message = updated.get(entry.getKey());
++            ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(message.toolCalls());
++            mergedToolCalls.addAll(entry.getValue());
++            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(), message.pending(), message.id(), mergedToolCalls, message.metadata()));
++        }
++
++        if (!legacySyntheticToolCalls.isEmpty()) {
++            ChatMessageView pendingAssistant = updated.get(latestPendingAssistantIndex);
++            ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(pendingAssistant.toolCalls());
++            mergedToolCalls.addAll(legacySyntheticToolCalls);
++            updated.set(latestPendingAssistantIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
++                    pendingAssistant.id(), mergedToolCalls, pendingAssistant.metadata()));
++        }
++
+         return updated;
+     }
+ 
+@@ -842,8 +874,9 @@ public class AppStateService {
+         List<AppStateRepository.ToolCallTraceRow> traces = repository.listToolCallTracesByAssistantMessage(message.id());
+         List<ToolCallView> toolCalls = new ArrayList<>(traces.size());
+         for (int i = 0; i < traces.size(); i++) {
+-            String toolCallId = i < payloads.size() ? payloads.get(i).toolCallId() : null;
+-            toolCalls.add(toToolCallView(traces.get(i), toolCallId));
++            AppStateRepository.ToolCallTraceRow trace = traces.get(i);
++            String toolCallId = trace.toolCallId() != null ? trace.toolCallId() : i < payloads.size() ? payloads.get(i).toolCallId() : null;
++            toolCalls.add(toToolCallView(trace, toolCallId));
+         }
+         return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(), toolCalls,
+                 message.agentId() == null && message.agentName() == null && message.modelId() == null && message.thinkingLevel() == null ? null :
+diff --git a/src/test/java/com/judepereira/jupiter2/persistence/AppStateServicePersistenceTests.java b/src/test/java/com/judepereira/jupiter2/persistence/AppStateServicePersistenceTests.java
+index 416eec1..08d93a1 100644
+--- a/src/test/java/com/judepereira/jupiter2/persistence/AppStateServicePersistenceTests.java
++++ b/src/test/java/com/judepereira/jupiter2/persistence/AppStateServicePersistenceTests.java
+@@ -105,6 +105,92 @@ public class AppStateServicePersistenceTests {
+                 .containsExactly(tuple(workspaceId, false));
+     }
+ 
++    @Test
++    public void completedTaskToolCallKeepsItsPersistedToolCallIdAfterCompletionClearsToolCallsJson(@TempDir Path projectPath) {
++        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
++        AppStateService service = context.service();
++        AppStateRepository repository = context.repository();
++
++        service.addOrReopenProject("Alpha", projectPath.toString());
++        long sessionId = service.loadViewData().activeSession().id();
++
++        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
++        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "running", Map.of());
++
++        service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
++        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
++
++        var assistantRow = repository.findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
++        assertThat(assistantRow.toolCallsJson()).isNull();
++        assertThat(repository.listToolCallTracesByAssistantMessage(assistantRow.id()))
++                .singleElement()
++                .extracting(AppStateRepository.ToolCallTraceRow::toolCallId)
++                .isEqualTo("task-1");
++
++        ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
++                .filter(message -> "assistant".equals(message.role()))
++                .findFirst()
++                .orElseThrow();
++        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.toolCallId()).isEqualTo("task-1"));
++    }
++
++    @Test
++    public void completedTaskTurnWithHiddenChildSessionDoesNotSynthesizeTheOldCallOntoALaterPendingTurn(@TempDir Path projectPath) {
++        AppStateService service = TestAppStateSupport.appStateService();
++
++        service.addOrReopenProject("Alpha", projectPath.toString());
++        long sessionId = service.loadViewData().activeSession().id();
++
++        QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
++        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "running", Map.of());
++        service.appendToolCallTrace(sessionId, firstTurn.assistantMessage().id(), trace);
++
++        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
++                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
++        long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
++        var child = service.loadSubagentSessionDetail(hiddenSessionId);
++        assertThat(child.parentSessionId()).isEqualTo(sessionId);
++        assertThat(child.parentToolCallId()).isEqualTo("task-1");
++
++        service.completeAssistantMessage(sessionId, firstTurn.assistantMessage().id(), "done", List.of(trace));
++        service.appendUserMessageAndPendingAssistant(sessionId, "next turn");
++
++        List<ChatMessageView> messages = service.loadViewData().activeSessionDetail().chatMessages();
++        assertThat(messages).filteredOn(message -> "assistant".equals(message.role()) && !message.pending())
++                .singleElement()
++                .satisfies(message -> assertThat(message.toolCalls()).extracting(call -> call.toolCallId()).containsExactly("task-1"));
++        assertThat(messages).filteredOn(message -> "assistant".equals(message.role()) && message.pending())
++                .singleElement()
++                .satisfies(message -> assertThat(message.toolCalls()).isEmpty());
++    }
++
++    @Test
++    public void pendingParentAssistantWithHiddenChildSessionShowsASyntheticRunningTaskCallBeforeTheTraceIsAppended(@TempDir Path projectPath) {
++        AppStateService service = TestAppStateSupport.appStateService();
++
++        service.addOrReopenProject("Alpha", projectPath.toString());
++        long sessionId = service.loadViewData().activeSession().id();
++
++        service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
++        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
++                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
++        long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
++
++        ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
++                .filter(message -> "assistant".equals(message.role()) && message.pending())
++                .findFirst()
++                .orElseThrow();
++
++        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> {
++            assertThat(call.toolCallId()).isEqualTo("task-1");
++            assertThat(call.toolName()).isEqualTo("task");
++            assertThat(call.status()).isEqualTo("running");
++            assertThat(call.subagentSessionId()).isEqualTo(hiddenSessionId);
++            assertThat(call.subagentAgentId()).isEqualTo("engineer");
++            assertThat(call.subagentAgentName()).isEqualTo("Engineer");
++        });
++    }
++
+     @Test
+     public void activeHiddenAndAlreadyUnreadSessionsDoNotPublishUnreadEvents(@TempDir Path projectPath) {
+         AtomicReference<Object> publishedEvent = new AtomicReference<>();

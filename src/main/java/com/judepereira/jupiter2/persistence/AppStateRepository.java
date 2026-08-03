@@ -181,6 +181,16 @@ public class AppStateRepository {
         return queryRequired("SELECT * FROM sessions WHERE id = :id", new MapSqlParameterSource("id", sessionId), this::mapSession, "session " + sessionId);
     }
 
+    Optional<ConversationMessageRow> findLatestPendingAssistantMessage(long sessionId) {
+        return queryOne("""
+                SELECT *
+                FROM conversation_messages
+                WHERE session_id = :sessionId AND role = 'assistant' AND pending = TRUE
+                ORDER BY sequence DESC
+                LIMIT 1
+                """, new MapSqlParameterSource("sessionId", sessionId), this::mapConversationMessage);
+    }
+
     List<SessionRow> listSessionsByWorkspace(long workspaceId) {
         return jdbc.query("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND hidden = FALSE ORDER BY position ASC",
                 new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
@@ -221,14 +231,15 @@ public class AppStateRepository {
 
     long insertSession(long workspaceId, String name, long position, Instant now, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource,
                        Long selectedChangedFileId) {
-        return insertSession(workspaceId, name, position, now, reviewPanelOpen, reviewSource, selectedChangedFileId, false, null, null, null, null);
+        return insertSession(workspaceId, name, position, now, reviewPanelOpen, reviewSource, selectedChangedFileId, false, null, null, null, null, null);
     }
 
     long insertSession(long workspaceId, String name, long position, Instant now, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource,
-                       Long selectedChangedFileId, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName) {
+                       Long selectedChangedFileId, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
+                       Long parentAssistantMessageId) {
         return insertAndReturnId("""
-                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, created_at, last_opened_at)
-                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :createdAt, :lastOpenedAt)
+                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, created_at, last_opened_at)
+                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :createdAt, :lastOpenedAt)
                 """, params -> params
                 .addValue("workspaceId", workspaceId)
                 .addValue("name", name)
@@ -241,6 +252,7 @@ public class AppStateRepository {
                 .addValue("parentToolCallId", parentToolCallId)
                 .addValue("subagentAgentId", subagentAgentId)
                 .addValue("subagentAgentName", subagentAgentName)
+                .addValue("parentAssistantMessageId", parentAssistantMessageId)
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("lastOpenedAt", Timestamp.from(now)));
     }
@@ -394,14 +406,15 @@ public class AppStateRepository {
         jdbc.update("DELETE FROM sessions WHERE id = :sessionId", new MapSqlParameterSource("sessionId", sessionId));
     }
 
-    long insertToolCallTrace(long sessionId, long assistantMessageId, long sequence, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant now) {
+    long insertToolCallTrace(long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant now) {
         return insertAndReturnId("""
-                INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_name, success, args_json, text_summary, machine_summary_json, created_at)
-                VALUES (:sessionId, :assistantMessageId, :sequence, :toolName, :success, :argsJson, :textSummary, :machineSummaryJson, :createdAt)
+                INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_call_id, tool_name, success, args_json, text_summary, machine_summary_json, created_at)
+                VALUES (:sessionId, :assistantMessageId, :sequence, :toolCallId, :toolName, :success, :argsJson, :textSummary, :machineSummaryJson, :createdAt)
                 """, params -> params
                 .addValue("sessionId", sessionId)
                 .addValue("assistantMessageId", assistantMessageId)
                 .addValue("sequence", sequence)
+                .addValue("toolCallId", toolCallId)
                 .addValue("toolName", toolName)
                 .addValue("success", success)
                 .addValue("argsJson", argsJson)
@@ -418,6 +431,16 @@ public class AppStateRepository {
     List<ToolCallTraceRow> listToolCallTracesByAssistantMessage(long assistantMessageId) {
         return jdbc.query("SELECT * FROM tool_call_traces WHERE assistant_message_id = :assistantMessageId ORDER BY sequence ASC",
                 new MapSqlParameterSource("assistantMessageId", assistantMessageId), this::mapToolCallTrace);
+    }
+
+    boolean existsToolCallTraceBySessionAndToolCallId(long sessionId, String toolCallId) {
+        return queryOne("""
+                SELECT 1
+                FROM tool_call_traces
+                WHERE session_id = :sessionId AND tool_call_id = :toolCallId
+                LIMIT 1
+                """, new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("toolCallId", toolCallId),
+                (rs, rowNum) -> 1).isPresent();
     }
 
     long nextChangedFilePosition(long sessionId) {
@@ -505,7 +528,7 @@ public class AppStateRepository {
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
                 Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getBoolean("unread"), rs.getBoolean("hidden"),
                 nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
-                timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
+                nullableLong(rs, "parent_assistant_message_id"), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
     }
 
     private ConversationMessageRow mapConversationMessage(ResultSet rs, int rowNum) throws SQLException {
@@ -521,8 +544,8 @@ public class AppStateRepository {
     }
 
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
-        return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"), rs.getString("tool_name"),
-                rs.getBoolean("success"), rs.getString("args_json"), rs.getString("text_summary"), rs.getString("machine_summary_json"), timestampToInstant(rs.getTimestamp("created_at")));
+        return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"), rs.getString("tool_call_id"),
+                rs.getString("tool_name"), rs.getBoolean("success"), rs.getString("args_json"), rs.getString("text_summary"), rs.getString("machine_summary_json"), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private ChangedFileRow mapChangedFile(ResultSet rs, int rowNum) throws SQLException {
@@ -544,9 +567,9 @@ public class AppStateRepository {
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
                       boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
-                      Instant createdAt, Instant lastOpenedAt) {}
+                      Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant createdAt) {}
-    record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}
+    record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}
     record ChangedFileRow(long id, long sessionId, String path, String diff, long position, Instant createdAt) {}
 }

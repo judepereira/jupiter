@@ -278,10 +278,11 @@ public class AppStateService {
         }
         var parentSession = repository.findSession(parentSessionId);
         var workspace = repository.findWorkspace(parentSession.workspaceId());
+        Long parentAssistantMessageId = repository.findLatestPendingAssistantMessage(parentSessionId).map(AppStateRepository.ConversationMessageRow::id).orElse(null);
         Instant now = Instant.now();
         long position = repository.nextSessionPosition(workspace.id());
         long sessionId = repository.insertSession(workspace.id(), "Subagent: " + subagent.name(), position, now, false, ReviewSource.SESSION, null,
-                true, parentSessionId, parentToolCallId, subagent.id(), subagent.name());
+                true, parentSessionId, parentToolCallId, subagent.id(), subagent.name(), parentAssistantMessageId);
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateWorkspaceLastOpened(workspace.id(), now);
         repository.updateSessionLastOpened(sessionId, now);
@@ -367,7 +368,7 @@ public class AppStateService {
 
         String argsJson = json(normalizedTrace.args());
         String machineSummaryJson = json(normalizedTrace.machineSummary());
-        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(), machineSummaryJson, now);
+        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolCallId(), normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(), machineSummaryJson, now);
         payloads.add(new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()));
         repository.updateMessageToolCalls(assistantMessage.id(), json(payloads));
 
@@ -771,8 +772,9 @@ public class AppStateService {
     public SessionDetailView loadSessionDetail(long sessionId) {
         var session = repository.findSession(sessionId);
         var workspace = repository.findWorkspace(session.workspaceId());
-        var messages = applySyntheticSubagentToolCalls(sessionId,
-                repository.listVisibleMessagesBySession(sessionId).stream().map(message -> toChatMessageView(message, sessionId)).toList());
+        List<AppStateRepository.ConversationMessageRow> visibleMessages = repository.listVisibleMessagesBySession(sessionId);
+        List<ChatMessageView> messages = visibleMessages.stream().map(message -> toChatMessageView(message, sessionId)).toList();
+        messages = applySyntheticSubagentToolCalls(sessionId, visibleMessages, messages);
         ReviewSource reviewSource = session.reviewSource();
         List<ChangedFileView> files = reviewSource == ReviewSource.GIT
                 ? listGitChangedFiles(Path.of(workspace.normalizedPath())).stream().map(this::toChangedFileView).toList()
@@ -783,48 +785,74 @@ public class AppStateService {
         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
     }
 
-    private List<ChatMessageView> applySyntheticSubagentToolCalls(long parentSessionId, List<ChatMessageView> messages) {
-        int pendingAssistantIndex = -1;
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            var message = messages.get(i);
-            if (message.pending() && "assistant".equals(message.role())) {
-                pendingAssistantIndex = i;
-                break;
-            }
-        }
-        if (pendingAssistantIndex < 0) {
+    private List<ChatMessageView> applySyntheticSubagentToolCalls(long parentSessionId, List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
+        if (messages.isEmpty()) {
             return messages;
         }
 
-        Set<String> existingToolCallIds = new java.util.HashSet<>();
-        for (var message : messages) {
-            for (var toolCall : message.toolCalls()) {
-                if (toolCall.toolCallId() != null && !toolCall.toolCallId().isBlank()) {
-                    existingToolCallIds.add(toolCall.toolCallId());
-                }
+        Map<Long, Integer> pendingAssistantIndexByMessageId = new java.util.HashMap<>();
+        int latestPendingAssistantIndex = -1;
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessageView message = messages.get(i);
+            if (message.pending() && "assistant".equals(message.role())) {
+                pendingAssistantIndexByMessageId.put(visibleMessages.get(i).id(), i);
+                latestPendingAssistantIndex = i;
             }
         }
+        if (latestPendingAssistantIndex < 0) {
+            return messages;
+        }
 
-        List<ToolCallView> syntheticToolCalls = new ArrayList<>();
+        Map<Integer, List<ToolCallView>> syntheticByMessageIndex = new java.util.HashMap<>();
+        List<ToolCallView> legacySyntheticToolCalls = new ArrayList<>();
         for (var childSession : repository.listChildSessionsByParentSession(parentSessionId)) {
-            String parentToolCallId = childSession.parentToolCallId();
-            if (!childSession.hidden() || parentToolCallId == null || parentToolCallId.isBlank() || existingToolCallIds.contains(parentToolCallId)) {
+            if (!childSession.hidden()) {
                 continue;
             }
-            syntheticToolCalls.add(new ToolCallView(parentToolCallId, "task", true, "", "running", false, false,
-                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running"));
+            String parentToolCallId = childSession.parentToolCallId();
+            if (parentToolCallId == null || parentToolCallId.isBlank()) {
+                continue;
+            }
+            ToolCallView syntheticToolCall = new ToolCallView(parentToolCallId, "task", true, "", "running", false, false,
+                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running");
+            Long parentAssistantMessageId = childSession.parentAssistantMessageId();
+            if (parentAssistantMessageId != null) {
+                Integer messageIndex = pendingAssistantIndexByMessageId.get(parentAssistantMessageId);
+                if (messageIndex != null) {
+                    ChatMessageView targetMessage = messages.get(messageIndex);
+                    boolean toolCallAlreadyPresent = targetMessage.toolCalls().stream()
+                            .anyMatch(toolCall -> parentToolCallId.equals(toolCall.toolCallId()));
+                    if (!toolCallAlreadyPresent) {
+                        syntheticByMessageIndex.computeIfAbsent(messageIndex, ignored -> new ArrayList<>()).add(syntheticToolCall);
+                    }
+                }
+                continue;
+            }
+            if (!repository.existsToolCallTraceBySessionAndToolCallId(parentSessionId, parentToolCallId)) {
+                legacySyntheticToolCalls.add(syntheticToolCall);
+            }
         }
 
-        if (syntheticToolCalls.isEmpty()) {
+        if (syntheticByMessageIndex.isEmpty() && legacySyntheticToolCalls.isEmpty()) {
             return messages;
         }
 
         ArrayList<ChatMessageView> updated = new ArrayList<>(messages);
-        ChatMessageView pendingAssistant = messages.get(pendingAssistantIndex);
-        ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(pendingAssistant.toolCalls());
-        mergedToolCalls.addAll(syntheticToolCalls);
-        updated.set(pendingAssistantIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
-                pendingAssistant.id(), mergedToolCalls, pendingAssistant.metadata()));
+        for (var entry : syntheticByMessageIndex.entrySet()) {
+            ChatMessageView message = updated.get(entry.getKey());
+            ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(message.toolCalls());
+            mergedToolCalls.addAll(entry.getValue());
+            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(), message.pending(), message.id(), mergedToolCalls, message.metadata()));
+        }
+
+        if (!legacySyntheticToolCalls.isEmpty()) {
+            ChatMessageView pendingAssistant = updated.get(latestPendingAssistantIndex);
+            ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(pendingAssistant.toolCalls());
+            mergedToolCalls.addAll(legacySyntheticToolCalls);
+            updated.set(latestPendingAssistantIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
+                    pendingAssistant.id(), mergedToolCalls, pendingAssistant.metadata()));
+        }
+
         return updated;
     }
 
@@ -842,8 +870,9 @@ public class AppStateService {
         List<AppStateRepository.ToolCallTraceRow> traces = repository.listToolCallTracesByAssistantMessage(message.id());
         List<ToolCallView> toolCalls = new ArrayList<>(traces.size());
         for (int i = 0; i < traces.size(); i++) {
-            String toolCallId = i < payloads.size() ? payloads.get(i).toolCallId() : null;
-            toolCalls.add(toToolCallView(traces.get(i), toolCallId));
+            AppStateRepository.ToolCallTraceRow trace = traces.get(i);
+            String toolCallId = trace.toolCallId() != null ? trace.toolCallId() : i < payloads.size() ? payloads.get(i).toolCallId() : null;
+            toolCalls.add(toToolCallView(trace, toolCallId));
         }
         return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(), toolCalls,
                 message.agentId() == null && message.agentName() == null && message.modelId() == null && message.thinkingLevel() == null ? null :
