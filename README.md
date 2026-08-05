@@ -1,7 +1,7 @@
-# Jupiter v2
-Jupiter v2 coding agent harness in the spirit of Claude Code, Codex, and opencode. It is model-agnostic / BYOM where API keys or a Codex subscription apply, remote-first for any browser, self-hostable on a server, and suited to private VPN access like Tailscale. There is no desktop app or CLI here — it is 100% focused on web and mobile browsers.
+# Jupiter
+Jupiter coding agent harness in the spirit of Claude Code, Codex, and opencode. It is model-agnostic / BYOM where API keys or a Codex subscription apply, remote-first for any browser, self-hostable on a server, and suited to private VPN access like Tailscale. There is no desktop app or CLI here — it is 100% focused on web and mobile browsers.
 
-| Jupiter v2 | Claude Code | Codex | opencode |
+| Jupiter | Claude Code | Codex | opencode |
 |---|---|---|---|
 | 🌐 Browser-first | 🧠 Agentic | 🪄 Strong coding flow | 🛠️ Hackable |
 | 🔐 Security-minded | 🤝 Familiar | 🔑 Subscription/API | ⚙️ Flexible |
@@ -15,7 +15,7 @@ Jupiter v2 coding agent harness in the spirit of Claude Code, Codex, and opencod
 Or build and run the packaged jar:
 ```bash
 ./mvnw package
-java -jar target/jupiter2-0.0.1-SNAPSHOT.jar
+java -jar target/jupiter-0.0.1-SNAPSHOT.jar
 ```
 
 ## Storage
@@ -25,14 +25,14 @@ java -jar target/jupiter2-0.0.1-SNAPSHOT.jar
 Build a Docker image as usual:
 
 ```bash
-docker build -t jupiter-v2 .
-docker run --rm -p 7272:7272 jupiter-v2
+docker build -t jupiter .
+docker run --rm -p 7272:7272 jupiter
 ```
 
 For persistence inside a container, mount the app user's `/home/<app-user>/.jupiter` directory:
 
 ```bash
-docker run --rm -p 7272:7272 -v "$(pwd)/.jupiter:/home/jupiter/.jupiter" jupiter-v2
+docker run --rm -p 7272:7272 -v "$(pwd)/.jupiter:/home/jupiter/.jupiter" jupiter
 ```
 
 ## Defaults

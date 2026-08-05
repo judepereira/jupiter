@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.judepereira</groupId>
-    <artifactId>jupiter2</artifactId>
+    <artifactId>jupiter</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>jupiter-v2</name>
-    <description>jupiter-v2</description>
+    <name>jupiter</name>
+    <description>jupiter</description>
     <url/>
     <licenses>
         <license/>

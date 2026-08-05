@@ -18,7 +18,7 @@ RUN useradd --create-home --home-dir /home/${USERNAME} --shell /bin/bash ${USERN
 
 WORKDIR /workspace
 
-COPY --from=build /workspace/target/jupiter2-0.0.1-SNAPSHOT.jar /workspace/app.jar
+COPY --from=build /workspace/target/jupiter-0.0.1-SNAPSHOT.jar /workspace/app.jar
 
 EXPOSE 7272
 
