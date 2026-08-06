@@ -238,31 +238,21 @@
         function updateDividerVisibility() {
             // hide divider when there's no review or it is closed
             review = getShellReviewPanel();
-            // On small screens we want the stacked layout. Ensure the divider
-            // is hidden, but also keep the shell in a neutral state: don't add
-            // review-closed/open classes which are desktop-specific (they
-            // change grid-template-columns). This prevents transient class
-            // toggles from placing elements into implicit rows.
+            const reviewOpen = !!(review && !review.classList.contains('closed'));
+            shell.dataset.reviewOpen = reviewOpen ? 'true' : 'false';
+
+            // On small screens the review panel is controlled by responsive CSS:
+            // tablet keeps the pre-existing stacked layout, phone uses a drawer.
             if (window.innerWidth <= 900) {
                 divider.classList.add('hidden');
                 shell.classList.remove('review-open');
                 shell.classList.remove('review-closed');
-                // ensure bottom-rail gets the small-screen placement handled
-                // by CSS media query (.bottom-rail { grid-column: 3 }). No JS
-                // changes to grid columns here.
                 return;
             }
 
-            if (!review || review.classList.contains('closed')) {
-                divider.classList.add('hidden');
-                // no review: mark shell closed so grid drops the columns on desktop
-                shell.classList.remove('review-open');
-                shell.classList.add('review-closed');
-            } else {
-                divider.classList.remove('hidden');
-                shell.classList.remove('review-closed');
-                shell.classList.add('review-open');
-            }
+            shell.classList.toggle('review-open', reviewOpen);
+            shell.classList.toggle('review-closed', !reviewOpen);
+            divider.classList.toggle('hidden', !reviewOpen);
         }
 
         // Run on load
@@ -541,6 +531,62 @@
             }
             syncAppSwitcherState();
         });
+
+        function getReviewToggleButtons() {
+            return document.querySelectorAll('#toggle-review-rail-btn');
+        }
+
+        function getReviewPanel() {
+            return document.getElementById('review');
+        }
+
+        function syncReviewToggleState() {
+            const review = getReviewPanel();
+            const reviewOpen = !!(review && review.dataset.open === 'true');
+            const ariaExpanded = reviewOpen ? 'true' : 'false';
+            const label = reviewOpen ? 'Close review panel' : 'Open review panel';
+            document.body.classList.toggle('mobile-review-open', isMobilePhoneViewport() && reviewOpen);
+            getReviewToggleButtons().forEach(button => {
+                button.setAttribute('aria-expanded', ariaExpanded);
+                button.setAttribute('aria-label', label);
+                button.setAttribute('title', label);
+            });
+        }
+
+        function isReviewInteractiveTarget(target) {
+            return !!(target && target.closest && target.closest('#review, #toggle-review-rail-btn'));
+        }
+
+        function triggerReviewToggle() {
+            const button = document.getElementById('toggle-review-rail-btn');
+            if (button) button.click();
+        }
+
+        document.addEventListener('click', event => {
+            const reviewToggle = event.target && event.target.closest ? event.target.closest('#toggle-review-rail-btn') : null;
+            if (reviewToggle) {
+                return;
+            }
+
+            if (!isMobilePhoneViewport() || !document.body.classList.contains('mobile-review-open')) return;
+            if (isReviewInteractiveTarget(event.target)) return;
+            const reviewPanel = getReviewPanel();
+            if (reviewPanel && reviewPanel.contains(event.target)) return;
+            triggerReviewToggle();
+        }, true);
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && document.body.classList.contains('mobile-review-open')) {
+                triggerReviewToggle();
+            }
+        }, true);
+
+        mobilePhoneQuery.addEventListener('change', () => {
+            syncReviewToggleState();
+        });
+
+        document.body.addEventListener('htmx:afterSwap', syncReviewToggleState, true);
+        syncReviewToggleState();
 
         document.body.addEventListener('htmx:afterSwap', syncAppSwitcherState, true);
         syncAppSwitcherState();
