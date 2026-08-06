@@ -14,6 +14,7 @@ import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.assertions.LocatorAssertions;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -64,6 +65,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 page.locator("#chat-input").fill("please edit the session file");
                 page.locator("#chat-send-btn").click();
                 assertThat(page.locator("#chat-messages-list li")).hasCount(3);
+                assertThat(page.locator("#chat-messages-list > li.pending")).hasCount(0);
 
                 page.reload();
                 assertThat(page.locator("#review .review-source-select")).isVisible();
