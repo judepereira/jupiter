@@ -1411,11 +1411,10 @@ input:focus, textarea:focus {
     #shell.shell-root.review-open,
     #shell.shell-root.review-closed {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: minmax(0, 1fr) minmax(0, 32vh) auto;
+        grid-template-rows: minmax(0, 1fr) auto;
     }
 
     .left-panel,
-    .review-panel,
     .terminal-panel,
     #bottom-panel {
         grid-column: 1;
@@ -1427,16 +1426,48 @@ input:focus, textarea:focus {
         grid-row: 1;
     }
 
-    .review-panel {
-        grid-row: 2;
-        margin: 8px 0 0 0;
-    }
-
     .terminal-panel,
     #bottom-panel {
-        grid-row: 3;
+        grid-row: 2;
         height: 220px;
         margin: 0 0 8px 0;
+    }
+
+    .review-panel {
+        position: fixed;
+        top: var(--topbar-height);
+        right: 0;
+        bottom: var(--bottom-nav-height);
+        width: min(84vw, 420px);
+        max-width: none;
+        margin: 0;
+        z-index: 1700;
+        transform: translateX(100%);
+        transition: transform 180ms ease;
+        box-shadow: -18px 0 40px rgba(2, 12, 32, 0.28);
+        will-change: transform;
+        overflow: auto;
+        border-radius: 10px 0 0 10px;
+        border-left: 1px solid var(--panel-border);
+    }
+
+    .review-panel.closed {
+        display: flex;
+        pointer-events: none;
+    }
+
+    body.mobile-review-open .review-panel {
+        transform: translateX(0);
+        pointer-events: auto;
+    }
+
+    body.mobile-review-open::after {
+        content: "";
+        position: fixed;
+        inset: var(--topbar-height) 0 var(--bottom-nav-height) 0;
+        background: rgba(6, 23, 51, 0.48);
+        z-index: 1650;
+        pointer-events: auto;
     }
 
     .left-rail {

@@ -1,6 +1,6 @@
 <!doctype html>
-<aside th:fragment="panel" id="review" class="main-panel review-panel" th:classappend="${!reviewPanelOpen} ? 'closed' : ''" th:attr="hx-swap-oob=${reviewOob} ? 'outerHTML' : null">
-    <div id="review-panel" class="review-shell" th:attr="data-open=${reviewPanelOpen}" th:if="${reviewPanelOpen}">
+<aside th:fragment="panel" id="review" class="main-panel review-panel" th:classappend="${!reviewPanelOpen} ? 'closed' : ''" th:attr="data-open=${reviewPanelOpen}, hx-swap-oob=${reviewOob} ? 'outerHTML' : null">
+    <div id="review-panel" class="review-shell" th:if="${reviewPanelOpen}">
         <div class="review-header">
             <h5>Review</h5>
             <select class="review-source-select"

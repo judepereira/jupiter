@@ -938,6 +938,7 @@ public class UiController {
         model.addAttribute("activeWorkspace", toWorkspace(view.activeWorkspace()));
         model.addAttribute("sessions", view.sessions().stream().map(this::toSession).toList());
         model.addAttribute("activeSession", toSession(view.activeSession()));
+        model.addAttribute("reviewPanelOpen", view.activeSessionDetail() != null && view.activeSessionDetail().reviewPanelOpen());
         model.addAttribute("shellRefresh", false);
         model.addAttribute("includeChatContainer", false);
         model.addAttribute("appVersion", appVersion);

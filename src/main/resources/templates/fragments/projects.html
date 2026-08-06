@@ -1,5 +1,5 @@
 <!doctype html>
-<th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}">
+<th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, reviewPanelOpen=${reviewPanelOpen ?: false}">
     <header id="top-bar" class="top-bar" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
         <button type="button"
                 class="app-switcher"
@@ -52,11 +52,12 @@
                 <button id="toggle-review-rail-btn"
                       type="button"
                       class="rail-btn topbar-rail-btn"
-                       hx-post="/ui/review/toggle"
+                      aria-controls="review"
+                      th:attr="aria-expanded=${reviewPanelOpen}, aria-label=${reviewPanelOpen ? 'Close review panel' : 'Open review panel'}, title=${reviewPanelOpen ? 'Close review panel' : 'Open review panel'}"
+                      hx-post="/ui/review/toggle"
                       hx-target="#review"
-                     hx-swap="outerHTML">
-                <i class="bi bi-journal-text" aria-label="Open review panel"
-                   title="Open review panel"></i>
+                      hx-swap="outerHTML">
+                <i class="bi bi-journal-text" aria-hidden="true"></i>
                 </button>
         </div>
     </header>
