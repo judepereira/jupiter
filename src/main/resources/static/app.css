@@ -31,7 +31,11 @@ body {
     overflow: hidden;
     background: var(--topbar-bg);
     color: #111b31;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, Roboto, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+b, strong {
+    font-weight: 600;
 }
 
 input[type=radio] {
@@ -491,9 +495,11 @@ input:focus, textarea:focus {
     align-self: stretch;
     transition: background-color 120ms ease;
 }
+
 .panel-divider:hover {
     background: var(--divider-background-hover);
 }
+
 .panel-divider:active,
 .panel-divider.dragging {
     background: var(--divider-background-hover);
@@ -1275,7 +1281,7 @@ input:focus, textarea:focus {
     margin: 0 0 0.75em 0;
     padding: 8px 12px;
     border-left: 3px solid #e6eef6;
-    background: rgba(0,0,0,0.02);
+    background: rgba(0, 0, 0, 0.02);
     color: var(--muted);
     border-radius: 6px;
 }
@@ -1874,8 +1880,8 @@ input:focus, textarea:focus {
     padding: 2px 8px;
     font-size: 12px;
     color: #475569;
-    background: rgba(71,85,105,0.08);
-    border: 1px solid rgba(71,85,105,0.12);
+    background: rgba(71, 85, 105, 0.08);
+    border: 1px solid rgba(71, 85, 105, 0.12);
 }
 
 .tool-call {
@@ -1895,7 +1901,7 @@ input:focus, textarea:focus {
     padding: 6px 8px;
     font-weight: 600;
     color: #0b1220;
-    background: rgba(11,18,32,0.03);
+    background: rgba(11, 18, 32, 0.03);
     border-radius: 6px;
     font-size: 14px;
 }
@@ -1910,15 +1916,17 @@ input:focus, textarea:focus {
     border-radius: 999px;
     display: inline-block;
 }
+
 .tool-call-status-success {
-    background: rgba(34,197,94,0.12);
+    background: rgba(34, 197, 94, 0.12);
     color: #16a34a;
-    border: 1px solid rgba(34,197,94,0.12);
+    border: 1px solid rgba(34, 197, 94, 0.12);
 }
+
 .tool-call-status-failure {
-    background: rgba(239,68,68,0.08);
+    background: rgba(239, 68, 68, 0.08);
     color: #dc2626;
-    border: 1px solid rgba(239,68,68,0.08);
+    border: 1px solid rgba(239, 68, 68, 0.08);
 }
 
 .tool-call-detail {
@@ -1975,4 +1983,6 @@ input:focus, textarea:focus {
 }
 
 /* ensure details summary marker doesn't disturb layout in some browsers */
-details.tool-call summary::-webkit-details-marker { display: none; }
+details.tool-call summary::-webkit-details-marker {
+    display: none;
+}
