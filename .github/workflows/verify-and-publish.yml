@@ -30,7 +30,7 @@ jobs:
       - name: Push latest image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          IMAGE: ${{ secrets.DOCKER_USERNAME }}/jupiter:latest
+          IMAGE: ${{ vars.DOCKER_USERNAME }}/jupiter:latest
         run: |
           docker tag jupiter:$GITHUB_SHA "$IMAGE"
           docker push "$IMAGE"
