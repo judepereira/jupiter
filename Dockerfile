@@ -21,7 +21,7 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
 
 FROM eclipse-temurin:25-jre AS runtime
 
-ARG USERNAME=app
+ARG USERNAME=jupiter
 
 RUN useradd --create-home --home-dir /home/${USERNAME} --shell /bin/bash ${USERNAME} \
     && mkdir -p /workspace \
