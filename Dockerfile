@@ -21,18 +21,9 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
 
 FROM eclipse-temurin:25-jre AS runtime
 
-ARG USERNAME=jupiter
-
-RUN useradd --create-home --home-dir /home/${USERNAME} --shell /bin/bash ${USERNAME} \
-    && mkdir -p /workspace \
-    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} /workspace
-
-WORKDIR /workspace
-
-COPY --from=build /workspace/target/jupiter-0.0.1-SNAPSHOT.jar /workspace/app.jar
+COPY --from=build /workspace/target/jupiter-0.0.1-SNAPSHOT.jar /opt/jupiter.jar
+ADD entrypoint.sh /entrypoint.sh
 
 EXPOSE 7272
 
-USER ${USERNAME}
-
-ENTRYPOINT ["java", "-jar", "/workspace/app.jar"]
+CMD ["bash", "/entrypoint.sh"]
