@@ -21,6 +21,9 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
 
 FROM eclipse-temurin:25-jre AS runtime
 
+RUN     userdel ubuntu || true
+RUN     groupdel ubuntu || true
+
 COPY --from=build /workspace/target/jupiter-0.0.1-SNAPSHOT.jar /opt/jupiter.jar
 ADD entrypoint.sh /entrypoint.sh
 
