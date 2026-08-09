@@ -21,6 +21,8 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
 
 FROM eclipse-temurin:25-jre AS runtime
 
+RUN     apt update && apt install -y git && apt-get clean && rm -rf /var/cache/apt/lists
+
 RUN     userdel ubuntu || true
 RUN     groupdel ubuntu || true
 
