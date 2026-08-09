@@ -6,8 +6,8 @@ PORT=${PORT:-7272}
 WITH_UID=${WITH_UID:-1000}
 WITH_GID=${WITH_GID:-1000}
 
-groupadd -g $WITH_GID $USERNAME
-useradd -u $WITH_UID -g $WITH_GID -m -s /bin/bash $USERNAME
+groupadd -g $WITH_GID $USERNAME || echo "Group exists"
+useradd -u $WITH_UID -g $WITH_GID -m -s /bin/bash $USERNAME || echo "User exists"
 
 if [[ -f /init.sh ]]; then
   echo "Init script found. Running as root..."
