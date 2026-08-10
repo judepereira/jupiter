@@ -19,6 +19,7 @@ import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
+import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import com.judepereira.jupiter.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter.persistence.Persistence.SessionView;
 import com.judepereira.jupiter.persistence.Persistence.WorkspaceView;
@@ -569,6 +570,31 @@ public class AppStateServicePersistenceTests {
         assertThat(reloaded.activeSessionDetail().changedFiles()).extracting(ChangedFileView::path)
                 .contains("live-git.txt")
                 .doesNotContain("removed-git.txt");
+    }
+
+    @Test
+    public void updateProjectEnvironmentVariablesIgnoreBlankNamesAndKeepLastDuplicate(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView view = service.loadViewData();
+        long projectId = view.activeProject().id();
+        long sessionId = view.activeSession().id();
+
+        service.updateProjectEnvironmentVariables(projectId, List.of(
+                new ProjectEnvironmentVariable("API_URL", "https://first.test"),
+                new ProjectEnvironmentVariable("", "ignored"),
+                new ProjectEnvironmentVariable("API_URL", "https://override.test"),
+                new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
+        ));
+
+        assertThat(service.loadProjectEnvironmentVariables(projectId))
+                .containsEntry("API_URL", "https://override.test")
+                .containsEntry("FEATURE_FLAG", "true")
+                .doesNotContainKey("");
+        assertThat(service.loadSessionProjectEnvironmentVariables(sessionId))
+                .containsEntry("API_URL", "https://override.test")
+                .containsEntry("FEATURE_FLAG", "true")
+                .doesNotContainKey("");
     }
 
     @Test

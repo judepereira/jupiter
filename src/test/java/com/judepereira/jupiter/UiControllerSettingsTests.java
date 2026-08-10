@@ -17,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -83,16 +84,24 @@ public class UiControllerSettingsTests {
     }
 
     @Test
-    public void applySettingsPersistsMultilineCommandsAndClosesModal(@TempDir Path workspaceRoot) {
+    public void applySettingsPersistsMultilineCommandsAndMultipleEnvironmentVariables(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
 
         String commands = "echo init-one\npwd\ntouch init-ran.txt";
         ConcurrentModel model = new ConcurrentModel();
-        String view = context.controller().applySettings(commands, model);
+        String view = context.controller().applySettings(commands,
+                List.of("API_URL", "FEATURE_FLAG", "API_URL", ""),
+                List.of("https://example.test", "true", "https://override.test", "ignored"),
+                model);
 
         assertThat(view).isEqualTo("fragments/projects :: modalClose");
         assertThat(context.appStateService().loadViewData().activeProject().workspaceInitCommands()).isEqualTo(commands);
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        assertThat(context.appStateService().loadProjectEnvironmentVariables(projectId))
+                .containsEntry("FEATURE_FLAG", "true")
+                .containsEntry("API_URL", "https://override.test")
+                .doesNotContainKey("");
     }
 
     private static TestContext newContext(Path workspaceRoot) {

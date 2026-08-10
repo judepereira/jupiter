@@ -31,11 +31,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+
+import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 
 @Service
 @RequiredArgsConstructor
@@ -307,6 +310,24 @@ public class AppStateService {
     public void updateProjectWorkspaceInitCommands(long projectId, String workspaceInitCommands) {
         String normalized = workspaceInitCommands == null || workspaceInitCommands.isBlank() ? null : workspaceInitCommands;
         repository.updateProjectWorkspaceInitCommands(projectId, normalized);
+    }
+
+    @Transactional
+    public void updateProjectEnvironmentVariables(long projectId, List<ProjectEnvironmentVariable> environmentVariables) {
+        repository.updateProjectEnvironmentVariables(projectId, json(normalizeEnvironmentVariables(environmentVariables)));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, String> loadSessionProjectEnvironmentVariables(long sessionId) {
+        var session = repository.findSession(sessionId);
+        var workspace = repository.findWorkspace(session.workspaceId());
+        var project = repository.findProject(workspace.projectId());
+        return toEnvironmentVariables(projectEnvironmentVariables(project.environmentVariables()));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, String> loadProjectEnvironmentVariables(long projectId) {
+        return toEnvironmentVariables(projectEnvironmentVariables(repository.findProject(projectId).environmentVariables()));
     }
 
     @Transactional
@@ -955,6 +976,45 @@ public class AppStateService {
         }
     }
 
+    private List<ProjectEnvironmentVariable> normalizeEnvironmentVariables(List<ProjectEnvironmentVariable> environmentVariables) {
+        if (environmentVariables == null || environmentVariables.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, ProjectEnvironmentVariable> deduped = new LinkedHashMap<>();
+        for (ProjectEnvironmentVariable environmentVariable : environmentVariables) {
+            if (environmentVariable == null) {
+                continue;
+            }
+            String name = environmentVariable.name() == null ? "" : environmentVariable.name().trim();
+            if (name.isBlank()) {
+                continue;
+            }
+            deduped.remove(name);
+            deduped.put(name, new ProjectEnvironmentVariable(name, environmentVariable.value()));
+        }
+        return List.copyOf(deduped.values());
+    }
+
+    private List<ProjectEnvironmentVariable> projectEnvironmentVariables(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return normalizeEnvironmentVariables(objectMapper.readValue(json, new TypeReference<List<ProjectEnvironmentVariable>>() {}));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read project environment variables JSON", e);
+        }
+    }
+
+    private Map<String, String> toEnvironmentVariables(List<ProjectEnvironmentVariable> environmentVariables) {
+        Map<String, String> vars = new LinkedHashMap<>();
+        for (ProjectEnvironmentVariable environmentVariable : environmentVariables) {
+            vars.put(environmentVariable.name(), environmentVariable.value() == null ? "" : environmentVariable.value());
+        }
+        return Map.copyOf(vars);
+    }
+
     private String jsonPretty(Object value) {
         try {
             return value == null ? null : objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(value);
@@ -995,7 +1055,8 @@ public class AppStateService {
 
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
         String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank() ? null : row.workspaceInitCommands();
-        return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands);
+        List<ProjectEnvironmentVariable> environmentVariables = projectEnvironmentVariables(row.environmentVariables());
+        return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands, environmentVariables);
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {

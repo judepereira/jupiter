@@ -17,7 +17,9 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
+import com.judepereira.jupiter.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
+import com.judepereira.jupiter.persistence.AppStateService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -37,26 +39,34 @@ public class CodingAgentHarness {
     private final AgentProperties props;
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
+    private final AppStateService appStateService;
     private final SystemPromptComposer systemPromptComposer;
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props) {
-        this(modelFactory, registry, props, null, null, new SystemPromptComposer());
+        this(modelFactory, registry, props, null, null, null, new SystemPromptComposer());
     }
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, new SystemPromptComposer());
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, null, new SystemPromptComposer());
+    }
+
+    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
+                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                              AppStateService appStateService) {
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, new SystemPromptComposer());
     }
 
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                              SystemPromptComposer systemPromptComposer) {
+                              AppStateService appStateService, SystemPromptComposer systemPromptComposer) {
         this.modelFactory = modelFactory;
         this.registry = registry;
         this.props = props;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
+        this.appStateService = appStateService;
         this.systemPromptComposer = systemPromptComposer;
     }
 
@@ -83,6 +93,7 @@ public class CodingAgentHarness {
         String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
                 ? props.getWorkspaceRoot()
                 : request.getWorkspaceRoot();
+        Map<String, String> environmentVariables = resolveEnvironmentVariables(request.getSessionId());
         ToolExecutionContext execCtxTemplate = new ToolExecutionContext(Path.of(workspaceRoot),
                 agent != null ? agent.allowWrite() : props.getTooling().isAllowWrite(),
                 agent != null ? agent.allowCommand() : props.getTooling().isAllowCommand(),
@@ -90,7 +101,9 @@ public class CodingAgentHarness {
                 request.getSessionId(),
                 request.getAgentId(),
                 agent == null ? null : agent.mode(),
-                null);
+                null,
+                environmentVariables,
+                ToolProgressSink.noop());
 
         Set<String> allowedTools = resolveAllowedTools(agent);
         List<ToolDefinition> defs = resolveToolDefinitions(allowedTools);
@@ -164,6 +177,7 @@ public class CodingAgentHarness {
                                 execCtxTemplate.getAgentId(),
                                 execCtxTemplate.getAgentMode(),
                                 toolCallId,
+                                execCtxTemplate.getEnvironmentVariables(),
                                 (eventName, payload) -> listener.onToolCallProgress(toolCallId, toolName, eventName, payload));
                         ToolExecutionResult result = registry.executeByName(toolName, args, execCtx);
                         String toolText = result.getText() == null ? "" : result.getText();
@@ -294,5 +308,12 @@ public class CodingAgentHarness {
                 .filter(tool -> allowedTools.contains(tool.name()))
                 .map(tool -> tool.definition())
                 .collect(Collectors.toList());
+    }
+
+    private Map<String, String> resolveEnvironmentVariables(Long sessionId) {
+        if (sessionId == null || appStateService == null) {
+            return Map.of();
+        }
+        return appStateService.loadSessionProjectEnvironmentVariables(sessionId);
     }
 }

@@ -4,6 +4,7 @@ import com.judepereira.jupiter.ui.UiController.Project;
 import com.judepereira.jupiter.ui.UiController.Session;
 import com.judepereira.jupiter.ui.UiController.Workspace;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -91,6 +92,41 @@ public class ProjectsTemplateRenderTest {
         String html = engine.process("index", context);
 
         assertThat(html).contains("id=\"system-balloon-root\"");
+    }
+
+    @Test
+    public void settingsModalRendersExistingProjectEnvironmentVariablesAndAddButton() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", "", List.of(
+                new ProjectEnvironmentVariable("API_URL", "https://example.test"),
+                new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
+        ))));
+        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", "", List.of(
+                new ProjectEnvironmentVariable("API_URL", "https://example.test"),
+                new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
+        )));
+        context.setVariable("workspaces", List.of());
+        context.setVariable("activeWorkspace", null);
+        context.setVariable("sessions", List.of());
+        context.setVariable("activeSession", null);
+        context.setVariable("selectedName", "");
+        context.setVariable("selectedPath", "");
+        context.setVariable("currentPath", "");
+        context.setVariable("directoryEntries", List.of());
+        context.setVariable("includeChatContainer", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("selectedFile", null);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
+
+        String html = engine.process("fragments/projects", context);
+
+        assertThat(html).contains("id=\"settings-modal\"", "Environment variables", "API_URL", "https://example.test", "FEATURE_FLAG", "true", "Add Variable");
+        assertThat(html.split("data-settings-env-row", -1)).hasSize(4);
     }
 
     @Test

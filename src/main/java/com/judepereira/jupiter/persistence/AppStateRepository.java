@@ -98,6 +98,7 @@ public class AppStateRepository {
                 .addValue("lastOpenedAt", Timestamp.from(now)));
     }
 
+
     void reopenProject(long projectId, String name, long displayOrder, Instant now) {
         var params = new MapSqlParameterSource()
                 .addValue("projectId", projectId)
@@ -126,6 +127,11 @@ public class AppStateRepository {
     void updateProjectWorkspaceInitCommands(long projectId, String workspaceInitCommands) {
         jdbc.update("UPDATE projects SET workspace_init_commands = :workspaceInitCommands WHERE id = :projectId",
                 new MapSqlParameterSource().addValue("projectId", projectId).addValue("workspaceInitCommands", workspaceInitCommands));
+    }
+
+    void updateProjectEnvironmentVariables(long projectId, String environmentVariablesJson) {
+        jdbc.update("UPDATE projects SET environment_variables = :environmentVariables WHERE id = :projectId",
+                new MapSqlParameterSource().addValue("projectId", projectId).addValue("environmentVariables", environmentVariablesJson));
     }
 
     WorkspaceRow findWorkspace(long workspaceId) {
@@ -515,7 +521,7 @@ public class AppStateRepository {
     private ProjectRow mapProject(ResultSet rs, int rowNum) throws SQLException {
         return new ProjectRow(rs.getLong("id"), rs.getString("name"), rs.getString("normalized_path"), rs.getLong("display_order"),
                 timestampToInstant(rs.getTimestamp("closed_at")), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")),
-                rs.getString("workspace_init_commands"));
+                rs.getString("workspace_init_commands"), rs.getString("environment_variables"));
     }
 
     private WorkspaceRow mapWorkspace(ResultSet rs, int rowNum) throws SQLException {
@@ -563,7 +569,7 @@ public class AppStateRepository {
 
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
-    record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands) {}
+    record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
                       boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
