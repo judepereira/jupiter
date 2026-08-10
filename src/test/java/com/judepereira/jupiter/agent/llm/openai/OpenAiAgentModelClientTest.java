@@ -21,15 +21,19 @@ import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -41,6 +45,21 @@ import static org.mockito.Mockito.when;
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
 public class OpenAiAgentModelClientTest {
+
+    private static OpenAiProperties openAiProperties() {
+        return openAiProperties(10, Duration.ofSeconds(1), Duration.ofSeconds(120));
+    }
+
+    private static OpenAiProperties openAiProperties(int maxRetries, Duration initialBackoff, Duration maxBackoff) {
+        OpenAiProperties openAiProperties = new OpenAiProperties();
+        openAiProperties.setApiKey("api-key-123");
+        OpenAiProperties.Retry retry = new OpenAiProperties.Retry();
+        retry.setMaxRetries(maxRetries);
+        retry.setInitialBackoff(initialBackoff);
+        retry.setMaxBackoff(maxBackoff);
+        openAiProperties.setRetry(retry);
+        return openAiProperties;
+    }
 
     @Test
     public void source_does_not_reference_raw_http_or_mapping_helpers() throws Exception {
@@ -249,6 +268,96 @@ public class OpenAiAgentModelClientTest {
         verify(oauthService, times(1)).currentAccountId();
     }
 
+    @Test
+    public void non_streaming_retries_transient_failures_then_succeeds() {
+        OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
+        ChatModel chatModel = mock(ChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
+            if (attempts.getAndIncrement() == 0) {
+                throw new IOException("transient");
+            }
+            return ChatResponse.builder().aiMessage(AiMessage.from("ok")).build();
+        });
+
+        RecordingClient client = new RecordingClient(chatModel, null, openAiProperties);
+
+        assertEquals("ok", client.chat(List.of(new Message(Message.Role.USER, "retry")), List.of()).getAssistantText());
+        assertEquals(2, attempts.get());
+        verify(chatModel, times(2)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void streaming_retries_a_transient_upstream_failure_before_any_partial_output() {
+        OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel streamingModel = mock(StreamingChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            if (attempts.getAndIncrement() == 0) {
+                handler.onError(new IOException("temporary"));
+                return null;
+            }
+            handler.onPartialResponse("he");
+            handler.onPartialResponse("llo");
+            handler.onCompleteResponse(ChatResponse.builder().aiMessage(AiMessage.from("done")).build());
+            return null;
+        }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        RecordingClient client = new RecordingClient(null, streamingModel, openAiProperties);
+        List<String> deltas = new ArrayList<>();
+
+        assertEquals("done", client.chatStreaming(List.of(new Message(Message.Role.USER, "stream")), List.of(), deltas::add).getAssistantText());
+        assertEquals(List.of("he", "llo"), deltas);
+        assertEquals(2, attempts.get());
+        verify(streamingModel, times(2)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void streaming_does_not_retry_after_a_partial_delta_has_already_been_emitted() {
+        OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel streamingModel = mock(StreamingChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            attempts.incrementAndGet();
+            handler.onPartialResponse("he");
+            handler.onError(new IOException("after-partial"));
+            return null;
+        }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        RecordingClient client = new RecordingClient(null, streamingModel, openAiProperties);
+        List<String> deltas = new ArrayList<>();
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream")), List.of(), deltas::add));
+
+        assertEquals("OpenAI streaming request failed", exception.getMessage());
+        assertEquals(List.of("he"), deltas);
+        assertEquals(1, attempts.get());
+        verify(streamingModel, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void retry_count_is_capped_by_configured_max_retries() {
+        OpenAiProperties openAiProperties = openAiProperties(1, Duration.ZERO, Duration.ZERO);
+        ChatModel chatModel = mock(ChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
+            attempts.incrementAndGet();
+            throw new IOException("still failing");
+        });
+
+        RecordingClient client = new RecordingClient(chatModel, null, openAiProperties);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "retry")), List.of()));
+
+        assertEquals("OpenAI request failed", exception.getMessage());
+        assertEquals(2, attempts.get());
+        verify(chatModel, times(2)).chat(any(ChatRequest.class));
+    }
+
     private static final class RecordingClient extends OpenAiAgentModelClient {
         private final List<String> chatModelNames = new ArrayList<>();
         private final List<String> streamingModelNames = new ArrayList<>();
@@ -256,14 +365,27 @@ public class OpenAiAgentModelClientTest {
         private final StreamingChatModel streamingChatModel;
 
         private RecordingClient(ChatModel chatModel, StreamingChatModel streamingChatModel) {
-            super(openAiProperties(), new AgentProperties());
+            this(chatModel, streamingChatModel, openAiProperties());
+        }
+
+        private RecordingClient(ChatModel chatModel, StreamingChatModel streamingChatModel, OpenAiProperties openAiProperties) {
+            super(openAiProperties, new AgentProperties());
             this.chatModel = chatModel;
             this.streamingChatModel = streamingChatModel;
         }
 
         private static OpenAiProperties openAiProperties() {
+            return openAiProperties(10, Duration.ofSeconds(1), Duration.ofSeconds(120));
+        }
+
+        private static OpenAiProperties openAiProperties(int maxRetries, Duration initialBackoff, Duration maxBackoff) {
             OpenAiProperties openAiProperties = new OpenAiProperties();
             openAiProperties.setApiKey("api-key-123");
+            OpenAiProperties.Retry retry = new OpenAiProperties.Retry();
+            retry.setMaxRetries(maxRetries);
+            retry.setInitialBackoff(initialBackoff);
+            retry.setMaxBackoff(maxBackoff);
+            openAiProperties.setRetry(retry);
             return openAiProperties;
         }
 

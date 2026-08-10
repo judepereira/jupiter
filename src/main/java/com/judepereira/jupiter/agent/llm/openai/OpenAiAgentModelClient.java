@@ -23,21 +23,26 @@ import dev.langchain4j.http.client.jdk.JdkHttpClient;
 import dev.langchain4j.http.client.jdk.JdkHttpClientBuilder;
 import dev.langchain4j.http.client.sse.ServerSentEventListener;
 import dev.langchain4j.http.client.sse.ServerSentEventParser;
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.InternalServerException;
+import dev.langchain4j.exception.RateLimitException;
 import dev.langchain4j.model.openai.OpenAiResponsesChatModel;
 import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.security.MessageDigest;
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.security.MessageDigest;
 import java.util.function.Consumer;
 
 @Component
@@ -78,11 +83,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         String modelName = resolveModelName(options);
         ResolvedAuth auth = resolveAuth();
         ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools, options);
-        try {
-            return messageMapper.toModelResponse(chatModel(modelName, auth).chat(request));
-        } catch (Exception e) {
-            throw new IllegalStateException("OpenAI request failed", e);
-        }
+        return executeWithRetry(() -> messageMapper.toModelResponse(chatModel(modelName, auth).chat(request)),
+                "OpenAI request failed");
     }
 
     @Override
@@ -90,64 +92,78 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         String modelName = resolveModelName(options);
         ResolvedAuth auth = resolveAuth();
         ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools, options);
-        AtomicReference<ModelResponse> response = new AtomicReference<>();
-        AtomicReference<Throwable> error = new AtomicReference<>();
-        AtomicReference<ToolCall> toolCall = new AtomicReference<>();
-        CountDownLatch done = new CountDownLatch(1);
-
-        StreamingChatResponseHandler handler = new StreamingChatResponseHandler() {
-            @Override
-            public void onPartialResponse(String partialResponse) {
-                if (onDelta != null && partialResponse != null && !partialResponse.isEmpty()) {
-                    onDelta.accept(partialResponse);
-                }
-            }
-
-            @Override
-            public void onCompleteToolCall(CompleteToolCall completeToolCall) {
-                toolCall.compareAndSet(null, messageMapper.toToolCall(completeToolCall.toolExecutionRequest()));
-            }
-
-            @Override
-            public void onCompleteResponse(ChatResponse chatResponse) {
-                response.set(messageMapper.toModelResponse(chatResponse));
-                if (toolCall.get() == null) {
-                    toolCall.compareAndSet(null, response.get().getToolCall());
-                }
-                done.countDown();
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-                error.set(throwable);
-                done.countDown();
-            }
-        };
-
-        try {
-            streamingChatModel(modelName, auth).chat(request, handler);
-            done.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("OpenAI streaming request interrupted", e);
-        } catch (Exception e) {
-            throw new IllegalStateException("OpenAI streaming request failed", e);
-        }
-
-        if (error.get() != null) {
-            throw new IllegalStateException("OpenAI streaming request failed: " + error.get().getMessage(),
-                    error.get());
-        }
-
-        if (toolCall.get() != null) {
-            return new ModelResponse(response.get() == null ? null : response.get().getAssistantText(), toolCall.get());
-        }
-        return response.get();
+        return executeStreamingWithRetry(modelName, auth, request, onDelta);
     }
 
     @Override
     public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, Consumer<String> onDelta) {
         return chatStreaming(conversation, tools, null, onDelta);
+    }
+
+    private ModelResponse executeStreamingWithRetry(String modelName, ResolvedAuth auth, ChatRequest request, Consumer<String> onDelta) {
+        OpenAiRetryPolicy retryPolicy = retryPolicy();
+        int retriesUsed = 0;
+        while (true) {
+            StreamingAttemptState attemptState = new StreamingAttemptState(onDelta);
+            try {
+                streamingChatModel(modelName, auth).chat(request, attemptState.handler());
+                attemptState.await();
+                Throwable handlerError = attemptState.error();
+                if (handlerError != null) {
+                    if (attemptState.canRetry() && retryPolicy.shouldRetry(handlerError) && retriesUsed < retryPolicy.maxRetries()) {
+                        retriesUsed++;
+                        retryPolicy.sleep(retriesUsed);
+                        continue;
+                    }
+                    throw attemptState.streamingFailure(handlerError, true);
+                }
+                return attemptState.finish();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("OpenAI streaming request interrupted", e);
+            } catch (Exception e) {
+                if (attemptState.canRetry() && retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
+                    retriesUsed++;
+                    try {
+                        retryPolicy.sleep(retriesUsed);
+                        continue;
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("OpenAI streaming request interrupted", interruptedException);
+                    }
+                }
+                throw attemptState.streamingFailure(e, false);
+            }
+        }
+    }
+
+    private <T> T executeWithRetry(java.util.concurrent.Callable<T> operation, String failureMessage) {
+        OpenAiRetryPolicy retryPolicy = retryPolicy();
+        int retriesUsed = 0;
+        while (true) {
+            try {
+                return operation.call();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(failureMessage, e);
+            } catch (Exception e) {
+                if (retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
+                    retriesUsed++;
+                    try {
+                        retryPolicy.sleep(retriesUsed);
+                        continue;
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(failureMessage, interruptedException);
+                    }
+                }
+                throw new IllegalStateException(failureMessage, e);
+            }
+        }
+    }
+
+    private OpenAiRetryPolicy retryPolicy() {
+        return new OpenAiRetryPolicy(openAiProperties.getRetry());
     }
 
     private ChatModel chatModel(String modelName) {
@@ -278,6 +294,128 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private record ResolvedAuth(String credential, String baseUrl, Optional<String> accountId, AuthMode mode) {
+    }
+
+    private final class OpenAiRetryPolicy {
+        private final int maxRetries;
+        private final Duration initialBackoff;
+        private final Duration maxBackoff;
+
+        private OpenAiRetryPolicy(OpenAiProperties.Retry retry) {
+            this.maxRetries = Math.max(0, retry.getMaxRetries());
+            this.initialBackoff = retry.getInitialBackoff();
+            this.maxBackoff = retry.getMaxBackoff();
+        }
+
+        private void sleep(int retryNumber) throws InterruptedException {
+            long backoffMillis = Math.min(maxBackoff.toMillis(), initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
+            Thread.sleep(backoffMillis);
+        }
+
+        private int maxRetries() {
+            return maxRetries;
+        }
+
+        private boolean shouldRetry(Throwable throwable) {
+            return isTransient(throwable);
+        }
+    }
+
+    private final class StreamingAttemptState {
+        private final Consumer<String> onDelta;
+        private final AtomicBoolean observedPartial = new AtomicBoolean();
+        private final AtomicBoolean observedToolCall = new AtomicBoolean();
+        private final AtomicReference<ModelResponse> response = new AtomicReference<>();
+        private final AtomicReference<ToolCall> toolCall = new AtomicReference<>();
+        private final AtomicReference<Throwable> error = new AtomicReference<>();
+        private final CountDownLatch done = new CountDownLatch(1);
+
+        private StreamingAttemptState(Consumer<String> onDelta) {
+            this.onDelta = onDelta;
+        }
+
+        private StreamingChatResponseHandler handler() {
+            return new StreamingChatResponseHandler() {
+                @Override
+                public void onPartialResponse(String partialResponse) {
+                    if (partialResponse != null && !partialResponse.isEmpty()) {
+                        observedPartial.set(true);
+                        if (onDelta != null) {
+                            onDelta.accept(partialResponse);
+                        }
+                    }
+                }
+
+                @Override
+                public void onCompleteToolCall(CompleteToolCall completeToolCall) {
+                    observedToolCall.set(true);
+                    toolCall.compareAndSet(null, messageMapper.toToolCall(completeToolCall.toolExecutionRequest()));
+                }
+
+                @Override
+                public void onCompleteResponse(ChatResponse chatResponse) {
+                    response.set(messageMapper.toModelResponse(chatResponse));
+                    if (toolCall.get() == null && response.get() != null) {
+                        toolCall.compareAndSet(null, response.get().getToolCall());
+                    }
+                    done.countDown();
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                    error.set(throwable);
+                    done.countDown();
+                }
+            };
+        }
+
+        private void await() throws InterruptedException {
+            done.await();
+        }
+
+        private boolean canRetry() {
+            return !observedPartial.get() && !observedToolCall.get();
+        }
+
+        private Throwable error() {
+            return error.get();
+        }
+
+        private ModelResponse finish() {
+            if (response.get() != null) {
+                return toolCall.get() == null ? response.get() : new ModelResponse(response.get().getAssistantText(), toolCall.get());
+            }
+            return new ModelResponse(null, toolCall.get());
+        }
+
+        private IllegalStateException streamingFailure(Throwable throwable, boolean includePrefix) {
+            String message = throwable.getMessage();
+            if (includePrefix && message != null && !message.isBlank()) {
+                return new IllegalStateException("OpenAI streaming request failed: " + message, throwable);
+            }
+            return new IllegalStateException("OpenAI streaming request failed", throwable);
+        }
+    }
+
+    private boolean isTransient(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof RateLimitException || current instanceof InternalServerException) {
+                return true;
+            }
+            if (current instanceof HttpException httpException && (httpException.statusCode() == 429 || httpException.statusCode() / 100 == 5)) {
+                return true;
+            }
+            if (isConnectivityFailure(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean isConnectivityFailure(Throwable throwable) {
+        return throwable instanceof IOException || throwable instanceof java.net.ConnectException || throwable instanceof java.net.SocketTimeoutException || throwable instanceof java.net.UnknownHostException;
     }
 
     private enum AuthMode {
