@@ -494,7 +494,7 @@ public class AppStateService {
             long position = repository.nextChangedFilePosition(sessionId);
             latestFileId = repository.insertChangedFile(sessionId, draft.path(), draft.diff(), position, now);
         }
-        repository.updateSessionReviewState(sessionId, true, ReviewSource.SESSION, latestFileId);
+        repository.updateSessionSelectedChangedFile(sessionId, latestFileId);
         return repository.listChangedFilesBySession(sessionId).stream().map(this::toChangedFileView).toList();
     }
 

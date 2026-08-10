@@ -105,26 +105,25 @@ public final class TestAppStateSupport {
         return awaitChatMessage(controller, assistantId, message -> !message.pending());
     }
 
-    public static ConcurrentModel awaitReviewPanelAndChangedFiles(UiController controller) {
+    public static ConcurrentModel awaitChangedFilesAndSelection(UiController controller) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         ConcurrentModel lastSeen = null;
         while (System.nanoTime() < deadline) {
             ConcurrentModel model = new ConcurrentModel();
             controller.index(model);
             lastSeen = model;
-            Boolean reviewPanelOpen = (Boolean) model.getAttribute("reviewPanelOpen");
             List<?> changedFiles = (List<?>) model.getAttribute("changedFiles");
-            if (Boolean.TRUE.equals(reviewPanelOpen) && changedFiles != null && !changedFiles.isEmpty()) {
+            if (changedFiles != null && !changedFiles.isEmpty() && model.getAttribute("selectedFile") != null) {
                 return model;
             }
             try {
                 Thread.sleep(25);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupted while waiting for review panel and changed files", e);
+                throw new IllegalStateException("Interrupted while waiting for changed files and selection", e);
             }
         }
-        throw new IllegalStateException("Timed out waiting for review panel and changed files" + (lastSeen == null ? "" : ": " + lastSeen));
+        throw new IllegalStateException("Timed out waiting for changed files and selection" + (lastSeen == null ? "" : ": " + lastSeen));
     }
 
     private static UiController.ChatMessage awaitChatMessage(UiController controller, String messageId, Predicate<UiController.ChatMessage> condition) {

@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class UiControllerPollReviewOobTests {
 
     @Test
-    public void streamingCompletion_setsReviewAndChangedFiles() throws Exception {
+    public void streamingCompletion_setsChangedFilesAndSelectionWithoutOpeningReviewPanel() throws Exception {
         // prepare a harness that emits a write_file trace on completion
         CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
             @Override
@@ -71,10 +71,10 @@ public class UiControllerPollReviewOobTests {
         assertThat(emitter).isNotNull();
         TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
-        // wait for review state and changed files to be persisted before asserting
-        ConcurrentModel m2 = TestAppStateSupport.awaitReviewPanelAndChangedFiles(ctrl);
+        // wait for changed files and selection to be persisted before asserting
+        ConcurrentModel m2 = TestAppStateSupport.awaitChangedFilesAndSelection(ctrl);
         Boolean reviewOpen = (Boolean) m2.getAttribute("reviewPanelOpen");
-        assertThat(reviewOpen).isTrue();
+        assertThat(reviewOpen).isFalse();
         List<?> changed = (List<?>) m2.getAttribute("changedFiles");
         assertThat(changed).isNotEmpty();
         // selected file should be set
