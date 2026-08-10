@@ -23,7 +23,6 @@
     --terminal-control-active: #e8eef8;
     --conversation-panel-bg: #f3f7fb;
     --mobile-offcanvas-transition: transform 180ms ease;
-    --mobile-offcanvas-shadow-bleed: 64px;
 }
 
 body {
@@ -1444,9 +1443,9 @@ input:focus, textarea:focus {
         max-width: none;
         margin: 0;
         z-index: 1700;
-        transform: translateX(calc(100% + var(--mobile-offcanvas-shadow-bleed)));
-        transition: var(--mobile-offcanvas-transition);
-        box-shadow: -18px 0 40px rgba(2, 12, 32, 0.28);
+        transform: translateX(100%);
+        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease 180ms;
+        box-shadow: -2px 0 5px rgba(2, 12, 32, 0);
         will-change: transform;
         overflow: auto;
         border-radius: 0;
@@ -1461,6 +1460,8 @@ input:focus, textarea:focus {
     body.mobile-review-open .review-panel {
         transform: translateX(0);
         pointer-events: auto;
+        box-shadow: -2px 0 5px rgba(2, 12, 32, 0.28);
+        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease;
     }
 
     body.mobile-review-open::after {
@@ -1470,6 +1471,7 @@ input:focus, textarea:focus {
         background: rgba(6, 23, 51, 0.48);
         z-index: 1650;
         pointer-events: auto;
+        transition: background 180ms linear;
     }
 
     .left-rail {
@@ -1480,14 +1482,17 @@ input:focus, textarea:focus {
         width: 80vw;
         max-width: none;
         z-index: 1700;
-        transform: translateX(calc(-100% - var(--mobile-offcanvas-shadow-bleed)));
-        transition: var(--mobile-offcanvas-transition);
-        box-shadow: 18px 0 40px rgba(2, 12, 32, 0.28);
+        transform: translateX(-100%);
+        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease 180ms;
+        box-shadow: 2px 0 5px rgba(2, 12, 32, 0);
         will-change: transform;
+        background: rgba(6, 23, 51, 0);
     }
 
     body.mobile-left-rail-open .left-rail {
         transform: translateX(0);
+        box-shadow: 2px 0 5px rgba(2, 12, 32, 0.28);
+        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease;
     }
 
     body.mobile-left-rail-open::before {
@@ -1497,6 +1502,7 @@ input:focus, textarea:focus {
         background: rgba(6, 23, 51, 0.48);
         z-index: 1650;
         pointer-events: auto;
+        transition: background 180ms linear;
     }
 
     .project-tabs {
