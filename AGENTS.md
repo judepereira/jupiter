@@ -19,3 +19,4 @@ and other instructions for working with this project.
 3. Use lombok and Java records wherever possible 
 4. When adding browser/frontend library assets (for example xterm, marked, DOMPurify), use WebJars instead of external CDN URLs
 5. Never use reflection in tests; open production visibility appropriately, preferably package-private, when tests need access.
+6. Always run all tests after targeted tests pass
