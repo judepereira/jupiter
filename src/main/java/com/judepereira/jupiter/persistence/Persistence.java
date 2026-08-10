@@ -16,10 +16,24 @@ public final class Persistence {
     public record ProjectView(long id, String name, String path, String workspaceInitCommands) {
     }
 
-    public record WorkspaceView(long id, String name, String path, boolean unread) {
+    public record WorkspaceView(long id, String name, String path, boolean unread, boolean inProgress) {
+        public WorkspaceView(long id, String name, String path, boolean unread) {
+            this(id, name, path, unread, false);
+        }
+
+        public WorkspaceView(long id, String name, String path) {
+            this(id, name, path, false, false);
+        }
     }
 
-    public record SessionView(long id, String name, boolean unread) {
+    public record SessionView(long id, String name, boolean unread, boolean inProgress) {
+        public SessionView(long id, String name, boolean unread) {
+            this(id, name, unread, false);
+        }
+
+        public SessionView(long id, String name) {
+            this(id, name, false, false);
+        }
     }
 
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,

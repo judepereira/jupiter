@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -64,8 +63,8 @@ public class AppStateServicePersistenceTests {
 
     @Test
     public void completedInactiveTurnsMarkOnlyThatSessionAndWorkspaceUnread(@TempDir Path projectPath) {
-        AtomicReference<Object> publishedEvent = new AtomicReference<>();
-        AppStateService service = TestAppStateSupport.appStateService(event -> publishedEvent.set(event));
+        List<Object> events = new ArrayList<>();
+        AppStateService service = TestAppStateSupport.appStateService(event -> events.add(event));
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         AppStateView initial = service.loadViewData();
@@ -79,24 +78,36 @@ public class AppStateServicePersistenceTests {
                 new ToolCallTraceInput("tool-1", "read_file", Map.of("path", "README.md"), true, "read README", Map.of()));
 
         AppStateView afterToolCall = service.loadViewData();
+        assertThat(afterToolCall.sessions()).extracting(SessionView::id, SessionView::inProgress)
+                .containsExactly(tuple(sessionOneId, true), tuple(sessionTwoId, false));
+        assertThat(afterToolCall.workspaces()).extracting(WorkspaceView::id, WorkspaceView::inProgress)
+                .containsExactly(tuple(workspaceId, true));
         assertThat(afterToolCall.sessions()).extracting(SessionView::id, SessionView::unread)
                 .containsExactly(tuple(sessionOneId, false), tuple(sessionTwoId, false));
-        assertThat(afterToolCall.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
-                .containsExactly(tuple(workspaceId, false));
 
+        events.clear();
         service.completeAssistantMessage(sessionOneId, inactiveTurn.assistantMessage().id(), "reply one", List.of());
 
         AppStateView afterComplete = service.loadViewData();
+        assertThat(afterComplete.sessions()).extracting(SessionView::id, SessionView::inProgress)
+                .containsExactly(tuple(sessionOneId, false), tuple(sessionTwoId, false));
+        assertThat(afterComplete.workspaces()).extracting(WorkspaceView::id, WorkspaceView::inProgress)
+                .containsExactly(tuple(workspaceId, false));
         assertThat(afterComplete.sessions()).extracting(SessionView::id, SessionView::unread)
                 .containsExactly(tuple(sessionOneId, true), tuple(sessionTwoId, false));
         assertThat(afterComplete.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
                 .containsExactly(tuple(workspaceId, true));
-        assertThat(publishedEvent.get()).hasToString("SessionMarkedUnreadEvent[sessionId=" + sessionOneId + "]");
+        assertThat(events).extracting(Object::toString)
+                .containsExactly("SessionMarkedUnreadEvent[sessionId=" + sessionOneId + "]");
 
         service.activateSession(sessionOneId);
 
         AppStateView afterActivate = service.loadViewData();
         assertThat(afterActivate.activeSession().id()).isEqualTo(sessionOneId);
+        assertThat(afterActivate.sessions()).extracting(SessionView::id, SessionView::inProgress)
+                .containsExactly(tuple(sessionOneId, false), tuple(sessionTwoId, false));
+        assertThat(afterActivate.workspaces()).extracting(WorkspaceView::id, WorkspaceView::inProgress)
+                .containsExactly(tuple(workspaceId, false));
         assertThat(afterActivate.sessions()).extracting(SessionView::id, SessionView::unread)
                 .containsExactly(tuple(sessionOneId, false), tuple(sessionTwoId, false));
         assertThat(afterActivate.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
@@ -225,8 +236,8 @@ public class AppStateServicePersistenceTests {
 
     @Test
     public void activeHiddenAndAlreadyUnreadSessionsDoNotPublishUnreadEvents(@TempDir Path projectPath) {
-        AtomicReference<Object> publishedEvent = new AtomicReference<>();
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> publishedEvent.set(event));
+        List<Object> events = new ArrayList<>();
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> events.add(event));
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
@@ -236,8 +247,9 @@ public class AppStateServicePersistenceTests {
         long activeSessionId = initial.activeSession().id();
 
         QueuedChatTurn activeTurn = service.appendUserMessageAndPendingAssistant(activeSessionId, "active user");
+        events.clear();
         service.completeAssistantMessage(activeSessionId, activeTurn.assistantMessage().id(), "active reply", List.of());
-        assertThat(publishedEvent.get()).isNull();
+        assertThat(events).extracting(Object::toString).containsExactly("WorkspaceRailRefreshEvent[]");
         assertThat(service.loadViewData().sessions()).filteredOn(session -> session.id() == activeSessionId)
                 .singleElement().satisfies(session -> assertThat(session.unread()).isFalse());
 
@@ -245,8 +257,9 @@ public class AppStateServicePersistenceTests {
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long hiddenSessionId = service.createHiddenSubagentSession(activeSessionId, "parent-tool-call", subagent);
         QueuedChatTurn hiddenTurn = service.appendUserMessageAndPendingAssistant(hiddenSessionId, "hidden user");
+        events.clear();
         service.completeAssistantMessage(hiddenSessionId, hiddenTurn.assistantMessage().id(), "hidden reply", List.of());
-        assertThat(publishedEvent.get()).isNull();
+        assertThat(events).extracting(Object::toString).containsExactly("WorkspaceRailRefreshEvent[]");
         assertThat(repository.findSession(hiddenSessionId).unread()).isFalse();
         assertThat(repository.findSession(hiddenSessionId).hidden()).isTrue();
 
@@ -255,8 +268,9 @@ public class AppStateServicePersistenceTests {
         service.activateSession(activeSessionId);
         repository.updateSessionUnread(unreadSessionId, true);
         QueuedChatTurn unreadTurn = service.appendUserMessageAndPendingAssistant(unreadSessionId, "unread user");
+        events.clear();
         service.completeAssistantMessage(unreadSessionId, unreadTurn.assistantMessage().id(), "unread reply", List.of());
-        assertThat(publishedEvent.get()).isNull();
+        assertThat(events).extracting(Object::toString).containsExactly("WorkspaceRailRefreshEvent[]");
         assertThat(repository.findSession(unreadSessionId).unread()).isTrue();
     }
 

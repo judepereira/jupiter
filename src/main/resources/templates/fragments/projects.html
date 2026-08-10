@@ -82,6 +82,7 @@
                         <span class="rail-label-wrap">
                             <span class="workspace-label" th:text="${workspace.name}"></span>
                             <span th:if="${workspace.unread}" class="unread-dot" aria-label="Unread"></span>
+                            <span th:if="${!workspace.unread and workspace.inProgress}" class="pending-dot" aria-label="In progress"></span>
                         </span>
                     </button>
 
@@ -104,6 +105,7 @@
                             <span class="rail-label-wrap">
                                 <span class="session-label" th:text="${s.name}"></span>
                                 <span th:if="${s.unread}" class="unread-dot" aria-label="Unread"></span>
+                                <span th:if="${!s.unread and s.inProgress}" class="pending-dot" aria-label="In progress"></span>
                             </span>
                         </button>
 

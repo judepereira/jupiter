@@ -53,12 +53,10 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New session")).click();
             assertThat(page.locator("#session-name-input")).isVisible();
+            page.locator("#session-name-input").fill("Session #2");
             page.waitForResponse(
                     response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
-                    () -> {
-                        page.locator("#session-name-input").fill("Session #2");
-                        page.locator("#session-name-input").press("Enter");
-                    });
+                    () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
 
             assertThat(page.locator(".session-row")).hasCount(2);
             Locator sessionOneRow = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #1"));
@@ -75,16 +73,19 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
             TestAppConfig.awaitPrimaryStarted();
             page.locator("#chat-messages-list > li.pending").waitFor();
+            assertThat(sessionOneRow.locator(".pending-dot")).hasCount(1);
 
             page.waitForResponse(
                     response -> response.url().contains("/ui/sessions/") && response.url().contains("/activate") && response.status() == 200,
                     () -> sessionTwoRow.locator(".session-item").click());
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
+            assertThat(sessionOneRow.locator(".pending-dot")).hasCount(1);
             assertThat(sessionOneRow.locator(".unread-dot")).hasCount(0);
 
             TestAppConfig.releasePrimaryTurn();
             TestAppConfig.awaitPrimaryCompleted();
 
+            assertThat(sessionOneRow.locator(".pending-dot")).hasCount(0);
             assertThat(sessionOneRow.locator(".unread-dot")).hasCount(1);
 
             page.waitForResponse(

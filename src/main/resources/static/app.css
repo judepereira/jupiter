@@ -807,13 +807,22 @@ input:focus, textarea:focus {
     white-space: nowrap;
 }
 
-.unread-dot {
+.unread-dot,
+.pending-dot {
     width: 8px;
     height: 8px;
     flex: 0 0 auto;
     border-radius: 999px;
+}
+
+.unread-dot {
     background: #22c55e;
     box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.16);
+}
+
+.pending-dot {
+    background: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
 }
 
 .workspace-label {

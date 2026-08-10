@@ -59,6 +59,13 @@ class WorkspaceRailRefreshServiceTests {
         assertThat(emitter.completed).isTrue();
     }
 
+    @Test
+    void workspaceRailRefreshEventConstantUsesExpectedSseName() {
+        assertThat(WorkspaceRailRefreshService.WORKSPACE_RAIL_REFRESH_EVENT).isEqualTo("workspace-rail-refresh");
+    }
+
+
+
     private static final class TestEmitter extends SseEmitter {
         private volatile boolean completed;
 

@@ -33,9 +33,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -293,12 +291,13 @@ public class AppStateService {
         var appState = repository.loadAppState();
         List<ProjectView> projects = repository.listVisibleProjects().stream().map(this::toProjectView).toList();
         ProjectView activeProject = appState.activeProjectId() == null ? null : toProjectView(repository.findProject(appState.activeProjectId()));
-        Set<Long> unreadWorkspaceIds = activeProject == null ? Set.of() : repository.listUnreadWorkspaceIds(activeProject.id());
-        Function<AppStateRepository.WorkspaceRow, WorkspaceView> workspaceMapper = row -> toWorkspaceView(row, unreadWorkspaceIds.contains(row.id()));
-        List<WorkspaceView> workspaces = activeProject == null ? List.of() : repository.listWorkspacesByProject(activeProject.id()).stream().map(workspaceMapper).toList();
-        WorkspaceView activeWorkspace = appState.activeWorkspaceId() == null ? null : workspaceMapper.apply(repository.findWorkspace(appState.activeWorkspaceId()));
+
+        List<WorkspaceView> workspaces = activeProject == null ? List.of() : repository.listWorkspacesByProject(activeProject.id()).stream().map(this::toWorkspaceView).toList();
+        WorkspaceView activeWorkspace = appState.activeWorkspaceId() == null ? null : toWorkspaceView(repository.findWorkspace(appState.activeWorkspaceId()));
+
+        AppStateRepository.SessionRow activeSessionRow = appState.activeSessionId() == null ? null : repository.findSession(appState.activeSessionId());
         List<SessionView> sessions = activeWorkspace == null ? List.of() : repository.listSessionsByWorkspace(activeWorkspace.id()).stream().map(this::toSessionView).toList();
-        SessionView activeSession = appState.activeSessionId() == null ? null : toSessionView(repository.findSession(appState.activeSessionId()));
+        SessionView activeSession = activeSessionRow == null ? null : toSessionView(activeSessionRow);
         SessionDetailView sessionDetail = activeSession == null ? null : loadSessionDetail(activeSession.id());
         return new AppStateView(projects, activeProject, workspaces, activeWorkspace, sessions, activeSession, sessionDetail);
     }
@@ -333,6 +332,7 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
                 null,
                 now);
+        applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
         return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, List.of(), null),
                 new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, List.of(), assistantMetadata));
     }
@@ -395,7 +395,9 @@ public class AppStateService {
         }
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true);
-        markUnreadIfInactive(sessionId);
+        if (!markUnreadIfInactive(sessionId)) {
+            applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
+        }
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
 
@@ -410,7 +412,9 @@ public class AppStateService {
         }
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), errorText, false, false);
-        markUnreadIfInactive(sessionId);
+        if (!markUnreadIfInactive(sessionId)) {
+            applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
+        }
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
 
@@ -580,19 +584,20 @@ public class AppStateService {
         repository.updateAppState(projectId, workspace.id(), session.id());
     }
 
-    private void markUnreadIfInactive(long sessionId) {
+    private boolean markUnreadIfInactive(long sessionId) {
         var session = repository.findSession(sessionId);
         if (session.hidden() || session.unread()) {
-            return;
+            return false;
         }
 
         var appState = repository.loadAppState();
         if (appState.activeSessionId() != null && appState.activeSessionId() == sessionId) {
-            return;
+            return false;
         }
 
         repository.updateSessionUnread(sessionId, true);
         applicationEventPublisher.publishEvent(new SessionMarkedUnreadEvent(sessionId));
+        return true;
     }
 
     private long createSessionInternal(long workspaceId, Instant now) {
@@ -999,15 +1004,19 @@ public class AppStateService {
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {
-        return toWorkspaceView(row, false);
+        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), row.unread(), row.inProgress());
     }
 
-    private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row, boolean unread) {
-        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), unread);
+    private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row, boolean unread, boolean inProgress) {
+        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), unread, inProgress);
     }
 
     private SessionView toSessionView(AppStateRepository.SessionRow row) {
-        return new SessionView(row.id(), row.name(), row.unread());
+        return new SessionView(row.id(), row.name(), row.unread(), row.inProgress());
+    }
+
+    private SessionView toSessionView(AppStateRepository.SessionRow row, boolean inProgress) {
+        return new SessionView(row.id(), row.name(), row.unread(), inProgress);
     }
 
     private ChangedFileView toChangedFileView(AppStateRepository.ChangedFileRow row) {

@@ -1166,7 +1166,7 @@ public class UiController {
     }
 
     private Workspace toWorkspace(WorkspaceView view) {
-        return view == null ? null : new Workspace(view.id(), view.name(), view.path(), view.unread());
+        return view == null ? null : new Workspace(view.id(), view.name(), view.path(), view.unread(), view.inProgress());
     }
 
     private WorkspaceAction toWorkspaceAction(ProjectView activeProject, WorkspaceView workspace) {
@@ -1175,7 +1175,7 @@ public class UiController {
     }
 
     private Session toSession(SessionView view) {
-        return view == null ? null : new Session(view.id(), view.name(), view.unread());
+        return view == null ? null : new Session(view.id(), view.name(), view.unread(), view.inProgress());
     }
 
     private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
@@ -1343,17 +1343,25 @@ public class UiController {
 
     public record Project(long id, String name, String path, String workspaceInitCommands) {}
 
-    public record Workspace(long id, String name, String path, boolean unread) {
+    public record Workspace(long id, String name, String path, boolean unread, boolean inProgress) {
+        public Workspace(long id, String name, String path, boolean unread) {
+            this(id, name, path, unread, false);
+        }
+
         public Workspace(long id, String name, String path) {
-            this(id, name, path, false);
+            this(id, name, path, false, false);
         }
     }
 
     public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
 
-    public record Session(long id, String name, boolean unread) {
+    public record Session(long id, String name, boolean unread, boolean inProgress) {
+        public Session(long id, String name, boolean unread) {
+            this(id, name, unread, false);
+        }
+
         public Session(long id, String name) {
-            this(id, name, false);
+            this(id, name, false, false);
         }
     }
 
