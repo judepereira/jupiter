@@ -138,6 +138,11 @@ class ReviewSourceE2ETest extends E2ETestSupport {
 
                 page.reload();
 
+                page.waitForResponse(
+                        response -> response.url().contains("/ui/review/toggle") && response.status() == 200,
+                        () -> page.locator("#toggle-review-rail-btn").click());
+                assertThat(page.locator("#review .review-source-select")).isVisible();
+
                 var firstFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("first-review-file.txt"));
                 var secondFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("second-review-file.txt"));
 

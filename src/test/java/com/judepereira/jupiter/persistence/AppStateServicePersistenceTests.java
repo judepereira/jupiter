@@ -542,6 +542,31 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void recordingChangedFilesKeepsReviewPanelClosedAndSelectsLatestSessionFile(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        assertThat(service.loadViewData().activeSessionDetail().reviewPanelOpen()).isFalse();
+
+        service.addChangedFilesToSession(sessionId, List.of(
+                new ChangedFileDraft("first-review-file.txt", "first diff"),
+                new ChangedFileDraft("second-review-file.txt", "second diff")
+        ));
+
+        AppStateView view = service.loadViewData();
+        assertThat(view.activeSessionDetail()).isNotNull();
+        assertThat(view.activeSessionDetail().reviewPanelOpen()).isFalse();
+        assertThat(view.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.SESSION);
+        assertThat(view.activeSessionDetail().selectedFile()).isNotNull();
+        assertThat(view.activeSessionDetail().selectedFile().path()).isEqualTo("second-review-file.txt");
+        assertThat(view.activeSessionDetail().changedFiles()).extracting(com.judepereira.jupiter.persistence.Persistence.ChangedFileView::path)
+                .containsExactly("second-review-file.txt", "first-review-file.txt");
+    }
+
+    @Test
     public void gitReviewReloadIgnoresDeletedSelectedFilesAndKeepsLiveChangedFiles(@TempDir Path projectPath) throws Exception {
         initGitRepo(projectPath);
 
