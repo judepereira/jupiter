@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockServletContext;
+import org.thymeleaf.TemplateSpec;
 import org.thymeleaf.context.WebContext;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
@@ -17,6 +18,7 @@ import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -164,6 +166,40 @@ public class ProjectsTemplateRenderTest {
         assertThat(html).contains("bi-chevron-down workspace-disclosure", "bi-chevron-right workspace-disclosure");
         assertThat(html).contains("Session #1", "Session #2");
         assertThat(html.split("class=\"unread-dot\" aria-label=\"Unread\"", -1)).hasSizeGreaterThanOrEqualTo(3);
+    }
+
+    @Test
+    public void workspaceRailRendersPendingDotsForInProgressItems() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null)));
+        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null));
+        context.setVariable("workspaces", List.of(
+                new Workspace(1L, "Default Workspace", "/repo", false, true),
+                new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace", false, false)));
+        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo", false, true));
+        context.setVariable("sessions", List.of(
+                new Session(1L, "Session #1", false, true),
+                new Session(2L, "Session #2", false, false)));
+        context.setVariable("activeSession", new Session(2L, "Session #2"));
+        context.setVariable("selectedName", "");
+        context.setVariable("selectedPath", "");
+        context.setVariable("currentPath", "");
+        context.setVariable("directoryEntries", List.of());
+        context.setVariable("includeChatContainer", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("selectedFile", null);
+        context.setVariable("workspaceCloseStatus", new AppStateService.WorkspaceCloseInspection(0L, "", "", "", false, false, List.of()));
+
+        String html = engine.process(new TemplateSpec("fragments/projects", Set.of("workspaceRail"), TemplateMode.HTML, null), context);
+
+        assertThat(html).contains("aria-label=\"In progress\"");
+        assertThat(html.split("class=\"pending-dot\" aria-label=\"In progress\"", -1)).hasSize(3);
+        assertThat(html).doesNotContain("class=\"unread-dot\" aria-label=\"Unread\"");
     }
 
     @Test

@@ -129,20 +129,61 @@ public class AppStateRepository {
     }
 
     WorkspaceRow findWorkspace(long workspaceId) {
-        return queryRequired("SELECT * FROM workspaces WHERE id = :id",
-                new MapSqlParameterSource("id", workspaceId), this::mapWorkspace, "workspace " + workspaceId);
+        return queryRequired("""
+                SELECT w.*, 
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND s.unread = TRUE
+                       ) AS unread,
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           JOIN conversation_messages m ON m.session_id = s.id
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM workspaces w
+                WHERE w.id = :id
+                """, new MapSqlParameterSource("id", workspaceId), this::mapWorkspace, "workspace " + workspaceId);
     }
 
     List<WorkspaceRow> listWorkspacesByProject(long projectId) {
-        return jdbc.query("SELECT * FROM workspaces WHERE project_id = :projectId ORDER BY position ASC",
-                new MapSqlParameterSource("projectId", projectId), this::mapWorkspace);
+        return jdbc.query("""
+                SELECT w.*, 
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND s.unread = TRUE
+                       ) AS unread,
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           JOIN conversation_messages m ON m.session_id = s.id
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM workspaces w
+                WHERE w.project_id = :projectId
+                ORDER BY w.position ASC
+                """, new MapSqlParameterSource("projectId", projectId), this::mapWorkspace);
     }
 
     WorkspaceRow findWorkspaceToActivate(long projectId) {
         return queryOne("""
-                SELECT * FROM workspaces
-                WHERE project_id = :projectId
-                ORDER BY CASE WHEN last_opened_at IS NULL THEN 1 ELSE 0 END, last_opened_at DESC, position ASC
+                SELECT w.*, 
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND s.unread = TRUE
+                       ) AS unread,
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           JOIN conversation_messages m ON m.session_id = s.id
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM workspaces w
+                WHERE w.project_id = :projectId
+                ORDER BY CASE WHEN w.last_opened_at IS NULL THEN 1 ELSE 0 END, w.last_opened_at DESC, w.position ASC
                 LIMIT 1
                 """, new MapSqlParameterSource("projectId", projectId), this::mapWorkspace).orElse(null);
     }
@@ -178,7 +219,16 @@ public class AppStateRepository {
     }
 
     SessionRow findSession(long sessionId) {
-        return queryRequired("SELECT * FROM sessions WHERE id = :id", new MapSqlParameterSource("id", sessionId), this::mapSession, "session " + sessionId);
+        return queryRequired("""
+                SELECT s.*,
+                       EXISTS(
+                           SELECT 1
+                           FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM sessions s
+                WHERE s.id = :id
+                """, new MapSqlParameterSource("id", sessionId), this::mapSession, "session " + sessionId);
     }
 
     Optional<ConversationMessageRow> findLatestPendingAssistantMessage(long sessionId) {
@@ -192,8 +242,17 @@ public class AppStateRepository {
     }
 
     List<SessionRow> listSessionsByWorkspace(long workspaceId) {
-        return jdbc.query("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND hidden = FALSE ORDER BY position ASC",
-                new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
+        return jdbc.query("""
+                SELECT s.*,
+                       EXISTS(
+                           SELECT 1
+                           FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM sessions s
+                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE
+                ORDER BY s.position ASC
+                """, new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
     }
 
     Set<Long> listUnreadWorkspaceIds(long projectId) {
@@ -205,26 +264,80 @@ public class AppStateRepository {
                 """, new MapSqlParameterSource("projectId", projectId), Long.class));
     }
 
+    Set<Long> listPendingWorkspaceIds(long projectId) {
+        return Set.copyOf(jdbc.queryForList("""
+                SELECT DISTINCT w.id
+                FROM workspaces w
+                JOIN sessions s ON s.workspace_id = w.id
+                JOIN conversation_messages m ON m.session_id = s.id
+                WHERE w.project_id = :projectId AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                """, new MapSqlParameterSource("projectId", projectId), Long.class));
+    }
+
+    Set<Long> listPendingSessionIds(long workspaceId) {
+        return Set.copyOf(jdbc.queryForList("""
+                SELECT DISTINCT s.id
+                FROM sessions s
+                JOIN conversation_messages m ON m.session_id = s.id
+                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                """, new MapSqlParameterSource("workspaceId", workspaceId), Long.class));
+    }
+
     List<SessionRow> listChildSessionsByParentSession(long parentSessionId) {
-        return jdbc.query("SELECT * FROM sessions WHERE parent_session_id = :parentSessionId ORDER BY position ASC",
-                new MapSqlParameterSource("parentSessionId", parentSessionId), this::mapSession);
+        return jdbc.query("""
+                SELECT s.*,
+                       EXISTS(
+                           SELECT 1
+                           FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM sessions s
+                WHERE s.parent_session_id = :parentSessionId
+                ORDER BY s.position ASC
+                """, new MapSqlParameterSource("parentSessionId", parentSessionId), this::mapSession);
     }
 
     SessionRow findNextSessionAfter(long workspaceId, long position) {
-        return queryOne("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND hidden = FALSE AND position > :position ORDER BY position ASC LIMIT 1",
-                new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
+        return queryOne("""
+                SELECT s.*,
+                       EXISTS(
+                           SELECT 1
+                           FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM sessions s
+                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND s.position > :position
+                ORDER BY s.position ASC
+                LIMIT 1
+                """, new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
     }
 
     SessionRow findPreviousSessionBefore(long workspaceId, long position) {
-        return queryOne("SELECT * FROM sessions WHERE workspace_id = :workspaceId AND hidden = FALSE AND position < :position ORDER BY position DESC LIMIT 1",
-                new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
+        return queryOne("""
+                SELECT s.*,
+                       EXISTS(
+                           SELECT 1
+                           FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM sessions s
+                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND s.position < :position
+                ORDER BY s.position DESC
+                LIMIT 1
+                """, new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
     }
 
     SessionRow findSessionToActivate(long workspaceId) {
         return queryOne("""
-                SELECT * FROM sessions
-                WHERE workspace_id = :workspaceId AND hidden = FALSE
-                ORDER BY CASE WHEN last_opened_at IS NULL THEN 1 ELSE 0 END, last_opened_at DESC, position ASC
+                SELECT s.*,
+                       EXISTS(
+                           SELECT 1
+                           FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM sessions s
+                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE
+                ORDER BY CASE WHEN s.last_opened_at IS NULL THEN 1 ELSE 0 END, s.last_opened_at DESC, s.position ASC
                 LIMIT 1
                 """, new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession).orElse(null);
     }
@@ -467,12 +580,46 @@ public class AppStateRepository {
     }
 
     WorkspaceRow findNextWorkspaceAfter(long projectId, long position) {
-        return queryOne("SELECT * FROM workspaces WHERE project_id = :projectId AND position > :position ORDER BY position ASC LIMIT 1",
+        return queryOne("""
+                SELECT w.*, 
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND s.unread = TRUE
+                       ) AS unread,
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           JOIN conversation_messages m ON m.session_id = s.id
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM workspaces w
+                WHERE w.project_id = :projectId AND w.position > :position
+                ORDER BY w.position ASC
+                LIMIT 1
+                """,
                 new MapSqlParameterSource().addValue("projectId", projectId).addValue("position", position), this::mapWorkspace).orElse(null);
     }
 
     WorkspaceRow findPreviousWorkspaceBefore(long projectId, long position) {
-        return queryOne("SELECT * FROM workspaces WHERE project_id = :projectId AND position < :position ORDER BY position DESC LIMIT 1",
+        return queryOne("""
+                SELECT w.*, 
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND s.unread = TRUE
+                       ) AS unread,
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           JOIN conversation_messages m ON m.session_id = s.id
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                       ) AS in_progress
+                FROM workspaces w
+                WHERE w.project_id = :projectId AND w.position < :position
+                ORDER BY w.position DESC
+                LIMIT 1
+                """,
                 new MapSqlParameterSource().addValue("projectId", projectId).addValue("position", position), this::mapWorkspace).orElse(null);
     }
 
@@ -520,7 +667,7 @@ public class AppStateRepository {
 
     private WorkspaceRow mapWorkspace(ResultSet rs, int rowNum) throws SQLException {
         return new WorkspaceRow(rs.getLong("id"), rs.getLong("project_id"), rs.getString("name"), rs.getString("normalized_path"), rs.getLong("position"),
-                timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
+                timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")), rs.getBoolean("unread"), rs.getBoolean("in_progress"));
     }
 
     private SessionRow mapSession(ResultSet rs, int rowNum) throws SQLException {
@@ -528,7 +675,7 @@ public class AppStateRepository {
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
                 Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getBoolean("unread"), rs.getBoolean("hidden"),
                 nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
-                nullableLong(rs, "parent_assistant_message_id"), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")));
+                nullableLong(rs, "parent_assistant_message_id"), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")), rs.getBoolean("in_progress"));
     }
 
     private ConversationMessageRow mapConversationMessage(ResultSet rs, int rowNum) throws SQLException {
@@ -564,10 +711,10 @@ public class AppStateRepository {
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands) {}
-    record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt) {}
+    record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt, boolean unread, boolean inProgress) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
                       boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
-                      Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt) {}
+                      Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt, boolean inProgress) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant createdAt) {}
     record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}
