@@ -4,6 +4,7 @@ import com.judepereira.jupiter.agent.catalog.AgentMode;
 import lombok.Getter;
 
 import java.nio.file.Path;
+import java.util.Map;
 
 @Getter
 public class ToolExecutionContext {
@@ -15,19 +16,26 @@ public class ToolExecutionContext {
     private final String agentId;
     private final AgentMode agentMode;
     private final String toolCallId;
+    private final Map<String, String> environmentVariables;
     private final ToolProgressSink progressSink;
 
     public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds) {
-        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, null, null, null, null, ToolProgressSink.noop());
+        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, null, null, null, null, Map.of(), ToolProgressSink.noop());
     }
 
     public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
                                 Long sessionId, String agentId, AgentMode agentMode, String toolCallId) {
-        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, sessionId, agentId, agentMode, toolCallId, ToolProgressSink.noop());
+        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, sessionId, agentId, agentMode, toolCallId, Map.of(), ToolProgressSink.noop());
     }
 
     public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
                                 Long sessionId, String agentId, AgentMode agentMode, String toolCallId, ToolProgressSink progressSink) {
+        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, sessionId, agentId, agentMode, toolCallId, Map.of(), progressSink);
+    }
+
+    public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
+                                Long sessionId, String agentId, AgentMode agentMode, String toolCallId,
+                                Map<String, String> environmentVariables, ToolProgressSink progressSink) {
         this.workspaceRoot = workspaceRoot;
         this.allowWrite = allowWrite;
         this.allowCommand = allowCommand;
@@ -36,6 +44,7 @@ public class ToolExecutionContext {
         this.agentId = agentId;
         this.agentMode = agentMode;
         this.toolCallId = toolCallId;
+        this.environmentVariables = environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables);
         this.progressSink = progressSink == null ? ToolProgressSink.noop() : progressSink;
     }
 }

@@ -49,6 +49,7 @@ public class RunCommandTool implements AgentTool {
         Path wd = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), working);
         ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", cmd);
         pb.directory(wd.toFile());
+        pb.environment().putAll(context.getEnvironmentVariables());
         Process p = pb.start();
         // drain stdout and stderr concurrently to avoid blocking due to pipe buffers
         StringBuilder out = new StringBuilder();

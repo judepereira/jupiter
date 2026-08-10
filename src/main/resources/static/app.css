@@ -1633,6 +1633,77 @@ input:focus, textarea:focus {
     word-break: break-word;
 }
 
+.settings-env-field {
+    padding: 14px;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fcfdff 0%, #f7fbff 100%);
+}
+
+.settings-env-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-env-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.settings-env-row input {
+    width: 100%;
+}
+
+.settings-env-name,
+.settings-env-value {
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    padding: 8px 10px;
+    font: inherit;
+    background: #ffffff;
+    box-shadow: inset 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.settings-env-name {
+    min-width: 0;
+}
+
+.settings-env-value {
+    min-width: 0;
+}
+
+.settings-env-add,
+.settings-env-remove {
+    border-radius: 8px;
+    border: 1px solid #cfe0ff;
+    background: #f8fbff;
+    color: #0b1220;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.settings-env-add {
+    align-self: flex-start;
+    margin-top: 2px;
+    border-color: #b9cdf4;
+    background: #eef5ff;
+    color: #12408d;
+    font-weight: 600;
+}
+
+.settings-env-add:hover,
+.settings-env-remove:hover,
+.settings-env-add:focus-visible,
+.settings-env-remove:focus-visible {
+    background: #e9f1ff;
+    border-color: #9fbee9;
+    outline: none;
+}
+
 .settings-commands {
     min-height: 170px;
     resize: vertical;

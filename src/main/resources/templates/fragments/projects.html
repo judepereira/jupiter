@@ -186,7 +186,7 @@
     <div id="modal-root" hx-swap-oob="innerHTML"></div>
 </th:block>
 
-<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}">
+<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}">
     <div id="settings-modal" class="project-modal settings-modal">
         <div class="project-modal-backdrop"
              hx-get="/ui/projects/modal/close"
@@ -206,6 +206,56 @@
                         <div class="settings-project-meta">
                             <div><strong>Name:</strong> <span th:text="${activeProject == null ? '' : activeProject.name}"></span></div>
                             <div><strong>Path:</strong> <span th:text="${activeProject == null ? '' : activeProject.path}"></span></div>
+                        </div>
+
+                        <div class="project-form-field settings-env-field" data-settings-env-field>
+                            <span>Environment variables</span>
+                            <div class="settings-env-list" data-settings-env-vars>
+                                <div th:if="${#lists.isEmpty(environmentVariablesValue)}" class="settings-env-row" data-settings-env-row>
+                                    <input type="text"
+                                           class="settings-env-name"
+                                           name="environmentVariableNames"
+                                           placeholder="Name"
+                                           autocomplete="off">
+                                    <input type="text"
+                                           class="settings-env-value"
+                                           name="environmentVariableValues"
+                                           placeholder="Value"
+                                           autocomplete="off">
+                                    <button type="button" class="settings-env-remove" data-settings-env-remove>Remove</button>
+                                </div>
+                                <div th:each="environmentVariable : ${environmentVariablesValue}" class="settings-env-row" data-settings-env-row>
+                                    <input type="text"
+                                           class="settings-env-name"
+                                           name="environmentVariableNames"
+                                           placeholder="Name"
+                                           autocomplete="off"
+                                           th:value="${environmentVariable.name}">
+                                    <input type="text"
+                                           class="settings-env-value"
+                                           name="environmentVariableValues"
+                                           placeholder="Value"
+                                           autocomplete="off"
+                                           th:value="${environmentVariable.value}">
+                                    <button type="button" class="settings-env-remove" data-settings-env-remove>Remove</button>
+                                </div>
+                            </div>
+                            <template data-settings-env-template>
+                                <div class="settings-env-row" data-settings-env-row>
+                                    <input type="text"
+                                           class="settings-env-name"
+                                           name="environmentVariableNames"
+                                           placeholder="Name"
+                                           autocomplete="off">
+                                    <input type="text"
+                                           class="settings-env-value"
+                                           name="environmentVariableValues"
+                                           placeholder="Value"
+                                           autocomplete="off">
+                                    <button type="button" class="settings-env-remove" data-settings-env-remove>Remove</button>
+                                </div>
+                            </template>
+                            <button type="button" class="settings-env-add" data-settings-env-add>Add Variable</button>
                         </div>
 
                         <label class="project-form-field settings-commands-field">

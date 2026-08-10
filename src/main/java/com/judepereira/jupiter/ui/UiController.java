@@ -24,6 +24,7 @@ import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
+import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import com.judepereira.jupiter.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
@@ -655,13 +656,32 @@ public class UiController {
     }
 
     @PostMapping("/ui/settings/apply")
-    public String applySettings(@RequestParam("workspaceInitCommands") String workspaceInitCommands, Model model) {
+    public String applySettings(@RequestParam("workspaceInitCommands") String workspaceInitCommands,
+                                @RequestParam(name = "environmentVariableNames", required = false) List<String> environmentVariableNames,
+                                @RequestParam(name = "environmentVariableValues", required = false) List<String> environmentVariableValues,
+                                Model model) {
+        return applySettingsInternal(workspaceInitCommands, environmentVariableNames, environmentVariableValues, model);
+    }
+
+    String applySettingsInternal(String workspaceInitCommands,
+                                 List<String> environmentVariableNames,
+                                 List<String> environmentVariableValues,
+                                 Model model) {
         AppStateView view = appStateService.loadViewData();
         if (view.activeProject() == null) {
             return "fragments/projects :: modalClose";
         }
 
+        List<ProjectEnvironmentVariable> environmentVariables = new ArrayList<>();
+        int count = Math.max(environmentVariableNames == null ? 0 : environmentVariableNames.size(), environmentVariableValues == null ? 0 : environmentVariableValues.size());
+        for (int i = 0; i < count; i++) {
+            String name = environmentVariableNames != null && i < environmentVariableNames.size() ? environmentVariableNames.get(i) : null;
+            String value = environmentVariableValues != null && i < environmentVariableValues.size() ? environmentVariableValues.get(i) : null;
+            environmentVariables.add(new ProjectEnvironmentVariable(name, value));
+        }
+
         appStateService.updateProjectWorkspaceInitCommands(view.activeProject().id(), workspaceInitCommands);
+        appStateService.updateProjectEnvironmentVariables(view.activeProject().id(), environmentVariables);
         return "fragments/projects :: modalClose";
     }
 
@@ -1162,7 +1182,7 @@ public class UiController {
     }
 
     private Project toProject(ProjectView view) {
-        return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands());
+        return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(), view.environmentVariables());
     }
 
     private Workspace toWorkspace(WorkspaceView view) {
@@ -1341,7 +1361,11 @@ public class UiController {
 
     public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
 
-    public record Project(long id, String name, String path, String workspaceInitCommands) {}
+    public record Project(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables) {
+        public Project(long id, String name, String path, String workspaceInitCommands) {
+            this(id, name, path, workspaceInitCommands, List.of());
+        }
+    }
 
     public record Workspace(long id, String name, String path, boolean unread, boolean inProgress) {
         public Workspace(long id, String name, String path, boolean unread) {

@@ -13,7 +13,13 @@ public final class Persistence {
     private Persistence() {
     }
 
-    public record ProjectView(long id, String name, String path, String workspaceInitCommands) {
+    public record ProjectView(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables) {
+        public ProjectView(long id, String name, String path, String workspaceInitCommands) {
+            this(id, name, path, workspaceInitCommands, List.of());
+        }
+    }
+
+    public record ProjectEnvironmentVariable(String name, String value) {
     }
 
     public record WorkspaceView(long id, String name, String path, boolean unread, boolean inProgress) {
