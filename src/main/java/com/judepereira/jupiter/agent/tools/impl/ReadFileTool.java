@@ -65,8 +65,7 @@ public class ReadFileTool implements AgentTool {
                 String line;
                 while ((line = br.readLine()) != null) {
                     read++;
-                    if (start != null && skipped < start) {
-                        skipped++;
+                    if (start != null && ++skipped < start) {
                         continue;
                     }
 
