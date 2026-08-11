@@ -1,0 +1,187 @@
+/* Responsive: keep the nav usable without recreating the old side-rail grid. */
+@media (max-width: 900px) {
+    #shell.shell-root {
+        grid-template-columns: minmax(150px, 38vw) minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .review-panel,
+    .terminal-panel,
+    #bottom-panel {
+        position: relative;
+        grid-column: 2 / span 1;
+        order: 3;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .review-panel {
+        grid-row: 1;
+    }
+
+    .terminal-panel,
+    #bottom-panel {
+        grid-row: 2;
+        height: 240px;
+        margin: 0 0 8px 0;
+    }
+
+    :root {
+        --terminal-panel-height: 240px;
+    }
+
+    .bottom-rail {
+        position: fixed;
+    }
+
+    /* hide divider on small screens where review stacks */
+    .panel-divider {
+        display: none;
+    }
+
+    .terminal-panel-divider {
+        display: none;
+    }
+
+    /* collapse review by default on small screens to leave space for chat.
+       Closed state should not leave a footprint — use display:none via the
+       .closed modifier (applied to .review-panel or .review-shell). */
+    .review-shell[data-open="false"] { /* internal content hidden above; keep container flow */
+    }
+
+    .terminal-shell {
+        min-height: 0;
+    }
+}
+
+@media (max-width: 600px) {
+    #shell.shell-root,
+    #shell.shell-root.review-open,
+    #shell.shell-root.review-closed {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .left-panel,
+    .terminal-panel,
+    #bottom-panel {
+        grid-column: 1;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .left-panel {
+        grid-row: 1;
+    }
+
+    .terminal-panel,
+    #bottom-panel {
+        grid-row: 2;
+        height: 220px;
+        margin: 0 0 8px 0;
+    }
+
+    .review-panel {
+        position: fixed;
+        top: var(--topbar-height);
+        right: 0;
+        bottom: var(--bottom-nav-height);
+        width: min(84vw, 420px);
+        max-width: none;
+        margin: 0;
+        z-index: 1700;
+        transform: translateX(100%);
+        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease 180ms;
+        box-shadow: -2px 0 5px rgba(2, 12, 32, 0);
+        will-change: transform;
+        overflow: auto;
+        border-radius: 0;
+        border-left: 1px solid var(--panel-border);
+    }
+
+    .review-panel.closed {
+        display: flex;
+        pointer-events: none;
+    }
+
+    body.mobile-review-open .review-panel {
+        transform: translateX(0);
+        pointer-events: auto;
+        box-shadow: -2px 0 5px rgba(2, 12, 32, 0.28);
+        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease;
+    }
+
+    body.mobile-review-open::after {
+        content: "";
+        position: fixed;
+        inset: var(--topbar-height) 0 var(--bottom-nav-height) 0;
+        background: rgba(6, 23, 51, 0.48);
+        z-index: 1650;
+        pointer-events: auto;
+        transition: background 180ms linear;
+    }
+
+    .left-rail {
+        position: fixed;
+        top: var(--topbar-height);
+        left: 0;
+        bottom: var(--bottom-nav-height);
+        width: 80vw;
+        max-width: none;
+        z-index: 1700;
+        transform: translateX(-100%);
+        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease 180ms;
+        box-shadow: 2px 0 5px rgba(2, 12, 32, 0);
+        will-change: transform;
+        background: rgba(6, 23, 51, 0);
+    }
+
+    body.mobile-left-rail-open .left-rail {
+        transform: translateX(0);
+        box-shadow: 2px 0 5px rgba(2, 12, 32, 0.28);
+        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease;
+    }
+
+    body.mobile-left-rail-open::before {
+        content: "";
+        position: fixed;
+        inset: var(--topbar-height) 0 var(--bottom-nav-height) 0;
+        background: rgba(6, 23, 51, 0.48);
+        z-index: 1650;
+        pointer-events: auto;
+        transition: background 180ms linear;
+    }
+
+    .project-tabs {
+        gap: 4px;
+        margin-left: 10px;
+        padding-bottom: 2px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+    }
+
+    .project-tab-group,
+    .project-tab-add {
+        flex: 0 0 auto;
+    }
+
+    .project-tab-group {
+        max-width: none;
+        min-width: max-content;
+        overflow: visible;
+    }
+
+    .project-tab {
+        flex: 0 0 auto;
+        gap: 8px;
+    }
+
+    .project-tab-label {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: nowrap;
+    }
+}
