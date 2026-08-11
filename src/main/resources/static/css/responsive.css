@@ -1,0 +1,8 @@
+@media (max-width: 480px) {
+    #system-balloon-root {
+        left: 8px;
+        right: 8px;
+        width: auto;
+        max-width: none;
+    }
+}

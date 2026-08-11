@@ -1,0 +1,361 @@
+/* Chat area: scroll history + pinned composer */
+.chat-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+.subagent-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    background: #eef4ff;
+    color: var(--rail-fg);
+    margin-bottom: 8px;
+}
+
+.subagent-back-button,
+.tool-call-subagent-button {
+    border: 1px solid rgba(31, 111, 255, 0.22);
+    background: #ffffff;
+    color: var(--accent);
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.tool-call-subagent {
+    margin: 0;
+}
+
+.tool-call-subagent-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+}
+
+.subagent-back-button:hover,
+.tool-call-subagent-button:hover {
+    background: #f4f8ff;
+}
+
+#chat-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+}
+
+/* Preserve newlines for raw/plain text spans (keep markdown rendering intact)
+   Only apply pre-wrap to chat message text that has NOT been rendered as
+   markdown. Rendered markdown should control its own whitespace/blocks. */
+.chat-message-text:not(.markdown-rendered) {
+    white-space: pre-wrap;
+}
+
+/* Scoped styles for rendered markdown inside chat messages. These rules
+   keep plain text readable while ensuring markdown blocks (p, ul, ol,
+   blockquote, pre, code, headings) render with correct spacing and
+   code blocks are visually distinct and scroll when needed. */
+.chat-message-text {
+    /* fallback for long words/plain text */
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.45;
+    min-width: 0; /* prevent overflow in flex/grid children */
+}
+
+.chat-message-text p {
+    margin: 0 0 0.75em 0;
+}
+
+.chat-message-text h1,
+.chat-message-text h2,
+.chat-message-text h3,
+.chat-message-text h4,
+.chat-message-text h5,
+.chat-message-text h6 {
+    margin: 0 0 0.5em 0;
+    line-height: 1.2;
+    font-weight: 600;
+}
+
+.chat-message-text ul,
+.chat-message-text ol {
+    margin: 0 0 0.75em 1.25em;
+    padding-left: 0;
+}
+
+.chat-message-text li {
+    margin-bottom: 0.25em;
+}
+
+.chat-message-text blockquote {
+    margin: 0 0 0.75em 0;
+    padding: 8px 12px;
+    border-left: 3px solid #e6eef6;
+    background: rgba(0, 0, 0, 0.02);
+    color: var(--muted);
+    border-radius: 6px;
+}
+
+/* Code blocks: visually distinct, preserve formatting, scroll horizontally
+   when too wide but never overflow the chat panel. */
+.chat-message-text pre {
+    background: #e7eaee;
+    padding: 10px;
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Liberation Mono", monospace;
+    line-height: 1.4;
+    white-space: pre; /* preserve exact formatting */
+    overflow: auto; /* allow scrolling instead of overflowing */
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Inline code: subtle background and allow wrapping if needed */
+.chat-message-text code {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    white-space: pre-wrap;
+}
+
+.chat-message-text a {
+    color: var(--accent);
+    text-decoration: underline;
+    word-break: break-word;
+}
+
+#chat-history.messages {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 8px;
+    border-radius: 6px;
+    background: var(--conversation-panel-bg);
+    border: 1px solid #e8f0fb;
+    /* Prevent browser auto-adjusting scroll during incremental streaming updates */
+    overflow-anchor: none;
+}
+
+#chat-messages-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    /* avoid layout shifts from user scroll + incremental text updates */
+    overflow-anchor: none;
+}
+
+.chat-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #f0f4f8;
+}
+
+.chat-controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.chat-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.chat-control-label {
+    font-weight: 600;
+}
+
+.chat-controls select,
+.chat-compose-row textarea,
+.chat-compose-row button {
+    min-width: 0;
+}
+
+.chat-quality-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.chat-compose-row {
+    display: flex;
+    gap: 8px;
+}
+
+.chat-form input,
+.chat-form select,
+.chat-form textarea,
+#chat-input {
+    flex: 1 1 auto;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #dbeafe;
+    font: inherit;
+}
+
+/* Textarea specific: prevent manual resize, keep single-line height and
+   grow visually up to a limit. Overflow will scroll when exceeding max-height. */
+.chat-form textarea,
+#chat-input {
+    resize: none;
+    overflow-y: hidden;
+    line-height: 1.4;
+    min-height: 1.4em; /* roughly single-line */
+    max-height: calc(1.4em * 10 + 16px); /* ~10 lines plus padding */
+}
+
+.chat-form button {
+    padding: 8px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* Tool call rendering (compact) */
+.tool-calls {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.chat-message-meta {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chat-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #475569;
+    background: rgba(71, 85, 105, 0.08);
+    border: 1px solid rgba(71, 85, 105, 0.12);
+}
+
+.tool-call {
+    border-radius: 6px;
+    border: 1px solid #e6eef6;
+    background: transparent;
+    overflow: hidden;
+}
+
+.tool-call summary.tool-call-summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    font-weight: 600;
+    color: #0b1220;
+    background: rgba(11, 18, 32, 0.03);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.tool-call-name {
+    margin-right: 8px;
+}
+
+.tool-call-status {
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 999px;
+    display: inline-block;
+}
+
+.tool-call-status-success {
+    background: rgba(34, 197, 94, 0.12);
+    color: #16a34a;
+    border: 1px solid rgba(34, 197, 94, 0.12);
+}
+
+.tool-call-status-failure {
+    background: rgba(239, 68, 68, 0.08);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.08);
+}
+
+.tool-call-detail {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tool-call-calls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tool-call-call {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tool-call-call + .tool-call-call {
+    padding-top: 8px;
+    margin-top: 8px;
+    border-top: 1px solid #e6eef6;
+}
+
+.tool-call-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tool-call-label {
+    color: var(--muted);
+}
+
+.tool-call-pre {
+    white-space: pre-wrap; /* allow wrapping inside details */
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    background: #f5f7fa;
+    color: #0b1220;
+    padding: 6px;
+    border-radius: 6px;
+    max-height: 9em;
+    overflow: auto;
+    margin: 0;
+}
+
+.tool-call-truncated {
+    color: var(--muted);
+    margin-left: 6px;
+}
+
+/* ensure details summary marker doesn't disturb layout in some browsers */
+details.tool-call summary::-webkit-details-marker {
+    display: none;
+}

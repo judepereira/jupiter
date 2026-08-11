@@ -7,7 +7,18 @@
     <link href="/webjars/bootstrap/5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/webjars/bootstrap-icons/1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="/webjars/xterm/5.3.0/css/xterm.css">
-    <link rel="stylesheet" th:href="@{/app.css}">
+    <link rel="stylesheet" th:href="@{/css/tokens.css}">
+    <link rel="stylesheet" th:href="@{/css/base.css}">
+    <link rel="stylesheet" th:href="@{/css/projects.css}">
+    <link rel="stylesheet" th:href="@{/css/system-balloons.css}">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+    <link rel="stylesheet" th:href="@{/css/chat.css}">
+    <link rel="stylesheet" th:href="@{/css/review.css}">
+    <link rel="stylesheet" th:href="@{/css/terminal.css}">
+    <link rel="stylesheet" th:href="@{/css/session.css}">
+    <link rel="stylesheet" th:href="@{/css/settings.css}">
+    <link rel="stylesheet" th:href="@{/css/mobile-rail.css}">
+    <link rel="stylesheet" th:href="@{/css/responsive.css}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="apple-touch-icon" sizes="180x180" th:href="@{/apple-touch-icon.png}">
     <link rel="icon" type="image/png" sizes="32x32" th:href="@{/favicon-32x32.png}">
@@ -64,6 +75,15 @@
 <script src="/webjars/marked/18.0.5/lib/marked.umd.js"></script>
 <script src="/webjars/xterm/5.3.0/lib/xterm.js"></script>
     <script src="/webjars/xterm-addon-fit/0.8.0/lib/xterm-addon-fit.js"></script>
-<script th:src="@{/app.js}"></script>
+<script type="module" th:src="@{/js/system-balloons.js}"></script>
+<script type="module" th:src="@{/js/workspace-branch-sanitizer.js}"></script>
+<script type="module" th:src="@{/js/review-divider.js}"></script>
+<script type="module" th:src="@{/js/terminal-divider.js}"></script>
+<script type="module" th:src="@{/js/shortcuts.js}"></script>
+<script type="module" th:src="@{/js/mobile-rail.js}"></script>
+<script type="module" th:src="@{/js/chat.js}"></script>
+<script type="module" th:src="@{/js/terminal.js}"></script>
+<script type="module" th:src="@{/js/session.js}"></script>
+<script type="module" th:src="@{/js/settings.js}"></script>
 </body>
 </html>
