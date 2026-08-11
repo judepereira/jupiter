@@ -74,6 +74,7 @@ public class ReadFileTool implements AgentTool {
                     }
 
                     out.append(line);
+                    out.append(System.lineSeparator());
                 }
 
                 text = out.toString();
