@@ -28,10 +28,12 @@ import org.springframework.ui.ConcurrentModel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -84,7 +86,15 @@ public final class TestAppStateSupport {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
         });
+        when(terminalManager.createTerminal(anyString(), anyMap())).thenAnswer(invocation -> {
+            int n = sequence.incrementAndGet();
+            return new TerminalHandle("terminal-" + n, "Terminal " + n);
+        });
         when(terminalManager.createTerminal(anyString(), anyString())).thenAnswer(invocation -> {
+            int n = sequence.incrementAndGet();
+            return new TerminalHandle("terminal-" + n, (String) invocation.getArgument(1));
+        });
+        when(terminalManager.createTerminal(anyString(), anyString(), anyMap())).thenAnswer(invocation -> {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, (String) invocation.getArgument(1));
         });
