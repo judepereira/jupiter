@@ -24,6 +24,10 @@ abstract class E2ETestSupport {
         return startApp(fakeHome, dbFile, Map.of(), testConfigClasses);
     }
 
+    protected static RunningApp startApp(Path fakeHome, Path dbFile, int port, Class<?>... testConfigClasses) {
+        return startApp(fakeHome, dbFile, Map.of("server.port", Integer.toString(port)), testConfigClasses);
+    }
+
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {
         String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize() + "?journal_mode=WAL&foreign_keys=on";
         Map<String, String> previousProperties = new HashMap<>();
@@ -124,6 +128,11 @@ abstract class E2ETestSupport {
             } finally {
                 cleanup.run();
             }
+        }
+
+        int port() {
+            String value = baseUrl.substring(baseUrl.lastIndexOf(':') + 1);
+            return Integer.parseInt(value);
         }
     }
 }

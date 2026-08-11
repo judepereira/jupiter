@@ -103,5 +103,9 @@
 
         source.addEventListener('error', error => {
             console.error('System balloon stream error', error);
+            const hasBackendMessage = error && typeof error.data === 'string' && error.data.trim();
+            if (!hasBackendMessage) {
+                window.__connectionLossMonitor && window.__connectionLossMonitor.transportFailure();
+            }
         });
     }

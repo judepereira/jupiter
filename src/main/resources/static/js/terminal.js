@@ -116,6 +116,7 @@
             terminal.open(mount);
 
             const socket = new WebSocket(wsUrl);
+            let expectedClose = false;
             const entry = {mount, terminal, fitAddon, socket, resizeObserver: null, lastSentResizeSignature: ''};
             mounts.set(mount, entry);
 
@@ -147,23 +148,35 @@
                     } else if (payload.type === 'exit') {
                         terminal.writeln('');
                         terminal.writeln(`[terminal exited with code ${payload.code ?? 'unknown'}]`);
+                        expectedClose = true;
                         socket.close();
                     } else if (payload.type === 'error') {
                         terminal.writeln('');
                         terminal.writeln(`[terminal error] ${payload.message ?? 'Terminal error'}`);
+                        expectedClose = true;
                         socket.close();
                     }
                 } catch (_) {
                 }
             });
-            socket.addEventListener('close', () => {
-            });
-            socket.addEventListener('error', () => {
+            socket.addEventListener('close', event => {
+                if (event && event.wasClean) return;
+                if (expectedClose) return;
                 try {
                     terminal.writeln('');
                     terminal.writeln('[terminal connection error]');
                 } catch (_) {
                 }
+                window.__connectionLossMonitor && window.__connectionLossMonitor.transportFailure();
+            });
+            socket.addEventListener('error', () => {
+                if (expectedClose) return;
+                try {
+                    terminal.writeln('');
+                    terminal.writeln('[terminal connection error]');
+                } catch (_) {
+                }
+                window.__connectionLossMonitor && window.__connectionLossMonitor.transportFailure();
             });
         }
 

@@ -17,6 +17,7 @@
     <link rel="stylesheet" th:href="@{/css/terminal.css}">
     <link rel="stylesheet" th:href="@{/css/session.css}">
     <link rel="stylesheet" th:href="@{/css/settings.css}">
+    <link rel="stylesheet" th:href="@{/css/connection-loss.css}">
     <link rel="stylesheet" th:href="@{/css/mobile-rail.css}">
     <link rel="stylesheet" th:href="@{/css/responsive.css}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -69,12 +70,21 @@
 </div>
 
 <div id="system-balloon-root" aria-live="polite" aria-atomic="false"></div>
+<div id="connection-loss-overlay" class="connection-loss-overlay" hidden aria-hidden="true">
+    <div class="connection-loss-overlay__panel" role="status" aria-live="polite" aria-atomic="true">
+        <p class="connection-loss-overlay__eyebrow">Connection lost</p>
+        <h1 class="connection-loss-overlay__title">Cannot reach the server</h1>
+        <p class="connection-loss-overlay__message">Jupiter will reload automatically once the backend is reachable again.</p>
+        <button type="button" class="connection-loss-overlay__refresh" data-connection-loss-refresh>Refresh</button>
+    </div>
+</div>
 <div id="modal-root"></div>
 
 <script src="/webjars/dompurify/3.4.11/dist/purify.min.js"></script>
 <script src="/webjars/marked/18.0.5/lib/marked.umd.js"></script>
 <script src="/webjars/xterm/5.3.0/lib/xterm.js"></script>
     <script src="/webjars/xterm-addon-fit/0.8.0/lib/xterm-addon-fit.js"></script>
+<script type="module" th:src="@{/js/connection-loss-monitor.js}"></script>
 <script type="module" th:src="@{/js/system-balloons.js}"></script>
 <script type="module" th:src="@{/js/workspace-branch-sanitizer.js}"></script>
 <script type="module" th:src="@{/js/review-divider.js}"></script>
