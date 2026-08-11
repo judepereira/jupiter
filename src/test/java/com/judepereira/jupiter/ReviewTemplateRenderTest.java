@@ -68,10 +68,13 @@ public class ReviewTemplateRenderTest {
 
     @Test
     public void reviewAndChatPanelsShareTheConversationBackgroundVariable() throws Exception {
-        String css = Files.readString(Path.of("src/main/resources/static/app.css"));
+        String tokensCss = Files.readString(Path.of("src/main/resources/static/css/tokens.css"));
+        String layoutCss = Files.readString(Path.of("src/main/resources/static/css/layout.css"));
+        String chatCss = Files.readString(Path.of("src/main/resources/static/css/chat.css"));
 
-        assertThat(css).contains(".review-panel", "background: var(--conversation-panel-bg);");
-        assertThat(css).contains("#chat-history.messages", "background: var(--conversation-panel-bg);");
+        assertThat(tokensCss).contains("--conversation-panel-bg: #f3f7fb;");
+        assertThat(layoutCss).contains(".review-panel", "background: var(--conversation-panel-bg);");
+        assertThat(chatCss).contains("#chat-history.messages", "background: var(--conversation-panel-bg);");
     }
 
     private static WebContext webContext() {

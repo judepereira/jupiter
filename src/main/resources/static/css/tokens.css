@@ -1,0 +1,26 @@
+:root {
+    --rail-width: 216px;
+    --topbar-height: 42px;
+    --bottom-nav-height: 42px;
+    /* width of the review panel (can be overridden by JS during drag) */
+    --review-width: 40%;
+    --terminal-panel-height: 320px;
+    --rail-bg: #f8fafc;
+    --rail-fg: #15233f;
+    --panel-bg: #ffffff;
+    --panel-border: #dfe7f3;
+    --muted: #657492;
+    --accent: #1f6fff;
+    --divider-background-hover: rgb(0 0 0 / 0);
+    --topbar-bg: #061733;
+    --topbar-border: rgba(135, 163, 205, 0.22);
+    --shell-bg: #f7faff;
+    --terminal-shell-bg: #ffffff;
+    --terminal-shell-fg: #334155;
+    --terminal-shell-border: #d9e2ef;
+    --terminal-control-bg: #f8fafc;
+    --terminal-control-border: #cbd5e1;
+    --terminal-control-active: #e8eef8;
+    --conversation-panel-bg: #f3f7fb;
+    --mobile-offcanvas-transition: transform 180ms ease;
+}

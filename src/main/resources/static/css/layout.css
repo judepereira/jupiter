@@ -1,0 +1,215 @@
+/* Shell grid: left rail + top split (chat/review) + bottom terminal panel. */
+#shell.shell-root {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 var(--review-width);
+    gap: 6px;
+    align-items: stretch;
+    background: var(--shell-bg);
+    height: calc(100vh - var(--topbar-height) - var(--bottom-nav-height));
+    box-sizing: border-box;
+    padding: 0;
+    margin-top: var(--topbar-height);
+    overflow-x: hidden;
+}
+
+/* open: include divider + review column */
+#shell.shell-root.review-open {
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 var(--review-width);
+}
+
+/* closed: collapse the review column while preserving the left nav and chat. */
+#shell.shell-root.review-closed {
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 0;
+}
+
+/* Rails */
+.rail {
+    background: var(--rail-bg);
+    color: var(--rail-fg);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    border-right: 1px solid #dce5f2;
+    box-shadow: 1px 0 0 rgba(15, 38, 78, 0.03);
+}
+
+.left-rail {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+}
+
+.bottom-rail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1600;
+    width: 100%;
+    height: var(--bottom-nav-height);
+    padding: 0;
+    background: var(--topbar-bg);
+    border: 0;
+    border-top: 1px solid rgba(135, 163, 205, 0.18);
+    box-shadow: none;
+    color: #ffffff;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+
+.rail .panel-placeholder {
+    display: none;
+}
+
+/* hidden by default */
+.rail .rail-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 33px;
+    height: 29px;
+    border-radius: 6px;
+    background: #0b1931;
+    color: #ffffff;
+    border: 1px solid rgba(181, 202, 237, 0.24);
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.bottom-rail {
+    gap: 8px;
+}
+
+/* Main panels */
+.main-panel {
+    background: var(--panel-bg);
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
+    border: 1px solid var(--panel-border);
+    padding: 8px;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.left-panel {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+    margin: 8px 0 0 0;
+}
+
+.review-panel {
+    grid-column: 4;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: var(--conversation-panel-bg);
+    /* allow the review column to fully collapse when the shell
+       requests it (review-closed). Some browsers will honor an
+       element's min-width even when grid column is 0 which can
+       produce off-canvas overflow; using 0 here + a stronger
+       min-width when open prevents that. */
+    min-width: 0;
+    margin: 8px 8px 0 0;
+}
+
+.terminal-panel,
+#bottom-panel {
+    /*grid-column: 2 / -1;*/
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    height: var(--terminal-panel-height);
+    min-height: 0;
+    padding: 0;
+    margin: 0 8px 8px 0;
+    overflow: hidden;
+}
+
+/* Divider between left panel and review */
+.panel-divider {
+    grid-column: 3;
+    width: 5px;
+    background: transparent;
+    cursor: col-resize;
+    display: block;
+    align-self: stretch;
+    transition: background-color 120ms ease;
+}
+
+.panel-divider:hover {
+    background: var(--divider-background-hover);
+}
+
+.panel-divider:active,
+.panel-divider.dragging {
+    background: var(--divider-background-hover);
+}
+
+/* hide divider when review panel is closed or explicitly hidden by JS */
+.panel-divider.hidden {
+    display: none;
+}
+
+/* closed modifier: fully remove the panel from layout and visual chrome */
+.review-panel.closed {
+    display: none;
+}
+
+.terminal-panel.closed,
+#bottom-panel.closed {
+    display: none;
+}
+
+.terminal-panel-divider {
+    height: 6px;
+    margin: 0 8px 0 0;
+    background: transparent;
+    cursor: row-resize;
+    touch-action: none;
+    display: block;
+    border-radius: 999px;
+    transition: background-color 120ms ease;
+}
+
+.terminal-panel-divider:hover {
+    background: var(--divider-background-hover);
+}
+
+.terminal-panel-divider:active,
+.terminal-panel-divider.dragging {
+    background: var(--divider-background-hover);
+}
+
+/* Defensive closed-state styling when shell has collapsed the review
+   column. This forces the review panel to produce no width/footprint
+   and prevents horizontal overflow during HTMX swaps or transient
+   states where the element might still be present in the DOM. */
+#shell.shell-root.review-closed .review-panel {
+    min-width: 0 !important;
+    max-width: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+}
+
+/* When review is explicitly open on desktop ensure a reasonable
+   minimum width is respected for usability. The JS drag clamp will
+   also enforce a pixel minimum, but adding this rule preserves the
+   previous visual behavior while avoiding overflow when closed. */
+#shell.shell-root.review-open .review-panel {
+    min-width: 138px;
+}
+
+/* Chat area: scroll history + pinned composer */
