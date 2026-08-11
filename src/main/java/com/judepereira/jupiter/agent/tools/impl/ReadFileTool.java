@@ -2,8 +2,14 @@ package com.judepereira.jupiter.agent.tools.impl;
 
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
-import com.judepereira.jupiter.agent.tools.*;
+import com.judepereira.jupiter.agent.tools.AgentTool;
+import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
+import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
+import lombok.val;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -21,13 +27,16 @@ public class ReadFileTool implements AgentTool {
                     integer("endLine", "optional 1-based end line")
             ).required("path")
     );
-    private final int MAX_CHARS = 50_000;
 
     @Override
-    public String name() { return "read_file"; }
+    public String name() {
+        return "read_file";
+    }
 
     @Override
-    public ToolDefinition definition() { return DEF; }
+    public ToolDefinition definition() {
+        return DEF;
+    }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {
@@ -39,23 +48,39 @@ public class ReadFileTool implements AgentTool {
         if (!Files.exists(p) || !Files.isRegularFile(p)) {
             return new ToolExecutionResult(false, "file not found: " + rel, Map.of());
         }
-        String all = FileUtils.readUtf8(p, MAX_CHARS);
         Integer start = args.get("startLine") instanceof Number ? ((Number) args.get("startLine")).intValue() : null;
         Integer end = args.get("endLine") instanceof Number ? ((Number) args.get("endLine")).intValue() : null;
-        String text = all;
+        String text;
         if (start != null || end != null) {
-            String[] lines = all.split("\n", -1);
-            int s = start == null ? 1 : Math.max(1, start);
-            int e = end == null ? lines.length : Math.min(lines.length, end);
-            if (s > e) {
-                return new ToolExecutionResult(false, "invalid line range", Map.of());
+            int skipped = 0;
+            int read = 0;
+
+            if (start != null && end != null && start > end) {
+                return new ToolExecutionResult(false, "Invalid line range: start > end", Map.of());
             }
-            StringBuilder sb = new StringBuilder();
-            for (int i = s - 1; i < e; i++) {
-                sb.append(lines[i]);
-                if (i < e - 1) sb.append('\n');
+
+            val out = new StringBuilder();
+
+            try (val br = new BufferedReader(new InputStreamReader(Files.newInputStream(p), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    read++;
+                    if (start != null && skipped < start) {
+                        skipped++;
+                        continue;
+                    }
+
+                    if (end != null && read > end) {
+                        break;
+                    }
+
+                    out.append(line);
+                }
+
+                text = out.toString();
             }
-            text = sb.toString();
+        } else {
+            text = FileUtils.readUtf8(p, 1_000_000); // ~ 1 MB max - truncated by ToolRegistry later.
         }
         return new ToolExecutionResult(true, text, Map.of("path", rel));
     }
