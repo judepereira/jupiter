@@ -187,14 +187,6 @@
     min-width: 0;
 }
 
-.chat-quality-summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 14px;
-    font-size: 12px;
-    color: var(--muted);
-}
-
 .chat-compose-row {
     display: flex;
     gap: 8px;

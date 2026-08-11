@@ -267,25 +267,6 @@
             return select.options ? select.options[select.selectedIndex] : null;
         }
 
-        function updateChatQualitySummary(form) {
-            const agentSelect = form && form.querySelector('#chat-agent-select');
-            const modelSelect = form && form.querySelector('#chat-model-select');
-            const thinkingSelect = form && form.querySelector('#chat-thinking-select');
-            const currentModel = form && form.querySelector('[data-chat-current-model]');
-            const currentThinking = form && form.querySelector('[data-chat-current-thinking]');
-            const writeAccess = form && form.querySelector('[data-chat-write-access]');
-            const commandAccess = form && form.querySelector('[data-chat-command-access]');
-            if (!agentSelect || !modelSelect || !thinkingSelect || !currentModel || !currentThinking || !writeAccess || !commandAccess) return;
-
-            const agentOption = getChatSelectOption(agentSelect);
-            const modelOption = getChatSelectOption(modelSelect);
-            const thinkingOption = getChatSelectOption(thinkingSelect);
-            currentModel.textContent = modelOption ? modelOption.textContent : '';
-            currentThinking.textContent = thinkingOption ? thinkingOption.textContent : '';
-            writeAccess.textContent = agentOption && agentOption.dataset && agentOption.dataset.allowWrite === 'true' ? 'yes' : 'no';
-            commandAccess.textContent = agentOption && agentOption.dataset && agentOption.dataset.allowCommand === 'true' ? 'yes' : 'no';
-        }
-
         function syncChatDefaults(form) {
             const agentSelect = form && form.querySelector('#chat-agent-select');
             const modelSelect = form && form.querySelector('#chat-model-select');
@@ -297,7 +278,6 @@
 
             modelSelect.value = agentOption.dataset.defaultModel;
             thinkingSelect.value = agentOption.dataset.defaultThinking;
-            updateChatQualitySummary(form);
         }
 
         function bindChatControlListeners(form) {
@@ -305,14 +285,9 @@
             form.dataset.chatControlsBound = '1';
 
             const agentSelect = form.querySelector('#chat-agent-select');
-            const modelSelect = form.querySelector('#chat-model-select');
-            const thinkingSelect = form.querySelector('#chat-thinking-select');
-            if (!agentSelect || !modelSelect || !thinkingSelect) return;
+            if (!agentSelect) return;
 
             agentSelect.addEventListener('change', () => syncChatDefaults(form));
-            modelSelect.addEventListener('change', () => updateChatQualitySummary(form));
-            thinkingSelect.addEventListener('change', () => updateChatQualitySummary(form));
-            updateChatQualitySummary(form);
         }
 
         function resizeChatTextarea(textarea) {
