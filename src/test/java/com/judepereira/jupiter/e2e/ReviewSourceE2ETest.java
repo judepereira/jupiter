@@ -12,9 +12,9 @@ import com.microsoft.playwright.ConsoleMessage;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
-import com.microsoft.playwright.assertions.LocatorAssertions;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -152,13 +152,13 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 page.waitForResponse(
                         response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         firstFileButton::click);
-                assertTrue((Boolean) firstFileButton.evaluate("el => el.classList.contains('active')"));
+                assertReviewFileButtonActiveState(firstFileButton, true);
                 assertThat(page.locator("#diff-content")).containsText("first file diff");
 
                 page.waitForResponse(
                         response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         firstFileButton::click);
-                assertTrue(!(Boolean) firstFileButton.evaluate("el => el.classList.contains('active')"));
+                assertReviewFileButtonActiveState(firstFileButton, false);
                 assertThat(page.locator("#diff-content")).hasCount(0);
 
                 consoleErrors.clear();
@@ -166,14 +166,14 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 page.waitForResponse(
                         response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         secondFileButton::click);
-                assertTrue((Boolean) secondFileButton.evaluate("el => el.classList.contains('active')"));
+                assertReviewFileButtonActiveState(secondFileButton, true);
                 assertThat(page.locator("#diff-content")).containsText("second file diff");
                 assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
 
                 page.waitForResponse(
                         response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         secondFileButton::click);
-                assertTrue(!(Boolean) secondFileButton.evaluate("el => el.classList.contains('active')"));
+                assertReviewFileButtonActiveState(secondFileButton, false);
                 assertThat(page.locator("#diff-content")).hasCount(0);
             }
         } finally {
@@ -182,6 +182,14 @@ class ReviewSourceE2ETest extends E2ETestSupport {
             } else {
                 System.setProperty("user.home", previousHome);
             }
+        }
+    }
+
+    private static void assertReviewFileButtonActiveState(Locator fileButton, boolean active) {
+        if (active) {
+            assertThat(fileButton).containsClass("active");
+        } else {
+            assertThat(fileButton).not().containsClass("active");
         }
     }
 
