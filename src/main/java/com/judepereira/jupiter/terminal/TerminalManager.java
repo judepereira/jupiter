@@ -42,13 +42,13 @@ public class TerminalManager {
         this.lifecycleListeners = lifecycleListeners;
     }
 
-    public TerminalHandle createTerminal(String workspaceRoot) {
-        return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement());
+    public TerminalHandle createTerminal(String workspaceRoot, Map<String, String> environmentVariables) {
+        return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement(), environmentVariables);
     }
 
-    public TerminalHandle createTerminal(String workspaceRoot, String title) {
+    public TerminalHandle createTerminal(String workspaceRoot, String title, Map<String, String> environmentVariables) {
         String terminalId = UUID.randomUUID().toString();
-        PtyProcess process = startProcess(workspaceRoot);
+        PtyProcess process = startProcess(workspaceRoot, environmentVariables);
         TerminalRuntime runtime = new TerminalRuntime(terminalId, title, process);
         terminals.put(terminalId, runtime);
         runtime.startReader();
@@ -93,10 +93,11 @@ public class TerminalManager {
         }
     }
 
-    private PtyProcess startProcess(String workspaceRoot) {
+    private PtyProcess startProcess(String workspaceRoot, Map<String, String> environmentVariables) {
         try {
             String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank()).orElse("/bin/bash");
             Map<String, String> env = new HashMap<>(System.getenv());
+            env.putAll(environmentVariables);
             env.put("TERM", "xterm-256color");
             return new PtyProcessBuilder(new String[]{shell, "-l"}) // Force a login shell.
                     .setEnvironment(env)
