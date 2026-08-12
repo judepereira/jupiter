@@ -9,6 +9,7 @@ import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.ui.UiController;
@@ -256,7 +257,7 @@ public class UiControllerAsyncStreamingTests {
                 new SystemBalloonService(new ObjectMapper()), new com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService(),
                 mock(TerminalManager.class), new TerminalStateService(),
                 new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
-                contextCompactionService, "0.0.1-SNAPSHOT");
+                contextCompactionService, mock(CommandStreamService.class), "0.0.1-SNAPSHOT");
 
         for (int i = 1; i <= 7; i++) {
             Model model = new ConcurrentModel();
@@ -408,7 +409,7 @@ public class UiControllerAsyncStreamingTests {
                 new SystemBalloonService(new ObjectMapper()), new com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService(),
                 mock(TerminalManager.class), new TerminalStateService(),
                 new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
-                contextCompactionService, "0.0.1-SNAPSHOT");
+                contextCompactionService, mock(CommandStreamService.class), "0.0.1-SNAPSHOT");
 
         Model sendModel = new ConcurrentModel();
         ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);

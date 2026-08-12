@@ -15,6 +15,7 @@ import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
+import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
 import com.judepereira.jupiter.persistence.GitWorktreeException;
@@ -84,6 +85,7 @@ public class UiController {
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
     private final ContextCompactionService contextCompactionService;
+    private final CommandStreamService commandStreamService;
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
     private final SystemBalloonService systemBalloonService;
@@ -99,7 +101,7 @@ public class UiController {
                         SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService,
+                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -107,6 +109,7 @@ public class UiController {
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
         this.contextCompactionService = contextCompactionService;
+        this.commandStreamService = commandStreamService;
         this.systemBalloonService = systemBalloonService;
         this.terminalManager = terminalManager;
         this.terminalStateService = terminalStateService;
@@ -171,6 +174,7 @@ public class UiController {
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         model.addAttribute("newChatMessages", List.copyOf(newChatMessages));
+        model.addAttribute("pendingStreamBaseUrl", "/ui/chat/stream");
         boolean hasPending = view.activeSessionDetail() != null && view.activeSessionDetail().chatMessages().stream().anyMatch(ChatMessageView::pending);
         model.addAttribute("hasPending", hasPending);
         model.addAttribute("shellRefresh", shellRefresh);
@@ -237,6 +241,11 @@ public class UiController {
 
     @GetMapping("/ui/chat/stream/{assistantId}")
     public SseEmitter streamChat(@PathVariable("assistantId") String assistantId) {
+        SseEmitter commandEmitter = commandStreamService.tryConnect(assistantId);
+        if (commandEmitter != null) {
+            return commandEmitter;
+        }
+
         SseEmitter emitter = new SseEmitter(0L);
         ActiveStream active = activeStreams.get(assistantId);
         if (active == null || active.finished().get()) {

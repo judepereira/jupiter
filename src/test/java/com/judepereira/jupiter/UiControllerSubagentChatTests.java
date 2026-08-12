@@ -7,6 +7,7 @@ import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
@@ -131,6 +132,6 @@ public class UiControllerSubagentChatTests {
         var openAiOAuthService = new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient());
         return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, balloonService,
                 new WorkspaceRailRefreshService(), terminalManager, terminalStateService, openAiOAuthService,
-                contextCompactionService, "test");
+                contextCompactionService, mock(CommandStreamService.class), "test");
     }
 }

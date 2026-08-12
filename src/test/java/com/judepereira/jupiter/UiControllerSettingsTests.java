@@ -3,6 +3,7 @@ package com.judepereira.jupiter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
@@ -122,6 +123,7 @@ public class UiControllerSettingsTests {
                         new TerminalStateService(),
                         openAiOAuthService,
                         TestAppStateSupport.contextCompactionService(appStateService),
+                        mock(CommandStreamService.class),
                         "test"));
     }
 

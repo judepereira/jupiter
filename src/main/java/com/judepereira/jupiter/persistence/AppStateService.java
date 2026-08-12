@@ -358,6 +358,23 @@ public class AppStateService {
                 new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, List.of(), assistantMetadata));
     }
 
+    @Transactional
+    public ChatMessageView appendPendingAssistantMessage(long sessionId, String assistantPublicId, String content, ChatMessageMetadata assistantMetadata) {
+        Instant now = Instant.now();
+        long turnId = repository.nextTurnId(sessionId);
+        long assistantSequence = repository.nextMessageSequence(sessionId);
+        String assistantId = publicId(assistantPublicId);
+        repository.insertConversationMessage(sessionId, assistantId, "assistant", turnId, assistantSequence, content, null, null, true, false, true,
+                assistantMetadata == null ? null : assistantMetadata.agentId(),
+                assistantMetadata == null ? null : assistantMetadata.agentName(),
+                assistantMetadata == null ? null : assistantMetadata.modelId(),
+                assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
+                null,
+                now);
+        applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
+        return new ChatMessageView("assistant", content, now.toEpochMilli(), true, assistantId, List.of(), assistantMetadata);
+    }
+
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userText) {
         return appendUserMessageAndPendingAssistant(sessionId, null, null, userText);
     }
