@@ -125,9 +125,13 @@ class SubagentTaskE2ETest extends E2ETestSupport {
 
             TestAppConfig.awaitPrimaryStarted();
             page.locator("#chat-messages-list > li.pending").waitFor();
+            assertThat(page.locator(".session-item.active .pending-dot")).hasCount(1);
+            assertThat(page.locator(".session-item.active .failed-dot")).hasCount(0);
 
             page.reload();
             page.locator("#chat-messages-list > li.pending").waitFor();
+            assertThat(page.locator(".session-item.active .pending-dot")).hasCount(1);
+            assertThat(page.locator(".session-item.active .failed-dot")).hasCount(0);
             String reloadedText = page.locator("#chat-container").innerText();
             org.assertj.core.api.Assertions.assertThat(reloadedText).doesNotContain("no_job", "[Error: no_job]");
 
@@ -136,6 +140,8 @@ class SubagentTaskE2ETest extends E2ETestSupport {
 
             page.reload();
             assertThat(page.locator("#chat-messages-list")).containsText("Primary complete");
+            assertThat(page.locator(".session-item.active .pending-dot")).hasCount(0);
+            assertThat(page.locator(".session-item.active .failed-dot")).hasCount(0);
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job", "[Error: no_job]");
         } finally {
             TestAppConfig.reset();

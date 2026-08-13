@@ -12,7 +12,7 @@ public class SessionMarkedUnreadRailListener {
 
     private final WorkspaceRailRefreshService workspaceRailRefreshService;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onSessionMarkedUnread(SessionMarkedUnreadEvent event) {
         workspaceRailRefreshService.publishWorkspaceRailRefresh();
     }

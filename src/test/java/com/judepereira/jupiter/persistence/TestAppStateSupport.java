@@ -17,6 +17,7 @@ import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
+import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
@@ -54,6 +55,10 @@ public final class TestAppStateSupport {
     }
 
     public static AppStateTestContext appStateContext(ApplicationEventPublisher applicationEventPublisher) {
+        return appStateContext(applicationEventPublisher, new ActiveStreamRegistryService());
+    }
+
+    private static AppStateTestContext appStateContext(ApplicationEventPublisher applicationEventPublisher, ActiveStreamRegistryService activeStreamRegistryService) {
         Path dbFile;
         try {
             dbFile = Files.createTempDirectory("jupiter-app-state-").resolve("app-state.db");
@@ -67,11 +72,11 @@ public final class TestAppStateSupport {
         SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
 
         AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource));
-        AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher);
-        return new AppStateTestContext(service, repository);
+        AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher, activeStreamRegistryService);
+        return new AppStateTestContext(service, repository, activeStreamRegistryService);
     }
 
-    public record AppStateTestContext(AppStateService service, AppStateRepository repository) {}
+    public record AppStateTestContext(AppStateService service, AppStateRepository repository, ActiveStreamRegistryService activeStreamRegistryService) {}
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
         return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService());
@@ -88,12 +93,19 @@ public final class TestAppStateSupport {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, (String) invocation.getArgument(1));
         });
-        AppStateService appStateService = appStateService();
+        ActiveStreamRegistryService activeStreamRegistryService = new ActiveStreamRegistryService();
+        AppStateTestContext context = appStateContext(new ApplicationEventPublisher() {
+            @Override
+            public void publishEvent(Object event) {
+            }
+        }, activeStreamRegistryService);
+        AppStateService appStateService = context.service();
         return new UiController(harness, properties, appStateService,
                 new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
                 modelCatalogService,
                 new SystemBalloonService(new ObjectMapper()),
                 new WorkspaceRailRefreshService(),
+                activeStreamRegistryService,
                 terminalManager,
                 new TerminalStateService(),
                 new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),

@@ -65,7 +65,8 @@ public class AppStateServicePersistenceTests {
     @Test
     public void completedInactiveTurnsMarkOnlyThatSessionAndWorkspaceUnread(@TempDir Path projectPath) {
         List<Object> events = new ArrayList<>();
-        AppStateService service = TestAppStateSupport.appStateService(event -> events.add(event));
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> events.add(event));
+        AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         AppStateView initial = service.loadViewData();
@@ -77,6 +78,7 @@ public class AppStateServicePersistenceTests {
         QueuedChatTurn inactiveTurn = service.appendUserMessageAndPendingAssistant(sessionOneId, "hello from inactive session");
         service.appendToolCallTrace(sessionOneId, inactiveTurn.assistantMessage().id(),
                 new ToolCallTraceInput("tool-1", "read_file", Map.of("path", "README.md"), true, "read README", Map.of()));
+        context.activeStreamRegistryService().register(inactiveTurn.assistantMessage().id(), sessionOneId, projectPath.toString());
 
         AppStateView afterToolCall = service.loadViewData();
         assertThat(afterToolCall.sessions()).extracting(SessionView::id, SessionView::inProgress)
@@ -86,6 +88,7 @@ public class AppStateServicePersistenceTests {
         assertThat(afterToolCall.sessions()).extracting(SessionView::id, SessionView::unread)
                 .containsExactly(tuple(sessionOneId, false), tuple(sessionTwoId, false));
 
+        context.activeStreamRegistryService().unregister(inactiveTurn.assistantMessage().id());
         events.clear();
         service.completeAssistantMessage(sessionOneId, inactiveTurn.assistantMessage().id(), "reply one", List.of());
 
@@ -146,7 +149,8 @@ public class AppStateServicePersistenceTests {
 
     @Test
     public void completedTaskTurnWithHiddenChildSessionDoesNotSynthesizeTheOldCallOntoALaterPendingTurn(@TempDir Path projectPath) {
-        AppStateService service = TestAppStateSupport.appStateService();
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
@@ -163,7 +167,8 @@ public class AppStateServicePersistenceTests {
         assertThat(child.parentToolCallId()).isEqualTo("task-1");
 
         service.completeAssistantMessage(sessionId, firstTurn.assistantMessage().id(), "done", List.of(trace));
-        service.appendUserMessageAndPendingAssistant(sessionId, "next turn");
+        QueuedChatTurn nextTurn = service.appendUserMessageAndPendingAssistant(sessionId, "next turn");
+        context.activeStreamRegistryService().register(nextTurn.assistantMessage().id(), sessionId, projectPath.toString());
 
         List<ChatMessageView> messages = service.loadViewData().activeSessionDetail().chatMessages();
         assertThat(messages).filteredOn(message -> "assistant".equals(message.role()) && !message.pending())
@@ -172,16 +177,19 @@ public class AppStateServicePersistenceTests {
         assertThat(messages).filteredOn(message -> "assistant".equals(message.role()) && message.pending())
                 .singleElement()
                 .satisfies(message -> assertThat(message.toolCalls()).isEmpty());
+        context.activeStreamRegistryService().unregister(nextTurn.assistantMessage().id());
     }
 
     @Test
     public void pendingParentAssistantWithHiddenChildSessionShowsASyntheticRunningTaskCallBeforeTheTraceIsAppended(@TempDir Path projectPath) {
-        AppStateService service = TestAppStateSupport.appStateService();
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
 
-        service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        context.activeStreamRegistryService().register(turn.assistantMessage().id(), sessionId, projectPath.toString());
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
@@ -199,11 +207,13 @@ public class AppStateServicePersistenceTests {
             assertThat(call.subagentAgentId()).isEqualTo("engineer");
             assertThat(call.subagentAgentName()).isEqualTo("Engineer");
         });
+        context.activeStreamRegistryService().unregister(turn.assistantMessage().id());
     }
 
     @Test
     public void laterPendingAssistantWithHiddenChildSessionStillShowsASyntheticRunningTaskCallWhenAnEarlierTurnUsedTheSameToolCallId(@TempDir Path projectPath) {
-        AppStateService service = TestAppStateSupport.appStateService();
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
@@ -213,7 +223,8 @@ public class AppStateServicePersistenceTests {
         service.appendToolCallTrace(sessionId, firstTurn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, firstTurn.assistantMessage().id(), "done", List.of(trace));
 
-        service.appendUserMessageAndPendingAssistant(sessionId, "use the same task again");
+        QueuedChatTurn nextTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use the same task again");
+        context.activeStreamRegistryService().register(nextTurn.assistantMessage().id(), sessionId, projectPath.toString());
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
@@ -233,6 +244,7 @@ public class AppStateServicePersistenceTests {
         });
         assertThat(service.loadViewData().activeSessionDetail().chatMessages()).filteredOn(message -> "assistant".equals(message.role()) && !message.pending())
                 .anySatisfy(message -> assertThat(message.toolCalls()).extracting(call -> call.toolCallId()).contains("task-1"));
+        context.activeStreamRegistryService().unregister(nextTurn.assistantMessage().id());
     }
 
     @Test
@@ -250,7 +262,7 @@ public class AppStateServicePersistenceTests {
         QueuedChatTurn activeTurn = service.appendUserMessageAndPendingAssistant(activeSessionId, "active user");
         events.clear();
         service.completeAssistantMessage(activeSessionId, activeTurn.assistantMessage().id(), "active reply", List.of());
-        assertThat(events).extracting(Object::toString).containsExactly("WorkspaceRailRefreshEvent[]");
+        assertThat(events).isEmpty();
         assertThat(service.loadViewData().sessions()).filteredOn(session -> session.id() == activeSessionId)
                 .singleElement().satisfies(session -> assertThat(session.unread()).isFalse());
 
@@ -260,7 +272,7 @@ public class AppStateServicePersistenceTests {
         QueuedChatTurn hiddenTurn = service.appendUserMessageAndPendingAssistant(hiddenSessionId, "hidden user");
         events.clear();
         service.completeAssistantMessage(hiddenSessionId, hiddenTurn.assistantMessage().id(), "hidden reply", List.of());
-        assertThat(events).extracting(Object::toString).containsExactly("WorkspaceRailRefreshEvent[]");
+        assertThat(events).isEmpty();
         assertThat(repository.findSession(hiddenSessionId).unread()).isFalse();
         assertThat(repository.findSession(hiddenSessionId).hidden()).isTrue();
 
@@ -271,7 +283,7 @@ public class AppStateServicePersistenceTests {
         QueuedChatTurn unreadTurn = service.appendUserMessageAndPendingAssistant(unreadSessionId, "unread user");
         events.clear();
         service.completeAssistantMessage(unreadSessionId, unreadTurn.assistantMessage().id(), "unread reply", List.of());
-        assertThat(events).extracting(Object::toString).containsExactly("WorkspaceRailRefreshEvent[]");
+        assertThat(events).isEmpty();
         assertThat(repository.findSession(unreadSessionId).unread()).isTrue();
     }
 
