@@ -500,7 +500,9 @@
                     rail.outerHTML = html;
                     if (window.htmx) window.htmx.process(document.getElementById('workspace-session-rail'));
                 })
-                .catch(error => console.error(error));
+                .catch(error => {
+                    console.error(error);
+                });
         }
 
         if (!window.__workspaceRailRefreshSource) {
@@ -519,6 +521,10 @@
             workspaceRailRefreshSource.addEventListener('workspace-rail-refresh', scheduleWorkspaceRailRefresh);
             workspaceRailRefreshSource.addEventListener('error', error => {
                 console.error('Workspace rail stream error', error);
+                const hasBackendMessage = error && typeof error.data === 'string' && error.data.trim();
+                if (!hasBackendMessage) {
+                    window.__connectionLossMonitor && window.__connectionLossMonitor.transportFailure();
+                }
             });
         }
 
@@ -1571,18 +1577,25 @@
 
                     es.addEventListener('error', (e) => {
                         try {
+                            const rawData = e && typeof e.data === 'string' ? e.data.trim() : '';
                             const payload = parseStreamPayload(e);
-                            const data = (payload && payload.message) ? payload.message : ((e && e.data) ? e.data : 'Stream error');
-                            const textSpan = currentTextSpan();
-                            if (textSpan) {
-                                try {
-                                    const prevRaw = getRawChatMarkdown(textSpan);
-                                    renderChatMarkdown(textSpan, prevRaw + '\n[Error: ' + data + ']');
-                                } catch (_) {
+                            const data = (payload && payload.message) ? payload.message : (rawData || 'Stream error');
+                            if (rawData) {
+                                const textSpan = currentTextSpan();
+                                if (textSpan) {
                                     try {
-                                        textSpan.textContent = textSpan.textContent + '\n[Error: ' + data + ']';
+                                        const prevRaw = getRawChatMarkdown(textSpan);
+                                        renderChatMarkdown(textSpan, prevRaw + '\n[Error: ' + data + ']');
                                     } catch (_) {
+                                        try {
+                                            textSpan.textContent = textSpan.textContent + '\n[Error: ' + data + ']';
+                                        } catch (_) {
+                                        }
                                     }
+                                }
+                            } else {
+                                if (!(e && e.error)) {
+                                    window.__connectionLossMonitor && window.__connectionLossMonitor.transportFailure();
                                 }
                             }
                             const liveRow = currentRow();

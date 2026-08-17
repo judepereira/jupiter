@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
@@ -45,9 +46,8 @@ public class UiControllerTerminalTests {
         UiController controller = context.controller();
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
-        context.appStateService().updateProjectEnvironmentVariables(
-                context.appStateService().loadViewData().activeProject().id(),
-                List.of(new ProjectEnvironmentVariable("PROJECT_ENV", "alpha")));
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
 
         ConcurrentModel model = new ConcurrentModel();
         String view = controller.openTerminalPanel(model);
@@ -58,7 +58,7 @@ public class UiControllerTerminalTests {
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-1");
         assertThat(bottomPanelMode(model)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(model)).isTrue();
-        verify(context.terminalManager()).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString()), eq(Map.of("PROJECT_ENV", "alpha")));
+        verify(context.terminalManager()).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString(), Map.of("API_URL", "https://example.test")), eq(Map.of("PROJECT_ENV", "alpha")));
     }
 
     @Test
@@ -67,6 +67,8 @@ public class UiControllerTerminalTests {
         UiController controller = context.controller();
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
 
         controller.openTerminalPanel(new ConcurrentModel());
 
@@ -87,7 +89,7 @@ public class UiControllerTerminalTests {
         assertThat(activeTerminal(reopenedModel).id()).isEqualTo("terminal-1");
         assertThat(bottomPanelMode(reopenedModel)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(reopenedModel)).isTrue();
-        verify(context.terminalManager()).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString()), eq(Map.of()));
+        verify(context.terminalManager()).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString(), Map.of("API_URL", "https://example.test")), eq(Map.of()));
     }
 
     @Test
@@ -99,6 +101,8 @@ public class UiControllerTerminalTests {
         UiController controller = context.controller();
 
         controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
         long workspaceAId = context.appStateService().loadViewData().activeWorkspace().id();
 
         ConcurrentModel openModel = new ConcurrentModel();
@@ -168,9 +172,8 @@ public class UiControllerTerminalTests {
         UiController controller = context.controller();
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
-        context.appStateService().updateProjectEnvironmentVariables(
-                context.appStateService().loadViewData().activeProject().id(),
-                List.of(new ProjectEnvironmentVariable("PROJECT_ENV", "alpha")));
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
         controller.openTerminalPanel(new ConcurrentModel());
 
         ConcurrentModel model = new ConcurrentModel();
@@ -184,7 +187,7 @@ public class UiControllerTerminalTests {
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-2");
         assertThat(bottomPanelMode(model)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(model)).isTrue();
-        verify(context.terminalManager(), times(2)).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString()), eq(Map.of("PROJECT_ENV", "alpha")));
+        verify(context.terminalManager(), times(2)).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString(), Map.of("API_URL", "https://example.test")), eq(Map.of("PROJECT_ENV", "alpha")));
     }
 
     @Test
@@ -196,6 +199,7 @@ public class UiControllerTerminalTests {
 
         controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
         long projectId = context.appStateService().loadViewData().activeProject().id();
+        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
         String commands = "echo init-one\npwd\ntouch init-ran.txt";
         context.appStateService().updateProjectWorkspaceInitCommands(projectId, commands);
         context.appStateService().updateProjectEnvironmentVariables(
@@ -217,7 +221,7 @@ public class UiControllerTerminalTests {
         assertThat(bottomPanelMode(model)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(model)).isTrue();
         assertThat(context.terminalStateService().snapshot(context.appStateService().loadViewData().activeWorkspace().id()).bottomPanelOpen()).isTrue();
-        verify(context.terminalManager()).createTerminal(eq(worktreePath.toString()), eq("Workspace Init"), eq(Map.of("PROJECT_ENV", "alpha")));
+        verify(context.terminalManager()).createTerminal(eq(worktreePath.toString()), eq("Workspace Init", Map.of("API_URL", "https://example.test")), eq(Map.of("PROJECT_ENV", "alpha")));
         verify(context.terminalManager()).write(anyString(), eq(commands + "\n"));
     }
 
@@ -240,7 +244,6 @@ public class UiControllerTerminalTests {
         assertThat(activeTerminal(model)).isNull();
         assertThat(bottomPanelMode(model)).isEqualTo("none");
         assertThat(bottomPanelOpen(model)).isFalse();
-        verify(context.terminalManager(), never()).createTerminal(anyString(), anyMap());
         verify(context.terminalManager(), never()).createTerminal(anyString(), anyString(), anyMap());
     }
 
@@ -263,7 +266,6 @@ public class UiControllerTerminalTests {
         assertThat(activeTerminal(model)).isNull();
         assertThat(bottomPanelMode(model)).isEqualTo("none");
         assertThat(bottomPanelOpen(model)).isFalse();
-        verify(context.terminalManager(), never()).createTerminal(anyString(), anyMap());
         verify(context.terminalManager(), never()).createTerminal(anyString(), anyString(), anyMap());
     }
 
@@ -273,6 +275,8 @@ public class UiControllerTerminalTests {
         UiController controller = context.controller();
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
         controller.openTerminalPanel(new ConcurrentModel());
         controller.newTerminal(new ConcurrentModel());
 
@@ -331,7 +335,7 @@ public class UiControllerTerminalTests {
     private static TestContext newContext(Path workspaceRoot) {
         TerminalManager terminalManager = mock(TerminalManager.class);
         AtomicInteger sequence = new AtomicInteger();
-        when(terminalManager.createTerminal(anyString())).thenAnswer(invocation -> {
+        when(terminalManager.createTerminal(anyString(), anyMap())).thenAnswer(invocation -> {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
         });
@@ -339,7 +343,7 @@ public class UiControllerTerminalTests {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
         });
-        when(terminalManager.createTerminal(anyString(), anyString())).thenAnswer(invocation -> {
+        when(terminalManager.createTerminal(anyString(), anyString(), anyMap())).thenAnswer(invocation -> {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, (String) invocation.getArgument(1));
         });

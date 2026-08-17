@@ -42,16 +42,8 @@ public class TerminalManager {
         this.lifecycleListeners = lifecycleListeners;
     }
 
-    public TerminalHandle createTerminal(String workspaceRoot) {
-        return createTerminal(workspaceRoot, Map.of());
-    }
-
-    public TerminalHandle createTerminal(String workspaceRoot, Map<String, String> projectEnvironmentVariables) {
-        return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement(), projectEnvironmentVariables);
-    }
-
-    public TerminalHandle createTerminal(String workspaceRoot, String title) {
-        return createTerminal(workspaceRoot, title, Map.of());
+    public TerminalHandle createTerminal(String workspaceRoot, Map<String, String> environmentVariables) {
+        return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement(), environmentVariables);
     }
 
     public TerminalHandle createTerminal(String workspaceRoot, String title, Map<String, String> projectEnvironmentVariables) {
@@ -101,11 +93,11 @@ public class TerminalManager {
         }
     }
 
-    private PtyProcess startProcess(String workspaceRoot, Map<String, String> projectEnvironmentVariables) {
+    private PtyProcess startProcess(String workspaceRoot, Map<String, String> environmentVariables) {
         try {
             String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank()).orElse("/bin/bash");
             Map<String, String> env = new HashMap<>(System.getenv());
-            env.putAll(projectEnvironmentVariables);
+            env.putAll(environmentVariables);
             env.put("TERM", "xterm-256color");
             return new PtyProcessBuilder(new String[]{shell, "-l"}) // Force a login shell.
                     .setEnvironment(env)

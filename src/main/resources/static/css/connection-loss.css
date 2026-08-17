@@ -1,0 +1,66 @@
+#connection-loss-overlay[hidden] {
+    display: none !important;
+}
+
+.connection-loss-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2500;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(10px);
+}
+
+.connection-loss-overlay__panel {
+    width: min(100%, 520px);
+    border-radius: 20px;
+    padding: 28px 24px;
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+    text-align: center;
+}
+
+.connection-loss-overlay__eyebrow {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #b45309;
+}
+
+.connection-loss-overlay__title {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.1;
+    font-weight: 700;
+}
+
+.connection-loss-overlay__message {
+    margin: 14px 0 22px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #475569;
+}
+
+.connection-loss-overlay__refresh {
+    min-width: 120px;
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    background: #0f172a;
+}
+
+.connection-loss-overlay__refresh:hover {
+    background: #1e293b;
+}
+
+body.connection-loss-overlay-open {
+    overflow: hidden;
+}

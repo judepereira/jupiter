@@ -534,7 +534,7 @@ public class UiController {
                 terminalStateService.closeTerminalPane(view.activeWorkspace().id());
             } else {
                 if (state.terminalTabs().isEmpty()) {
-                    TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), projectEnvironmentVariables(view));
+                    TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), activeProjectEnvironmentVariables(view));
                     terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
                 }
                 terminalStateService.openTerminalPane(view.activeWorkspace().id());
@@ -550,7 +550,7 @@ public class UiController {
     public String newTerminal(Model model) {
         AppStateView view = appStateService.loadViewData();
         if (view.activeWorkspace() != null) {
-            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), projectEnvironmentVariables(view));
+            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), activeProjectEnvironmentVariables(view));
             terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
             terminalStateService.openTerminalPane(view.activeWorkspace().id());
             view = appStateService.loadViewData();
@@ -763,7 +763,7 @@ public class UiController {
         view = appStateService.loadViewData();
         String workspaceInitCommands = view.activeProject().workspaceInitCommands();
         if (workspaceInitCommands != null && !workspaceInitCommands.isBlank()) {
-            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), "Workspace Init", projectEnvironmentVariables(view));
+            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), "Workspace Init", activeProjectEnvironmentVariables(view));
             terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
             terminalStateService.openTerminalPane(view.activeWorkspace().id());
             terminalManager.write(terminal.id(), workspaceInitCommands.endsWith("\n") ? workspaceInitCommands : workspaceInitCommands + "\n");
@@ -1187,6 +1187,10 @@ public class UiController {
 
     private Project toProject(ProjectView view) {
         return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(), view.environmentVariables());
+    }
+
+    private Map<String, String> activeProjectEnvironmentVariables(AppStateView view) {
+        return appStateService.loadProjectEnvironmentVariables(view.activeProject().id());
     }
 
     private Workspace toWorkspace(WorkspaceView view) {
