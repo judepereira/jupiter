@@ -127,11 +127,11 @@ public class UiController {
                         SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService,
+                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, appVersion);
+                openAiOAuthService, contextCompactionService, commandStreamService, appVersion);
     }
 
     @GetMapping("/")
