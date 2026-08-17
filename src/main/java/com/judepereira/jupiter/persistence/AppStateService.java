@@ -365,9 +365,10 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
                 null,
+                null,
                 now);
-        return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, List.of(), null),
-                new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, List.of(), assistantMetadata));
+        return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, null, List.of(), null),
+                new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, null, List.of(), assistantMetadata));
     }
 
     @Transactional
@@ -382,9 +383,10 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
                 null,
+                null,
                 now);
         applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
-        return new ChatMessageView("assistant", content, now.toEpochMilli(), true, assistantId, List.of(), assistantMetadata);
+        return new ChatMessageView("assistant", content, now.toEpochMilli(), true, assistantId, null, List.of(), assistantMetadata);
     }
 
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userText) {
@@ -397,7 +399,7 @@ public class AppStateService {
         if (!message.pending() || !"assistant".equals(message.role())) {
             throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
         }
-        repository.updateMessageContentAndPending(message.id(), text, true, false);
+        repository.updateMessageContentAndPending(message.id(), text, true, false, null);
     }
 
     @Transactional
@@ -425,7 +427,7 @@ public class AppStateService {
         long assistantToolCallSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant", assistantMessage.turnId(), assistantToolCallSequence,
                 "", null, json(List.of(new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()))), false, true, false,
-                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), null, now);
+                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), null, null, now);
 
         long toolResultSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,
@@ -444,7 +446,7 @@ public class AppStateService {
             throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
         }
         repository.updateMessageToolCalls(assistantMessage.id(), null);
-        repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true);
+        repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true, Instant.now());
         markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
@@ -459,7 +461,7 @@ public class AppStateService {
             throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
         }
         repository.updateMessageToolCalls(assistantMessage.id(), null);
-        repository.updateMessageContentAndPending(assistantMessage.id(), errorText, false, false);
+        repository.updateMessageContentAndPending(assistantMessage.id(), errorText, false, false, Instant.now());
         markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
@@ -547,7 +549,7 @@ public class AppStateService {
         long sequence = repository.nextMessageSequence(sessionId);
         String id = UUID.randomUUID().toString();
         repository.insertConversationMessage(sessionId, id, "system", turnId, sequence, content, null, null, true, true, false,
-                null, null, null, null, compactedThroughTurnId, now);
+                null, null, null, null, compactedThroughTurnId, null, now);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
     }
 
@@ -662,7 +664,7 @@ public class AppStateService {
         }
         long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, ReviewSource.SESSION, null);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
-                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null, null, null, null, null, now);
+                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null, null, null, null, null, null, now);
         var workspace = repository.findWorkspace(workspaceId);
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateWorkspaceLastOpened(workspaceId, now);
@@ -908,6 +910,7 @@ public class AppStateService {
                 visibleRow.ts(),
                 false,
                 visibleRow.id(),
+                visibleRow.completedTs(),
                 visibleRow.toolCalls(),
                 visibleRow.metadata()));
         return updated;
@@ -928,7 +931,7 @@ public class AppStateService {
             if (updated == null) {
                 updated = new ArrayList<>(messages);
             }
-            updated.set(i, new ChatMessageView(message.role(), message.text(), message.ts(), false, message.id(), message.toolCalls(), message.metadata()));
+            updated.set(i, new ChatMessageView(message.role(), message.text(), message.ts(), false, message.id(), message.completedTs(), message.toolCalls(), message.metadata()));
         }
 
         return updated == null ? messages : updated;
@@ -1003,7 +1006,7 @@ public class AppStateService {
             ChatMessageView message = updated.get(entry.getKey());
             ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(message.toolCalls());
             mergedToolCalls.addAll(entry.getValue());
-            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(), message.pending(), message.id(), mergedToolCalls, message.metadata()));
+            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(), message.pending(), message.id(), message.completedTs(), mergedToolCalls, message.metadata()));
         }
 
         if (!legacySyntheticToolCalls.isEmpty()) {
@@ -1011,7 +1014,7 @@ public class AppStateService {
             ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(pendingAssistant.toolCalls());
             mergedToolCalls.addAll(legacySyntheticToolCalls);
             updated.set(latestPendingAssistantIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
-                    pendingAssistant.id(), mergedToolCalls, pendingAssistant.metadata()));
+                    pendingAssistant.id(), pendingAssistant.completedTs(), mergedToolCalls, pendingAssistant.metadata()));
         }
 
         return updated;
@@ -1035,7 +1038,8 @@ public class AppStateService {
             String toolCallId = trace.toolCallId() != null ? trace.toolCallId() : i < payloads.size() ? payloads.get(i).toolCallId() : null;
             toolCalls.add(toToolCallView(trace, toolCallId, sessionId));
         }
-        return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(), toolCalls,
+        return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(),
+                message.completedAt() == null ? null : message.completedAt().toEpochMilli(), toolCalls,
                 message.agentId() == null && message.agentName() == null && message.modelId() == null && message.thinkingLevel() == null ? null :
                         new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel()));
     }

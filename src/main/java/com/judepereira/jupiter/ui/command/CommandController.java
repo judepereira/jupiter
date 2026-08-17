@@ -52,9 +52,9 @@ public class CommandController {
 
         model.addAttribute("newChatMessages", List.of(
                 new ChatMessage(queuedTurn.userMessage().role(), queuedTurn.userMessage().text(), queuedTurn.userMessage().ts(), queuedTurn.userMessage().pending(),
-                        queuedTurn.userMessage().id(), List.of(), queuedTurn.userMessage().metadata()),
+                        queuedTurn.userMessage().id(), queuedTurn.userMessage().completedTs(), List.of(), queuedTurn.userMessage().metadata()),
                 new ChatMessage(queuedTurn.assistantMessage().role(), queuedTurn.assistantMessage().text(), queuedTurn.assistantMessage().ts(), queuedTurn.assistantMessage().pending(),
-                        queuedTurn.assistantMessage().id(), List.of(), queuedTurn.assistantMessage().metadata())));
+                        queuedTurn.assistantMessage().id(), queuedTurn.assistantMessage().completedTs(), List.of(), queuedTurn.assistantMessage().metadata())));
         model.addAttribute("pendingStreamBaseUrl", "/ui/chat/stream");
         model.addAttribute("subagentView", false);
         return "fragments/chat-response :: newRows";

@@ -16,15 +16,12 @@
     <th:block th:if="${newChatMessages != null}" th:fragment="newRows" th:with="pendingStreamUrlPrefix=${pendingStreamBaseUrl ?: '/ui/chat/stream'}">
         <!-- inline rows so HTMX can append <li> elements directly into #chat-messages-list -->
         <li th:each="m : ${newChatMessages}"
-            th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
+            th:attr="data-id=${m.id}, data-role=${m.role}, data-start-ts=${m.ts}, data-completed-ts=${m.completedTs}, data-agent-label=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentName + ' (' + m.metadata.agentId + ')'} : null, data-agent-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentId} : null, data-model-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.modelId} : null, data-thinking-level=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.thinkingLevel} : null, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
             th:classappend="${m.pending} ? 'pending' : ''">
             <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
 
-            <div class="chat-message-meta" th:if="${m.role == 'assistant' and m.metadata != null}">
-                <span class="chat-meta-chip" th:text="${m.metadata.agentName + ' (' + m.metadata.agentId + ')'}"></span>
-                <span class="chat-meta-chip" th:text="${m.metadata.modelId}"></span>
-                <span class="chat-meta-chip" th:text="${m.metadata.thinkingLevel}"></span>
-            </div>
+            <div class="chat-message-subtitle" th:if="${m.role == 'assistant' and (m.metadata != null or m.completedTs != null)}"
+                 th:attr="data-start-ts=${m.ts}, data-completed-ts=${m.completedTs}, data-agent-label=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentName + ' (' + m.metadata.agentId + ')'} : null, data-agent-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentId} : null, data-model-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.modelId} : null, data-thinking-level=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.thinkingLevel} : null"></div>
 
             <div th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls">
                 <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image'}">
