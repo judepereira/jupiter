@@ -43,12 +43,20 @@ public class TerminalManager {
     }
 
     public TerminalHandle createTerminal(String workspaceRoot) {
-        return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement());
+        return createTerminal(workspaceRoot, Map.of());
+    }
+
+    public TerminalHandle createTerminal(String workspaceRoot, Map<String, String> projectEnvironmentVariables) {
+        return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement(), projectEnvironmentVariables);
     }
 
     public TerminalHandle createTerminal(String workspaceRoot, String title) {
+        return createTerminal(workspaceRoot, title, Map.of());
+    }
+
+    public TerminalHandle createTerminal(String workspaceRoot, String title, Map<String, String> projectEnvironmentVariables) {
         String terminalId = UUID.randomUUID().toString();
-        PtyProcess process = startProcess(workspaceRoot);
+        PtyProcess process = startProcess(workspaceRoot, projectEnvironmentVariables);
         TerminalRuntime runtime = new TerminalRuntime(terminalId, title, process);
         terminals.put(terminalId, runtime);
         runtime.startReader();
@@ -93,10 +101,11 @@ public class TerminalManager {
         }
     }
 
-    private PtyProcess startProcess(String workspaceRoot) {
+    private PtyProcess startProcess(String workspaceRoot, Map<String, String> projectEnvironmentVariables) {
         try {
             String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank()).orElse("/bin/bash");
             Map<String, String> env = new HashMap<>(System.getenv());
+            env.putAll(projectEnvironmentVariables);
             env.put("TERM", "xterm-256color");
             return new PtyProcessBuilder(new String[]{shell, "-l"}) // Force a login shell.
                     .setEnvironment(env)
