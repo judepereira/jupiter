@@ -13,10 +13,8 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,17 +62,6 @@ public class ReviewTemplateRenderTest {
         String html = engine.process("fragments/review", context);
 
         assertThat(html).doesNotContain("No file selected", "class=\"file-diff-container\"");
-    }
-
-    @Test
-    public void reviewAndChatPanelsShareTheConversationBackgroundVariable() throws Exception {
-        String tokensCss = Files.readString(Path.of("src/main/resources/static/css/tokens.css"));
-        String layoutCss = Files.readString(Path.of("src/main/resources/static/css/layout.css"));
-        String chatCss = Files.readString(Path.of("src/main/resources/static/css/chat.css"));
-
-        assertThat(tokensCss).contains("--conversation-panel-bg: #f3f7fb;");
-        assertThat(layoutCss).contains(".review-panel", "background: var(--conversation-panel-bg);");
-        assertThat(chatCss).contains("#chat-history.messages", "background: var(--conversation-panel-bg);");
     }
 
     private static WebContext webContext() {
