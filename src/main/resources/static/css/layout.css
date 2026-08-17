@@ -4,7 +4,7 @@
     grid-template-rows: minmax(0, 1fr) auto;
     grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px var(--review-width);
     row-gap: 6px;
-    column-gap: 0;
+    column-gap: 6px;
     align-items: stretch;
     background: var(--shell-bg);
     height: calc(100vh - var(--topbar-height) - var(--bottom-nav-height));
