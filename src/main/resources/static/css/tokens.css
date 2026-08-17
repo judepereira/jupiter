@@ -5,6 +5,12 @@
     /* width of the review panel (can be overridden by JS during drag) */
     --review-width: 40%;
     --terminal-panel-height: 320px;
+    --radius-none: 0;
+    --radius-sm: 5px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-pill: 999px;
     --rail-bg: #f8fafc;
     --rail-fg: #15233f;
     --panel-bg: #ffffff;

@@ -96,7 +96,7 @@
         box-shadow: -2px 0 5px rgba(2, 12, 32, 0);
         will-change: transform;
         overflow: auto;
-        border-radius: 0;
+        border-radius: var(--radius-none);
         border-left: 1px solid var(--panel-border);
     }
 

@@ -16,9 +16,9 @@
     <th:block th:if="${newChatMessages != null}" th:fragment="newRows" th:with="pendingStreamUrlPrefix=${pendingStreamBaseUrl ?: '/ui/chat/stream'}">
         <!-- inline rows so HTMX can append <li> elements directly into #chat-messages-list -->
         <li th:each="m : ${newChatMessages}"
-            th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
-            th:classappend="${m.pending} ? 'pending' : ''">
-            <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
+            th:attr="data-id=${m.id}, data-role=${m.role}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
+            th:classappend="${'message-' + m.role + (m.pending ? ' pending' : '')}">
+            <span class="chat-message-text" th:text="${m.text}"></span>
 
             <div class="chat-message-meta" th:if="${m.role == 'assistant' and m.metadata != null}">
                 <span class="chat-meta-chip" th:text="${m.metadata.agentName + ' (' + m.metadata.agentId + ')'}"></span>

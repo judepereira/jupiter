@@ -33,7 +33,7 @@
     align-items: stretch;
     gap: 0;
     border-right: 1px solid #dce5f2;
-    box-shadow: 1px 0 0 rgba(15, 38, 78, 0.03);
+    box-shadow: none;
 }
 
 .left-rail {
@@ -74,7 +74,7 @@
     justify-content: center;
     width: 33px;
     height: 29px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     background: #0b1931;
     color: #ffffff;
     border: 1px solid rgba(181, 202, 237, 0.24);
@@ -89,9 +89,9 @@
 /* Main panels */
 .main-panel {
     background: var(--panel-bg);
-    border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
-    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    border: 0;
     padding: 8px;
     overflow: hidden;
     min-height: 0;
@@ -180,7 +180,7 @@
     cursor: row-resize;
     touch-action: none;
     display: block;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     transition: background-color 120ms ease;
 }
 

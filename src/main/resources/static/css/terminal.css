@@ -17,7 +17,7 @@
     border: 1px solid var(--terminal-control-border);
     background: var(--terminal-control-bg);
     color: var(--terminal-shell-fg);
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     cursor: pointer;
 }
 
@@ -56,7 +56,7 @@
     border: 1px solid var(--terminal-control-border);
     background: var(--terminal-control-bg);
     color: var(--terminal-shell-fg);
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     white-space: nowrap;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -78,7 +78,7 @@
     border: 0;
     background: transparent;
     box-shadow: none;
-    border-radius: 0;
+    border-radius: var(--radius-none);
     height: 100%;
 }
 
@@ -87,11 +87,11 @@
     background: transparent;
     color: inherit;
     border-left: 1px solid var(--terminal-control-border);
-    border-radius: 0;
+    border-radius: var(--radius-none);
 }
 
 .terminal-tab-add {
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     font-size: 17px;
     border: 1px solid var(--terminal-control-border);
     background: var(--terminal-control-bg);
@@ -145,7 +145,7 @@
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     overflow: hidden;
     background: var(--terminal-shell-bg);
     border: 1px solid var(--terminal-shell-border);

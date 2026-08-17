@@ -13,9 +13,9 @@
             <ul id="chat-messages-list" th:fragment="messages">
                 <!-- iterate and inline the single-row markup so Thymeleaf doesn't evaluate a standalone fragment -->
                 <li th:each="m : ${chatMessages}"
-                    th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
-                    th:classappend="${m.pending} ? 'pending' : ''">
-                    <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
+                    th:attr="data-id=${m.id}, data-role=${m.role}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
+                    th:classappend="${'message-' + m.role + (m.pending ? ' pending' : '')}">
+                    <span class="chat-message-text" th:text="${m.text}"></span>
 
                     <div class="chat-message-meta" th:if="${m.role == 'assistant' and m.metadata != null}">
                         <span class="chat-meta-chip" th:text="${m.metadata.agentName + ' (' + m.metadata.agentId + ')'}"></span>

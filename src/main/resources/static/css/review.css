@@ -16,7 +16,7 @@
 .review-source-select {
     max-width: 180px;
     padding: 4px 6px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--panel-border);
     background: var(--panel-bg);
 }
@@ -25,7 +25,7 @@
     background: transparent;
     border: 1px solid var(--panel-border);
     padding: 6px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     cursor: pointer;
 }
 
@@ -74,7 +74,7 @@
     font-family: monospace;
     background: #fff;
     padding: 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
 }
 
 /* file list styles */
@@ -95,7 +95,7 @@
     width: 100%;
     border: 1px solid transparent;
     background: transparent;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     color: #131d32;
     cursor: pointer;
     text-align: left;

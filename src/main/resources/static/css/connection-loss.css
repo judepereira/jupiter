@@ -15,7 +15,7 @@
 
 .connection-loss-overlay__panel {
     width: min(100%, 520px);
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     padding: 28px 24px;
     background: #ffffff;
     color: #0f172a;
@@ -42,7 +42,7 @@
 .connection-loss-overlay__refresh {
     min-width: 120px;
     border: 0;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     padding: 10px 18px;
     font-size: 14px;
     font-weight: 600;
