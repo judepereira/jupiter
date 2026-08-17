@@ -3,6 +3,7 @@ package com.judepereira.jupiter.ui.balloon;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
@@ -127,6 +128,7 @@ class UiControllerInvalidCheckoutBranchTests {
                 new TerminalStateService(),
                 new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
                 TestAppStateSupport.contextCompactionService(appStateService),
+                mock(CommandStreamService.class),
                 "0.0.1-SNAPSHOT");
     }
 

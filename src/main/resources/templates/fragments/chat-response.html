@@ -13,10 +13,10 @@
 
     <!-- in-band: only append the new rows to the existing messages list -->
     <!-- emit only the <li> rows so HTMX can append directly into #chat-messages-list -->
-    <th:block th:if="${newChatMessages != null}" th:fragment="newRows">
+    <th:block th:if="${newChatMessages != null}" th:fragment="newRows" th:with="pendingStreamUrlPrefix=${pendingStreamBaseUrl ?: '/ui/chat/stream'}">
         <!-- inline rows so HTMX can append <li> elements directly into #chat-messages-list -->
         <li th:each="m : ${newChatMessages}"
-            th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? @{/ui/chat/stream/{id}(id=${m.id})} : null"
+            th:attr="data-id=${m.id}, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
             th:classappend="${m.pending} ? 'pending' : ''">
             <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
 

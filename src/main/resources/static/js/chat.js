@@ -290,6 +290,247 @@
             agentSelect.addEventListener('change', () => syncChatDefaults(form));
         }
 
+        const commandPickerState = {
+            open: false,
+            query: '/',
+            activeIndex: 0,
+            catalog: [],
+            textarea: null,
+            modal: null,
+            input: null,
+            list: null,
+            fetchPromise: null
+        };
+
+        function getCommandModalRoot() {
+            return document.getElementById('modal-root');
+        }
+
+        function closeCommandPicker() {
+            const root = getCommandModalRoot();
+            if (root) root.innerHTML = '';
+            commandPickerState.open = false;
+            commandPickerState.textarea = null;
+            commandPickerState.modal = null;
+            commandPickerState.input = null;
+            commandPickerState.list = null;
+        }
+
+        function fetchCommandCatalog() {
+            if (!commandPickerState.fetchPromise) {
+                commandPickerState.fetchPromise = fetch('/ui/commands/catalog', {headers: {'HX-Request': 'true'}})
+                    .then(response => {
+                        if (!response.ok) throw new Error('Failed to load command catalog');
+                        return response.json();
+                    });
+            }
+            return commandPickerState.fetchPromise;
+        }
+
+        function commandMatchesQuery(command, query) {
+            const normalized = String(query || '').trim().toLowerCase();
+            if (!normalized || normalized === '/') return true;
+            return ('/' + String(command && command.id ? command.id : '').toLowerCase()).startsWith(normalized);
+        }
+
+        function filteredCommands(query) {
+            return (commandPickerState.catalog || []).filter(command => commandMatchesQuery(command, query));
+        }
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderCommandPickerList() {
+            const list = commandPickerState.list;
+            const input = commandPickerState.input;
+            if (!list || !input) return;
+
+            const query = input.value || '/';
+            commandPickerState.query = query;
+            const commands = filteredCommands(query);
+            if (commandPickerState.activeIndex >= commands.length) {
+                commandPickerState.activeIndex = commands.length ? commands.length - 1 : 0;
+            }
+
+            list.innerHTML = commands.map((command, index) => {
+                const id = String(command.id || '');
+                const name = String(command.name || id);
+                const description = String(command.description || '');
+                const type = String(command.type || command.kind || '').toLowerCase();
+                const active = index === commandPickerState.activeIndex ? ' is-active' : '';
+                return '<li class="command-modal-item' + active + '" data-command-id="' + escapeHtml(id) + '" data-command-type="' + escapeHtml(type) + '">' +
+                    '<div class="command-modal-item-command">/' + escapeHtml(id) + '</div>' +
+                    '<div class="command-modal-item-meta">' + escapeHtml(name) + (description ? ' — ' + escapeHtml(description) : '') + '</div>' +
+                    '<div class="command-modal-item-kind">' + escapeHtml(type) + '</div>' +
+                    '</li>';
+            }).join('');
+
+            const activeItem = list.querySelector('.command-modal-item.is-active');
+            if (activeItem && activeItem.scrollIntoView) {
+                activeItem.scrollIntoView({block: 'nearest'});
+            }
+        }
+
+        function setCommandPickerActiveIndex(nextIndex) {
+            const commands = filteredCommands(commandPickerState.input ? commandPickerState.input.value : '/');
+            if (!commands.length) {
+                commandPickerState.activeIndex = 0;
+                renderCommandPickerList();
+                return;
+            }
+            const normalized = (nextIndex + commands.length) % commands.length;
+            commandPickerState.activeIndex = normalized;
+            renderCommandPickerList();
+        }
+
+        function insertCommandText(textarea, text) {
+            textarea.value = String(text || '');
+            resizeChatTextarea(textarea);
+            textarea.focus({preventScroll: true});
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+
+        function appendChatHtml(html) {
+            const list = document.getElementById('chat-messages-list');
+            if (!list || !html) return;
+            list.insertAdjacentHTML('beforeend', html);
+            try {
+                renderAllChatMarkdown(list);
+            } catch (_) {
+            }
+            try {
+                bindPendingStreams();
+            } catch (_) {
+            }
+            checkAndMaybeScroll();
+        }
+
+        function executeCommand(command) {
+            if (!command) return;
+            const textarea = commandPickerState.textarea || document.getElementById('chat-input');
+            if (String(command.type || command.kind || '').toLowerCase() === 'prompt') {
+                if (textarea) {
+                    insertCommandText(textarea, command.body || '');
+                }
+                closeCommandPicker();
+                return;
+            }
+
+            if (textarea) {
+                textarea.value = '';
+                resizeChatTextarea(textarea);
+            }
+            closeCommandPicker();
+            fetch('/ui/commands/' + encodeURIComponent(command.id) + '/execute', {
+                method: 'POST',
+                headers: {'HX-Request': 'true'}
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error('Command execution failed');
+                    return response.text();
+                })
+                .then(html => appendChatHtml(html))
+                .catch(error => console.error(error));
+        }
+
+        function executeCommandAtIndex(index) {
+            const commands = filteredCommands(commandPickerState.input ? commandPickerState.input.value : '/');
+            const command = commands[index] || commands[0];
+            if (!command) return;
+            commandPickerState.activeIndex = Math.max(0, commands.indexOf(command));
+            renderCommandPickerList();
+            executeCommand(command);
+        }
+
+        function openCommandPicker(textarea, query) {
+            const root = getCommandModalRoot();
+            if (!root) return;
+            const value = query || textarea.value || '/';
+            commandPickerState.open = true;
+            commandPickerState.textarea = textarea;
+            commandPickerState.query = value;
+            commandPickerState.activeIndex = 0;
+            textarea.value = value;
+            resizeChatTextarea(textarea);
+            root.innerHTML = '' +
+                '<div id="command-modal" class="command-modal">' +
+                '<div class="command-modal-backdrop" data-command-modal-close="1"></div>' +
+                '<div class="command-modal-card" role="dialog" aria-modal="true" aria-labelledby="command-modal-title">' +
+                '<div class="command-modal-header">' +
+                '<h4 id="command-modal-title">Commands</h4>' +
+                '<button type="button" class="btn-close" aria-label="Close" data-command-modal-close="1"></button>' +
+                '</div>' +
+                '<div class="command-modal-body">' +
+                '<input class="command-modal-input" type="text" value="' + escapeHtml(value) + '" autocomplete="off" spellcheck="false" aria-label="Command filter">' +
+                '<ul class="command-modal-list"></ul>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            commandPickerState.modal = root.querySelector('#command-modal');
+            commandPickerState.input = root.querySelector('.command-modal-input');
+            commandPickerState.list = root.querySelector('.command-modal-list');
+            if (!commandPickerState.input || !commandPickerState.list) return;
+            commandPickerState.input.value = value;
+            commandPickerState.input.focus({preventScroll: true});
+            commandPickerState.input.setSelectionRange(value.length, value.length);
+
+            const closeHandler = event => {
+                if (event.target && event.target.dataset && event.target.dataset.commandModalClose === '1') {
+                    closeCommandPicker();
+                }
+            };
+
+            root.addEventListener('click', closeHandler, {once: true});
+            commandPickerState.input.addEventListener('input', renderCommandPickerList);
+            commandPickerState.input.addEventListener('keydown', event => {
+                if (event.isComposing) return;
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeCommandPicker();
+                    return;
+                }
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setCommandPickerActiveIndex(commandPickerState.activeIndex + 1);
+                    return;
+                }
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setCommandPickerActiveIndex(commandPickerState.activeIndex - 1);
+                    return;
+                }
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    executeCommandAtIndex(commandPickerState.activeIndex);
+                }
+            });
+
+            commandPickerState.list.addEventListener('click', event => {
+                const item = event.target && event.target.closest ? event.target.closest('.command-modal-item') : null;
+                if (!item) return;
+                const index = Array.prototype.indexOf.call(commandPickerState.list.children, item);
+                if (index < 0) return;
+                executeCommandAtIndex(index);
+            });
+
+            root.querySelectorAll('[data-command-modal-close="1"]').forEach(el => {
+                el.addEventListener('click', closeCommandPicker, {once: true});
+            });
+
+            fetchCommandCatalog()
+                .then(catalog => {
+                    commandPickerState.catalog = Array.isArray(catalog) ? catalog : [];
+                    renderCommandPickerList();
+                })
+                .catch(error => console.error(error));
+        }
+
         function resizeChatTextarea(textarea) {
             if (!textarea) return;
             textarea.style.height = 'auto';
@@ -320,15 +561,15 @@
                 if (textarea.dataset.chatBound !== '1') {
                     textarea.dataset.chatBound = '1';
 
-                    // Handle keyboard: Enter submits, Option+Enter inserts a newline.
-                    // Respect IME composition.
                     function onKeyDown(e) {
+                        if (commandPickerState.open) {
+                            return;
+                        }
                         const isEnter = e.key === 'Enter' || e.keyCode === 13;
                         if (!isEnter) return;
-                        if (e.isComposing) return; // IME in progress
-                        if (e.altKey) return; // Option+Enter should keep the textarea newline behavior
+                        if (e.isComposing) return;
+                        if (e.altKey) return;
 
-                        // Submit on plain Enter.
                         e.preventDefault();
                         if (typeof form.requestSubmit === 'function') {
                             form.requestSubmit();
@@ -337,25 +578,34 @@
                         }
                     }
 
-                    textarea.addEventListener('input', () => resizeChatTextarea(textarea));
+                    textarea.addEventListener('input', () => {
+                        resizeChatTextarea(textarea);
+                    });
                     textarea.addEventListener('keydown', onKeyDown);
-                    // Clear textarea after successful htmx form submit when targeting messages list
+                    textarea.addEventListener('beforeinput', event => {
+                        if (commandPickerState.open) return;
+                        if (textarea.selectionStart !== 0 || textarea.selectionEnd !== 0 || textarea.value) return;
+                        if (event.inputType !== 'insertText' || event.data !== '/') return;
+                        event.preventDefault();
+                        openCommandPicker(textarea, '/');
+                    });
+                    textarea.addEventListener('input', () => {
+                        if (commandPickerState.open) return;
+                        if (!textarea.value.startsWith('/')) return;
+                        openCommandPicker(textarea, textarea.value);
+                    });
                     if (!htmxAfterOnLoadBound) {
                         htmxAfterOnLoadBound = true;
                         document.body.addEventListener('htmx:afterOnLoad', function (evt) {
                             try {
                                 const detail = evt && evt.detail;
-                                const target = detail && detail.target;
-                                // Only clear when the request was a form submit to /ui/chat/send
                                 if (!detail || !detail.xhr) return;
-                                // HTMX exposes the request path on detail.path in some builds; fallback to inspecting the request URL
                                 const path = (detail.path) || (detail.xhr && detail.xhr.responseURL) || '';
                                 if (!path) return;
                                 if (!path.includes('/ui/chat/send')) return;
 
                                 const textarea = document.getElementById('chat-input');
                                 if (!textarea) return;
-                                // Clear and reset height
                                 textarea.value = '';
                                 resizeChatTextarea(textarea);
                             } catch (_) {
@@ -364,15 +614,11 @@
                     }
                 }
 
-                // Initial resize to match any prefilled content
-                // Use rAF to allow browser to compute styles if needed
                 requestAnimationFrame(() => resizeChatTextarea(textarea));
                 bindChatControlListeners(form);
-                // Bind auto-scroll listeners once chat composer exists on page
-                // and perform an initial check/scroll.
                 bindAutoScrollListeners();
                 checkAndMaybeScroll();
-            } catch (_) { /* defensive - don't break other UI */
+            } catch (_) {
             }
         }
 

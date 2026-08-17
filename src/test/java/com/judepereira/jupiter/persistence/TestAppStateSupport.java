@@ -11,6 +11,7 @@ import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.terminal.TerminalHandle;
 import com.judepereira.jupiter.terminal.TerminalManager;
@@ -100,6 +101,7 @@ public final class TestAppStateSupport {
                 new TerminalStateService(),
                 new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
                 contextCompactionService(appStateService),
+                mock(CommandStreamService.class),
                 "0.0.1-SNAPSHOT");
     }
 
