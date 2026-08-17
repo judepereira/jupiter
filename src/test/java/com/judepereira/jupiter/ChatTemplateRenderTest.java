@@ -17,9 +17,9 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
 import java.nio.charset.StandardCharsets;
-import java.util.regex.Pattern;
 import java.util.Locale;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,14 +30,7 @@ public class ChatTemplateRenderTest {
         AgentDefinitionService agentService = new AgentDefinitionService(new ObjectMapper());
         var modelService = ModelCatalogTestSupport.modelCatalogService();
 
-        SpringTemplateEngine engine = new SpringTemplateEngine();
-        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
-        resolver.setPrefix("templates/");
-        resolver.setSuffix(".html");
-        resolver.setTemplateMode(TemplateMode.HTML);
-        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        resolver.setCacheable(false);
-        engine.setTemplateResolver(resolver);
+        SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
@@ -49,7 +42,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
         context.setVariable("chatMessages", List.of(
-                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", List.of(),
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(),
                         new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"))
         ));
         context.setVariable("agents", agentService.listPrimaryAgents());
@@ -64,6 +57,68 @@ public class ChatTemplateRenderTest {
         assertThat(html).contains("id=\"chat-agent-select\"", "id=\"chat-model-select\"", "id=\"chat-thinking-select\"");
         assertThat(html).contains("class=\"chat-message-meta\"", "class=\"chat-meta-chip\"", "Plan (plan)", "Engineer", "GPT-5.5", "HIGH");
         assertThat(html).doesNotContain("Explore");
+    }
+
+    @Test
+    public void chatFragmentRendersCompletedAssistantSubtitleButNotPendingOne() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("hasPending", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("subagentView", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("reviewSource", null);
+        context.setVariable("selectedFile", null);
+        context.setVariable("chatMessages", List.of(
+                new UiController.ChatMessage("assistant", "Done", 1L, false, "assistant-done", 2L, List.of(), null),
+                new UiController.ChatMessage("assistant", "Thinking…", 3L, true, "assistant-pending", null, List.of(), null)
+        ));
+
+        String html = engine.process("fragments/chat", context);
+
+        assertThat(html).contains("data-completed-ts=\"2\"");
+        assertThat(html).contains("assistant-done");
+        assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
+        assertThat(html).contains("assistant-done");
+        assertThat(html).contains("chat-message-subtitle");
+        assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
+    }
+
+    @Test
+    public void chatResponseFragmentRendersCompletedAssistantSubtitleButNotPendingOne() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("reviewSource", null);
+        context.setVariable("selectedFile", null);
+        context.setVariable("newChatMessages", List.of(
+                new UiController.ChatMessage("assistant", "Done", 1L, false, "assistant-done", 2L, List.of(), null),
+                new UiController.ChatMessage("assistant", "Thinking…", 3L, true, "assistant-pending", null, List.of(), null)
+        ));
+
+        String html = engine.process("fragments/chat-response", context);
+
+        assertThat(html).contains("data-completed-ts=\"2\"");
+        assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
+    }
+
+    private static SpringTemplateEngine engine() {
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+        return engine;
     }
 
     @Test
@@ -88,7 +143,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
         context.setVariable("newChatMessages", List.of(
-                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null,
                         List.of(new UiController.ToolCallView("tool-call-1", "task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
                                 42L, "engineer", "Engineer")), null)
         ));
@@ -117,7 +172,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
         context.setVariable("newChatMessages", List.of(
-                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", List.of(
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(
                         new UiController.ToolCallView("read-1", "read", true, "read-1 input", "read-1 output", false, false, null, null, null),
                         new UiController.ToolCallView("read-2", "read", true, "read-2 input", "read-2 output", false, false, null, null, null),
                         new UiController.ToolCallView("task-1", "task", true, "task input", "task output", false, false, null, null, null),
@@ -154,7 +209,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
         context.setVariable("newChatMessages", List.of(
-                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", List.of(
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(
                         new UiController.ToolCallView("read-1", "read", true, "read-1 input", "read-1 output", false, false, null, null, null),
                         new UiController.ToolCallView("read-2", "read", true, "read-2 input", "read-2 output", false, false, null, null, null),
                         new UiController.ToolCallView("task-1", "task", true, "task-1 input", "task-1 output", false, false, 41L, "engineer-1", "Engineer 1"),
@@ -201,8 +256,8 @@ public class ChatTemplateRenderTest {
         context.setVariable("subagentAgentId", "engineer");
         context.setVariable("subagentSessionId", 42L);
         context.setVariable("chatMessages", List.of(
-                new UiController.ChatMessage("user", "Primary task:\nwrite a file", 1L, false, "user-1", List.of(), null),
-                new UiController.ChatMessage("assistant", "child final", 2L, false, "assistant-1", List.of(), null)
+                new UiController.ChatMessage("user", "Primary task:\nwrite a file", 1L, false, "user-1", null, List.of(), null),
+                new UiController.ChatMessage("assistant", "child final", 2L, false, "assistant-1", null, List.of(), null)
         ));
         context.setVariable("agents", agentService.listPrimaryAgents());
         context.setVariable("models", modelService.list());
@@ -242,7 +297,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
         context.setVariable("chatMessages", List.of(
-                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null,
                         List.of(new UiController.ToolCallView("tool-call-1", "task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
                                 42L, "engineer", "Engineer")), null)
         ));

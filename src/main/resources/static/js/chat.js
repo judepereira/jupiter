@@ -624,11 +624,6 @@
 
         // Run once on load to bind any existing chat fragment
         initChatComposer();
-        // Initial render of any server-rendered messages into markdown
-        try {
-            renderAllChatMarkdown();
-        } catch (_) {
-        }
 
         // Helper functions: render chat message text as sanitized markdown while
         // preserving a raw-source copy on the element to support streaming updates.
@@ -702,6 +697,107 @@
                 });
             } catch (_) {
             }
+        }
+
+        function formatChatDuration(startTs, completedTs) {
+            const start = Number(startTs);
+            const end = Number(completedTs);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) return '';
+
+            let totalSeconds = Math.max(0, Math.floor((end - start) / 1000));
+            const hours = Math.floor(totalSeconds / 3600);
+            totalSeconds -= hours * 3600;
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds - (minutes * 60);
+
+            if (hours > 0) {
+                return minutes > 0 ? hours + 'h ' + minutes + 'm' : hours + 'h';
+            }
+            if (minutes > 0) {
+                return seconds > 0 ? minutes + 'm ' + seconds + 's' : minutes + 'm';
+            }
+            return seconds + 's';
+        }
+
+        const chatCompletionTimeFormatter = new Intl.DateTimeFormat(undefined, {timeStyle: 'short'});
+        const chatCompletionDateFormatter = new Intl.DateTimeFormat(undefined, {weekday: 'long', day: 'numeric', month: 'long'});
+
+        function formatChatCompletedTs(completedTs) {
+            const completed = new Date(Number(completedTs));
+            if (Number.isNaN(completed.getTime())) return '';
+
+            const now = new Date();
+            const sameDay = completed.getFullYear() === now.getFullYear() && completed.getMonth() === now.getMonth() && completed.getDate() === now.getDate();
+            if (sameDay) {
+                return chatCompletionTimeFormatter.format(completed);
+            }
+
+            const parts = chatCompletionDateFormatter.formatToParts(completed);
+            const weekday = parts.find(part => part.type === 'weekday');
+            const day = parts.find(part => part.type === 'day');
+            const month = parts.find(part => part.type === 'month');
+            const dateText = [weekday && weekday.value, day && day.value, month && month.value].filter(Boolean).join(' ');
+            return dateText + ', ' + chatCompletionTimeFormatter.format(completed);
+        }
+
+        function formatChatSubtitle(subtitle) {
+            try {
+                if (!subtitle || !subtitle.dataset) return;
+                const duration = formatChatDuration(subtitle.dataset.startTs, subtitle.dataset.completedTs);
+                const completedTs = formatChatCompletedTs(subtitle.dataset.completedTs);
+                subtitle.textContent = duration && completedTs ? duration + ' · ' + completedTs : (duration || completedTs);
+            } catch (_) {
+            }
+        }
+
+        function updateChatRowCompletion(row, completedTs) {
+            try {
+                if (!row || !completedTs) return;
+                row.dataset.completedTs = String(completedTs);
+                ensureChatMessageSubtitle(row, completedTs);
+            } catch (_) {
+            }
+        }
+
+        function formatAllChatSubtitles(root) {
+            try {
+                const base = root || document;
+                const subtitles = base.querySelectorAll && base.querySelectorAll('.chat-message-subtitle');
+                if (!subtitles) return;
+                subtitles.forEach(formatChatSubtitle);
+            } catch (_) {
+            }
+        }
+
+        function ensureChatMessageSubtitle(row, completedTs) {
+            try {
+                if (!row || !row.dataset || row.dataset.role !== 'assistant') return;
+                const completed = completedTs != null ? String(completedTs) : '';
+                if (!completed) return;
+
+                row.dataset.completedTs = completed;
+                let subtitle = row.querySelector('.chat-message-subtitle');
+                if (!subtitle) {
+                    subtitle = document.createElement('div');
+                    subtitle.className = 'chat-message-subtitle';
+                    subtitle.dataset.startTs = row.dataset.startTs || '';
+                    subtitle.dataset.completedTs = completed;
+                    const before = row.querySelector('.chat-message-meta, .tool-calls');
+                    row.insertBefore(subtitle, before);
+                } else {
+                    subtitle.dataset.startTs = subtitle.dataset.startTs || row.dataset.startTs || '';
+                    subtitle.dataset.completedTs = completed;
+                }
+                formatChatSubtitle(subtitle);
+            } catch (_) {
+            }
+        }
+
+        // Initial render of any server-rendered messages into markdown and subtitles.
+        try {
+            renderAllChatMarkdown();
+            formatAllChatSubtitles();
+        } catch (_) {
         }
 
         function getCurrentOpenSubagentSessionId() {
@@ -1808,6 +1904,9 @@
                                 liveRow.classList.remove('pending');
                                 liveRow.removeAttribute('data-pending');
                                 liveRow.dataset.streamBound = '0';
+                                if (payload && payload.completedTs != null) {
+                                    updateChatRowCompletion(liveRow, payload.completedTs);
+                                }
                             }
                         } catch (_) {
                         }
@@ -1849,6 +1948,9 @@
                                 liveRow.classList.remove('pending');
                                 liveRow.removeAttribute('data-pending');
                                 liveRow.dataset.streamBound = '0';
+                                if (payload && payload.completedTs != null) {
+                                    updateChatRowCompletion(liveRow, payload.completedTs);
+                                }
                             }
                         } catch (_) {
                         }
@@ -1978,7 +2080,10 @@
                 // Prefer the live chat list if present (handles beforeend appends)
                 const liveList = document.getElementById('chat-messages-list');
                 const base = liveList ? liveList : (target && target.querySelector && target.querySelector('.chat-message-text') ? target : document);
-                Promise.resolve().then(() => renderAllChatMarkdown(base));
+                Promise.resolve().then(() => {
+                    renderAllChatMarkdown(base);
+                    formatAllChatSubtitles(base);
+                });
             } catch (_) {
             }
         }, true);
@@ -1987,7 +2092,10 @@
                 const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
                 const liveList = document.getElementById('chat-messages-list');
                 const base = liveList ? liveList : (target && target.querySelector && target.querySelector('.chat-message-text') ? target : document);
-                Promise.resolve().then(() => renderAllChatMarkdown(base));
+                Promise.resolve().then(() => {
+                    renderAllChatMarkdown(base);
+                    formatAllChatSubtitles(base);
+                });
             } catch (_) {
             }
         }, true);

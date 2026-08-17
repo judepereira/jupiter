@@ -395,9 +395,9 @@ public class UiController {
             public void onError(Exception e) {
                 try {
                     String normalizedMessage = normalizeProviderErrorMessage(e);
-                    appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+                    ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
                     log.error("Execution failure!", e);
-                    finalizeStreamError(active, assistantId, normalizedMessage, e, completed);
+                    finalizeStreamError(active, assistantId, normalizedMessage, failedMessage, e, completed);
                 } catch (Exception ignored) {
                 }
             }
@@ -416,9 +416,9 @@ public class UiController {
     private void listenerStartFailed(ActiveStream active, String assistantId, Exception e, SseEmitter emitter) {
         try {
             String normalizedMessage = normalizeProviderErrorMessage(e);
-            appStateService.failAssistantMessage(active.pendingStream().sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+            ChatMessageView failedMessage = appStateService.failAssistantMessage(active.pendingStream().sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
             log.error("Execution failure!", e);
-            broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage));
+            broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
         } catch (Exception ignored) {
         } finally {
             active.finished().set(true);
@@ -464,12 +464,12 @@ public class UiController {
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
-        broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls()));
+        broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls(), "completedTs", completedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
     }
 
-    private void finalizeStreamError(ActiveStream active, String assistantId, String normalizedMessage, Exception e, AtomicBoolean completed) {
+    private void finalizeStreamError(ActiveStream active, String assistantId, String normalizedMessage, ChatMessageView failedMessage, Exception e, AtomicBoolean completed) {
         if (!completed.compareAndSet(false, true)) {
             return;
         }
@@ -477,7 +477,7 @@ public class UiController {
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
-        broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage));
+        broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
     }
@@ -1218,7 +1218,7 @@ public class UiController {
     }
 
     private ChatMessage toChatMessage(ChatMessageView view) {
-        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata());
+        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.completedTs(), view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata());
     }
 
     private ToolCallView toToolCallView(com.judepereira.jupiter.persistence.Persistence.ToolCallView view) {
@@ -1331,7 +1331,7 @@ public class UiController {
 
     public record ToolCallGroupView(String toolName, String displayLabel, boolean success, int count, List<ToolCallView> calls) {}
 
-    public record ChatMessage(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
+    public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
         private static final Set<String> EXPLORATORY_TOOL_NAMES = Set.of("list_files", "read_file", "search_code");
 
         public List<ToolCallGroupView> toolCallGroups() {

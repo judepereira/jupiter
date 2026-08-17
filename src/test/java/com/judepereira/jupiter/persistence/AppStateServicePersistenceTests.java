@@ -119,6 +119,37 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void completedAssistantMessagePersistsCompletedAtAndThreadsItIntoSessionDetail(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn queuedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "hello");
+        assertThat(queuedTurn.assistantMessage().completedTs()).isNull();
+
+        var pendingRow = repository.findMessageBySessionAndPublicId(sessionId, queuedTurn.assistantMessage().id());
+        assertThat(pendingRow.completedAt()).isNull();
+        assertThat(pendingRow.pending()).isTrue();
+
+        ChatMessageView completed = service.completeAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "reply", List.of());
+        assertThat(completed.completedTs()).isNotNull();
+
+        var completedRow = repository.findMessageBySessionAndPublicId(sessionId, queuedTurn.assistantMessage().id());
+        assertThat(completedRow.completedAt()).isNotNull();
+        assertThat(completedRow.pending()).isFalse();
+
+        ChatMessageView threaded = service.loadSessionDetail(sessionId).chatMessages().stream()
+                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(threaded.completedTs()).isEqualTo(completedRow.completedAt().toEpochMilli());
+        assertThat(threaded.text()).isEqualTo("reply");
+    }
+
+    @Test
     public void completedTaskToolCallKeepsItsPersistedToolCallIdAfterCompletionClearsToolCallsJson(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
         AppStateService service = context.service();

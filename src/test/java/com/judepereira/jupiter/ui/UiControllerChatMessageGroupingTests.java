@@ -10,7 +10,7 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void exploratoryToolCallsGroupAcrossNamesAndAggregateSuccess() {
-        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", List.of(
+        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
                 toolCall("read-1", "read_file", true),
                 toolCall("read-2", "read_file", false),
                 toolCall("list-1", "list_files", true),
@@ -37,7 +37,7 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void adjacentNonExploratorySameNameCallsStillGroupAsBefore() {
-        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", List.of(
+        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
                 toolCall("write-1", "write_file", true),
                 toolCall("write-2", "write_file", true)
         ), null);

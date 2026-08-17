@@ -83,7 +83,7 @@ public final class Persistence {
     public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel) {
     }
 
-    public record ChatMessageView(String role, String text, long ts, boolean pending, String id, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
+    public record ChatMessageView(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
     }
 
     public record ChangedFileView(String key, ReviewSource source, Integer id, String path, String diff) {
