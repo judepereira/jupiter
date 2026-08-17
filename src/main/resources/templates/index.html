@@ -44,6 +44,10 @@
         </div>
     </main>
 
+    <!-- draggable divider between left rail and left panel -->
+    <div id="left-rail-divider" class="left-rail-divider" role="separator" aria-label="Click and drag to resize left rail"
+         title="Click and drag to resize left rail" aria-orientation="vertical" tabindex="0"></div>
+
     <!-- draggable divider between left panel and review panel -->
     <div id="panel-divider" class="panel-divider" role="separator" aria-label="Click and drag to resize"
          title="Click and drag to resize" aria-orientation="vertical" tabindex="0"></div>
@@ -86,6 +90,7 @@
 <script type="module" th:src="@{/js/connection-loss-monitor.js}"></script>
 <script type="module" th:src="@{/js/system-balloons.js}"></script>
 <script type="module" th:src="@{/js/workspace-branch-sanitizer.js}"></script>
+<script type="module" th:src="@{/js/left-rail-divider.js}"></script>
 <script type="module" th:src="@{/js/review-divider.js}"></script>
 <script type="module" th:src="@{/js/terminal-divider.js}"></script>
 <script type="module" th:src="@{/js/shortcuts.js}"></script>

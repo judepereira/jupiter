@@ -135,10 +135,6 @@
 #chat-history.messages {
     flex: 1 1 auto;
     overflow: auto;
-    padding: 8px;
-    border-radius: 6px;
-    background: var(--conversation-panel-bg);
-    border: 1px solid #e8f0fb;
     /* Prevent browser auto-adjusting scroll during incremental streaming updates */
     overflow-anchor: none;
 }

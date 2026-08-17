@@ -2,23 +2,76 @@ package com.judepereira.jupiter.e2e;
 
 import com.judepereira.jupiter.Jupiter;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
-import javax.sql.DataSource;
 
-import java.nio.file.Path;
+import javax.sql.DataSource;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
 abstract class E2ETestSupport {
+
+    @BeforeAll
+    static void requirePlaywrightBrowserSupport() {
+        String skipReason = playwrightDependencySkipReason();
+        Assumptions.assumeTrue(skipReason == null, skipReason);
+    }
+
+    static String playwrightDependencySkipReason() {
+        try (Playwright playwright = Playwright.create();
+             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
+            return null;
+        } catch (Throwable throwable) {
+            String skipReason = playwrightDependencySkipReason(throwable);
+            if (skipReason != null) {
+                return skipReason;
+            }
+            if (throwable instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new RuntimeException(throwable);
+        }
+    }
+
+    static String playwrightDependencySkipReason(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            String message = current.getMessage();
+            if (message == null) {
+                continue;
+            }
+
+            String normalized = message.toLowerCase(Locale.ROOT);
+            if (normalized.contains("host system is missing dependencies to run browsers")
+                    || normalized.contains("please run `npx playwright install-deps`")
+                    || normalized.contains("please run `npx playwright install`")
+                    || normalized.contains("executable doesn't exist")
+                    || normalized.contains("browser executable") && normalized.contains("doesn't exist")
+                    || normalized.contains("cannot find browser executable")) {
+                return "Skipping Playwright E2E tests: " + firstLine(message);
+            }
+        }
+        return null;
+    }
+
+    private static String firstLine(String message) {
+        int newline = message.indexOf('\n');
+        return newline >= 0 ? message.substring(0, newline) : message;
+    }
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
         return startApp(fakeHome, dbFile, Map.of(), testConfigClasses);
