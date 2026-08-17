@@ -47,6 +47,9 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -490,6 +493,28 @@ public class UiController {
             }
         }
         active.emitters().clear();
+    }
+
+    @GetMapping("/ui/chat/image/{sessionId}/{toolCallId}")
+    ResponseEntity<byte[]> streamDisplayImage(@PathVariable long sessionId, @PathVariable String toolCallId) throws Exception {
+        AppStateService.DisplayImageView view = appStateService.loadDisplayImageView(sessionId, toolCallId);
+        Path workspace = Path.of(view.workspaceRoot());
+        Path resolved = FileUtils.resolveWorkspacePath(workspace, view.path());
+        if (!Files.exists(resolved) || !Files.isRegularFile(resolved)) {
+            throw new IllegalStateException("Image file not found: " + view.path());
+        }
+        resolved = FileUtils.ensureWorkspaceContained(workspace, resolved);
+        String mediaType = FileUtils.resolveAllowedImageMediaType(Files.probeContentType(resolved), view.path());
+        if (mediaType == null) {
+            throw new IllegalStateException("Unsupported image type: " + view.path());
+        }
+        byte[] bytes = Files.readAllBytes(resolved);
+        String contentType = mediaType;
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(bytes);
     }
 
     @GetMapping("/ui/chat/primary")
@@ -1223,7 +1248,7 @@ public class UiController {
 
     private ToolCallView toToolCallView(com.judepereira.jupiter.persistence.Persistence.ToolCallView view) {
         return new ToolCallView(view.toolCallId(), view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated(),
-                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status());
+                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status(), view.imageUrl(), view.imageAlt(), view.imagePath(), view.imageMediaType());
     }
 
     private ChangedFile toChangedFile(ChangedFileView view) {
@@ -1322,10 +1347,16 @@ public class UiController {
     private record ProviderError(String message) {}
 
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
+                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
+                                String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
+        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null);
+        }
+
         public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                             Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null);
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null);
         }
     }
 

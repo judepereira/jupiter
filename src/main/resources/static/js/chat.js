@@ -891,6 +891,7 @@
         }
 
         const EXPLORATORY_TOOL_CALLS = new Set(['list_files', 'read_file', 'search_code']);
+        const IMAGE_TOOL_CALLS = new Set(['display_image']);
 
         function normalizeToolCallName(name) {
             return String(name == null ? '' : name).trim() || 'tool';
@@ -899,6 +900,7 @@
         function toolCallGroupKind(toolName) {
             if (toolName === 'task') return 'task';
             if (EXPLORATORY_TOOL_CALLS.has(toolName)) return 'exploratory';
+            if (IMAGE_TOOL_CALLS.has(toolName)) return 'image';
             return 'other';
         }
 
@@ -1102,7 +1104,8 @@
                 outputLabel.textContent = 'Output';
 
                 let outputPre = outputSection.querySelector('.tool-call-pre');
-                if (!outputPre) {
+                let imageFigure = outputSection.querySelector('.tool-call-image-preview');
+                if (!outputPre && !imageFigure) {
                     outputPre = document.createElement('pre');
                     outputPre.className = 'tool-call-pre';
                     outputSection.appendChild(outputPre);
@@ -1117,7 +1120,7 @@
 
                 if (processHtmxElementFn) processHtmxElementFn(button);
 
-                return {details: call, detail: call, subagent, button, inputPre, outputPre, nestedCalls};
+                return {details: call, detail: call, subagent, button, inputPre, outputSection, outputPre, imageFigure, nestedCalls};
             } catch (_) {
                 return null;
             }
@@ -1201,7 +1204,7 @@
                 refs.details.dataset.toolCallSuccess = 'false';
 
                 refreshToolCallGroupSummary(groupRefs);
-                return {group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, detail: refs.detail, details: refs.details, subagent: refs.subagent, button: refs.button, inputPre: refs.inputPre, outputPre: refs.outputPre, nestedCalls: refs.nestedCalls};
+                return {group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, detail: refs.detail, details: refs.details, subagent: refs.subagent, button: refs.button, inputPre: refs.inputPre, outputSection: refs.outputSection, outputPre: refs.outputPre, imageFigure: refs.imageFigure, nestedCalls: refs.nestedCalls};
             } catch (_) {
                 return null;
             }
@@ -1214,7 +1217,7 @@
                 const groupRefs = buildToolCallGroupRefs(group);
                 const callRefs = buildToolCallCallRefs(entry, processHtmxElementFn);
                 if (!groupRefs || !callRefs) return null;
-                return {group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, detail: callRefs.detail, details: callRefs.details, subagent: callRefs.subagent, button: callRefs.button, inputPre: callRefs.inputPre, outputPre: callRefs.outputPre, nestedCalls: callRefs.nestedCalls};
+                return {group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, detail: callRefs.detail, details: callRefs.details, subagent: callRefs.subagent, button: callRefs.button, inputPre: callRefs.inputPre, outputSection: callRefs.outputSection, outputPre: callRefs.outputPre, imageFigure: callRefs.imageFigure, nestedCalls: callRefs.nestedCalls};
             } catch (_) {
                 return null;
             }
@@ -1261,6 +1264,7 @@
                 const details = entry.details;
                 const group = entry.group || details.closest('details.tool-call');
                 const toolName = options && options.toolName != null ? String(options.toolName) : (payload && payload.toolName != null ? String(payload.toolName) : 'tool');
+                const toolKind = toolCallGroupKind(toolName);
                 const inputText = options && Object.prototype.hasOwnProperty.call(options, 'inputText') ? String(options.inputText ?? '') : toolCallInputText(payload);
                 const outputText = options && Object.prototype.hasOwnProperty.call(options, 'outputText') ? String(options.outputText ?? '') : toolCallOutputText(payload);
                 const state = options && options.state != null ? String(options.state) : (payload && payload.success != null ? (payload.success ? 'done' : 'error') : 'running');
@@ -1282,17 +1286,65 @@
 
                 if (Object.prototype.hasOwnProperty.call(options || {}, 'inputText')) {
                     entry.inputPre.textContent = inputText;
-                } else if (!entry.inputPre.textContent && inputText) {
+                } else if (entry.inputPre && !entry.inputPre.textContent && inputText) {
                     entry.inputPre.textContent = inputText;
                 }
 
-                if (Object.prototype.hasOwnProperty.call(options || {}, 'outputText')) {
-                    entry.outputPre.textContent = outputText;
-                } else if (outputText && !entry.outputPre.textContent) {
-                    entry.outputPre.textContent = outputText;
+                const imageUrl = options && options.imageUrl != null ? String(options.imageUrl) : (payload && payload.imageUrl != null ? String(payload.imageUrl) : '');
+                const imageAlt = options && options.imageAlt != null ? String(options.imageAlt) : (payload && payload.imageAlt != null ? String(payload.imageAlt) : '');
+                const imagePath = options && options.imagePath != null ? String(options.imagePath) : (payload && payload.imagePath != null ? String(payload.imagePath) : '');
+                const imageMediaType = options && options.imageMediaType != null ? String(options.imageMediaType) : (payload && payload.imageMediaType != null ? String(payload.imageMediaType) : '');
+                const isImage = Boolean(imageUrl) || toolKind === 'image';
+
+                if (isImage && entry.outputPre) {
+                    entry.outputPre.remove();
+                    entry.outputPre = null;
+                } else if (entry.outputPre) {
+                    if (Object.prototype.hasOwnProperty.call(options || {}, 'outputText')) {
+                        entry.outputPre.textContent = outputText;
+                    } else if (outputText && !entry.outputPre.textContent) {
+                        entry.outputPre.textContent = outputText;
+                    }
+                }
+                if (!isImage && entry.imageFigure) {
+                    entry.imageFigure.remove();
+                    entry.imageFigure = null;
                 }
 
-                if (options && options.appendOutputText != null) {
+                if (isImage) {
+                    if (!entry.imageFigure) {
+                        entry.imageFigure = document.createElement('figure');
+                        entry.imageFigure.className = 'tool-call-image-preview';
+                        entry.detail.appendChild(entry.imageFigure);
+                    }
+                    let img = entry.imageFigure.querySelector('img');
+                    if (!img) {
+                        img = document.createElement('img');
+                        entry.imageFigure.appendChild(img);
+                    }
+                    img.src = imageUrl;
+                    img.alt = imageAlt;
+                    let caption = entry.imageFigure.querySelector('figcaption');
+                    if (!caption) {
+                        caption = document.createElement('figcaption');
+                        entry.imageFigure.appendChild(caption);
+                    }
+                    caption.replaceChildren(document.createTextNode(outputText || 'Displayed image: ' + imagePath));
+                    if (imagePath) {
+                        const small = document.createElement('small');
+                        small.textContent = imagePath;
+                        caption.appendChild(document.createElement('br'));
+                        caption.appendChild(small);
+                    }
+                    details.open = true;
+                    if (entry.group) entry.group.open = true;
+                    entry.imageFigure.dataset.imageMediaType = imageMediaType || '';
+                } else if (entry.imageFigure) {
+                    entry.imageFigure.remove();
+                    entry.imageFigure = null;
+                }
+
+                if (options && options.appendOutputText != null && entry.outputPre) {
                     entry.outputPre.textContent = (entry.outputPre.textContent || '') + String(options.appendOutputText);
                 }
 

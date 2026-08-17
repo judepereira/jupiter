@@ -322,6 +322,34 @@
 }
 
 /* Tool call rendering (compact) */
+.tool-call-image-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+}
+
+.tool-call-image-preview img {
+    display: block;
+    max-width: min(100%, 720px);
+    height: auto;
+    border-radius: 10px;
+    border: 1px solid #dbeafe;
+    background: #fff;
+}
+
+.tool-call-image-preview figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.tool-call-image-preview small {
+    color: #64748b;
+}
+
 .tool-calls {
     margin-top: 6px;
     display: flex;

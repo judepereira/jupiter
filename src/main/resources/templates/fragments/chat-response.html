@@ -27,7 +27,7 @@
             </div>
 
             <div th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls">
-                <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}">
+                <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image'}">
                     <summary class="tool-call-summary">
                         <span class="tool-call-name" th:text="${group.displayLabel}"></span>
                         <span class="tool-call-status" th:classappend="${group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
@@ -58,7 +58,16 @@
                                     <div class="tool-call-label">Output
                                         <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
                                     </div>
-                                    <pre class="tool-call-pre" th:text="${call.outputPreview}"></pre>
+                                    <th:block th:if="${call.imageUrl != null}">
+                                        <figure class="tool-call-image-preview">
+                                            <img th:src="${call.imageUrl}" th:alt="${call.imageAlt}"/>
+                                            <figcaption>
+                                                <span th:text="${call.outputPreview}"></span>
+                                                <small th:if="${call.imagePath != null}" th:text="${call.imagePath}"></small>
+                                            </figcaption>
+                                        </figure>
+                                    </th:block>
+                                    <pre th:unless="${call.imageUrl != null}" class="tool-call-pre" th:text="${call.outputPreview}"></pre>
                                 </section>
                             </div>
                         </div>

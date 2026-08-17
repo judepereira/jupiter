@@ -29,6 +29,7 @@ public class AgentDefinitionService {
             "search_code",
             "write_file",
             "apply_patch",
+            "display_image",
             "run_command",
             "task"
     );
