@@ -55,8 +55,8 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("id=\"chat-agent-select\"", "id=\"chat-model-select\"", "id=\"chat-thinking-select\"");
-        assertThat(html).contains("class=\"chat-message-meta\"", "class=\"chat-meta-chip\"", "Plan (plan)", "Engineer", "GPT-5.5", "HIGH");
-        assertThat(html).doesNotContain("Explore");
+        assertThat(html).contains("class=\"chat-message-subtitle\"", "data-agent-label=\"Plan (plan)\"", "data-agent-id=\"plan\"", "data-model-id=\"openai/gpt-5.5\"", "data-thinking-level=\"HIGH\"");
+        assertThat(html).doesNotContain("chat-message-meta", "chat-meta-chip", "Explore");
     }
 
     @Test
@@ -82,7 +82,6 @@ public class ChatTemplateRenderTest {
         assertThat(html).contains("data-completed-ts=\"2\"");
         assertThat(html).contains("assistant-done");
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
-        assertThat(html).contains("assistant-done");
         assertThat(html).contains("chat-message-subtitle");
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
     }

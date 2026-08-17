@@ -743,9 +743,16 @@
         function formatChatSubtitle(subtitle) {
             try {
                 if (!subtitle || !subtitle.dataset) return;
+                const metadataParts = [
+                    subtitle.dataset.agentLabel,
+                    subtitle.dataset.modelId,
+                    subtitle.dataset.thinkingLevel
+                ].filter(part => part != null && String(part).trim());
+                const metadataText = metadataParts.join(' · ');
                 const duration = formatChatDuration(subtitle.dataset.startTs, subtitle.dataset.completedTs);
                 const completedTs = formatChatCompletedTs(subtitle.dataset.completedTs);
-                subtitle.textContent = duration && completedTs ? duration + ' · ' + completedTs : (duration || completedTs);
+                const completionText = duration && completedTs ? duration + ' · ' + completedTs : (duration || completedTs);
+                subtitle.textContent = metadataText && completionText ? metadataText + ' · ' + completionText : (metadataText || completionText);
             } catch (_) {
             }
         }
@@ -780,14 +787,15 @@
                 if (!subtitle) {
                     subtitle = document.createElement('div');
                     subtitle.className = 'chat-message-subtitle';
-                    subtitle.dataset.startTs = row.dataset.startTs || '';
-                    subtitle.dataset.completedTs = completed;
-                    const before = row.querySelector('.chat-message-meta, .tool-calls');
+                    const before = row.querySelector('.tool-calls');
                     row.insertBefore(subtitle, before);
-                } else {
-                    subtitle.dataset.startTs = subtitle.dataset.startTs || row.dataset.startTs || '';
-                    subtitle.dataset.completedTs = completed;
                 }
+                subtitle.dataset.startTs = subtitle.dataset.startTs || row.dataset.startTs || '';
+                subtitle.dataset.completedTs = completed;
+                subtitle.dataset.agentLabel = subtitle.dataset.agentLabel || row.dataset.agentLabel || '';
+                subtitle.dataset.agentId = subtitle.dataset.agentId || row.dataset.agentId || '';
+                subtitle.dataset.modelId = subtitle.dataset.modelId || row.dataset.modelId || '';
+                subtitle.dataset.thinkingLevel = subtitle.dataset.thinkingLevel || row.dataset.thinkingLevel || '';
                 formatChatSubtitle(subtitle);
             } catch (_) {
             }
