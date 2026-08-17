@@ -1,5 +1,6 @@
 import './system-balloons.js';
 import './workspace-branch-sanitizer.js';
+import './left-rail-divider.js';
 import './review-divider.js';
 import './terminal-divider.js';
 import './shortcuts.js';
