@@ -62,7 +62,7 @@
                                         <figure class="tool-call-image-preview">
                                             <img th:src="${call.imageUrl}" th:alt="${call.imageAlt}"/>
                                             <figcaption>
-                                                <span th:text="${call.outputPreview}"></span>
+                                                <span class="tool-call-image-caption" th:text="${call.imageAlt}"></span>
                                                 <small th:if="${call.imagePath != null}" th:text="${call.imagePath}"></small>
                                             </figcaption>
                                         </figure>

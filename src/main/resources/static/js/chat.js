@@ -926,6 +926,25 @@
             entry.dataset[datasetKey] = JSON.stringify(Array.from(new Set(values.filter(Boolean))));
         }
 
+        function rememberToolCallIdentity(entry, toolCallId, key) {
+            try {
+                if (!entry) return;
+                if (toolCallId) {
+                    const toolCallIds = readToolCallValues(entry, 'toolCallIds', 'toolCallId');
+                    if (!toolCallIds.includes(toolCallId)) toolCallIds.push(toolCallId);
+                    writeToolCallValues(entry, 'toolCallIds', toolCallIds);
+                    entry.dataset.toolCallId = toolCallId;
+                }
+                if (key) {
+                    const toolCallKeys = readToolCallValues(entry, 'toolCallKeys', 'toolCallKey');
+                    if (!toolCallKeys.includes(key)) toolCallKeys.push(key);
+                    writeToolCallValues(entry, 'toolCallKeys', toolCallKeys);
+                    entry.dataset.toolCallKey = key;
+                }
+            } catch (_) {
+            }
+        }
+
         function toolCallSummaryText(items) {
             return items.map(item => item.count > 1 ? item.name + ' (' + item.count + ')' : item.name).join(', ');
         }
@@ -974,6 +993,12 @@
             return existingName === nextName;
         }
 
+        function updateToolCallGroupKind(details, toolName) {
+            if (!details) return;
+            const kind = toolCallGroupKind(normalizeToolCallName(toolName));
+            details.dataset.toolCallGroupKind = kind;
+        }
+
         function entryHasToolCallId(entry, toolCallId) {
             if (!entry || !toolCallId) return false;
             return readToolCallValues(entry, 'toolCallIds', 'toolCallId').includes(toolCallId);
@@ -986,30 +1011,85 @@
 
         function findToolCallEntry(container, payload) {
             try {
-                if (!container) return null;
-
                 const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
                 const key = toolCallKey(payload);
-                const groups = getToolCallGroups(container);
-                for (const group of groups) {
-                    const detail = getDirectToolCallChild(group, 'tool-call-detail');
-                    const callsContainer = detail ? getDirectToolCallChild(detail, 'tool-call-calls') : null;
-                    const entries = callsContainer ? getDirectToolCallChildren(callsContainer, 'tool-call-call') : [];
+                const searchScopes = [];
 
-                    if (toolCallId) {
-                        const byId = entries.find(entry => entry.dataset.toolCallId === toolCallId);
-                        if (byId) return byId;
+                const addScope = (scope) => {
+                    if (scope && !searchScopes.includes(scope)) searchScopes.push(scope);
+                };
+
+                addScope(container);
+                try {
+                    addScope(toolCallRegistryScope(container));
+                    addScope(container && container.closest ? container.closest('li[data-id]') : null);
+                    addScope(document.getElementById('chat-messages-list'));
+                } catch (_) {
+                }
+
+                for (const scope of searchScopes) {
+                    const registry = toolCallRegistry(scope);
+                    if (registry) {
+                        if (toolCallId && registry.byId.has(toolCallId)) return registry.byId.get(toolCallId);
+                        if (key && registry.byKey.has(key)) return registry.byKey.get(key);
                     }
-
-                    if (key) {
-                        const byKey = entries.find(entry => entry.dataset.toolCallKey === key);
-                        if (byKey) return byKey;
+                    const entries = scope && scope.querySelectorAll ? Array.from(scope.querySelectorAll('.tool-call-call')) : [];
+                    for (const entry of entries) {
+                        if (toolCallId && entryHasToolCallId(entry, toolCallId)) return entry;
+                        if (key && entryHasToolCallKey(entry, key)) return entry;
                     }
                 }
 
                 return null;
             } catch (_) {
                 return null;
+            }
+        }
+
+        function hasVisibleImageFigure(entry) {
+            return Boolean(entry && entry.querySelector && entry.querySelector('.tool-call-image-preview'));
+        }
+
+        function clearToolCallImages(entry) {
+            try {
+                if (!entry || !entry.querySelectorAll) return;
+                Array.from(entry.querySelectorAll('.tool-call-image-preview')).forEach(node => node.remove());
+            } catch (_) {
+            }
+        }
+
+        function toolCallRegistryScope(target) {
+            try {
+                return target && target.closest ? target.closest('li[data-id]') : null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function toolCallRegistry(scope) {
+            if (!scope) return null;
+            if (!scope.__toolCallRegistry) {
+                try {
+                    Object.defineProperty(scope, '__toolCallRegistry', {
+                        value: {byId: new Map(), byKey: new Map()},
+                        configurable: true,
+                        enumerable: false,
+                        writable: false
+                    });
+                } catch (_) {
+                    scope.__toolCallRegistry = {byId: new Map(), byKey: new Map()};
+                }
+            }
+            return scope.__toolCallRegistry;
+        }
+
+        function registerToolCallEntry(scope, entry, toolCallId, key) {
+            try {
+                const registry = toolCallRegistry(scope);
+                if (!registry || !entry) return;
+                if (toolCallId) registry.byId.set(toolCallId, entry);
+                if (key) registry.byKey.set(key, entry);
+            } catch (_) {
             }
         }
 
@@ -1104,7 +1184,7 @@
                 outputLabel.textContent = 'Output';
 
                 let outputPre = outputSection.querySelector('.tool-call-pre');
-                let imageFigure = outputSection.querySelector('.tool-call-image-preview');
+                let imageFigure = outputSection.querySelector('.tool-call-image-preview') || call.querySelector('.tool-call-image-preview');
                 if (!outputPre && !imageFigure) {
                     outputPre = document.createElement('pre');
                     outputPre.className = 'tool-call-pre';
@@ -1197,8 +1277,10 @@
                 const toolName = payload && payload.toolName != null ? String(payload.toolName).trim() : 'tool';
                 const key = toolCallKey(payload);
 
-                if (toolCallId) refs.details.dataset.toolCallId = toolCallId;
-                if (key) refs.details.dataset.toolCallKey = key;
+                rememberToolCallIdentity(call, toolCallId, key);
+                call.dataset.toolCallGroupKind = toolCallGroupKind(toolName);
+                registerToolCallEntry(toolCallRegistryScope(groupRefs.group || call), call, toolCallId, key);
+                rememberToolCallIdentity(refs.details, toolCallId, key);
                 refs.details.dataset.toolCallToolName = toolName;
                 refs.details.dataset.toolCallState = 'running';
                 refs.details.dataset.toolCallSuccess = 'false';
@@ -1231,8 +1313,12 @@
                 const toolCallId = payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '';
                 const toolName = payload && payload.toolName != null ? String(payload.toolName).trim() : 'tool';
 
-                const existing = buildToolCallEntry(findToolCallEntry(container, payload), processHtmxElementFn);
+                const existingEntry = findToolCallEntry(container, payload);
+                const existing = existingEntry ? buildToolCallEntry(existingEntry, processHtmxElementFn) : null;
                 if (existing) {
+                    if (payload && payload.imageUrl) {
+                        clearToolCallImages(existingEntry);
+                    }
                     refreshToolCallGroupSummary({group: existing.group, summary: existing.summary, nameSpan: existing.nameSpan, statusSpan: existing.statusSpan, callsContainer: existing.group ? getDirectToolCallChild(getDirectToolCallChild(existing.group, 'tool-call-detail'), 'tool-call-calls') : null});
                     return existing;
                 }
@@ -1274,9 +1360,8 @@
                 details.dataset.toolCallToolName = toolName;
                 details.dataset.toolCallState = state;
                 details.dataset.toolCallSuccess = success ? 'true' : 'false';
-                if (payload && payload.toolCallId != null) details.dataset.toolCallId = String(payload.toolCallId).trim();
-                const key = toolCallKey(payload);
-                if (key) details.dataset.toolCallKey = key;
+                updateToolCallGroupKind(group, toolName);
+                rememberToolCallIdentity(details, payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '', toolCallKey(payload));
 
                 entry.nameSpan.textContent = toolName;
                 entry.statusSpan.className = 'tool-call-status';
@@ -1294,7 +1379,7 @@
                 const imageAlt = options && options.imageAlt != null ? String(options.imageAlt) : (payload && payload.imageAlt != null ? String(payload.imageAlt) : '');
                 const imagePath = options && options.imagePath != null ? String(options.imagePath) : (payload && payload.imagePath != null ? String(payload.imagePath) : '');
                 const imageMediaType = options && options.imageMediaType != null ? String(options.imageMediaType) : (payload && payload.imageMediaType != null ? String(payload.imageMediaType) : '');
-                const isImage = Boolean(imageUrl) || toolKind === 'image';
+                const isImage = Boolean(imageUrl);
 
                 if (isImage && entry.outputPre) {
                     entry.outputPre.remove();
@@ -1329,7 +1414,14 @@
                         caption = document.createElement('figcaption');
                         entry.imageFigure.appendChild(caption);
                     }
-                    caption.replaceChildren(document.createTextNode(outputText || 'Displayed image: ' + imagePath));
+                    let captionText = caption.querySelector('.tool-call-image-caption');
+                    if (!captionText) {
+                        captionText = document.createElement('span');
+                        captionText.className = 'tool-call-image-caption';
+                        caption.appendChild(captionText);
+                    }
+                    captionText.textContent = imageAlt;
+                    Array.from(caption.querySelectorAll('br, small')).forEach(node => node.remove());
                     if (imagePath) {
                         const small = document.createElement('small');
                         small.textContent = imagePath;
@@ -1845,12 +1937,19 @@
                             if (payload && Array.isArray(payload.toolCalls) && payload.toolCalls.length > 0) {
                                 const doneRow = currentRow();
                                 if (doneRow) {
-                                    payload.toolCalls.forEach(toolCall => appendToolCallToChatRow(doneRow, toolCall, processHtmxElement, {
-                                        state: toolCall.success ? 'done' : 'error',
-                                        statusText: toolCall.success ? 'success' : 'failure',
-                                        success: Boolean(toolCall.success),
-                                        outputText: toolCallOutputText(toolCall)
-                                    }));
+                                    payload.toolCalls.forEach(toolCall => {
+                                        const toolCallId = toolCall && toolCall.toolCallId != null ? String(toolCall.toolCallId).trim() : '';
+                                        if (toolCallId) {
+                                            const existing = document.getElementById('chat-messages-list')?.querySelector('.tool-call-call[data-tool-call-id="' + toolCallId.replace(/"/g, '\\"') + '"]');
+                                            if (existing) return;
+                                        }
+                                        appendToolCallToChatRow(doneRow, toolCall, processHtmxElement, {
+                                            state: toolCall.success ? 'done' : 'error',
+                                            statusText: toolCall.success ? 'success' : 'failure',
+                                            success: Boolean(toolCall.success),
+                                            outputText: toolCallOutputText(toolCall)
+                                        });
+                                    });
                                 }
                             }
 

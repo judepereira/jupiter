@@ -104,7 +104,8 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("<details", "open", "<img", "src=\"/ui/chat/image/1/tool-call-1\"", "alt=\"Cat\"", "images/cat.png", "Displayed image: images/cat.png");
+        assertThat(html).contains("<details", "open", "<img", "src=\"/ui/chat/image/1/tool-call-1\"", "alt=\"Cat\"", "images/cat.png", "tool-call-image-caption", ">Cat<");
+        assertThat(html).doesNotContain("Displayed image: images/cat.png");
     }
 
     private static SpringTemplateEngine engine() {

@@ -120,6 +120,12 @@ abstract class E2ETestSupport {
         assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText(projectName);
     }
 
+    protected static void createImageFile(Path projectDir, String relativePath) throws Exception {
+        Path image = projectDir.resolve(relativePath);
+        Files.createDirectories(image.getParent());
+        Files.write(image, new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+    }
+
     protected record RunningApp(ConfigurableApplicationContext context, String baseUrl, Runnable cleanup) implements AutoCloseable {
         @Override
         public void close() {
