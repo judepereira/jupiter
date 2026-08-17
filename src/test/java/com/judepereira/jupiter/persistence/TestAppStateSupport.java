@@ -82,17 +82,9 @@ public final class TestAppStateSupport {
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService) {
         TerminalManager terminalManager = mock(TerminalManager.class);
         AtomicInteger sequence = new AtomicInteger();
-        when(terminalManager.createTerminal(anyString(), org.mockito.ArgumentMatchers.anyMap())).thenAnswer(invocation -> {
-            int n = sequence.incrementAndGet();
-            return new TerminalHandle("terminal-" + n, "Terminal " + n);
-        });
         when(terminalManager.createTerminal(anyString(), anyMap())).thenAnswer(invocation -> {
             int n = sequence.incrementAndGet();
             return new TerminalHandle("terminal-" + n, "Terminal " + n);
-        });
-        when(terminalManager.createTerminal(anyString(), anyString(), org.mockito.ArgumentMatchers.anyMap())).thenAnswer(invocation -> {
-            int n = sequence.incrementAndGet();
-            return new TerminalHandle("terminal-" + n, (String) invocation.getArgument(1));
         });
         when(terminalManager.createTerminal(anyString(), anyString(), anyMap())).thenAnswer(invocation -> {
             int n = sequence.incrementAndGet();

@@ -48,22 +48,7 @@ public class UiControllerPollReviewOobTests {
         // find assistant id from model
         List<?> msgs = (List<?>) ((ConcurrentModel)m1).getAttribute("chatMessages");
         Object last = msgs.get(msgs.size()-1);
-        String assistantId = null;
-        // attempt to extract id via toString or reflection
-        try {
-            var cls = last.getClass();
-            var f = cls.getDeclaredField("id");
-            f.setAccessible(true);
-            assistantId = (String) f.get(last);
-        } catch (Exception e) {
-            // fallback to toString parsing
-            String s = last.toString();
-            int i = s.indexOf("id=");
-            if (i >= 0) {
-                // hyphen placed at the end of the character class doesn't need escaping
-                assistantId = s.substring(i+3).replaceAll("[^a-zA-Z0-9-]", "");
-            }
-        }
+        String assistantId = ((UiController.ChatMessage) last).id();
         assertThat(assistantId).isNotNull();
 
         // call stream endpoint which will run same-thread executor in test constructor
