@@ -3,8 +3,6 @@
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
     grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px var(--review-width);
-    row-gap: 6px;
-    column-gap: 6px;
     align-items: stretch;
     background: var(--shell-bg);
     height: calc(100vh - var(--topbar-height) - var(--bottom-nav-height));
@@ -17,12 +15,12 @@
 
 /* open: include divider + review column */
 #shell.shell-root.review-open {
-    grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px var(--review-width);
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 var(--review-width);
 }
 
 /* closed: collapse the review column while preserving the left nav and chat. */
 #shell.shell-root.review-closed {
-    grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px 0;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 0;
 }
 
 /* Rails */
@@ -93,8 +91,6 @@
 .main-panel {
     background: var(--panel-bg);
     border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
-    border: 1px solid var(--panel-border);
     padding: 8px;
     overflow: hidden;
     min-height: 0;
@@ -107,7 +103,7 @@
     flex-direction: column;
     gap: 0;
     min-height: 0;
-    margin: 8px 0 0 0;
+    margin: 0;
 }
 
 .review-panel {

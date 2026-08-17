@@ -14,7 +14,6 @@
     background: linear-gradient(180deg, #061a3a 0%, var(--topbar-bg) 100%);
     color: var(--rail-fg);
     border-bottom: 1px solid var(--topbar-border);
-    box-shadow: 0 6px 19px rgba(2, 12, 32, 0.22);
 }
 
 button {
