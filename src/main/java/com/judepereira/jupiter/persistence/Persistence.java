@@ -10,6 +10,12 @@ public final class Persistence {
         GIT
     }
 
+    public enum RailStatus {
+        NONE,
+        IN_PROGRESS,
+        FAILED
+    }
+
     private Persistence() {
     }
 
@@ -22,23 +28,47 @@ public final class Persistence {
     public record ProjectEnvironmentVariable(String name, String value) {
     }
 
-    public record WorkspaceView(long id, String name, String path, boolean unread, boolean inProgress) {
+    public record WorkspaceView(long id, String name, String path, boolean unread, RailStatus railStatus) {
         public WorkspaceView(long id, String name, String path, boolean unread) {
-            this(id, name, path, unread, false);
+            this(id, name, path, unread, RailStatus.NONE);
+        }
+
+        public WorkspaceView(long id, String name, String path, boolean unread, boolean inProgress) {
+            this(id, name, path, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
         }
 
         public WorkspaceView(long id, String name, String path) {
-            this(id, name, path, false, false);
+            this(id, name, path, false, RailStatus.NONE);
+        }
+
+        public boolean inProgress() {
+            return railStatus == RailStatus.IN_PROGRESS;
+        }
+
+        public boolean failed() {
+            return railStatus == RailStatus.FAILED;
         }
     }
 
-    public record SessionView(long id, String name, boolean unread, boolean inProgress) {
+    public record SessionView(long id, String name, boolean unread, RailStatus railStatus) {
         public SessionView(long id, String name, boolean unread) {
-            this(id, name, unread, false);
+            this(id, name, unread, RailStatus.NONE);
+        }
+
+        public SessionView(long id, String name, boolean unread, boolean inProgress) {
+            this(id, name, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
         }
 
         public SessionView(long id, String name) {
-            this(id, name, false, false);
+            this(id, name, false, RailStatus.NONE);
+        }
+
+        public boolean inProgress() {
+            return railStatus == RailStatus.IN_PROGRESS;
+        }
+
+        public boolean failed() {
+            return railStatus == RailStatus.FAILED;
         }
     }
 

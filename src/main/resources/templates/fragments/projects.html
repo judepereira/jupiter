@@ -81,8 +81,9 @@
                         <i class="bi bi-folder workspace-icon" aria-hidden="true"></i>
                         <span class="rail-label-wrap">
                             <span class="workspace-label" th:text="${workspace.name}"></span>
-                            <span th:if="${workspace.unread}" class="unread-dot" aria-label="Unread"></span>
-                            <span th:if="${!workspace.unread and workspace.inProgress}" class="pending-dot" aria-label="In progress"></span>
+                            <span th:if="${workspace.failed}" class="failed-dot" aria-label="Failed"></span>
+                            <span th:if="${!workspace.failed and workspace.unread}" class="unread-dot" aria-label="Unread"></span>
+                            <span th:if="${!workspace.failed and !workspace.unread and workspace.inProgress}" class="pending-dot" aria-label="In progress"></span>
                         </span>
                     </button>
 
@@ -104,8 +105,9 @@
                             <i class="bi bi-chat-square session-icon" aria-hidden="true"></i>
                             <span class="rail-label-wrap">
                                 <span class="session-label" th:text="${s.name}"></span>
-                                <span th:if="${s.unread}" class="unread-dot" aria-label="Unread"></span>
-                                <span th:if="${!s.unread and s.inProgress}" class="pending-dot" aria-label="In progress"></span>
+                                <span th:if="${s.failed}" class="failed-dot" aria-label="Failed"></span>
+                                <span th:if="${!s.failed and s.unread}" class="unread-dot" aria-label="Unread"></span>
+                                <span th:if="${!s.failed and !s.unread and s.inProgress}" class="pending-dot" aria-label="In progress"></span>
                             </span>
                         </button>
 

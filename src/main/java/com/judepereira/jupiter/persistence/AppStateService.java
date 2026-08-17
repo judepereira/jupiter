@@ -15,11 +15,13 @@ import com.judepereira.jupiter.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter.persistence.Persistence.SessionDetailView;
+import com.judepereira.jupiter.persistence.Persistence.RailStatus;
 import com.judepereira.jupiter.persistence.Persistence.SessionView;
 import com.judepereira.jupiter.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallView;
 import com.judepereira.jupiter.persistence.Persistence.WorkspaceView;
+import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -34,6 +36,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
@@ -47,6 +50,11 @@ public class AppStateService {
     private final AppStateRepository repository;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final ActiveStreamRegistryService activeStreamRegistryService;
+
+    public ActiveStreamRegistryService activeStreamRegistryService() {
+        return activeStreamRegistryService;
+    }
 
     @Transactional
     public SessionView ensureChatSession(String defaultWorkspaceRoot) {
@@ -104,7 +112,7 @@ public class AppStateService {
         long position = repository.nextWorkspacePosition(projectId);
         long workspaceId = repository.insertWorkspace(projectId, normalizedBranchName, worktreePath.toString(), position, now);
         createSessionInternal(workspaceId, now);
-        return toWorkspaceView(repository.findWorkspace(workspaceId));
+        return toWorkspaceView(repository.findWorkspace(workspaceId), activeStreamRegistryService.activeSessionIdsSnapshot());
     }
 
     @Transactional
@@ -279,7 +287,9 @@ public class AppStateService {
         }
         var parentSession = repository.findSession(parentSessionId);
         var workspace = repository.findWorkspace(parentSession.workspaceId());
-        Long parentAssistantMessageId = repository.findLatestPendingAssistantMessage(parentSessionId).map(AppStateRepository.ConversationMessageRow::id).orElse(null);
+        Long parentAssistantMessageId = repository.findLatestPendingVisibleAssistantMessage(parentSessionId)
+                .map(AppStateRepository.ConversationMessageRow::id)
+                .orElse(null);
         Instant now = Instant.now();
         long position = repository.nextSessionPosition(workspace.id());
         long sessionId = repository.insertSession(workspace.id(), "Subagent: " + subagent.name(), position, now, false, ReviewSource.SESSION, null,
@@ -292,15 +302,16 @@ public class AppStateService {
 
     public AppStateView loadViewData() {
         var appState = repository.loadAppState();
+        Set<Long> activeSessionIds = activeStreamRegistryService.activeSessionIdsSnapshot();
         List<ProjectView> projects = repository.listVisibleProjects().stream().map(this::toProjectView).toList();
         ProjectView activeProject = appState.activeProjectId() == null ? null : toProjectView(repository.findProject(appState.activeProjectId()));
 
-        List<WorkspaceView> workspaces = activeProject == null ? List.of() : repository.listWorkspacesByProject(activeProject.id()).stream().map(this::toWorkspaceView).toList();
-        WorkspaceView activeWorkspace = appState.activeWorkspaceId() == null ? null : toWorkspaceView(repository.findWorkspace(appState.activeWorkspaceId()));
+        List<WorkspaceView> workspaces = activeProject == null ? List.of() : repository.listWorkspacesByProject(activeProject.id()).stream().map(workspace -> toWorkspaceView(workspace, activeSessionIds)).toList();
+        WorkspaceView activeWorkspace = appState.activeWorkspaceId() == null ? null : toWorkspaceView(repository.findWorkspace(appState.activeWorkspaceId()), activeSessionIds);
 
         AppStateRepository.SessionRow activeSessionRow = appState.activeSessionId() == null ? null : repository.findSession(appState.activeSessionId());
-        List<SessionView> sessions = activeWorkspace == null ? List.of() : repository.listSessionsByWorkspace(activeWorkspace.id()).stream().map(this::toSessionView).toList();
-        SessionView activeSession = activeSessionRow == null ? null : toSessionView(activeSessionRow);
+        List<SessionView> sessions = activeWorkspace == null ? List.of() : repository.listSessionsByWorkspace(activeWorkspace.id()).stream().map(session -> toSessionView(session, activeSessionIds)).toList();
+        SessionView activeSession = activeSessionRow == null ? null : toSessionView(activeSessionRow, activeSessionIds);
         SessionDetailView sessionDetail = activeSession == null ? null : loadSessionDetail(activeSession.id());
         return new AppStateView(projects, activeProject, workspaces, activeWorkspace, sessions, activeSession, sessionDetail);
     }
@@ -353,7 +364,6 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
                 null,
                 now);
-        applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
         return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, List.of(), null),
                 new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, List.of(), assistantMetadata));
     }
@@ -433,9 +443,7 @@ public class AppStateService {
         }
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true);
-        if (!markUnreadIfInactive(sessionId)) {
-            applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
-        }
+        markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
 
@@ -450,10 +458,12 @@ public class AppStateService {
         }
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), errorText, false, false);
-        if (!markUnreadIfInactive(sessionId)) {
-            applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
-        }
+        markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
+    }
+
+    public void publishWorkspaceRailRefresh() {
+        applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
     }
 
     @Transactional
@@ -818,6 +828,8 @@ public class AppStateService {
         List<AppStateRepository.ConversationMessageRow> visibleMessages = repository.listVisibleMessagesBySession(sessionId);
         List<ChatMessageView> messages = visibleMessages.stream().map(message -> toChatMessageView(message, sessionId)).toList();
         messages = applySyntheticSubagentToolCalls(sessionId, visibleMessages, messages);
+        messages = injectSyntheticFailedAssistantMessage(sessionId, visibleMessages, messages);
+        messages = clearStalePendingAssistantBindings(messages);
         ReviewSource reviewSource = session.reviewSource();
         List<ChangedFileView> files = reviewSource == ReviewSource.GIT
                 ? listGitChangedFiles(Path.of(workspace.normalizedPath())).stream().map(this::toChangedFileView).toList()
@@ -826,6 +838,75 @@ public class AppStateService {
                 ? null
                 : session.selectedChangedFileId() == null ? null : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
+    }
+
+    private List<ChatMessageView> injectSyntheticFailedAssistantMessage(long sessionId, List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
+        if (messages.isEmpty()) {
+            return messages;
+        }
+
+        AppStateRepository.ConversationMessageRow targetMessage = repository.findLatestPendingVisibleAssistantMessage(sessionId).orElse(null);
+        if (targetMessage == null || !targetMessage.pending()) {
+            return messages;
+        }
+
+        if (activeStreamRegistryService.hasActiveStreamForAssistantId(targetMessage.publicId())) {
+            return messages;
+        }
+
+        int targetIndex = findVisibleMessageIndex(messages, targetMessage.publicId());
+        if (targetIndex < 0) {
+            return messages;
+        }
+
+        ChatMessageView visibleRow = messages.get(targetIndex);
+        if (!visibleRow.pending() || !"assistant".equals(visibleRow.role())) {
+            return messages;
+        }
+
+        ArrayList<ChatMessageView> updated = new ArrayList<>(messages);
+        updated.set(targetIndex, new ChatMessageView(
+                visibleRow.role(),
+                "*Assistant stream failed because the process ended before this response could be completed. Restart the request to continue.*",
+                visibleRow.ts(),
+                false,
+                visibleRow.id(),
+                visibleRow.toolCalls(),
+                visibleRow.metadata()));
+        return updated;
+    }
+
+    private List<ChatMessageView> clearStalePendingAssistantBindings(List<ChatMessageView> messages) {
+        if (messages.isEmpty()) {
+            return messages;
+        }
+
+        ArrayList<ChatMessageView> updated = null;
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessageView message = messages.get(i);
+            if (!message.pending() || !"assistant".equals(message.role()) || activeStreamRegistryService.hasActiveStreamForAssistantId(message.id())) {
+                continue;
+            }
+
+            if (updated == null) {
+                updated = new ArrayList<>(messages);
+            }
+            updated.set(i, new ChatMessageView(message.role(), message.text(), message.ts(), false, message.id(), message.toolCalls(), message.metadata()));
+        }
+
+        return updated == null ? messages : updated;
+    }
+
+    private int findVisibleMessageIndex(List<ChatMessageView> messages, String publicId) {
+        if (publicId == null) {
+            return -1;
+        }
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if (publicId.equals(messages.get(i).id())) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private List<ChatMessageView> applySyntheticSubagentToolCalls(long parentSessionId, List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
@@ -1082,19 +1163,43 @@ public class AppStateService {
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {
-        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), row.unread(), row.inProgress());
+        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), row.unread(), workspaceRailStatus(row.id(), activeStreamRegistryService.activeSessionIdsSnapshot()));
     }
 
-    private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row, boolean unread, boolean inProgress) {
-        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), unread, inProgress);
+    private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row, Set<Long> activeSessionIds) {
+        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), row.unread(), workspaceRailStatus(row.id(), activeSessionIds));
     }
 
     private SessionView toSessionView(AppStateRepository.SessionRow row) {
-        return new SessionView(row.id(), row.name(), row.unread(), row.inProgress());
+        return new SessionView(row.id(), row.name(), row.unread(), railStatus(row.inProgress(), activeStreamRegistryService.activeSessionIdsSnapshot().contains(row.id())));
     }
 
-    private SessionView toSessionView(AppStateRepository.SessionRow row, boolean inProgress) {
-        return new SessionView(row.id(), row.name(), row.unread(), inProgress);
+    private SessionView toSessionView(AppStateRepository.SessionRow row, Set<Long> activeSessionIds) {
+        return new SessionView(row.id(), row.name(), row.unread(), railStatus(row.inProgress(), activeSessionIds.contains(row.id())));
+    }
+
+    private RailStatus workspaceRailStatus(long workspaceId, Set<Long> activeSessionIds) {
+        RailStatus status = RailStatus.NONE;
+        for (AppStateRepository.SessionRow session : repository.listSessionsByWorkspace(workspaceId)) {
+            RailStatus sessionStatus = railStatus(session.inProgress(), activeSessionIds.contains(session.id()));
+            if (sessionStatus == RailStatus.FAILED) {
+                return RailStatus.FAILED;
+            }
+            if (sessionStatus == RailStatus.IN_PROGRESS) {
+                status = RailStatus.IN_PROGRESS;
+            }
+        }
+        return status;
+    }
+
+    private RailStatus railStatus(boolean dbPending, boolean hasActiveStream) {
+        if (dbPending && hasActiveStream) {
+            return RailStatus.IN_PROGRESS;
+        }
+        if (dbPending) {
+            return RailStatus.FAILED;
+        }
+        return hasActiveStream ? RailStatus.FAILED : RailStatus.NONE;
     }
 
     private ChangedFileView toChangedFileView(AppStateRepository.ChangedFileRow row) {

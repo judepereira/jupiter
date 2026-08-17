@@ -146,7 +146,7 @@ public class AppStateRepository {
                            SELECT 1
                            FROM sessions s
                            JOIN conversation_messages m ON m.session_id = s.id
-                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM workspaces w
                 WHERE w.id = :id
@@ -165,7 +165,7 @@ public class AppStateRepository {
                            SELECT 1
                            FROM sessions s
                            JOIN conversation_messages m ON m.session_id = s.id
-                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM workspaces w
                 WHERE w.project_id = :projectId
@@ -185,7 +185,7 @@ public class AppStateRepository {
                            SELECT 1
                            FROM sessions s
                            JOIN conversation_messages m ON m.session_id = s.id
-                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM workspaces w
                 WHERE w.project_id = :projectId
@@ -230,18 +230,38 @@ public class AppStateRepository {
                        EXISTS(
                            SELECT 1
                            FROM conversation_messages m
-                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM sessions s
                 WHERE s.id = :id
                 """, new MapSqlParameterSource("id", sessionId), this::mapSession, "session " + sessionId);
     }
 
-    Optional<ConversationMessageRow> findLatestPendingAssistantMessage(long sessionId) {
+    Optional<ConversationMessageRow> findLatestAssistantMessage(long sessionId) {
         return queryOne("""
                 SELECT *
                 FROM conversation_messages
-                WHERE session_id = :sessionId AND role = 'assistant' AND pending = TRUE
+                WHERE session_id = :sessionId AND role = 'assistant'
+                ORDER BY sequence DESC
+                LIMIT 1
+                """, new MapSqlParameterSource("sessionId", sessionId), this::mapConversationMessage);
+    }
+
+    Optional<ConversationMessageRow> findLatestVisibleAssistantMessage(long sessionId) {
+        return queryOne("""
+                SELECT *
+                FROM conversation_messages
+                WHERE session_id = :sessionId AND role = 'assistant' AND show_in_chat = TRUE
+                ORDER BY sequence DESC
+                LIMIT 1
+                """, new MapSqlParameterSource("sessionId", sessionId), this::mapConversationMessage);
+    }
+
+    Optional<ConversationMessageRow> findLatestPendingVisibleAssistantMessage(long sessionId) {
+        return queryOne("""
+                SELECT *
+                FROM conversation_messages
+                WHERE session_id = :sessionId AND role = 'assistant' AND show_in_chat = TRUE AND pending = TRUE
                 ORDER BY sequence DESC
                 LIMIT 1
                 """, new MapSqlParameterSource("sessionId", sessionId), this::mapConversationMessage);
@@ -253,7 +273,7 @@ public class AppStateRepository {
                        EXISTS(
                            SELECT 1
                            FROM conversation_messages m
-                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM sessions s
                 WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE
@@ -276,7 +296,7 @@ public class AppStateRepository {
                 FROM workspaces w
                 JOIN sessions s ON s.workspace_id = w.id
                 JOIN conversation_messages m ON m.session_id = s.id
-                WHERE w.project_id = :projectId AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                WHERE w.project_id = :projectId AND s.hidden = FALSE AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                 """, new MapSqlParameterSource("projectId", projectId), Long.class));
     }
 
@@ -285,7 +305,7 @@ public class AppStateRepository {
                 SELECT DISTINCT s.id
                 FROM sessions s
                 JOIN conversation_messages m ON m.session_id = s.id
-                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                 """, new MapSqlParameterSource("workspaceId", workspaceId), Long.class));
     }
 
@@ -295,7 +315,7 @@ public class AppStateRepository {
                        EXISTS(
                            SELECT 1
                            FROM conversation_messages m
-                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM sessions s
                 WHERE s.parent_session_id = :parentSessionId
@@ -309,7 +329,7 @@ public class AppStateRepository {
                        EXISTS(
                            SELECT 1
                            FROM conversation_messages m
-                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM sessions s
                 WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND s.position > :position
@@ -324,7 +344,7 @@ public class AppStateRepository {
                        EXISTS(
                            SELECT 1
                            FROM conversation_messages m
-                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM sessions s
                 WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND s.position < :position
@@ -339,7 +359,7 @@ public class AppStateRepository {
                        EXISTS(
                            SELECT 1
                            FROM conversation_messages m
-                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM sessions s
                 WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE
@@ -597,7 +617,7 @@ public class AppStateRepository {
                            SELECT 1
                            FROM sessions s
                            JOIN conversation_messages m ON m.session_id = s.id
-                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM workspaces w
                 WHERE w.project_id = :projectId AND w.position > :position
@@ -619,7 +639,7 @@ public class AppStateRepository {
                            SELECT 1
                            FROM sessions s
                            JOIN conversation_messages m ON m.session_id = s.id
-                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.pending = TRUE
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                        ) AS in_progress
                 FROM workspaces w
                 WHERE w.project_id = :projectId AND w.position < :position

@@ -28,6 +28,7 @@ import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import com.judepereira.jupiter.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
+import com.judepereira.jupiter.persistence.Persistence.RailStatus;
 import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter.persistence.Persistence.SessionDetailView;
@@ -90,6 +91,7 @@ public class UiController {
     private final TerminalStateService terminalStateService;
     private final SystemBalloonService systemBalloonService;
     private final WorkspaceRailRefreshService workspaceRailRefreshService;
+    private final ActiveStreamRegistryService activeStreamRegistryService;
     private final OpenAiOAuthService openAiOAuthService;
     private final String appVersion;
 
@@ -99,6 +101,7 @@ public class UiController {
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                         SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        ActiveStreamRegistryService activeStreamRegistryService,
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
                         ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
@@ -111,11 +114,24 @@ public class UiController {
         this.contextCompactionService = contextCompactionService;
         this.commandStreamService = commandStreamService;
         this.systemBalloonService = systemBalloonService;
+        this.activeStreamRegistryService = activeStreamRegistryService;
         this.terminalManager = terminalManager;
         this.terminalStateService = terminalStateService;
         this.workspaceRailRefreshService = workspaceRailRefreshService;
         this.openAiOAuthService = openAiOAuthService;
         this.appVersion = appVersion;
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService,
+                        String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, appVersion);
     }
 
     @GetMapping("/")
@@ -148,26 +164,40 @@ public class UiController {
 
         if (message != null && !message.isBlank()) {
             shellRefresh = view.activeSession() == null;
-            session = appStateService.ensureChatSession(agentProperties.getWorkspaceRoot());
+            if (shellRefresh) {
+                session = appStateService.ensureChatSession(agentProperties.getWorkspaceRoot());
+                view = appStateService.loadViewData();
+            } else {
+                session = view.activeSession();
+            }
+            SessionDetailView sessionDetail = view.activeSessionDetail();
+            String workspaceRoot = sessionDetail.workspaceRoot();
             String user = message.trim();
             String assistantId = UUID.randomUUID().toString();
             String userId = UUID.randomUUID().toString();
             ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(), selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name());
             Optional<ChatMessageView> summaryMessage = contextCompactionService.compactIfNeeded(session.id(), selected.selectedAgent(), selected.selectedModel(),
-                    selected.selectedThinking(), agentProperties.getWorkspaceRoot(), user);
+                    selected.selectedThinking(), workspaceRoot, user);
             summaryMessage.ifPresent(summary -> newChatMessages.add(toChatMessage(summary)));
             QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId, assistantId, user, metadata);
             newChatMessages.add(toChatMessage(queued.userMessage()));
             newChatMessages.add(toChatMessage(queued.assistantMessage()));
 
-            view = appStateService.loadViewData();
-            SessionDetailView sessionDetail = view.activeSessionDetail();
-            String workspaceRoot = sessionDetail.workspaceRoot();
-            List<Message> conversationHistory = new ArrayList<>();
-            conversationHistory.addAll(appStateService.buildConversationHistory(session.id()));
-            activeStreams.put(assistantId, new ActiveStream(new PendingStream(session.id(), workspaceRoot,
+            List<Message> conversationHistory = new ArrayList<>(appStateService.buildConversationHistory(session.id()));
+            ActiveStream activeStream = new ActiveStream(new PendingStream(session.id(), workspaceRoot,
                     new AgentTurnRequest(null, conversationHistory, workspaceRoot,
-                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id()))));
+                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id())));
+            activeStreams.put(assistantId, activeStream);
+            try {
+                activeStreamRegistryService.register(assistantId, session.id(), workspaceRoot);
+                appStateService.publishWorkspaceRailRefresh();
+            } catch (Exception e) {
+                activeStreams.remove(assistantId, activeStream);
+                activeStreamRegistryService.unregister(assistantId);
+                throw e instanceof RuntimeException runtime ? runtime : new IllegalStateException("Failed to queue active stream", e);
+            }
+
+            view = appStateService.loadViewData();
         }
 
         populateChatControlsModel(model, selected);
@@ -393,6 +423,8 @@ public class UiController {
         } finally {
             active.finished().set(true);
             activeStreams.remove(assistantId, active);
+            activeStreamRegistryService.unregister(assistantId);
+            appStateService.publishWorkspaceRailRefresh();
             completeEmitters(active);
             detachEmitter(active, emitter);
         }
@@ -431,8 +463,10 @@ public class UiController {
 
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
+        activeStreamRegistryService.unregister(assistantId);
         broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls()));
         completeEmitters(active);
+        appStateService.publishWorkspaceRailRefresh();
     }
 
     private void finalizeStreamError(ActiveStream active, String assistantId, String normalizedMessage, Exception e, AtomicBoolean completed) {
@@ -442,8 +476,10 @@ public class UiController {
 
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
+        activeStreamRegistryService.unregister(assistantId);
         broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage));
         completeEmitters(active);
+        appStateService.publishWorkspaceRailRefresh();
     }
 
     private void completeEmitters(ActiveStream active) {
@@ -1203,7 +1239,7 @@ public class UiController {
     }
 
     private Workspace toWorkspace(WorkspaceView view) {
-        return view == null ? null : new Workspace(view.id(), view.name(), view.path(), view.unread(), view.inProgress());
+        return view == null ? null : new Workspace(view.id(), view.name(), view.path(), view.unread(), view.railStatus());
     }
 
     private WorkspaceAction toWorkspaceAction(ProjectView activeProject, WorkspaceView workspace) {
@@ -1212,7 +1248,7 @@ public class UiController {
     }
 
     private Session toSession(SessionView view) {
-        return view == null ? null : new Session(view.id(), view.name(), view.unread(), view.inProgress());
+        return view == null ? null : new Session(view.id(), view.name(), view.unread(), view.railStatus());
     }
 
     private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
@@ -1384,25 +1420,49 @@ public class UiController {
         }
     }
 
-    public record Workspace(long id, String name, String path, boolean unread, boolean inProgress) {
+    public record Workspace(long id, String name, String path, boolean unread, RailStatus railStatus) {
         public Workspace(long id, String name, String path, boolean unread) {
-            this(id, name, path, unread, false);
+            this(id, name, path, unread, RailStatus.NONE);
+        }
+
+        public Workspace(long id, String name, String path, boolean unread, boolean inProgress) {
+            this(id, name, path, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
         }
 
         public Workspace(long id, String name, String path) {
-            this(id, name, path, false, false);
+            this(id, name, path, false, RailStatus.NONE);
+        }
+
+        public boolean inProgress() {
+            return railStatus == RailStatus.IN_PROGRESS;
+        }
+
+        public boolean failed() {
+            return railStatus == RailStatus.FAILED;
         }
     }
 
     public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
 
-    public record Session(long id, String name, boolean unread, boolean inProgress) {
+    public record Session(long id, String name, boolean unread, RailStatus railStatus) {
         public Session(long id, String name, boolean unread) {
-            this(id, name, unread, false);
+            this(id, name, unread, RailStatus.NONE);
+        }
+
+        public Session(long id, String name, boolean unread, boolean inProgress) {
+            this(id, name, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
         }
 
         public Session(long id, String name) {
-            this(id, name, false, false);
+            this(id, name, false, RailStatus.NONE);
+        }
+
+        public boolean inProgress() {
+            return railStatus == RailStatus.IN_PROGRESS;
+        }
+
+        public boolean failed() {
+            return railStatus == RailStatus.FAILED;
         }
     }
 
