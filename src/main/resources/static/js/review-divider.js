@@ -76,8 +76,8 @@ if (divider && shell) {
         bodyClass: 'dragging-divider',
         onMove: event => {
             const shellRect = shell.getBoundingClientRect();
-            const gapStr = getComputedStyle(shell).getPropertyValue('gap') || '12px';
-            const gap = parseFloat(gapStr) || 12;
+            const gapStr = getComputedStyle(shell).getPropertyValue('column-gap') || '0px';
+            const gap = parseFloat(gapStr) || 0;
             const dividerRect = divider.getBoundingClientRect();
             const dividerW = Math.max(1, Math.floor(dividerRect.width)) || 3;
             const pointerCenter = event.clientX + (dividerW / 2) + gap;

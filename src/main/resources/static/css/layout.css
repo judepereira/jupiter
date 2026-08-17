@@ -2,8 +2,9 @@
 #shell.shell-root {
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
-    grid-template-columns: var(--rail-width) 6px minmax(0, 1fr) 5px var(--review-width);
-    gap: 6px;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px var(--review-width);
+    row-gap: 6px;
+    column-gap: 0;
     align-items: stretch;
     background: var(--shell-bg);
     height: calc(100vh - var(--topbar-height) - var(--bottom-nav-height));
@@ -11,16 +12,17 @@
     padding: 0;
     margin-top: var(--topbar-height);
     overflow-x: hidden;
+    position: relative;
 }
 
 /* open: include divider + review column */
 #shell.shell-root.review-open {
-    grid-template-columns: var(--rail-width) 6px minmax(0, 1fr) 5px var(--review-width);
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px var(--review-width);
 }
 
 /* closed: collapse the review column while preserving the left nav and chat. */
 #shell.shell-root.review-closed {
-    grid-template-columns: var(--rail-width) 6px minmax(0, 1fr) 5px 0;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px 0;
 }
 
 /* Rails */
@@ -99,7 +101,7 @@
 }
 
 .left-panel {
-    grid-column: 3;
+    grid-column: 2;
     grid-row: 1;
     display: flex;
     flex-direction: column;
@@ -109,7 +111,7 @@
 }
 
 .review-panel {
-    grid-column: 5;
+    grid-column: 4;
     grid-row: 1;
     display: flex;
     flex-direction: column;
@@ -141,13 +143,18 @@
 
 /* Divider between left rail and left panel */
 .left-rail-divider {
-    grid-column: 2;
-    width: 6px;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--rail-width);
+    width: 10px;
+    transform: translateX(-50%);
     background: transparent;
     cursor: col-resize;
     display: block;
     align-self: stretch;
     touch-action: none;
+    z-index: 3;
     transition: background-color 120ms ease;
 }
 
@@ -163,13 +170,15 @@
 
 /* Divider between left panel and review */
 .panel-divider {
-    grid-column: 4;
+    grid-column: 3;
     width: 5px;
     background: transparent;
     cursor: col-resize;
     display: block;
     align-self: stretch;
+    justify-self: end;
     touch-action: none;
+    z-index: 3;
     transition: background-color 120ms ease;
 }
 
@@ -230,6 +239,11 @@
     max-width: 0 !important;
     width: 0 !important;
     overflow: hidden !important;
+}
+
+#shell.shell-root.left-rail-closed .left-rail-divider {
+    left: 0;
+    transform: none;
 }
 
 /* Mobile off-canvas rail never uses the desktop collapsed state. */
