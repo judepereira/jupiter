@@ -1,16 +1,17 @@
 :root {
-    --rail-width: 216px;
+    --rail-width: 290px;
     --topbar-height: 42px;
     --bottom-nav-height: 42px;
     /* width of the review panel (can be overridden by JS during drag) */
     --review-width: 40%;
     --terminal-panel-height: 320px;
-    --rail-bg: #f8fafc;
+    --rail-bg: rgb(248, 249, 251);;
     --rail-fg: #15233f;
     --panel-bg: #ffffff;
     --panel-border: #dfe7f3;
     --muted: #657492;
-    --accent: #1f6fff;
+    --bg-hover-in-rails: #6574920d;
+    --accent: rgb(6, 100, 248);
     --divider-background-hover: rgb(0 0 0 / 0);
     --topbar-bg: #061733;
     --topbar-border: rgba(135, 163, 205, 0.22);
