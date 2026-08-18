@@ -26,8 +26,8 @@ input:focus, textarea:focus {
 }
 
 .app-switcher {
-    width: 25px;
-    height: 25px;
+    width: 22px;
+    height: 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;

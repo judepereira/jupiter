@@ -3,7 +3,7 @@ body {
     padding: 0;
     height: 100vh;
     overflow: hidden;
-    background: var(--topbar-bg);
+    background: var(--rail-bg);
     color: #111b31;
     font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, Roboto, 'Segoe UI', Helvetica, Arial, sans-serif;
 }

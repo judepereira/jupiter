@@ -137,6 +137,7 @@
     overflow: auto;
     /* Prevent browser auto-adjusting scroll during incremental streaming updates */
     overflow-anchor: none;
+    margin-bottom: 15px;
 }
 
 #chat-messages-list {
@@ -170,11 +171,11 @@
     gap: 4px;
     min-width: 0;
     font-size: 12px;
-    color: var(--muted);
+    color: #131d32;
 }
 
 .chat-control-label {
-    font-weight: 600;
+    font-weight: 300;
 }
 
 .chat-controls select,
