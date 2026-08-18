@@ -51,7 +51,6 @@
     width: 100%;
     height: var(--bottom-nav-height);
     padding: 0;
-    background: var(--topbar-bg);
     border: 0;
     border-top: 1px solid rgba(135, 163, 205, 0.18);
     box-shadow: none;
@@ -73,12 +72,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 33px;
-    height: 29px;
-    border-radius: 6px;
-    background: #0b1931;
-    color: #ffffff;
-    border: 1px solid rgba(181, 202, 237, 0.24);
+    width: 40px;
+    height: var(--topbar-height);
+    background: none;
+    color: var(--accent);
+    border: none;
     cursor: pointer;
     box-shadow: none;
 }

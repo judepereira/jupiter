@@ -111,5 +111,5 @@
 }
 
 .rail .rail-btn:hover {
-    background: #10213e;
+    background: var(--bg-hover-in-rails);
 }
