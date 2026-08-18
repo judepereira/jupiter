@@ -11,7 +11,7 @@
     gap: 8px;
     padding: 0 15px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, #061a3a 0%, var(--topbar-bg) 100%);
+    background: white;
     color: var(--rail-fg);
     border-bottom: 1px solid var(--topbar-border);
 }
@@ -26,8 +26,8 @@ input:focus, textarea:focus {
 }
 
 .app-switcher {
-    width: 20px;
-    height: 20px;
+    width: 25px;
+    height: 25px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -46,7 +46,7 @@ input:focus, textarea:focus {
     min-width: 0;
     overflow-x: auto;
     flex: 1 1 auto;
-    margin-left: 13px;
+    margin-left: 6px;
     scrollbar-width: none;
 }
 
