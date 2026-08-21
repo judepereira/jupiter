@@ -2,12 +2,18 @@ package com.judepereira.jupiter.agent.tools.impl;
 
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
-import com.judepereira.jupiter.agent.tools.*;
+import com.judepereira.jupiter.agent.tools.AgentTool;
+import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
+import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
+import lombok.val;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
@@ -29,7 +35,9 @@ public class RunCommandTool implements AgentTool {
     }
 
     @Override
-    public ToolDefinition definition() { return DEF; }
+    public ToolDefinition definition() {
+        return DEF;
+    }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {
@@ -52,10 +60,10 @@ public class RunCommandTool implements AgentTool {
         pb.environment().putAll(context.getEnvironmentVariables());
         Process p = pb.start();
         // drain stdout and stderr concurrently to avoid blocking due to pipe buffers
-        StringBuilder out = new StringBuilder();
-        StringBuilder err = new StringBuilder();
+        val out = new StringBuilder();
+        val err = new StringBuilder();
         Thread tOut = new Thread(() -> {
-            try (var is = p.getInputStream(); var ir = new InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8);
+            try (var is = p.getInputStream(); var ir = new InputStreamReader(is, StandardCharsets.UTF_8);
                  var br = new BufferedReader(ir)) {
                 br.lines().forEach(l -> out.append(l).append('\n'));
             } catch (Exception e) {
@@ -63,7 +71,7 @@ public class RunCommandTool implements AgentTool {
             }
         });
         Thread tErr = new Thread(() -> {
-            try (var is = p.getErrorStream(); var ir = new InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8);
+            try (var is = p.getErrorStream(); var ir = new InputStreamReader(is, StandardCharsets.UTF_8);
                  var br = new BufferedReader(ir)) {
                 br.lines().forEach(l -> err.append(l).append('\n'));
             } catch (Exception e) {
@@ -96,8 +104,26 @@ public class RunCommandTool implements AgentTool {
         } catch (InterruptedException ignored) {
         }
         int code = p.exitValue();
-        Map<String, Object> machine = Map.of("exitCode", code, "stdout", out.toString(), "stderr", err.toString());
-        String text = "exitCode=" + code + "\n" + out.toString() + err.toString();
+
+        // Auto redirect output to a file.
+        if (out.length() > 2048) {
+            val stdout = Files.createTempFile("stdout", ".txt");
+            Files.writeString(stdout, out.toString());
+            out.setLength(0);
+            out.append("stdout was too long, and was written to ").append(stdout).append("\n");
+        }
+
+        if (err.length() > 2048) {
+            val stderr = Files.createTempFile("stderr", ".txt");
+            Files.writeString(stderr, err.toString());
+            err.setLength(0);
+            err.append("stderr was too long, and was written to ").append(stderr).append("\n");
+        }
+        Map<String, Object> machine = Map.of(
+                "exitCode", code,
+                "stdout", out.toString(),
+                "stderr", err.toString());
+        String text = "exitCode=" + code + "\n" + out + err;
         return new ToolExecutionResult(code == 0, text, machine);
     }
 }
