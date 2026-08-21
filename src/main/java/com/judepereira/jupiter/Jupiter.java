@@ -1,5 +1,7 @@
 package com.judepereira.jupiter;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -10,7 +12,14 @@ public class Jupiter {
 
     @Bean
     ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        JsonFactory jsonFactory = JsonFactory.builder()
+                .streamReadConstraints(
+                        StreamReadConstraints.builder()
+                                .maxStringLength(100_000_000)
+                                .build())
+                .build();
+
+        return new ObjectMapper(jsonFactory);
     }
 
     public static void main(String[] args) {
