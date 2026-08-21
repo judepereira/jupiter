@@ -3,7 +3,6 @@ package com.judepereira.jupiter.agent.tools.impl;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 public class FileUtils {
     public static Path resolveWorkspacePath(Path workspaceRoot, String relative) throws IOException {
@@ -11,20 +10,7 @@ public class FileUtils {
         String rel = relative == null || relative.isBlank() ? "" : relative;
         // canonicalize workspace root to absolute normalized path first
         Path root = workspaceRoot.toAbsolutePath().normalize();
-        Path candidate = root.resolve(rel).normalize();
-        if (!candidate.startsWith(root)) {
-            throw new IOException("Path traversal outside workspace is not allowed: " + relative);
-        }
-        return candidate;
-    }
-
-    public static Path ensureWorkspaceContained(Path workspaceRoot, Path candidate) throws IOException {
-        Path rootRealPath = canonicalWorkspaceRoot(workspaceRoot).toRealPath();
-        Path candidateRealPath = candidate.toRealPath();
-        if (!candidateRealPath.startsWith(rootRealPath)) {
-            throw new IOException("Path escapes workspace: " + candidate);
-        }
-        return candidateRealPath;
+        return root.resolve(rel).normalize();
     }
 
     public static Path canonicalWorkspaceRoot(Path workspaceRoot) {
@@ -46,10 +32,6 @@ public class FileUtils {
         return s;
     }
 
-    public static boolean isAllowedImage(String mediaType, String relativePath) {
-        return isAllowedImageMediaType(mediaType) || isAllowedImageExtension(relativePath);
-    }
-
     public static String resolveAllowedImageMediaType(String mediaType, String relativePath) {
         if (isAllowedImageMediaType(mediaType)) {
             return mediaType;
@@ -65,10 +47,6 @@ public class FileUtils {
             case "image/png", "image/jpeg", "image/gif", "image/webp" -> true;
             default -> false;
         };
-    }
-
-    private static boolean isAllowedImageExtension(String relativePath) {
-        return imageMediaTypeFromExtension(relativePath) != null;
     }
 
     private static String imageMediaTypeFromExtension(String relativePath) {

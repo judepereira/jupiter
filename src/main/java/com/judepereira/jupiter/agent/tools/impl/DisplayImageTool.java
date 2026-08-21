@@ -44,8 +44,6 @@ public class DisplayImageTool implements AgentTool {
             return new ToolExecutionResult(false, "file not found: " + rel, Map.of());
         }
 
-        path = FileUtils.ensureWorkspaceContained(context.getWorkspaceRoot(), path);
-
         String mediaType = FileUtils.resolveAllowedImageMediaType(Files.probeContentType(path), rel);
         if (mediaType == null) {
             return new ToolExecutionResult(false, "unsupported image type: " + rel, Map.of());

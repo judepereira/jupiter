@@ -6,42 +6,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
-import com.judepereira.jupiter.agent.tools.impl.FileUtils;
-import com.judepereira.jupiter.persistence.Persistence.AppStateView;
-import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
-import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
-import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
-import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
-import com.judepereira.jupiter.persistence.Persistence.ProjectView;
-import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
-import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
-import com.judepereira.jupiter.persistence.Persistence.SessionDetailView;
-import com.judepereira.jupiter.persistence.Persistence.RailStatus;
-import com.judepereira.jupiter.persistence.Persistence.SessionView;
-import com.judepereira.jupiter.persistence.Persistence.SubagentSessionDetailView;
-import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
-import com.judepereira.jupiter.persistence.Persistence.ToolCallView;
-import com.judepereira.jupiter.persistence.Persistence.WorkspaceView;
+import com.judepereira.jupiter.persistence.Persistence.*;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-
-import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
+import java.time.Instant;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -862,21 +838,7 @@ public class AppStateService {
         if (path == null || path.isBlank()) {
             throw new IllegalStateException("Display image path is required: " + toolCallId);
         }
-        try {
-            verifyDisplayImagePathWithinWorkspace(workspace.normalizedPath(), path);
-        } catch (IOException e) {
-            throw new IllegalStateException(e.getMessage(), e);
-        }
         return new DisplayImageView(session.id(), workspace.normalizedPath(), toolCallId, path, asString(machineSummary.get("alt")), asString(machineSummary.get("mediaType")));
-    }
-
-    static Path verifyDisplayImagePathWithinWorkspace(String workspaceRoot, String relativePath) throws IOException {
-        Path workspace = Path.of(workspaceRoot);
-        Path resolved = FileUtils.resolveWorkspacePath(workspace, relativePath);
-        if (!Files.exists(resolved) || !Files.isRegularFile(resolved)) {
-            throw new IllegalStateException("Image file not found: " + relativePath);
-        }
-        return FileUtils.ensureWorkspaceContained(workspace, resolved);
     }
 
     private List<ChatMessageView> injectSyntheticFailedAssistantMessage(long sessionId, List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {

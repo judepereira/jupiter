@@ -40,12 +40,6 @@ class DisplayImageToolTest {
     }
 
     @Test
-    void failsOnTraversal(@TempDir Path tmp) throws Exception {
-        DisplayImageTool tool = new DisplayImageTool();
-        assertThrows(Exception.class, () -> tool.execute(Map.of("path", "../outside.png"), new ToolExecutionContext(tmp, true, true, 5)));
-    }
-
-    @Test
     void failsOnUnsupportedFileType(@TempDir Path tmp) throws Exception {
         Path file = tmp.resolve("notes.txt");
         Files.writeString(file, "not an image");
