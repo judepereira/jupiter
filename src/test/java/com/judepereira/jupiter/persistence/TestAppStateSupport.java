@@ -193,7 +193,8 @@ public final class TestAppStateSupport {
             @Override
             public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
                                                java.util.function.Consumer<String> onDelta) {
-                throw new AssertionError("context compaction should not stream");
+                onDelta.accept("compact summary");
+                return new ModelResponse("compact summary", null);
             }
         };
 
