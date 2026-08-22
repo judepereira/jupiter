@@ -5,12 +5,16 @@
     grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px var(--review-width);
     align-items: stretch;
     background: var(--shell-bg);
-    height: calc(100vh - var(--topbar-height) - var(--bottom-nav-height));
     box-sizing: border-box;
     padding: 0;
-    margin-top: var(--topbar-height);
+    margin-top: 0;
     overflow-x: hidden;
-    position: relative;
+    position: fixed;
+    top: var(--topbar-height);
+    right: 0;
+    bottom: var(--bottom-nav-height);
+    left: 0;
+    height: auto;
 }
 
 /* open: include divider + review column */
