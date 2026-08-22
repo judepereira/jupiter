@@ -11,65 +11,7 @@
         <div id="chat-history" class="messages" aria-live="polite">
             <!-- Message list fragment: do not use polling; SSE binds to pending assistant rows -->
             <ul id="chat-messages-list" th:fragment="messages">
-                <!-- iterate and inline the single-row markup so Thymeleaf doesn't evaluate a standalone fragment -->
-                <li th:each="m : ${chatMessages}"
-                    th:attr="data-id=${m.id}, data-role=${m.role}, data-start-ts=${m.ts}, data-completed-ts=${m.completedTs}, data-agent-label=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentName + ' (' + m.metadata.agentId + ')'} : null, data-agent-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentId} : null, data-model-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.modelId} : null, data-thinking-level=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.thinkingLevel} : null, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
-                    th:classappend="${m.pending} ? 'pending' : ''">
-                    <strong th:text="${m.role}"></strong>: <span class="chat-message-text" th:text="${m.text}"></span>
-
-                    <div class="chat-message-subtitle" th:if="${m.role == 'assistant' and (m.metadata != null or m.completedTs != null)}"
-                         th:attr="data-start-ts=${m.ts}, data-completed-ts=${m.completedTs}, data-agent-label=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentName + ' (' + m.metadata.agentId + ')'} : null, data-agent-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentId} : null, data-model-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.modelId} : null, data-thinking-level=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.thinkingLevel} : null"></div>
-
-                    <div th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls">
-                        <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image'}">
-                            <summary class="tool-call-summary">
-                                <span class="tool-call-name" th:text="${group.displayLabel}"></span>
-                                <span class="tool-call-status" th:classappend="${group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
-                                      th:text="${group.success} ? 'success' : 'failure'"></span>
-                            </summary>
-
-                            <div class="tool-call-detail">
-                                <div class="tool-call-calls">
-                                    <div th:each="call : ${group.calls}"
-                                         class="tool-call-call"
-                                         th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
-                                        <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
-                                            <button type="button"
-                                                    class="tool-call-subagent-button"
-                                                    th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                                Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
-                                            </button>
-                                        </div>
-
-                                        <section class="tool-call-section" data-tool-call-field="input">
-                                            <div class="tool-call-label">Input
-                                                <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
-                                            </div>
-                                            <pre class="tool-call-pre" th:text="${call.inputPreview}"></pre>
-                                        </section>
-
-                                        <section class="tool-call-section" data-tool-call-field="output">
-                                            <div class="tool-call-label">Output
-                                                <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
-                                            </div>
-                                            <th:block th:if="${call.imageUrl != null}">
-                                                <figure class="tool-call-image-preview">
-                                                    <img th:src="${call.imageUrl}" th:alt="${call.imageAlt}"/>
-                                                    <figcaption>
-                                                        <span class="tool-call-image-caption" th:text="${call.imageAlt}"></span>
-                                                        <small th:if="${call.imagePath != null}" th:text="${call.imagePath}"></small>
-                                                    </figcaption>
-                                                </figure>
-                                            </th:block>
-                                            <pre th:unless="${call.imageUrl != null}" class="tool-call-pre" th:text="${call.outputPreview}"></pre>
-                                        </section>
-                                    </div>
-                                </div>
-                            </div>
-                        </details>
-                    </div>
-
-                </li>
+                <th:block th:replace="~{fragments/chat-rows :: rows(messages=${chatMessages}, pendingStreamUrlPrefix=${pendingStreamUrlPrefix}, subagentView=${subagentView})}"></th:block>
             </ul>
         </div>
 
@@ -115,5 +57,3 @@
         </form>
     </section>
 </div>
-
-<!-- row fragment removed: markup inlined in list to avoid standalone evaluation when m is null -->
