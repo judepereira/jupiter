@@ -158,7 +158,6 @@
         position: fixed;
         inset: var(--topbar-height) 0 var(--bottom-nav-height) 0;
         background: rgba(6, 23, 51, 0.48);
-        z-index: 1650;
         pointer-events: auto;
         transition: background 180ms linear;
     }

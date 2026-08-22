@@ -13,7 +13,7 @@
     box-sizing: border-box;
     background: var(--rail-bg);
     color: var(--rail-fg);
-    border-bottom: 1px solid var(--topbar-border);
+    border-bottom: 1px solid var(--outline-colour);
 }
 
 button {
