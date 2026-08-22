@@ -193,10 +193,11 @@
 .chat-form textarea,
 #chat-input {
     flex: 1 1 auto;
-    padding: 8px 10px;
+    padding: 8px 35px 8px 10px;
     border-radius: 6px;
     border: 1px solid var(--outline-colour);
     font: inherit;
+    text-overflow: ellipsis;
 }
 
 /* Textarea specific: prevent manual resize, keep single-line height and
