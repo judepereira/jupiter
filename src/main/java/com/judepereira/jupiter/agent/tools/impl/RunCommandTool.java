@@ -21,8 +21,8 @@ import java.util.concurrent.TimeUnit;
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
 public class RunCommandTool implements AgentTool {
-    private static final int INLINE_OUTPUT_LIMIT_BYTES = 8 * 1024;
-    private static final int PREVIEW_EDGE_BYTES = 4 * 1024;
+    private static final int INLINE_OUTPUT_LIMIT_BYTES = 4 * 1024;
+    private static final int PREVIEW_EDGE_BYTES = 2 * 1024;
     private final List<String> forbidden = List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
     private static final ToolDefinition DEF = new ToolDefinition(
             "run_command",

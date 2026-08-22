@@ -21,9 +21,9 @@ public class ToolRegistryTest {
 
         ToolExecutionResult result = registry.executeByName("read_file", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
 
-        String suffix = "\n\n[tool_output_truncated: output exceeded 32 KiB. Use startLine/endLine to read a smaller range.]";
+        String suffix = "\n\n[tool_output_truncated: output exceeded 16 KiB. Use startLine/endLine to read a smaller range.]";
         assertTrue(result.getText().endsWith(suffix));
-        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length <= 32 * 1024);
+        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length <= 16 * 1024);
         assertTrue(result.getText().startsWith("x"));
         assertTrue(result.isSuccess());
         assertEquals(Map.of("ok", true), result.getMachine());
@@ -38,13 +38,13 @@ public class ToolRegistryTest {
         ToolExecutionResult result = registry.executeByName("task", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
 
         assertEquals(text, result.getText());
-        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length > 32 * 1024);
+        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length > 16 * 1024);
     }
 
     @Test
     public void run_command_output_under_new_limit_is_not_truncated(@TempDir Path tmp) throws Exception {
         ToolRegistry registry = new ToolRegistry();
-        String text = "x".repeat(12 * 1024);
+        String text = "x".repeat(8 * 1024);
         registry.register(tool("run_command", text));
 
         ToolExecutionResult result = registry.executeByName("run_command", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
@@ -60,9 +60,9 @@ public class ToolRegistryTest {
 
         ToolExecutionResult result = registry.executeByName("search_code", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
 
-        String suffix = "\n\n[tool_output_truncated: output exceeded 32 KiB. Narrow path, include, or pattern.]";
+        String suffix = "\n\n[tool_output_truncated: output exceeded 16 KiB. Narrow path, include, or pattern.]";
         assertTrue(result.getText().endsWith(suffix));
-        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length <= 32 * 1024);
+        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length <= 16 * 1024);
 
         String prefix = result.getText().substring(0, result.getText().length() - suffix.length());
         assertTrue(prefix.codePoints().allMatch(cp -> cp == 0x1F600));

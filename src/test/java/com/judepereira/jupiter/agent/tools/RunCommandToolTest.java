@@ -63,7 +63,7 @@ public class RunCommandToolTest {
 
         String fullText = Files.readString(outputFile, StandardCharsets.UTF_8);
         assertTrue(preview.codePoints().allMatch(cp -> cp == 0x1F600));
-        assertTrue(preview.getBytes(StandardCharsets.UTF_8).length <= 4 * 1024);
+        assertTrue(preview.getBytes(StandardCharsets.UTF_8).length <= 2 * 1024);
         assertTrue(fullText.startsWith(preview));
         assertTrue(fullText.endsWith("\n"));
     }
@@ -88,7 +88,7 @@ public class RunCommandToolTest {
 
         String fullText = Files.readString(outputFile, StandardCharsets.UTF_8);
         assertTrue(preview.codePoints().allMatch(cp -> cp == 0x1F600));
-        assertTrue(preview.getBytes(StandardCharsets.UTF_8).length <= 4 * 1024);
+        assertTrue(preview.getBytes(StandardCharsets.UTF_8).length <= 2 * 1024);
         assertTrue(fullText.startsWith(preview));
         assertTrue(fullText.endsWith("\n"));
     }
