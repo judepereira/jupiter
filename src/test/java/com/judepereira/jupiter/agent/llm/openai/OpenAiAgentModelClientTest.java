@@ -131,7 +131,7 @@ public class OpenAiAgentModelClientTest {
     }
 
     @Test
-    public void oauth_mode_rewrites_a_leading_system_message_to_user_message() {
+    public void oauth_mode_rewrites_every_system_message_to_user_message() {
         AtomicReference<ChatRequest> capturedRequest = new AtomicReference<>();
         OpenAiOAuthService oauthService = mock(OpenAiOAuthService.class);
         when(oauthService.currentAccessToken()).thenReturn(Optional.of("oauth-access-token"));
@@ -158,15 +158,24 @@ public class OpenAiAgentModelClientTest {
 
         OAuthRecordingClient client = new OAuthRecordingClient();
         var response = client.chat(
-                List.of(new Message(Message.Role.SYSTEM, "sys"), new Message(Message.Role.USER, "u")),
+                List.of(
+                        new Message(Message.Role.SYSTEM, "sys-1"),
+                        new Message(Message.Role.USER, "u-1"),
+                        new Message(Message.Role.SYSTEM, "sys-2"),
+                        new Message(Message.Role.ASSISTANT, "a-1")
+                ),
                 List.of()
         );
 
         assertEquals("oauth", response.getAssistantText());
         assertInstanceOf(UserMessage.class, capturedRequest.get().messages().get(0));
-        assertEquals("sys", ((UserMessage) capturedRequest.get().messages().get(0)).singleText());
+        assertEquals("sys-1", ((UserMessage) capturedRequest.get().messages().get(0)).singleText());
         assertInstanceOf(UserMessage.class, capturedRequest.get().messages().get(1));
-        assertEquals("u", ((UserMessage) capturedRequest.get().messages().get(1)).singleText());
+        assertEquals("u-1", ((UserMessage) capturedRequest.get().messages().get(1)).singleText());
+        assertInstanceOf(UserMessage.class, capturedRequest.get().messages().get(2));
+        assertEquals("sys-2", ((UserMessage) capturedRequest.get().messages().get(2)).singleText());
+        assertInstanceOf(AiMessage.class, capturedRequest.get().messages().get(3));
+        assertEquals("a-1", ((AiMessage) capturedRequest.get().messages().get(3)).text());
         assertTrue(capturedRequest.get().messages().stream().noneMatch(SystemMessage.class::isInstance));
         verify(oauthService, times(1)).currentAccessToken();
         verify(oauthService, times(1)).currentAccountId();
