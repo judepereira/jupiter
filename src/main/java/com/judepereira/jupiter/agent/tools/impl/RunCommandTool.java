@@ -5,10 +5,12 @@ import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
-import lombok.val;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +21,8 @@ import java.util.concurrent.TimeUnit;
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
 public class RunCommandTool implements AgentTool {
+    private static final int INLINE_OUTPUT_LIMIT_BYTES = 8 * 1024;
+    private static final int PREVIEW_EDGE_BYTES = 4 * 1024;
     private final List<String> forbidden = List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
     private static final ToolDefinition DEF = new ToolDefinition(
             "run_command",
@@ -59,22 +63,21 @@ public class RunCommandTool implements AgentTool {
         pb.directory(wd.toFile());
         pb.environment().putAll(context.getEnvironmentVariables());
         Process p = pb.start();
-        // drain stdout and stderr concurrently to avoid blocking due to pipe buffers
-        val out = new StringBuilder();
-        val err = new StringBuilder();
+        StringBuilder stdoutBuilder = new StringBuilder();
+        StringBuilder stderrBuilder = new StringBuilder();
         Thread tOut = new Thread(() -> {
             try (var is = p.getInputStream(); var ir = new InputStreamReader(is, StandardCharsets.UTF_8);
                  var br = new BufferedReader(ir)) {
-                br.lines().forEach(l -> out.append(l).append('\n'));
-            } catch (Exception e) {
+                br.lines().forEach(l -> stdoutBuilder.append(l).append('\n'));
+            } catch (Exception ignored) {
                 // ignore
             }
         });
         Thread tErr = new Thread(() -> {
             try (var is = p.getErrorStream(); var ir = new InputStreamReader(is, StandardCharsets.UTF_8);
                  var br = new BufferedReader(ir)) {
-                br.lines().forEach(l -> err.append(l).append('\n'));
-            } catch (Exception e) {
+                br.lines().forEach(l -> stderrBuilder.append(l).append('\n'));
+            } catch (Exception ignored) {
                 // ignore
             }
         });
@@ -83,7 +86,6 @@ public class RunCommandTool implements AgentTool {
         boolean finished = p.waitFor(context.getCommandTimeoutSeconds(), TimeUnit.SECONDS);
         if (!finished) {
             p.destroyForcibly();
-            // ensure threads finish
             try {
                 tOut.join(200);
             } catch (InterruptedException ignored) {
@@ -94,7 +96,6 @@ public class RunCommandTool implements AgentTool {
             }
             return new ToolExecutionResult(false, "command timed out", Map.of());
         }
-        // wait for drain threads to complete
         try {
             tOut.join(1000);
         } catch (InterruptedException ignored) {
@@ -105,25 +106,60 @@ public class RunCommandTool implements AgentTool {
         }
         int code = p.exitValue();
 
-        // Auto redirect output to a file.
-        if (out.length() > 2048) {
-            val stdout = Files.createTempFile("stdout", ".txt");
-            Files.writeString(stdout, out.toString());
-            out.setLength(0);
-            out.append("stdout was too long, and was written to ").append(stdout).append("\n");
-        }
-
-        if (err.length() > 2048) {
-            val stderr = Files.createTempFile("stderr", ".txt");
-            Files.writeString(stderr, err.toString());
-            err.setLength(0);
-            err.append("stderr was too long, and was written to ").append(stderr).append("\n");
-        }
+        String stdout = formatOutput("stdout", stdoutBuilder.toString());
+        String stderr = formatOutput("stderr", stderrBuilder.toString());
         Map<String, Object> machine = Map.of(
                 "exitCode", code,
-                "stdout", out.toString(),
-                "stderr", err.toString());
-        String text = "exitCode=" + code + "\n" + out + err;
+                "stdout", stdout,
+                "stderr", stderr);
+        String text = "exitCode=" + code + "\n" + stdout + stderr;
         return new ToolExecutionResult(code == 0, text, machine);
+    }
+
+    private String formatOutput(String streamName, String output) throws Exception {
+        byte[] bytes = output.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length <= INLINE_OUTPUT_LIMIT_BYTES) {
+            return output;
+        }
+
+        Path fullOutput = Files.createTempFile(streamName, ".txt");
+        Files.writeString(fullOutput, output, StandardCharsets.UTF_8);
+        return utf8Prefix(bytes, PREVIEW_EDGE_BYTES)
+                + "\n...\n...\n"
+                + utf8Suffix(bytes, PREVIEW_EDGE_BYTES)
+                + "\n\n"
+                + fullOutput;
+    }
+
+    private static String utf8Prefix(byte[] bytes, int maxBytes) throws CharacterCodingException {
+        int length = Math.min(maxBytes, bytes.length);
+        while (length > 0) {
+            try {
+                return decodeUtf8(bytes, 0, length);
+            } catch (CharacterCodingException e) {
+                length--;
+            }
+        }
+        return "";
+    }
+
+    private static String utf8Suffix(byte[] bytes, int maxBytes) throws CharacterCodingException {
+        int start = Math.max(0, bytes.length - maxBytes);
+        while (start < bytes.length) {
+            try {
+                return decodeUtf8(bytes, start, bytes.length - start);
+            } catch (CharacterCodingException e) {
+                start++;
+            }
+        }
+        return "";
+    }
+
+    private static String decodeUtf8(byte[] bytes, int offset, int length) throws CharacterCodingException {
+        return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes, offset, length))
+                .toString();
     }
 }

@@ -14,44 +14,55 @@ import static org.junit.jupiter.api.Assertions.*;
 public class ToolRegistryTest {
 
     @Test
-    public void non_task_output_over_5_kib_is_truncated(@TempDir Path tmp) throws Exception {
+    public void non_task_output_over_limit_is_truncated(@TempDir Path tmp) throws Exception {
         ToolRegistry registry = new ToolRegistry();
-        String text = "x".repeat(6 * 1024);
+        String text = "x".repeat(40 * 1024);
         registry.register(tool("read_file", text));
 
         ToolExecutionResult result = registry.executeByName("read_file", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
 
-        String suffix = "\n\n[tool_output_truncated: output exceeded 5 KiB. Use startLine/endLine to read a smaller range.]";
+        String suffix = "\n\n[tool_output_truncated: output exceeded 32 KiB. Use startLine/endLine to read a smaller range.]";
         assertTrue(result.getText().endsWith(suffix));
-        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length <= 5120);
+        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length <= 32 * 1024);
         assertTrue(result.getText().startsWith("x"));
-        assertEquals(true, result.isSuccess());
+        assertTrue(result.isSuccess());
         assertEquals(Map.of("ok", true), result.getMachine());
     }
 
     @Test
-    public void task_output_over_5_kib_is_not_truncated(@TempDir Path tmp) throws Exception {
+    public void task_output_is_not_truncated(@TempDir Path tmp) throws Exception {
         ToolRegistry registry = new ToolRegistry();
-        String text = "x".repeat(6 * 1024);
+        String text = "x".repeat(40 * 1024);
         registry.register(tool("task", text));
 
         ToolExecutionResult result = registry.executeByName("task", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
 
         assertEquals(text, result.getText());
-        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length > 5120);
+        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length > 32 * 1024);
+    }
+
+    @Test
+    public void run_command_output_under_new_limit_is_not_truncated(@TempDir Path tmp) throws Exception {
+        ToolRegistry registry = new ToolRegistry();
+        String text = "x".repeat(12 * 1024);
+        registry.register(tool("run_command", text));
+
+        ToolExecutionResult result = registry.executeByName("run_command", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
+
+        assertEquals(text, result.getText());
     }
 
     @Test
     public void multi_byte_output_is_truncated_on_code_point_boundaries(@TempDir Path tmp) throws Exception {
         ToolRegistry registry = new ToolRegistry();
-        String text = "😀".repeat(4000);
+        String text = "😀".repeat(9000);
         registry.register(tool("search_code", text));
 
         ToolExecutionResult result = registry.executeByName("search_code", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
 
-        String suffix = "\n\n[tool_output_truncated: output exceeded 5 KiB. Narrow path, include, or pattern.]";
+        String suffix = "\n\n[tool_output_truncated: output exceeded 32 KiB. Narrow path, include, or pattern.]";
         assertTrue(result.getText().endsWith(suffix));
-        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length <= 5120);
+        assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length <= 32 * 1024);
 
         String prefix = result.getText().substring(0, result.getText().length() - suffix.length());
         assertTrue(prefix.codePoints().allMatch(cp -> cp == 0x1F600));
@@ -65,7 +76,7 @@ public class ToolRegistryTest {
         ToolExecutionResult result = registry.executeByName("read_file", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
 
         assertNull(result.getText());
-        assertEquals(true, result.isSuccess());
+        assertTrue(result.isSuccess());
         assertEquals(Map.of("ok", true), result.getMachine());
     }
 
