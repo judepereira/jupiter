@@ -62,7 +62,8 @@ public class TaskTool implements AgentTool {
                     context.getWorkspaceRoot().toString(),
                     agentId,
                     task,
-                    expectedOutput
+                    expectedOutput,
+                    context.getCancellationToken()
             ), new SubagentTaskService.SubagentTaskStreamListener() {
                 @Override
                 public void onStarted(SubagentTaskService.SubagentTaskStarted event) {

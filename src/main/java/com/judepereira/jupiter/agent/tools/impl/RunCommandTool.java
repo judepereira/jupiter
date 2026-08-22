@@ -4,6 +4,8 @@ import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter.agent.tools.*;
 
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
@@ -72,28 +74,53 @@ public class RunCommandTool implements AgentTool {
         });
         tOut.start();
         tErr.start();
-        boolean finished = p.waitFor(context.getCommandTimeoutSeconds(), TimeUnit.SECONDS);
-        if (!finished) {
-            p.destroyForcibly();
-            // ensure threads finish
-            try {
-                tOut.join(200);
-            } catch (InterruptedException ignored) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(context.getCommandTimeoutSeconds());
+        while (true) {
+            if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
+                p.destroyForcibly();
+                try {
+                    tOut.join(200);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                try {
+                    tErr.join(200);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                throw new StreamCancelledException();
             }
-            try {
-                tErr.join(200);
-            } catch (InterruptedException ignored) {
+            if (p.waitFor(100, TimeUnit.MILLISECONDS)) {
+                break;
             }
-            return new ToolExecutionResult(false, "command timed out", Map.of());
+            if (System.nanoTime() >= deadline) {
+                p.destroyForcibly();
+                try {
+                    tOut.join(200);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                try {
+                    tErr.join(200);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                return new ToolExecutionResult(false, "command timed out", Map.of());
+            }
         }
         // wait for drain threads to complete
         try {
             tOut.join(1000);
         } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
         try {
             tErr.join(1000);
         } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+        if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
+            throw new StreamCancelledException();
         }
         int code = p.exitValue();
         Map<String, Object> machine = Map.of("exitCode", code, "stdout", out.toString(), "stderr", err.toString());

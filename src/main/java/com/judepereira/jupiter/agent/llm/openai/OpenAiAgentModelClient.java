@@ -110,6 +110,9 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 attemptState.await();
                 Throwable handlerError = attemptState.error();
                 if (handlerError != null) {
+                    if (handlerError instanceof com.judepereira.jupiter.agent.harness.StreamCancelledException cancelled) {
+                        throw cancelled;
+                    }
                     if (attemptState.canRetry() && retryPolicy.shouldRetry(handlerError) && retriesUsed < retryPolicy.maxRetries()) {
                         retriesUsed++;
                         retryPolicy.sleep(retriesUsed);
@@ -121,6 +124,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("OpenAI streaming request interrupted", e);
+            } catch (com.judepereira.jupiter.agent.harness.StreamCancelledException e) {
+                throw e;
             } catch (Exception e) {
                 if (attemptState.canRetry() && retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
                     retriesUsed++;
@@ -146,6 +151,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException(failureMessage, e);
+            } catch (com.judepereira.jupiter.agent.harness.StreamCancelledException e) {
+                throw e;
             } catch (Exception e) {
                 if (retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
                     retriesUsed++;

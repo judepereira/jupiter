@@ -464,6 +464,20 @@ public class AppStateService {
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
 
+    @Transactional
+    public ChatMessageView stopAssistantMessage(long sessionId, String assistantPublicId, String partialText) {
+        var assistantMessage = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
+        if (!assistantMessage.pending() || !"assistant".equals(assistantMessage.role())) {
+            return toChatMessageView(assistantMessage, sessionId);
+        }
+        String base = partialText == null ? "" : partialText.trim();
+        String stoppedText = base.isEmpty() ? "Stopped by user." : base + "\n\nStopped by user.";
+        repository.updateMessageToolCalls(assistantMessage.id(), null);
+        repository.updateMessageContentAndPending(assistantMessage.id(), stoppedText, false, false, Instant.now());
+        markUnreadIfInactive(sessionId);
+        return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
+    }
+
     public void publishWorkspaceRailRefresh() {
         applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
     }

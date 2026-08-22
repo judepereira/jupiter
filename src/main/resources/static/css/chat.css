@@ -223,6 +223,15 @@
     cursor: pointer;
 }
 
+.chat-form button.chat-stop-button {
+    background: #dc2626;
+}
+
+.chat-form button.chat-stopping-button {
+    background: #92400e;
+    cursor: wait;
+}
+
 .command-modal {
     position: fixed;
     inset: 0;

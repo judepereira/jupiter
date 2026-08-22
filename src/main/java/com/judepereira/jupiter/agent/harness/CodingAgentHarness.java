@@ -17,6 +17,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
@@ -109,9 +110,11 @@ public class CodingAgentHarness {
         List<ToolDefinition> defs = resolveToolDefinitions(allowedTools);
 
         StringBuilder accumulated = new StringBuilder();
+        CancellationToken cancellationToken = request.getCancellationToken();
 
         try {
             for (int i = 0; i < max; i++) {
+                throwIfCancelled(cancellationToken);
                 List<Message> preparedConversation = listener.onBeforeModelRequest(request, List.copyOf(convo));
                 if (preparedConversation == null) {
                     throw new IllegalStateException("Listener returned null conversation before model request");
@@ -119,7 +122,7 @@ public class CodingAgentHarness {
                 convo = new ArrayList<>(seedConversation(systemPrompt, preparedConversation));
 
                 ModelResponse resp = model.chatStreaming(convo, defs, modelOptions, delta -> {
-                    // forward and accumulate every non-null delta, including whitespace-only chunks
+                    throwIfCancelled(cancellationToken);
                     if (delta != null) {
                         accumulated.append(delta);
                         listener.onTextDelta(delta);
@@ -167,8 +170,8 @@ public class CodingAgentHarness {
                     }
                     listener.onStatus("calling_tool:" + toolName);
                     listener.onToolCallStarted(new ToolCallTrace(toolCallId, toolName, args, false, "", Map.of()));
-                    // execute tool
                     try {
+                        throwIfCancelled(cancellationToken);
                         ToolExecutionContext execCtx = new ToolExecutionContext(execCtxTemplate.getWorkspaceRoot(),
                                 execCtxTemplate.isAllowWrite(),
                                 execCtxTemplate.isAllowCommand(),
@@ -178,7 +181,8 @@ public class CodingAgentHarness {
                                 execCtxTemplate.getAgentMode(),
                                 toolCallId,
                                 execCtxTemplate.getEnvironmentVariables(),
-                                (eventName, payload) -> listener.onToolCallProgress(toolCallId, toolName, eventName, payload));
+                                (eventName, payload) -> listener.onToolCallProgress(toolCallId, toolName, eventName, payload),
+                                cancellationToken);
                         ToolExecutionResult result = registry.executeByName(toolName, args, execCtx);
                         String toolText = result.getText() == null ? "" : result.getText();
                         convo.add(new Message(Message.Role.TOOL, toolText, toolCallId));
@@ -186,8 +190,9 @@ public class CodingAgentHarness {
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_result:" + toolName);
+                    } catch (StreamCancelledException e) {
+                        throw e;
                     } catch (IllegalArgumentException e) {
-                        // unknown tool
                         String toolMsg = "[tool_error] Unknown tool: " + toolName;
                         convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
                         ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg, Map.of("error", e.getMessage()));
@@ -204,7 +209,7 @@ public class CodingAgentHarness {
                     }
                     // continue loop
                 } else if (assistantText != null && !assistantText.isBlank()) {
-                    // final assistant text
+                    throwIfCancelled(cancellationToken);
                     AgentTurnResult result = new AgentTurnResult(accumulated.length() == 0 ? assistantText : accumulated.toString(), traces);
                     listener.onComplete(result);
                     return result;
@@ -218,9 +223,17 @@ public class CodingAgentHarness {
             AgentTurnResult result = new AgentTurnResult(fallback, traces);
             listener.onComplete(result);
             return result;
+        } catch (StreamCancelledException e) {
+            throw e;
         } catch (Exception e) {
             listener.onError(e);
             throw e;
+        }
+    }
+
+    private static void throwIfCancelled(CancellationToken cancellationToken) {
+        if (cancellationToken != null) {
+            cancellationToken.throwIfCancelled();
         }
     }
 

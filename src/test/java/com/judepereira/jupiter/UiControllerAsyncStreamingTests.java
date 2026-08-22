@@ -7,6 +7,7 @@ import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.command.CommandStreamService;
@@ -602,6 +603,57 @@ public class UiControllerAsyncStreamingTests {
         assertThat(text).doesNotContain("\"error\"");
     }
 
+    @Test
+    public void stopChatCancelsInFlightStreamAndPersistsStoppedAssistantMessage(@TempDir java.nio.file.Path tmp) throws Exception {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+            @Override
+            public AgentTurnResult runTurn(AgentTurnRequest request) {
+                return new AgentTurnResult("", List.of());
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+                listener.onTextDelta("partial ");
+                while (request.getCancellationToken() != null && !request.getCancellationToken().isCancelled()) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                throw new StreamCancelledException();
+            }
+        };
+
+        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
+
+        Model sendModel = new ConcurrentModel();
+        ctrl.sendMessage("go", sendModel, null);
+        String assistantId = assistantId((ConcurrentModel) sendModel);
+
+        var emitter = ctrl.streamChat(assistantId);
+        assertThat(emitter).isNotNull();
+
+        Model stopModel = new ConcurrentModel();
+        String view = ctrl.stopChat(assistantId, stopModel);
+        assertThat(view).isEqualTo("fragments/chat :: chat");
+
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
+
+        Model after = new ConcurrentModel();
+        ctrl.index(after);
+        List<?> chatMessages = (List<?>) after.getAttribute("chatMessages");
+        Object assistant = chatMessages.stream()
+                .filter(message -> assistantId.equals(((UiController.ChatMessage) message).id()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(((UiController.ChatMessage) assistant).pending()).isFalse();
+        assertThat(((UiController.ChatMessage) assistant).text()).isEqualTo("partial\n\nStopped by user.");
+    }
     private static String assistantId(ConcurrentModel model) throws Exception {
         List<?> msgs = (List<?>) model.getAttribute("chatMessages");
         Object last = msgs.get(msgs.size() - 1);
