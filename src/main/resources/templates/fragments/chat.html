@@ -3,7 +3,7 @@
     <!-- HTMX polling attributes are applied to the messages list when hasPending is true -->
     <section id="chat" class="chat-shell">
         <div th:if="${subagentView ?: false}" class="subagent-bar">
-            <button type="button" class="subagent-back-button" hx-get="/ui/chat/primary" hx-target="#chat-container" hx-swap="outerHTML">Back</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm subagent-back-button" hx-get="/ui/chat/primary" hx-target="#chat-container" hx-swap="outerHTML">Back</button>
             <span class="subagent-bar-label">Subagent:</span>
             <strong class="subagent-bar-name" th:text="${subagentAgentName}"></strong>
         </div>
@@ -35,7 +35,7 @@
                                          th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
                                         <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
                                             <button type="button"
-                                                    class="tool-call-subagent-button"
+                                                    class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                                     th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
                                                 Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
                                             </button>
@@ -110,7 +110,7 @@
             <div class="chat-compose-row">
                 <label for="chat-input" class="sr-only">Message</label>
                 <textarea id="chat-input" name="message" rows="1" autocomplete="off"></textarea>
-                <button id="chat-send-btn" type="submit">Send</button>
+                <button id="chat-send-btn" type="submit" class="btn btn-primary">Send</button>
             </div>
         </form>
     </section>

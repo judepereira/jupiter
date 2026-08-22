@@ -7,7 +7,7 @@
 
 <li th:fragment="node(name, path, expanded)" class="directory-node" th:classappend="${expanded} ? ' expanded' : ''">
     <button type="button"
-            class="directory-node-row"
+            class="btn btn-light btn-sm w-100 text-start directory-node-row"
             th:if="${!expanded}"
             th:attr="hx-get=@{/ui/projects/directory(path=${path})}, hx-target='closest .directory-node', hx-swap='outerHTML'">
         <i class="bi bi-chevron-right directory-node-chevron" aria-hidden="true"></i>
@@ -15,7 +15,7 @@
     </button>
 
     <button type="button"
-            class="directory-node-row"
+            class="btn btn-light w-100 text-start directory-node-row"
             th:if="${expanded}"
             th:attr="hx-get=@{/ui/projects/directory/collapse(path=${path})}, hx-target='closest .directory-node', hx-swap='outerHTML'">
         <i class="bi bi-chevron-down directory-node-chevron" aria-hidden="true"></i>

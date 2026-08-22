@@ -1555,7 +1555,7 @@
                     if (!entry.button) {
                         entry.button = document.createElement('button');
                         entry.button.type = 'button';
-                        entry.button.className = 'tool-call-subagent-button';
+                        entry.button.className = 'btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button';
                         entry.subagent.appendChild(entry.button);
                     }
                     entry.subagent.dataset.childSessionId = subagentSessionId;

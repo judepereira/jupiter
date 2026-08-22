@@ -16,8 +16,39 @@
     border-bottom: 1px solid var(--outline-colour);
 }
 
-button {
-    font-size: 14px;
+.project-add-button {
+    border: 0;
+    background: #1269ff;
+    color: #ffffff;
+    border-radius: 5px;
+    height: 29px;
+    padding: 0 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 6px 14px rgba(18, 105, 255, 0.32);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.project-add-button:hover,
+.project-tab-group:hover {
+    filter: brightness(50%);
+    background: var(--bg-hover-in-rails);
+}
+
+.project-tab-group.active:hover {
+    filter: inherit;
+    background: white;
+}
+
+.project-tab-add:hover {
+    color: black;
+}
+
+.project-tab-close:hover {
+    color: black;
 }
 
 input:focus, textarea:focus {
@@ -132,41 +163,6 @@ input:focus, textarea:focus {
     align-items: center;
     gap: 0;
     flex: 0 0 auto;
-}
-
-.project-add-button {
-    border: 0;
-    background: #1269ff;
-    color: #ffffff;
-    border-radius: 5px;
-    height: 29px;
-    padding: 0 13px;
-    cursor: pointer;
-    white-space: nowrap;
-    box-shadow: 0 6px 14px rgba(18, 105, 255, 0.32);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex: 0 0 auto;
-}
-
-.project-add-button:hover,
-.project-tab-group:hover {
-    filter: brightness(50%);
-    background: var(--bg-hover-in-rails);
-}
-
-.project-tab-group.active:hover {
-    filter: inherit;
-    background: white;
-}
-
-.project-tab-add:hover {
-    color: black;
-}
-
-.project-tab-close:hover {
-    color: black;
 }
 
 .top-bar-actions .rail-btn,

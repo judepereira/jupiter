@@ -18,31 +18,10 @@
     margin-bottom: 8px;
 }
 
-.subagent-back-button,
-.tool-call-subagent-button {
-    border: 1px solid rgba(31, 111, 255, 0.22);
-    background: #ffffff;
-    color: var(--accent);
-    border-radius: 8px;
-    padding: 6px 10px;
-    cursor: pointer;
-}
-
 .tool-call-subagent {
     margin: 0;
 }
 
-.tool-call-subagent-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font: inherit;
-}
-
-.subagent-back-button:hover,
-.tool-call-subagent-button:hover {
-    background: #f4f8ff;
-}
 
 #chat-container {
     flex: 1 1 auto;
@@ -179,7 +158,7 @@
 
 .chat-controls select,
 .chat-compose-row textarea,
-.chat-compose-row button {
+.chat-compose-row .btn {
     min-width: 0;
 }
 
@@ -209,15 +188,6 @@
     line-height: 1.4;
     min-height: 1.4em; /* roughly single-line */
     max-height: calc(1.4em * 10 + 16px); /* ~10 lines plus padding */
-}
-
-.chat-form button {
-    padding: 8px 12px;
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
 }
 
 .command-modal {

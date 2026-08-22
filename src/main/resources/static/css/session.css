@@ -80,6 +80,10 @@
     font-weight: 600;
 }
 
+.session-item.active {
+    background: var(--bg-hover-in-rails);
+}
+
 .session-list {
     display: flex;
     flex-direction: column;
@@ -117,10 +121,6 @@
     width: 8px;
     height: 1px;
     background: #d6deeb;
-}
-
-.session-item.active {
-    background: var(--bg-hover-in-rails);
 }
 
 .workspace-close-button,
@@ -192,6 +192,9 @@
     white-space: nowrap;
 }
 
+.workspace-label {
+}
+
 .unread-dot,
 .pending-dot,
 .failed-dot {
@@ -214,9 +217,6 @@
 .failed-dot {
     background: #ef4444;
     box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.16);
-}
-
-.workspace-label {
 }
 
 .workspace-menu {
