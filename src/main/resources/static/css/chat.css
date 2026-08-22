@@ -120,8 +120,7 @@
 
 /* Inline code: subtle background and allow wrapping if needed */
 .chat-message-text code {
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 2px 0;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
     white-space: pre-wrap;
 }
