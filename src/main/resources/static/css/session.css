@@ -249,7 +249,6 @@
     color: var(--accent);
     cursor: pointer;
     box-sizing: border-box;
-    font-weight: 500;
 }
 
 .rail-action-button:hover {
