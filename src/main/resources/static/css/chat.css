@@ -6,6 +6,31 @@
     width: 100%;
 }
 
+#chat-messages-list > li {
+    margin-bottom: 10px;
+}
+
+#chat-messages-list > li:last-child {
+    margin-bottom: 0;
+}
+
+#chat-messages-list > li:first-child {
+    padding-top: 10px;
+}
+
+#chat-messages-list > li[data-role="user"] {
+    border: 1px solid var(--outline-colour);
+    border-radius: 6px;
+    padding: 5px 10px;
+    background: #3e7dcd21;
+    width: fit-content;
+    align-self: end;
+}
+
+#chat-messages-list p:last-child {
+    margin-bottom: 0;
+}
+
 .subagent-bar {
     display: flex;
     align-items: center;
