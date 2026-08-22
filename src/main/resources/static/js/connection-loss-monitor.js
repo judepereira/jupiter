@@ -45,7 +45,7 @@
     }
 
     function scheduleProbe(delay = HEALTH_POLL_MS) {
-        if (state.timer) return;
+        clearTimer();
         state.timer = window.setTimeout(() => {
             state.timer = null;
             probeHealth();
@@ -74,7 +74,7 @@
                     return;
                 }
                 setOverlayVisible(false);
-                clearTimer();
+                scheduleProbe(HEALTH_POLL_MS);
                 return;
             }
             showOverlayAndPoll();
@@ -106,11 +106,12 @@
 
     function transportFailure() {
         state.probeShouldReloadOnHealthy = true;
+        if (state.probeInFlight) return;
         if (state.overlayVisible) {
-            if (state.probeInFlight || state.timer) return;
             scheduleProbe(0);
             return;
         }
+        clearTimer();
         probeHealth();
     }
 
