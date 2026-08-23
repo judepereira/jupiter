@@ -290,6 +290,17 @@
             agentSelect.addEventListener('change', () => syncChatDefaults(form));
         }
 
+        function bindChatSubmitStopListener(form) {
+            if (!form || form.dataset.chatStopBound === '1') return;
+            form.dataset.chatStopBound = '1';
+            form.addEventListener('submit', event => {
+                if (!activePrimaryPendingAssistantRow()) return;
+                event.preventDefault();
+                event.stopPropagation();
+                requestStopActiveChat();
+            }, true);
+        }
+
         const commandPickerState = {
             open: false,
             query: '/',
@@ -626,6 +637,9 @@
                         if (e.altKey) return;
 
                         e.preventDefault();
+                        if (activePrimaryPendingAssistantRow()) {
+                            return;
+                        }
                         if (typeof form.requestSubmit === 'function') {
                             form.requestSubmit();
                         } else {
@@ -671,8 +685,10 @@
 
                 requestAnimationFrame(() => resizeChatTextarea(textarea));
                 bindChatControlListeners(form);
+                bindChatSubmitStopListener(form);
                 bindAutoScrollListeners();
                 checkAndMaybeScroll();
+                updateChatSendButtonState();
             } catch (_) {
             }
         }
@@ -886,11 +902,101 @@
         }
 
         const activePendingStreams = new Map();
+        let stopRequestInFlight = false;
+
+        function activePrimaryPendingAssistantRow() {
+            try {
+                if (getCurrentOpenSubagentSessionId()) return null;
+                const list = document.getElementById('chat-messages-list');
+                if (!list) return null;
+                return list.querySelector('li[data-role="assistant"][data-pending="true"][data-stream-url]');
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function updateChatSendButtonState() {
+            try {
+                const form = document.getElementById('chat-send-form');
+                const button = document.getElementById('chat-send-btn');
+                if (!form || !button) return;
+                const activeRow = activePrimaryPendingAssistantRow();
+                const running = Boolean(activeRow);
+                form.dataset.chatRunning = running ? 'true' : 'false';
+                button.classList.toggle('chat-stop-button', running);
+                button.classList.toggle('chat-stopping-button', stopRequestInFlight);
+                if (stopRequestInFlight) {
+                    button.textContent = 'Stopping...';
+                    button.setAttribute('aria-label', 'Stopping current response');
+                    button.setAttribute('aria-busy', 'true');
+                } else if (running) {
+                    button.textContent = 'Stop';
+                    button.setAttribute('aria-label', 'Stop current response');
+                    button.removeAttribute('aria-busy');
+                } else {
+                    button.textContent = 'Send';
+                    button.setAttribute('aria-label', 'Send message');
+                    button.removeAttribute('aria-busy');
+                }
+            } catch (_) {
+            }
+        }
+
+        function replaceChatContainerFromHtml(html) {
+            try {
+                if (!html) return;
+                const template = document.createElement('template');
+                template.innerHTML = html.trim();
+                const incoming = template.content.querySelector('#chat-container');
+                const current = document.getElementById('chat-container');
+                if (incoming && current) {
+                    current.outerHTML = incoming.outerHTML;
+                    Promise.resolve().then(() => {
+                        initChatComposer();
+                        bindPendingStreams();
+                        renderAllChatMarkdown();
+                        formatAllChatSubtitles();
+                        updateChatSendButtonState();
+                    });
+                }
+            } catch (_) {
+            }
+        }
+
+        function requestStopActiveChat() {
+            try {
+                if (stopRequestInFlight) return;
+                const row = activePrimaryPendingAssistantRow();
+                if (!row || !row.dataset || !row.dataset.id) return;
+                stopRequestInFlight = true;
+                updateChatSendButtonState();
+                const body = new URLSearchParams();
+                body.set('assistantId', row.dataset.id);
+                fetch('/ui/chat/stop', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', 'HX-Request': 'true'},
+                    body: body.toString()
+                }).then(response => {
+                    if (!response.ok) throw new Error('Stop request failed');
+                    return response.text();
+                }).then(replaceChatContainerFromHtml)
+                    .catch(error => console.error(error))
+                    .finally(() => {
+                        stopRequestInFlight = false;
+                        updateChatSendButtonState();
+                    });
+            } catch (_) {
+                stopRequestInFlight = false;
+                updateChatSendButtonState();
+            }
+        }
 
         function clearPendingStream(assistantId, source) {
             if (activePendingStreams.get(assistantId) === source) {
                 activePendingStreams.delete(assistantId);
             }
+            stopRequestInFlight = false;
+            updateChatSendButtonState();
         }
 
         function refreshWorkspaceRail() {
@@ -1824,6 +1930,7 @@
 
                     const es = new EventSource(url);
                     activePendingStreams.set(assistantId, es);
+                    updateChatSendButtonState();
 
                     // Helper to parse SSE payloads that may be JSON {text:...} or legacy raw strings
                     function parseStreamPayload(e) {
@@ -2121,6 +2228,7 @@
                                 if (payload && payload.completedTs != null) {
                                     updateChatRowCompletion(liveRow, payload.completedTs);
                                 }
+                                updateChatSendButtonState();
                             }
                         } catch (_) {
                         }
@@ -2131,6 +2239,39 @@
                         clearPendingStream(assistantId, es);
                         refreshWorkspaceRail();
                         // remove stream-local listener when stream completes
+                        removeStreamScrollListener();
+                    });
+
+                    es.addEventListener('stopped', (e) => {
+                        try {
+                            const payload = parseStreamPayload(e);
+                            if (flushTimer) {
+                                clearTimeout(flushTimer);
+                                flushTimer = null;
+                            }
+                            flushBuffer();
+                            const textSpan = currentTextSpan();
+                            if (textSpan && payload && payload.message != null) {
+                                renderChatMarkdown(textSpan, payload.message);
+                            }
+                            const liveRow = currentRow();
+                            if (liveRow) {
+                                liveRow.classList.remove('pending');
+                                liveRow.removeAttribute('data-pending');
+                                liveRow.dataset.streamBound = '0';
+                                if (payload && payload.completedTs != null) {
+                                    updateChatRowCompletion(liveRow, payload.completedTs);
+                                }
+                                updateChatSendButtonState();
+                            }
+                        } catch (_) {
+                        }
+                        try {
+                            es.close();
+                        } catch (_) {
+                        }
+                        clearPendingStream(assistantId, es);
+                        refreshWorkspaceRail();
                         removeStreamScrollListener();
                     });
 
@@ -2165,6 +2306,7 @@
                                 if (payload && payload.completedTs != null) {
                                     updateChatRowCompletion(liveRow, payload.completedTs);
                                 }
+                                updateChatSendButtonState();
                             }
                         } catch (_) {
                         }
@@ -2315,8 +2457,14 @@
         }, true);
 
         document.body.addEventListener('htmx:afterSwap', function () {
-            Promise.resolve().then(initChatComposer);
+            Promise.resolve().then(() => {
+                initChatComposer();
+                updateChatSendButtonState();
+            });
         }, true);
         document.body.addEventListener('htmx:afterSettle', function () {
-            Promise.resolve().then(initChatComposer);
+            Promise.resolve().then(() => {
+                initChatComposer();
+                updateChatSendButtonState();
+            });
         }, true);

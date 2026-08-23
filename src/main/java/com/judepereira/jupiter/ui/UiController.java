@@ -6,7 +6,9 @@ import com.judepereira.jupiter.agent.catalog.*;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
+import com.judepereira.jupiter.agent.harness.CancellationToken;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.llm.dto.Message;
@@ -49,6 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Log4j2
 @Controller
@@ -140,6 +143,9 @@ public class UiController {
         ChatSelection selected = resolveChatSelection(agentId, modelId, thinkingLevel);
 
         if (message != null && !message.isBlank()) {
+            if (view.activeSession() != null && activeStreamRegistryService.hasActiveStreamForSession(view.activeSession().id())) {
+                throw new IllegalStateException("A chat stream is already active for the current session");
+            }
             shellRefresh = view.activeSession() == null;
             if (shellRefresh) {
                 session = appStateService.ensureChatSession(agentProperties.getWorkspaceRoot());
@@ -161,9 +167,10 @@ public class UiController {
             newChatMessages.add(toChatMessage(queued.assistantMessage()));
 
             List<Message> conversationHistory = new ArrayList<>(appStateService.buildConversationHistory(session.id()));
+            CancellationToken cancellationToken = new CancellationToken();
             ActiveStream activeStream = new ActiveStream(new PendingStream(session.id(), workspaceRoot,
                     new AgentTurnRequest(null, conversationHistory, workspaceRoot,
-                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id())));
+                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id(), cancellationToken)), cancellationToken);
             activeStreams.put(assistantId, activeStream);
             try {
                 activeStreamRegistryService.register(assistantId, session.id(), workspaceRoot);
@@ -274,7 +281,8 @@ public class UiController {
 
     private void startActiveStream(String assistantId, ActiveStream active, SseEmitter emitter) {
         try {
-            Thread.startVirtualThread(() -> runActiveStream(assistantId, active));
+            Thread runner = Thread.startVirtualThread(() -> runActiveStream(assistantId, active));
+            active.runner().set(runner);
         } catch (Throwable t) {
             active.started().set(false);
             Exception e = t instanceof Exception exception ? exception : new RuntimeException(t);
@@ -284,8 +292,8 @@ public class UiController {
 
     private void runActiveStream(String assistantId, ActiveStream active) {
         PendingStream pending = active.pendingStream();
-        AtomicBoolean completed = new AtomicBoolean(false);
-        StringBuilder accumulated = new StringBuilder();
+        AtomicBoolean completed = active.completed();
+        StringBuilder accumulated = active.accumulatedText().get();
 
         AgentStreamListener listener = new AgentStreamListener() {
             @Override
@@ -294,6 +302,7 @@ public class UiController {
                     if (delta == null) {
                         return;
                     }
+                    active.cancellationToken().throwIfCancelled();
                     accumulated.append(delta);
                     appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
                     broadcastEvent(active, assistantId, "delta", Map.of("text", delta));
@@ -334,6 +343,7 @@ public class UiController {
 
             @Override
             public List<Message> onBeforeModelRequest(AgentTurnRequest currentRequest, List<Message> conversation) {
+                active.cancellationToken().throwIfCancelled();
                 if (currentRequest.getSessionId() == null) {
                     return conversation;
                 }
@@ -371,6 +381,16 @@ public class UiController {
             @Override
             public void onError(Exception e) {
                 try {
+                    if (e instanceof StreamCancelledException) {
+                        active.cancellationToken().cancel();
+                        Thread runner = active.runner().getAndSet(null);
+                        if (runner != null) {
+                            runner.interrupt();
+                        }
+                        ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(pending.sessionId(), assistantId, accumulated.toString());
+                        finalizeStreamStopped(active, assistantId, stoppedMessage, completed);
+                        return;
+                    }
                     String normalizedMessage = normalizeProviderErrorMessage(e);
                     ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
                     log.error("Execution failure!", e);
@@ -385,6 +405,8 @@ public class UiController {
             if (!completed.get()) {
                 listener.onComplete(result);
             }
+        } catch (StreamCancelledException e) {
+            listener.onError(e);
         } catch (Exception e) {
             listener.onError(e);
         }
@@ -459,6 +481,41 @@ public class UiController {
         appStateService.publishWorkspaceRailRefresh();
     }
 
+    private void finalizeStreamStopped(ActiveStream active, String assistantId, ChatMessageView stoppedMessage, AtomicBoolean completed) {
+        if (!completed.compareAndSet(false, true)) {
+            return;
+        }
+
+        active.finished().set(true);
+        activeStreams.remove(assistantId, active);
+        activeStreamRegistryService.unregister(assistantId);
+        broadcastEvent(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
+        completeEmitters(active);
+        appStateService.publishWorkspaceRailRefresh();
+    }
+
+    private void stopActiveStream(String assistantId, ActiveStream active) {
+        if (!active.completed().compareAndSet(false, true)) {
+            return;
+        }
+        active.cancellationToken().cancel();
+        Thread runner = active.runner().getAndSet(null);
+        if (runner != null) {
+            runner.interrupt();
+        }
+        try {
+            ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(active.pendingStream().sessionId(), assistantId, active.accumulatedText().get().toString());
+            active.finished().set(true);
+            activeStreams.remove(assistantId, active);
+            activeStreamRegistryService.unregister(assistantId);
+            broadcastEvent(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
+            completeEmitters(active);
+            appStateService.publishWorkspaceRailRefresh();
+        } catch (Exception e) {
+            log.error("Failed to stop assistant stream", e);
+        }
+    }
+
     private void completeEmitters(ActiveStream active) {
         for (SseEmitter emitter : active.emitters()) {
             try {
@@ -467,6 +524,58 @@ public class UiController {
             }
         }
         active.emitters().clear();
+    }
+
+    @PostMapping("/ui/chat/stop")
+    public String stopChat(@RequestParam(value = "assistantId", required = false) String assistantId, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        SessionView session = view.activeSession();
+        if (session == null) {
+            populateChatControlsModel(model, activeChatSelection(view));
+            populateProjectModel(model, view);
+            populateSessionModel(model, view);
+            return "fragments/chat :: chat";
+        }
+
+        String targetAssistantId = assistantId;
+        ActiveStream active = targetAssistantId == null || targetAssistantId.isBlank() ? null : activeStreams.get(targetAssistantId);
+        if (active != null && active.pendingStream().sessionId() != session.id()) {
+            throw new IllegalStateException("Assistant stream does not belong to the active session");
+        }
+        if (active == null) {
+            active = activeStreams.values().stream().filter(s -> s.pendingStream().sessionId() == session.id()).findFirst().orElse(null);
+        }
+        if (active == null) {
+            if (targetAssistantId != null && !targetAssistantId.isBlank()) {
+                Long streamSessionId = activeStreamRegistryService.sessionIdForAssistantId(targetAssistantId).orElse(null);
+                if (streamSessionId != null && streamSessionId != session.id()) {
+                    throw new IllegalStateException("Assistant stream does not belong to the active session");
+                }
+                commandStreamService.stop(targetAssistantId);
+            } else {
+                activeStreamRegistryService.assistantIdForSession(session.id()).ifPresent(commandStreamService::stop);
+            }
+            view = appStateService.loadViewData();
+            populateChatControlsModel(model, activeChatSelection(view));
+            populateProjectModel(model, view);
+            populateSessionModel(model, view);
+            return "fragments/chat :: chat";
+        }
+
+        if (targetAssistantId == null || targetAssistantId.isBlank()) {
+            ActiveStream targetActive = active;
+            targetAssistantId = activeStreams.entrySet().stream()
+                    .filter(entry -> entry.getValue() == targetActive)
+                    .map(Map.Entry::getKey)
+                    .findFirst()
+                    .orElseThrow();
+        }
+        stopActiveStream(targetAssistantId, active);
+        view = appStateService.loadViewData();
+        populateChatControlsModel(model, activeChatSelection(view));
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        return "fragments/chat :: chat";
     }
 
     @GetMapping("/ui/chat/image/{sessionId}/{toolCallId}")
@@ -1477,9 +1586,11 @@ public class UiController {
     private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {}
 
     private record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean started,
-                                AtomicBoolean finished) {
-        private ActiveStream(PendingStream pendingStream) {
-            this(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false));
+                                AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,
+                                CancellationToken cancellationToken, AtomicReference<StringBuilder> accumulatedText) {
+        private ActiveStream(PendingStream pendingStream, CancellationToken cancellationToken) {
+            this(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false),
+                    new AtomicBoolean(false), new AtomicReference<>(), cancellationToken, new AtomicReference<>(new StringBuilder()));
         }
     }
 }
