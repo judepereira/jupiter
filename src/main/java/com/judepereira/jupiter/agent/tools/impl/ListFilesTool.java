@@ -4,9 +4,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter.agent.tools.*;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
+import java.util.Map;
 
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
@@ -19,6 +17,15 @@ public class ListFilesTool implements AgentTool {
                     string("include", "optional glob filter, e.g. **/*.java")
             ).required("path")
     );
+    private final RipgrepToolSupport ripgrep;
+
+    public ListFilesTool() {
+        this(new RipgrepToolSupport());
+    }
+
+    public ListFilesTool(RipgrepToolSupport ripgrep) {
+        this.ripgrep = ripgrep;
+    }
 
     @Override
     public String name() {
@@ -29,25 +36,9 @@ public class ListFilesTool implements AgentTool {
     public ToolDefinition definition() { return DEF; }
 
     @Override
-    public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {
+    public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) {
         String rel = (String) args.getOrDefault("path", "");
-        Path p = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), rel);
-        if (!Files.exists(p)) {
-            return new ToolExecutionResult(false, "path does not exist: " + rel, Map.of());
-        }
         String include = (String) args.getOrDefault("include", "");
-        // matcher should operate on workspace-relative paths
-        Path canonicalRoot = FileUtils.canonicalWorkspaceRoot(context.getWorkspaceRoot());
-        final java.nio.file.PathMatcher matcher = (include != null && !include.isBlank()) ? canonicalRoot.getFileSystem().getPathMatcher("glob:" + include) : null;
-        List<String> files = new ArrayList<>();
-        try (java.util.stream.Stream<java.nio.file.Path> stream = Files.walk(p)) {
-            stream.filter(Files::isRegularFile).forEach(pp -> {
-                Path relPath = FileUtils.relativizeWorkspacePath(context.getWorkspaceRoot(), pp);
-                if (matcher != null && !matcher.matches(relPath)) return;
-                files.add(relPath.toString());
-            });
-        }
-        String text = String.join("\n", files);
-        return new ToolExecutionResult(true, text, Map.of("files", files));
+        return ripgrep.listFiles(context.getWorkspaceRoot(), rel, include, context.getCommandTimeoutSeconds());
     }
 }

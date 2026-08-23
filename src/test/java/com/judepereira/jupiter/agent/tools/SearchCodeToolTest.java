@@ -32,6 +32,24 @@ public class SearchCodeToolTest {
     }
 
     @Test
+    public void include_agents_md_matches_root_and_nested_files(@TempDir Path tmp) throws Exception {
+        Files.writeString(tmp.resolve("AGENTS.md"), "needle");
+        Path nested = tmp.resolve("docs");
+        Files.createDirectories(nested);
+        Files.writeString(nested.resolve("AGENTS.md"), "needle");
+
+        SearchCodeTool t = new SearchCodeTool();
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5);
+
+        var res = t.execute(Map.of("path", "", "pattern", "needle", "include", "**/AGENTS.md"), ctx);
+        assertTrue(res.isSuccess());
+        var matches = (java.util.List<String>) res.getMachine().get("matches");
+        assertNotNull(matches);
+        assertTrue(matches.stream().anyMatch(s -> s.contains("AGENTS.md:1:needle")));
+        assertTrue(matches.stream().anyMatch(s -> s.contains("docs/AGENTS.md:1:needle")));
+    }
+
+    @Test
     public void default_root_path_dot_search_matches(@TempDir Path unusedTmp) throws Exception {
         Path ws = Files.createTempDirectory(Path.of("."), "jupiter-test-ws-");
         Path a = ws.resolve("a.txt");

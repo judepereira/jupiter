@@ -308,8 +308,11 @@
             catalog: [],
             textarea: null,
             modal: null,
+            card: null,
             input: null,
             list: null,
+            repositionHandler: null,
+            positionFrame: null,
             fetchPromise: null
         };
 
@@ -322,7 +325,17 @@
             if (root) root.innerHTML = '';
             commandPickerState.open = false;
             commandPickerState.textarea = null;
+            if (commandPickerState.repositionHandler) {
+                window.removeEventListener('resize', commandPickerState.repositionHandler);
+                window.removeEventListener('scroll', commandPickerState.repositionHandler, true);
+                commandPickerState.repositionHandler = null;
+            }
+            if (commandPickerState.positionFrame != null) {
+                cancelAnimationFrame(commandPickerState.positionFrame);
+                commandPickerState.positionFrame = null;
+            }
             commandPickerState.modal = null;
+            commandPickerState.card = null;
             commandPickerState.input = null;
             commandPickerState.list = null;
         }
@@ -385,6 +398,151 @@
             const activeItem = list.querySelector('.command-modal-item.is-active');
             if (activeItem && activeItem.scrollIntoView) {
                 activeItem.scrollIntoView({block: 'nearest'});
+            }
+
+            requestCommandPickerPosition();
+        }
+
+        function requestCommandPickerPosition() {
+            if (!commandPickerState.open) return;
+            if (commandPickerState.positionFrame != null) return;
+            commandPickerState.positionFrame = requestAnimationFrame(() => {
+                commandPickerState.positionFrame = null;
+                positionCommandPicker();
+            });
+        }
+
+        function positionCommandPicker() {
+            const modal = commandPickerState.modal;
+            const card = commandPickerState.card;
+            const textarea = commandPickerState.textarea;
+            if (!modal || !card || !textarea) return;
+
+            const rect = textarea.getBoundingClientRect();
+            const viewportPadding = 16;
+            const cardMaxHeight = 400;
+            const maxCardWidth = Math.max(0, window.innerWidth - viewportPadding * 2);
+            const cardWidth = Math.min(maxCardWidth, Math.min(640, Math.max(320, rect.width)));
+            const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - cardWidth - viewportPadding));
+
+            modal.style.left = left + 'px';
+            modal.style.width = cardWidth + 'px';
+            card.style.maxHeight = cardMaxHeight + 'px';
+
+            const renderedHeight = Math.min(cardMaxHeight, Math.max(0, card.getBoundingClientRect().height || card.scrollHeight || 0));
+            const top = Math.max(viewportPadding, rect.top - renderedHeight);
+            modal.style.top = top + 'px';
+        }
+
+        function openCommandPicker(textarea, query) {
+            const root = getCommandModalRoot();
+            if (!root) return;
+            const value = query || textarea.value || '/';
+            commandPickerState.open = true;
+            commandPickerState.textarea = textarea;
+            commandPickerState.query = value;
+            commandPickerState.activeIndex = 0;
+            textarea.value = value;
+            resizeChatTextarea(textarea);
+            root.innerHTML = '' +
+                '<div id="command-modal" class="command-modal">' +
+                '<div class="command-modal-card" role="dialog" aria-modal="true" aria-labelledby="command-modal-title">' +
+                '<div class="command-modal-header">' +
+                '<h4 id="command-modal-title">Commands</h4>' +
+                '<button type="button" class="btn-close" aria-label="Close" data-command-modal-close="1"></button>' +
+                '</div>' +
+                '<div class="command-modal-body">' +
+                '<input class="command-modal-input" type="text" value="' + escapeHtml(value) + '" autocomplete="off" spellcheck="false" aria-label="Command filter">' +
+                '<ul class="command-modal-list"></ul>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            commandPickerState.modal = root.querySelector('#command-modal');
+            commandPickerState.card = root.querySelector('.command-modal-card');
+            commandPickerState.input = root.querySelector('.command-modal-input');
+            commandPickerState.list = root.querySelector('.command-modal-list');
+            if (!commandPickerState.input || !commandPickerState.list || !commandPickerState.modal || !commandPickerState.card) return;
+            positionCommandPicker();
+            commandPickerState.input.value = value;
+            commandPickerState.input.focus({preventScroll: true});
+            commandPickerState.input.setSelectionRange(value.length, value.length);
+
+            const closeHandler = event => {
+                if (event.target && event.target.dataset && event.target.dataset.commandModalClose === '1') {
+                    closeCommandPicker();
+                }
+            };
+
+            const reposition = () => {
+                if (!commandPickerState.open) return;
+                requestCommandPickerPosition();
+            };
+
+            root.addEventListener('click', closeHandler, {once: true});
+            window.addEventListener('resize', reposition);
+            window.addEventListener('scroll', reposition, true);
+            commandPickerState.repositionHandler = reposition;
+            commandPickerState.input.addEventListener('input', renderCommandPickerList);
+            commandPickerState.input.addEventListener('keydown', event => {
+                if (event.isComposing) return;
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeCommandPicker();
+                    return;
+                }
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setCommandPickerActiveIndex(commandPickerState.activeIndex + 1);
+                    return;
+                }
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setCommandPickerActiveIndex(commandPickerState.activeIndex - 1);
+                    return;
+                }
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    executeCommandAtIndex(commandPickerState.activeIndex);
+                }
+            });
+
+            commandPickerState.list.addEventListener('click', event => {
+                const item = event.target && event.target.closest ? event.target.closest('.command-modal-item') : null;
+                if (!item) return;
+                const index = Array.prototype.indexOf.call(commandPickerState.list.children, item);
+                if (index < 0) return;
+                executeCommandAtIndex(index);
+            });
+
+            root.querySelectorAll('[data-command-modal-close="1"]').forEach(el => {
+                el.addEventListener('click', closeCommandPicker, {once: true});
+            });
+
+            fetchCommandCatalog()
+                .then(catalog => {
+                    commandPickerState.catalog = Array.isArray(catalog) ? catalog : [];
+                    renderCommandPickerList();
+                })
+                .catch(error => console.error(error));
+        }
+
+        function resizeChatTextarea(textarea) {
+            if (!textarea) return;
+            textarea.style.height = 'auto';
+            const sh = textarea.scrollHeight;
+            textarea.style.height = sh + 'px';
+
+            const cs = getComputedStyle(textarea);
+            const maxH = cs.maxHeight;
+            if (maxH && maxH !== 'none') {
+                const maxVal = parseFloat(maxH);
+                if (!isNaN(maxVal) && sh > maxVal) {
+                    textarea.style.overflowY = 'auto';
+                } else {
+                    textarea.style.overflowY = 'hidden';
+                }
+            } else {
+                textarea.style.overflowY = '';
             }
         }
 
@@ -457,109 +615,6 @@
             commandPickerState.activeIndex = Math.max(0, commands.indexOf(command));
             renderCommandPickerList();
             executeCommand(command);
-        }
-
-        function openCommandPicker(textarea, query) {
-            const root = getCommandModalRoot();
-            if (!root) return;
-            const value = query || textarea.value || '/';
-            commandPickerState.open = true;
-            commandPickerState.textarea = textarea;
-            commandPickerState.query = value;
-            commandPickerState.activeIndex = 0;
-            textarea.value = value;
-            resizeChatTextarea(textarea);
-            root.innerHTML = '' +
-                '<div id="command-modal" class="command-modal">' +
-                '<div class="command-modal-backdrop" data-command-modal-close="1"></div>' +
-                '<div class="command-modal-card" role="dialog" aria-modal="true" aria-labelledby="command-modal-title">' +
-                '<div class="command-modal-header">' +
-                '<h4 id="command-modal-title">Commands</h4>' +
-                '<button type="button" class="btn-close" aria-label="Close" data-command-modal-close="1"></button>' +
-                '</div>' +
-                '<div class="command-modal-body">' +
-                '<input class="command-modal-input" type="text" value="' + escapeHtml(value) + '" autocomplete="off" spellcheck="false" aria-label="Command filter">' +
-                '<ul class="command-modal-list"></ul>' +
-                '</div>' +
-                '</div>' +
-                '</div>';
-            commandPickerState.modal = root.querySelector('#command-modal');
-            commandPickerState.input = root.querySelector('.command-modal-input');
-            commandPickerState.list = root.querySelector('.command-modal-list');
-            if (!commandPickerState.input || !commandPickerState.list) return;
-            commandPickerState.input.value = value;
-            commandPickerState.input.focus({preventScroll: true});
-            commandPickerState.input.setSelectionRange(value.length, value.length);
-
-            const closeHandler = event => {
-                if (event.target && event.target.dataset && event.target.dataset.commandModalClose === '1') {
-                    closeCommandPicker();
-                }
-            };
-
-            root.addEventListener('click', closeHandler, {once: true});
-            commandPickerState.input.addEventListener('input', renderCommandPickerList);
-            commandPickerState.input.addEventListener('keydown', event => {
-                if (event.isComposing) return;
-                if (event.key === 'Escape') {
-                    event.preventDefault();
-                    closeCommandPicker();
-                    return;
-                }
-                if (event.key === 'ArrowDown') {
-                    event.preventDefault();
-                    setCommandPickerActiveIndex(commandPickerState.activeIndex + 1);
-                    return;
-                }
-                if (event.key === 'ArrowUp') {
-                    event.preventDefault();
-                    setCommandPickerActiveIndex(commandPickerState.activeIndex - 1);
-                    return;
-                }
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    executeCommandAtIndex(commandPickerState.activeIndex);
-                }
-            });
-
-            commandPickerState.list.addEventListener('click', event => {
-                const item = event.target && event.target.closest ? event.target.closest('.command-modal-item') : null;
-                if (!item) return;
-                const index = Array.prototype.indexOf.call(commandPickerState.list.children, item);
-                if (index < 0) return;
-                executeCommandAtIndex(index);
-            });
-
-            root.querySelectorAll('[data-command-modal-close="1"]').forEach(el => {
-                el.addEventListener('click', closeCommandPicker, {once: true});
-            });
-
-            fetchCommandCatalog()
-                .then(catalog => {
-                    commandPickerState.catalog = Array.isArray(catalog) ? catalog : [];
-                    renderCommandPickerList();
-                })
-                .catch(error => console.error(error));
-        }
-
-        function resizeChatTextarea(textarea) {
-            if (!textarea) return;
-            textarea.style.height = 'auto';
-            const sh = textarea.scrollHeight;
-            textarea.style.height = sh + 'px';
-
-            const cs = getComputedStyle(textarea);
-            const maxH = cs.maxHeight;
-            if (maxH && maxH !== 'none') {
-                const maxVal = parseFloat(maxH);
-                if (!isNaN(maxVal) && sh > maxVal) {
-                    textarea.style.overflowY = 'auto';
-                } else {
-                    textarea.style.overflowY = 'hidden';
-                }
-            } else {
-                textarea.style.overflowY = '';
-            }
         }
 
         function initChatComposer() {

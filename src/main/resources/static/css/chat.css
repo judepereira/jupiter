@@ -6,14 +6,36 @@
     width: 100%;
 }
 
+#chat-messages-list > li {
+    margin-bottom: 10px;
+}
+
+#chat-messages-list > li:last-child {
+    margin-bottom: 0;
+}
+
+#chat-messages-list > li:first-child {
+    padding-top: 10px;
+}
+
+#chat-messages-list > li[data-role="user"] {
+    border: 1px solid var(--outline-colour);
+    border-radius: 6px;
+    padding: 5px 10px;
+    background: #3e7dcd21;
+    width: fit-content;
+    align-self: end;
+}
+
+#chat-messages-list p:last-child {
+    margin-bottom: 0;
+}
+
 .subagent-bar {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    background: #eef4ff;
+    padding: 10px 0;
     color: var(--rail-fg);
     margin-bottom: 8px;
 }
@@ -231,25 +253,20 @@
 
 .command-modal {
     position: fixed;
-    inset: 0;
     z-index: 12000;
-}
-
-.command-modal-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.58);
-    backdrop-filter: blur(4px);
 }
 
 .command-modal-card {
     position: relative;
-    width: min(640px, calc(100vw - 32px));
-    margin: 10vh auto 0;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
     background: #fff;
     border: 1px solid rgba(148, 163, 184, 0.28);
     border-radius: 6px;
     overflow: hidden;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
 }
 
 .command-modal-header {
@@ -259,6 +276,7 @@
     gap: 12px;
     padding: 14px 16px 10px;
     border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    flex: 0 0 auto;
 }
 
 .command-modal-header h4 {
@@ -269,6 +287,11 @@
 
 .command-modal-body {
     padding: 12px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    flex: 1 1 auto;
 }
 
 .command-modal-input {
@@ -278,18 +301,20 @@
     border-radius: 6px;
     padding: 10px 12px;
     font: inherit;
-    margin-bottom: 10px;
+    margin: 0;
+    flex: 0 0 auto;
 }
 
 .command-modal-list {
     list-style: none;
     margin: 0;
     padding: 0;
-    max-height: min(48vh, 420px);
     overflow: auto;
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-height: 0;
+    flex: 1 1 auto;
 }
 
 .command-modal-item {
