@@ -1511,6 +1511,32 @@
             return 'other';
         }
 
+        function shouldAutoOpenToolCallBundle(toolName) {
+            const kind = toolCallGroupKind(normalizeToolCallName(toolName));
+            return kind === 'task' || kind === 'image';
+        }
+
+        function shouldAutoOpenTaskToolCall(toolName) {
+            return toolCallGroupKind(normalizeToolCallName(toolName)) === 'task';
+        }
+
+        function forceDetailsOpen(details) {
+            try {
+                if (!details) return;
+                details.open = true;
+                details.setAttribute('open', '');
+            } catch (_) {
+            }
+        }
+
+        function isTaskToolCallElement(element) {
+            try {
+                return Boolean(element && element.dataset && String(element.dataset.toolCallToolName || '').trim() === 'task');
+            } catch (_) {
+                return false;
+            }
+        }
+
         function parseToolCallList(value) {
             if (!value) return [];
             try {
@@ -1879,6 +1905,9 @@
                 bundleRefs.bundle.dataset.toolCallSummaryTotal = String(total);
                 bundleRefs.bundle.dataset.toolCallSummaryItems = JSON.stringify(items);
                 if (bundleRefs.nameSpan) bundleRefs.nameSpan.textContent = label;
+                if (groups.some(group => String(group.dataset ? group.dataset.toolCallToolName : '').trim() === 'task')) {
+                    forceDetailsOpen(bundleRefs.bundle);
+                }
             } catch (_) {
             }
         }
@@ -1895,9 +1924,12 @@
                 const refs = buildToolCallGroupRefs(group);
                 if (!refs) return null;
 
+                const bundle = getToolCallBundle(container);
+                if (bundle && shouldAutoOpenToolCallBundle(toolName)) forceDetailsOpen(bundle);
                 refs.nameSpan.textContent = toolName;
+                if (shouldAutoOpenTaskToolCall(toolName)) forceDetailsOpen(group);
                 refs.statusSpan.textContent = 'running';
-                const bundleRefs = buildToolCallBundleRefs(getToolCallBundle(container));
+                const bundleRefs = buildToolCallBundleRefs(bundle);
                 refreshToolCallBundleSummary(bundleRefs);
                 return refs;
             } catch (_) {
@@ -2008,6 +2040,12 @@
                 updateToolCallGroupKind(group, toolName);
                 rememberToolCallIdentity(details, payload && payload.toolCallId != null ? String(payload.toolCallId).trim() : '', toolCallKey(payload));
 
+                if (shouldAutoOpenTaskToolCall(toolName)) {
+                    forceDetailsOpen(group);
+                    const bundle = getToolCallBundle(group || details);
+                    if (bundle) forceDetailsOpen(bundle);
+                }
+
                 entry.nameSpan.textContent = toolName;
                 entry.statusSpan.className = 'tool-call-status';
                 if (state === 'done' || success) entry.statusSpan.classList.add('tool-call-status-success');
@@ -2047,11 +2085,11 @@
                         entry.imageFigure.className = 'tool-call-image-preview';
                         entry.detail.appendChild(entry.imageFigure);
                     }
-                    if (group) group.open = true;
+                    if (group) forceDetailsOpen(group);
                     const bundle = getToolCallBundle(group || entry.detail);
-                    if (bundle) bundle.open = true;
-                    if (entry.details) entry.details.open = true;
-                    if (entry.detail) entry.detail.open = true;
+                    if (bundle && shouldAutoOpenToolCallBundle(toolName)) forceDetailsOpen(bundle);
+                    if (entry.details) forceDetailsOpen(entry.details);
+                    if (entry.detail) forceDetailsOpen(entry.detail);
                     
                     let img = entry.imageFigure.querySelector('img');
                     if (!img) {
@@ -2094,6 +2132,9 @@
                 const subagentSessionId = options && options.subagentSessionId != null ? String(options.subagentSessionId) : (payload && payload.subagentSessionId != null ? String(payload.subagentSessionId) : '');
                 if (subagentSessionId) {
                     const name = options && options.subagentAgentName != null ? String(options.subagentAgentName) : (payload && payload.subagentAgentName != null ? String(payload.subagentAgentName) : (payload && payload.name != null ? String(payload.name) : subagentSessionId));
+                    forceDetailsOpen(group);
+                    const bundle = getToolCallBundle(group || entry.detail);
+                    if (bundle) forceDetailsOpen(bundle);
                     if (!entry.subagent) {
                         entry.subagent = document.createElement('div');
                         entry.subagent.className = 'tool-call-subagent';

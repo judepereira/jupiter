@@ -8,14 +8,14 @@
         <div class="chat-message-subtitle" th:if="${m.role == 'assistant' and (m.metadata != null or m.completedTs != null)}"
              th:attr="data-start-ts=${m.ts}, data-completed-ts=${m.completedTs}, data-agent-label=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentName} : null, data-agent-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentId} : null, data-model-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.modelId} : null, data-model-label=${m.role == 'assistant' and m.modelLabel != null} ? ${m.modelLabel} : null, data-thinking-level=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.thinkingLevel} : null"></div>
 
-        <details th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls tool-call-bundle" th:open="${!#lists.isEmpty(m.toolCallGroups.?[toolName == 'display_image'])}">
+        <details th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls tool-call-bundle" th:open="${!#lists.isEmpty(m.toolCallGroups.?[toolName == 'display_image' or toolName == 'task'])}">
             <summary class="tool-call-summary tool-call-bundle-summary">
                 <span class="tool-call-name" th:text="${m.toolCallSummary != null ? m.toolCallSummary.displayLabel : ''}"></span>
             </summary>
 
             <div class="tool-call-detail tool-call-bundle-detail">
                 <div class="tool-calls">
-                    <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image'}">
+                    <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image' or group.toolName == 'task'}">
                         <summary class="tool-call-summary">
                             <span class="tool-call-name" th:text="${group.displayLabel}"></span>
                             <span class="tool-call-status" th:classappend="${group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"

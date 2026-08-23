@@ -66,11 +66,11 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-name")).hasText("task");
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-status")).hasText("success");
 
-            taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
+            assertThat(taskSubagentButton).isVisible();
             assertThat(taskSubagentButton).containsText("Open subagent");
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
+            assertThat(page.locator("#chat-messages-list")).containsText("Primary complete");
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).doesNotContain("Primary task:");
 
             String subagentHref = taskSubagentButton.getAttribute("hx-get");
@@ -183,9 +183,9 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             taskToolCall.waitFor();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-name")).hasText("task");
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-status")).hasText("running");
-            taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
+            assertThat(taskSubagentButton).isVisible();
             assertThat(taskSubagentButton).containsText("Open subagent: Explore");
 
             taskSubagentButton.click();
@@ -240,7 +240,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             assertThat(taskToolCall).isVisible();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-status")).hasText("running");
 
-            taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
             taskSubagentButton.click();
@@ -266,8 +265,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                     .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
                     .isEqualTo(1);
 
-            var taskToolCallSummary = taskToolCall.locator(":scope > summary.tool-call-summary");
-            taskToolCallSummary.click();
             assertThat(taskSubagentButton).isVisible();
             taskSubagentButton.click();
             page.locator(".subagent-bar").waitFor();
