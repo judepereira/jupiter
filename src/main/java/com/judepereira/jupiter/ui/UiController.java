@@ -1335,8 +1335,20 @@ public class UiController {
         return modelCatalogService.getRequired(requestedModelId);
     }
 
+    String resolveModelLabel(String modelId) {
+        if (modelId == null || modelId.isBlank()) {
+            return null;
+        }
+        try {
+            return modelCatalogService.getRequired(modelId).displayName();
+        } catch (RuntimeException ignored) {
+            return modelId;
+        }
+    }
+
     private ChatMessage toChatMessage(ChatMessageView view) {
-        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.completedTs(), view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata());
+        String modelLabel = view.metadata() == null ? null : resolveModelLabel(view.metadata().modelId());
+        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.completedTs(), view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata(), modelLabel);
     }
 
     private ToolCallView toToolCallView(com.judepereira.jupiter.persistence.Persistence.ToolCallView view) {
@@ -1455,7 +1467,11 @@ public class UiController {
 
     public record ToolCallGroupView(String toolName, String displayLabel, boolean success, int count, List<ToolCallView> calls) {}
 
-    public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
+    public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata, String modelLabel) {
+        public ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
+            this(role, text, ts, pending, id, completedTs, toolCalls, metadata, null);
+        }
+
         private static final Set<String> EXPLORATORY_TOOL_NAMES = Set.of("list_files", "read_file", "search_code");
 
         public List<ToolCallGroupView> toolCallGroups() {
