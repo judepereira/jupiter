@@ -849,7 +849,7 @@ public class AppStateServicePersistenceTests {
                 .contains("compact summary");
 
         assertThat(service.buildConversationHistory(sessionId)).extracting(Message::getContent)
-                .contains("compact summary")
+                .contains("Previous conversation summary:\n\ncompact summary")
                 .doesNotContain("turn-1 " + "u".repeat(800));
     }
 
@@ -902,7 +902,7 @@ public class AppStateServicePersistenceTests {
 
         List<Message> history = service.buildConversationHistory(sessionId);
         assertThat(history).extracting(Message::getContent)
-                .contains("compact summary")
+                .contains("Previous conversation summary:\n\ncompact summary")
                 .doesNotContain("turn-1 " + "u".repeat(200))
                 .contains("wrote x.txt");
         assertThat(history).filteredOn(message -> message.getRole() == Message.Role.ASSISTANT && message.getToolCalls() != null && !message.getToolCalls().isEmpty())
@@ -957,12 +957,16 @@ public class AppStateServicePersistenceTests {
 
         List<Message> history = service.buildConversationHistory(sessionId);
         assertThat(history).extracting(Message::getContent)
-                .contains("compact summary")
+                .contains("Previous conversation summary:\n\ncompact summary")
                 .contains("tool turn " + "t".repeat(120))
                 .contains(hugeOutput)
                 .doesNotContain("turn-1 " + "u".repeat(120))
                 .doesNotContain("turn-2 " + "u".repeat(120));
-        assertThat(history).extracting(Message::getRole).contains(Message.Role.USER, Message.Role.ASSISTANT, Message.Role.TOOL, Message.Role.SYSTEM);
+        assertThat(history).extracting(Message::getRole).contains(Message.Role.USER, Message.Role.ASSISTANT, Message.Role.TOOL);
+        assertThat(history).anySatisfy(message -> {
+            assertThat(message.getRole()).isEqualTo(Message.Role.USER);
+            assertThat(message.getContent()).startsWith("Previous conversation summary:\n\n");
+        });
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient client) {

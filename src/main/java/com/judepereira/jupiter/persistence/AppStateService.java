@@ -1105,7 +1105,9 @@ public class AppStateService {
         return switch (row.role()) {
             case "assistant" -> new Message(Message.Role.ASSISTANT, row.content(), toolCalls(row.toolCallsJson()));
             case "tool" -> new Message(Message.Role.TOOL, row.content(), row.toolCallId());
-            case "system" -> new Message(Message.Role.SYSTEM, row.content());
+            case "system" -> row.compactedThroughTurnId() != null
+                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content())
+                    : new Message(Message.Role.SYSTEM, row.content());
             case "user" -> new Message(Message.Role.USER, row.content());
             default -> throw new IllegalStateException("Unsupported role: " + row.role());
         };
