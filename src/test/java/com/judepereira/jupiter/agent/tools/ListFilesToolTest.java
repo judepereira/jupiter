@@ -32,6 +32,24 @@ public class ListFilesToolTest {
     }
 
     @Test
+    public void include_agents_md_matches_root_and_nested_files(@TempDir Path tmp) throws Exception {
+        Files.writeString(tmp.resolve("AGENTS.md"), "root");
+        Path nested = tmp.resolve("docs");
+        Files.createDirectories(nested);
+        Files.writeString(nested.resolve("AGENTS.md"), "nested");
+
+        ListFilesTool t = new ListFilesTool();
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5);
+
+        var res = t.execute(Map.of("path", "", "include", "**/AGENTS.md"), ctx);
+        assertTrue(res.isSuccess());
+        var files = (java.util.List<String>) res.getMachine().get("files");
+        assertNotNull(files);
+        assertTrue(files.stream().anyMatch(s -> s.endsWith("AGENTS.md") && !s.contains("docs/")));
+        assertTrue(files.stream().anyMatch(s -> s.endsWith("docs/AGENTS.md")));
+    }
+
+    @Test
     public void default_root_path_dot_matches(@TempDir Path unusedTmp) throws Exception {
         // create a temporary workspace under the current working dir and use Path.of('.') as workspace root
         Path ws = Files.createTempDirectory(Path.of("."), "jupiter-test-ws-");
