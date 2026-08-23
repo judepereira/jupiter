@@ -606,6 +606,8 @@ public class UiController {
         }
 
         populateChatControlsModel(model, activeChatSelection(view));
+        model.addAttribute("activeSession", toSession(view.activeSession()));
+        model.addAttribute("chatDraft", view.activeSessionDetail().chatDraft());
         populateChatModel(model, view.activeSessionDetail().chatMessages(), false, null, null, null);
         return "fragments/chat :: chat";
     }
@@ -1016,6 +1018,12 @@ public class UiController {
         return "fragments/projects :: shellUpdates";
     }
 
+    @PostMapping("/ui/sessions/{sessionId}/draft")
+    public ResponseEntity<Void> updateSessionDraft(@PathVariable long sessionId, @RequestParam("draft") String draft) {
+        appStateService.updateSessionDraft(sessionId, draft);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/ui/sessions/add")
     public String addSession(@RequestParam("name") String name, Model model) {
         AppStateView view = appStateService.loadViewData();
@@ -1058,6 +1066,7 @@ public class UiController {
             model.addAttribute("hasPending", false);
             model.addAttribute("reviewOob", false);
             model.addAttribute("workspaceRoot", view.activeWorkspace() == null ? null : view.activeWorkspace().path());
+            model.addAttribute("chatDraft", "");
             model.addAttribute("terminalTabs", terminalState.terminalTabs());
             model.addAttribute("activeTerminal", terminalState.activeTerminal());
             model.addAttribute("bottomPanelMode", terminalState.bottomPanelMode());
@@ -1070,6 +1079,7 @@ public class UiController {
         boolean hasPending = detail.chatMessages().stream().anyMatch(ChatMessageView::pending);
         model.addAttribute("chatMessages", detail.chatMessages().stream().map(this::toChatMessage).toList());
         model.addAttribute("subagentView", false);
+        model.addAttribute("activeSession", toSession(session));
         model.addAttribute("changedFiles", detail.changedFiles().stream().map(this::toChangedFile).toList());
         model.addAttribute("reviewPanelOpen", detail.reviewPanelOpen());
         model.addAttribute("reviewSource", detail.reviewSource());
@@ -1077,6 +1087,7 @@ public class UiController {
         model.addAttribute("hasPending", hasPending);
         model.addAttribute("reviewOob", !hasPending && detail.reviewPanelOpen());
         model.addAttribute("workspaceRoot", detail.workspaceRoot());
+        model.addAttribute("chatDraft", detail.chatDraft());
         model.addAttribute("terminalTabs", terminalState.terminalTabs());
         model.addAttribute("activeTerminal", terminalState.activeTerminal());
         model.addAttribute("bottomPanelMode", terminalState.bottomPanelMode());
@@ -1124,6 +1135,7 @@ public class UiController {
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
+        model.addAttribute("activeSession", toSession(view.activeSession()));
         populateChatControlsModel(model, activeChatSelection(view));
     }
 

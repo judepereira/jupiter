@@ -12,8 +12,215 @@
         let primaryChatScrollRestorePending = false;
         let subagentScrollRestoreBound = false;
         let sessionChangeScrollRestoreBound = false;
+        let chatDraftFlushBound = false;
         // Ensure we add the textarea clear listener only once across re-inits
         let htmxAfterOnLoadBound = false;
+        const chatDraftAutosaveState = {
+            sessionId: '',
+            pendingValue: '',
+            lastSavedValue: '',
+            inFlightValue: null,
+            timerId: null,
+            clearEpoch: 0
+        };
+
+        function getHtmxRequestPath(evt) {
+            try {
+                const detail = evt && evt.detail;
+                return String(
+                    (detail && detail.path) ||
+                    (detail && detail.requestConfig && detail.requestConfig.path) ||
+                    (detail && detail.pathInfo && (detail.pathInfo.requestPath || detail.pathInfo.finalRequestPath || detail.pathInfo.path)) ||
+                    (detail && detail.elt && typeof detail.elt.getAttribute === 'function' && (detail.elt.getAttribute('hx-get') || detail.elt.getAttribute('hx-post'))) ||
+                    (detail && detail.xhr && detail.xhr.responseURL) ||
+                    ''
+                );
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function getChatComposerForm() {
+            return document.getElementById('chat-send-form');
+        }
+
+        function getChatTextarea() {
+            return document.getElementById('chat-input');
+        }
+
+        function getActiveChatSessionId() {
+            try {
+                const form = getChatComposerForm();
+                const fromForm = form && form.dataset && form.dataset.sessionId != null ? String(form.dataset.sessionId).trim() : '';
+                if (fromForm) return fromForm;
+                const container = document.getElementById('chat-container');
+                return container && container.dataset && container.dataset.sessionId != null ? String(container.dataset.sessionId).trim() : '';
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function isDraftSaveRequestPath(path) {
+            const value = String(path || '');
+            return /\/ui\/sessions\/[^/?#]+\/draft(?:[/?#]|$)/.test(value);
+        }
+
+        function shouldFlushDraftBeforeRequest(path) {
+            const value = String(path || '');
+            if (!value) return false;
+            if (value.includes('/ui/chat/send')) return false;
+            if (isDraftSaveRequestPath(value)) return false;
+            return /\/ui\/(chat\/primary|chat\/subagent\/|projects|workspaces|sessions)\b/.test(value);
+        }
+
+        function getDraftSaveUrl(sessionId) {
+            const value = String(sessionId || getActiveChatSessionId() || '').trim();
+            return value ? '/ui/sessions/' + encodeURIComponent(value) + '/draft' : '';
+        }
+
+        function clearChatDraftAutosaveState(nextValue) {
+            const value = String(nextValue != null ? nextValue : '');
+            chatDraftAutosaveState.pendingValue = value;
+            chatDraftAutosaveState.lastSavedValue = value;
+            chatDraftAutosaveState.inFlightValue = null;
+            chatDraftAutosaveState.clearEpoch += 1;
+            if (chatDraftAutosaveState.timerId != null) {
+                clearTimeout(chatDraftAutosaveState.timerId);
+                chatDraftAutosaveState.timerId = null;
+            }
+        }
+
+        function invalidateChatDraftAutosaveState() {
+            chatDraftAutosaveState.clearEpoch += 1;
+            chatDraftAutosaveState.inFlightValue = null;
+            if (chatDraftAutosaveState.timerId != null) {
+                clearTimeout(chatDraftAutosaveState.timerId);
+                chatDraftAutosaveState.timerId = null;
+            }
+        }
+
+        function syncChatDraftAutosaveStateFromTextarea(textarea, isFreshComposer) {
+            if (!textarea) return;
+            const sessionId = getActiveChatSessionId();
+            const value = textarea.value || '';
+            if (isFreshComposer || chatDraftAutosaveState.sessionId !== sessionId) {
+                chatDraftAutosaveState.sessionId = sessionId;
+                clearChatDraftAutosaveState(value);
+                return;
+            }
+            chatDraftAutosaveState.pendingValue = value;
+        }
+
+        function sendChatDraftSave(value, options) {
+            const textarea = getChatTextarea();
+            const sessionId = getActiveChatSessionId();
+            if (!textarea || !sessionId) return Promise.resolve(false);
+
+            const draft = String(value != null ? value : '');
+            const useBeacon = !!(options && options.useBeacon);
+            const keepalive = !!(options && options.keepalive);
+            const clearEpochAtSend = chatDraftAutosaveState.clearEpoch;
+            const requestBody = new URLSearchParams({draft: draft});
+            const url = getDraftSaveUrl(sessionId);
+            if (!url) return Promise.resolve(false);
+            if (chatDraftAutosaveState.lastSavedValue === draft && chatDraftAutosaveState.inFlightValue == null) return Promise.resolve(false);
+            if (chatDraftAutosaveState.inFlightValue === draft) return Promise.resolve(false);
+
+            const commitSavedValue = () => {
+                if (chatDraftAutosaveState.clearEpoch !== clearEpochAtSend) return;
+                if (chatDraftAutosaveState.sessionId !== sessionId) return;
+                if (chatDraftAutosaveState.inFlightValue !== draft) return;
+                chatDraftAutosaveState.lastSavedValue = draft;
+                chatDraftAutosaveState.inFlightValue = null;
+                if (chatDraftAutosaveState.pendingValue !== draft) {
+                    scheduleChatDraftSave(chatDraftAutosaveState.pendingValue);
+                }
+            };
+
+            chatDraftAutosaveState.inFlightValue = draft;
+            if (useBeacon && navigator && typeof navigator.sendBeacon === 'function') {
+                const queued = navigator.sendBeacon(url, requestBody);
+                if (queued) {
+                    commitSavedValue();
+                    return Promise.resolve(true);
+                }
+            }
+
+            return fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
+                body: requestBody,
+                keepalive: keepalive,
+                credentials: 'same-origin'
+            }).then(response => {
+                if (!response.ok) throw new Error('Failed to save chat draft');
+                commitSavedValue();
+                return true;
+            }).catch(error => {
+                console.error(error);
+                if (chatDraftAutosaveState.inFlightValue === draft) {
+                    chatDraftAutosaveState.inFlightValue = null;
+                }
+                throw error;
+            });
+        }
+
+        function drainChatDraftSave(options) {
+            const textarea = getChatTextarea();
+            const sessionId = getActiveChatSessionId();
+            if (!textarea || !sessionId) return Promise.resolve(false);
+
+            const value = chatDraftAutosaveState.pendingValue != null ? String(chatDraftAutosaveState.pendingValue) : String(textarea.value || '');
+            if (!options || !options.force) {
+                if (value === chatDraftAutosaveState.lastSavedValue && chatDraftAutosaveState.inFlightValue == null) {
+                    return Promise.resolve(false);
+                }
+                if (chatDraftAutosaveState.inFlightValue != null) {
+                    return Promise.resolve(false);
+                }
+            }
+
+            chatDraftAutosaveState.pendingValue = value;
+            if (chatDraftAutosaveState.timerId != null) {
+                clearTimeout(chatDraftAutosaveState.timerId);
+                chatDraftAutosaveState.timerId = null;
+            }
+            return sendChatDraftSave(value, options || {});
+        }
+
+        function scheduleChatDraftSave(value) {
+            const textarea = getChatTextarea();
+            const sessionId = getActiveChatSessionId();
+            if (!textarea || !sessionId) return;
+
+            const draft = String(value != null ? value : textarea.value || '');
+            const clearEpochAtSchedule = chatDraftAutosaveState.clearEpoch;
+            chatDraftAutosaveState.sessionId = sessionId;
+            chatDraftAutosaveState.pendingValue = draft;
+            if (chatDraftAutosaveState.timerId != null) {
+                clearTimeout(chatDraftAutosaveState.timerId);
+            }
+            chatDraftAutosaveState.timerId = window.setTimeout(() => {
+                chatDraftAutosaveState.timerId = null;
+                if (chatDraftAutosaveState.clearEpoch !== clearEpochAtSchedule) return;
+                drainChatDraftSave({keepalive: false, useBeacon: false});
+            }, 500);
+        }
+
+        function flushChatDraftSave(options) {
+            const textarea = getChatTextarea();
+            const sessionId = getActiveChatSessionId();
+            if (!textarea || !sessionId) return Promise.resolve(false);
+
+            const value = textarea.value || '';
+            chatDraftAutosaveState.sessionId = sessionId;
+            chatDraftAutosaveState.pendingValue = value;
+            if (chatDraftAutosaveState.timerId != null) {
+                clearTimeout(chatDraftAutosaveState.timerId);
+                chatDraftAutosaveState.timerId = null;
+            }
+            return sendChatDraftSave(value, {keepalive: true, useBeacon: true, ...(options || {})});
+        }
 
         function scrollChatToBottom(after) {
             try {
@@ -121,15 +328,6 @@
                 }
             }
 
-            function getHtmxRequestPath(evt) {
-                try {
-                    const detail = evt && evt.detail;
-                    return (detail && detail.path) || (detail && detail.requestConfig && detail.requestConfig.path) || (detail && detail.xhr && detail.xhr.responseURL) || '';
-                } catch (_) {
-                    return '';
-                }
-            }
-
             function isSessionActivationOrAddPath(path) {
                 const value = String(path || '');
                 return value.includes('/ui/sessions/add') || /\/ui\/sessions\/[^/?#]+\/activate(?:[/?#]|$)/.test(value);
@@ -158,6 +356,24 @@
                     wasNearBottomBeforeSwap = false;
                 } catch (_) {
                 }
+            }
+
+            function bindChatDraftFlushListeners() {
+                if (chatDraftFlushBound) return;
+                chatDraftFlushBound = true;
+
+                document.body.addEventListener('htmx:beforeRequest', function (evt) {
+                    try {
+                        const path = getHtmxRequestPath(evt);
+                        if (String(path || '').includes('/ui/chat/send')) {
+                            invalidateChatDraftAutosaveState();
+                            return;
+                        }
+                        if (!shouldFlushDraftBeforeRequest(path)) return;
+                        flushChatDraftSave({keepalive: true, useBeacon: true});
+                    } catch (_) {
+                    }
+                }, true);
             }
 
             function bindSubagentScrollListeners() {
@@ -434,6 +650,80 @@
             modal.style.top = top + 'px';
         }
 
+        function setCommandPickerActiveIndex(nextIndex) {
+            const commands = filteredCommands(commandPickerState.input ? commandPickerState.input.value : '/');
+            if (!commands.length) {
+                commandPickerState.activeIndex = 0;
+                renderCommandPickerList();
+                return;
+            }
+            const normalized = (nextIndex + commands.length) % commands.length;
+            commandPickerState.activeIndex = normalized;
+            renderCommandPickerList();
+        }
+
+        function insertCommandText(textarea, text) {
+            textarea.value = String(text || '');
+            resizeChatTextarea(textarea);
+            scheduleChatDraftSave(textarea.value);
+            textarea.focus({preventScroll: true});
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+
+        function appendChatHtml(html) {
+            const list = document.getElementById('chat-messages-list');
+            if (!list || !html) return;
+            list.insertAdjacentHTML('beforeend', html);
+            try {
+                renderAllChatMarkdown(list);
+            } catch (_) {
+            }
+            try {
+                bindPendingStreams();
+            } catch (_) {
+            }
+            checkAndMaybeScroll();
+        }
+
+        function executeCommand(command) {
+            if (!command) return;
+            const textarea = commandPickerState.textarea || document.getElementById('chat-input');
+            if (String(command.type || command.kind || '').toLowerCase() === 'prompt') {
+                if (textarea) {
+                    insertCommandText(textarea, command.body || '');
+                }
+                closeCommandPicker();
+                return;
+            }
+
+            if (textarea) {
+                textarea.value = '';
+                textarea.dataset.chatSlashRestoredValue = '';
+                resizeChatTextarea(textarea);
+                scheduleChatDraftSave('');
+            }
+            closeCommandPicker();
+            fetch('/ui/commands/' + encodeURIComponent(command.id) + '/execute', {
+                method: 'POST',
+                headers: {'HX-Request': 'true'}
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error('Command execution failed');
+                    return response.text();
+                })
+                .then(html => appendChatHtml(html))
+                .catch(error => console.error(error));
+        }
+
+        function executeCommandAtIndex(index) {
+            const commands = filteredCommands(commandPickerState.input ? commandPickerState.input.value : '/');
+            const command = commands[index] || commands[0];
+            if (!command) return;
+            commandPickerState.activeIndex = Math.max(0, commands.indexOf(command));
+            renderCommandPickerList();
+            executeCommand(command);
+        }
+
         function openCommandPicker(textarea, query) {
             const root = getCommandModalRoot();
             if (!root) return;
@@ -463,6 +753,7 @@
             commandPickerState.list = root.querySelector('.command-modal-list');
             if (!commandPickerState.input || !commandPickerState.list || !commandPickerState.modal || !commandPickerState.card) return;
             positionCommandPicker();
+            scheduleChatDraftSave(value);
             commandPickerState.input.value = value;
             commandPickerState.input.focus({preventScroll: true});
             commandPickerState.input.setSelectionRange(value.length, value.length);
@@ -546,86 +837,19 @@
             }
         }
 
-        function setCommandPickerActiveIndex(nextIndex) {
-            const commands = filteredCommands(commandPickerState.input ? commandPickerState.input.value : '/');
-            if (!commands.length) {
-                commandPickerState.activeIndex = 0;
-                renderCommandPickerList();
-                return;
-            }
-            const normalized = (nextIndex + commands.length) % commands.length;
-            commandPickerState.activeIndex = normalized;
-            renderCommandPickerList();
-        }
-
-        function insertCommandText(textarea, text) {
-            textarea.value = String(text || '');
-            resizeChatTextarea(textarea);
-            textarea.focus({preventScroll: true});
-            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-        }
-
-        function appendChatHtml(html) {
-            const list = document.getElementById('chat-messages-list');
-            if (!list || !html) return;
-            list.insertAdjacentHTML('beforeend', html);
-            try {
-                renderAllChatMarkdown(list);
-            } catch (_) {
-            }
-            try {
-                bindPendingStreams();
-            } catch (_) {
-            }
-            checkAndMaybeScroll();
-        }
-
-        function executeCommand(command) {
-            if (!command) return;
-            const textarea = commandPickerState.textarea || document.getElementById('chat-input');
-            if (String(command.type || command.kind || '').toLowerCase() === 'prompt') {
-                if (textarea) {
-                    insertCommandText(textarea, command.body || '');
-                }
-                closeCommandPicker();
-                return;
-            }
-
-            if (textarea) {
-                textarea.value = '';
-                resizeChatTextarea(textarea);
-            }
-            closeCommandPicker();
-            fetch('/ui/commands/' + encodeURIComponent(command.id) + '/execute', {
-                method: 'POST',
-                headers: {'HX-Request': 'true'}
-            })
-                .then(response => {
-                    if (!response.ok) throw new Error('Command execution failed');
-                    return response.text();
-                })
-                .then(html => appendChatHtml(html))
-                .catch(error => console.error(error));
-        }
-
-        function executeCommandAtIndex(index) {
-            const commands = filteredCommands(commandPickerState.input ? commandPickerState.input.value : '/');
-            const command = commands[index] || commands[0];
-            if (!command) return;
-            commandPickerState.activeIndex = Math.max(0, commands.indexOf(command));
-            renderCommandPickerList();
-            executeCommand(command);
-        }
-
         function initChatComposer() {
             try {
                 const form = document.getElementById('chat-send-form');
                 const textarea = document.getElementById('chat-input');
                 if (!form || !textarea) return;
 
+                const isFreshComposer = textarea.dataset.chatBound !== '1';
+                syncChatDraftAutosaveStateFromTextarea(textarea, isFreshComposer);
+
                 // Avoid double-binding when initializer is rerun for HTMX swaps.
-                if (textarea.dataset.chatBound !== '1') {
+                if (isFreshComposer) {
                     textarea.dataset.chatBound = '1';
+                    textarea.dataset.chatSlashRestoredValue = textarea.value && textarea.value.startsWith('/') ? textarea.value : '';
 
                     function onKeyDown(e) {
                         if (commandPickerState.open) {
@@ -649,6 +873,7 @@
 
                     textarea.addEventListener('input', () => {
                         resizeChatTextarea(textarea);
+                        scheduleChatDraftSave(textarea.value);
                     });
                     textarea.addEventListener('keydown', onKeyDown);
                     textarea.addEventListener('beforeinput', event => {
@@ -660,7 +885,11 @@
                     });
                     textarea.addEventListener('input', () => {
                         if (commandPickerState.open) return;
-                        if (!textarea.value.startsWith('/')) return;
+                        if (!textarea.value.startsWith('/')) {
+                            textarea.dataset.chatSlashRestoredValue = '';
+                            return;
+                        }
+                        if (textarea.dataset.chatSlashRestoredValue === textarea.value) return;
                         openCommandPicker(textarea, textarea.value);
                     });
                     if (!htmxAfterOnLoadBound) {
@@ -676,7 +905,9 @@
                                 const textarea = document.getElementById('chat-input');
                                 if (!textarea) return;
                                 textarea.value = '';
+                                textarea.dataset.chatSlashRestoredValue = '';
                                 resizeChatTextarea(textarea);
+                                clearChatDraftAutosaveState('');
                             } catch (_) {
                             }
                         }, true);
@@ -687,6 +918,7 @@
                 bindChatControlListeners(form);
                 bindChatSubmitStopListener(form);
                 bindAutoScrollListeners();
+                bindChatDraftFlushListeners();
                 checkAndMaybeScroll();
                 updateChatSendButtonState();
             } catch (_) {

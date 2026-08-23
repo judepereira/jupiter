@@ -237,6 +237,15 @@ public class AppStateRepository {
                 """, new MapSqlParameterSource("id", sessionId), this::mapSession, "session " + sessionId);
     }
 
+    void updateSessionDraft(long sessionId, String draft) {
+        jdbc.update("UPDATE sessions SET chat_draft = :draft WHERE id = :sessionId",
+                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("draft", draft == null ? "" : draft));
+    }
+
+    void clearSessionDraft(long sessionId) {
+        updateSessionDraft(sessionId, "");
+    }
+
     Optional<ConversationMessageRow> findLatestAssistantMessage(long sessionId) {
         return queryOne("""
                 SELECT *
@@ -377,8 +386,8 @@ public class AppStateRepository {
                        Long selectedChangedFileId, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
                        Long parentAssistantMessageId) {
         return insertAndReturnId("""
-                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, created_at, last_opened_at)
-                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :createdAt, :lastOpenedAt)
+                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, chat_draft, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, created_at, last_opened_at)
+                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, '', :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :createdAt, :lastOpenedAt)
                 """, params -> params
                 .addValue("workspaceId", workspaceId)
                 .addValue("name", name)
@@ -701,7 +710,7 @@ public class AppStateRepository {
     private SessionRow mapSession(ResultSet rs, int rowNum) throws SQLException {
         Long selectedChangedFileId = nullableLong(rs, "selected_changed_file_id");
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
-                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getBoolean("unread"), rs.getBoolean("hidden"),
+                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getString("chat_draft"), rs.getBoolean("unread"), rs.getBoolean("hidden"),
                 nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
                 nullableLong(rs, "parent_assistant_message_id"), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")), rs.getBoolean("in_progress"));
     }
@@ -741,7 +750,7 @@ public class AppStateRepository {
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt, boolean unread, boolean inProgress) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
-                      boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
+                      String chatDraft, boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
                       Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt, boolean inProgress) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant completedAt, Instant createdAt) {}

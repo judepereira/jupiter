@@ -15,7 +15,7 @@
             </ul>
         </div>
 
-        <form th:if="${!(subagentView ?: false)}" id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend">
+        <form th:if="${!(subagentView ?: false)}" id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend" th:attr="data-session-id=${activeSession != null ? activeSession.id : null}">
             <div class="chat-controls">
                 <label>
                     <span class="chat-control-label">Agent</span>
@@ -51,7 +51,7 @@
 
             <div class="chat-compose-row">
                 <label for="chat-input" class="sr-only">Message</label>
-                <textarea id="chat-input" name="message" rows="1" autocomplete="off"></textarea>
+                <textarea id="chat-input" name="message" rows="1" autocomplete="off" th:text="${chatDraft ?: ''}"></textarea>
                 <button id="chat-send-btn" type="submit" class="btn btn-primary">Send</button>
             </div>
         </form>
