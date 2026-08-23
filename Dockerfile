@@ -1,7 +1,7 @@
 FROM eclipse-temurin:25-jdk AS build
 
 RUN     apt update
-RUN     apt install -y git
+RUN     apt install -y git ripgrep
 
 WORKDIR /workspace
 
@@ -21,7 +21,7 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
 
 FROM eclipse-temurin:25-jre AS runtime
 
-RUN     apt update && apt install -y git git-lfs && apt-get clean && rm -rf /var/cache/apt/lists
+RUN     apt update && apt install -y git git-lfs ripgrep && apt-get clean && rm -rf /var/cache/apt/lists
 
 RUN     userdel ubuntu || true
 RUN     groupdel ubuntu || true
