@@ -343,6 +343,7 @@ public class AppStateService {
                 null,
                 null,
                 now);
+        repository.clearSessionDraft(sessionId);
         return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, null, List.of(), null),
                 new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, null, List.of(), assistantMetadata));
     }
@@ -517,6 +518,16 @@ public class AppStateService {
 
     public ChatMessageView appendVisibleSystemMessage(long sessionId, String content) {
         return appendVisibleSystemMessage(sessionId, content, null);
+    }
+
+    @Transactional
+    public void updateSessionDraft(long sessionId, String draft) {
+        repository.updateSessionDraft(sessionId, draft);
+    }
+
+    @Transactional
+    public void clearSessionDraft(long sessionId) {
+        repository.clearSessionDraft(sessionId);
     }
 
     public ChatMessageView appendVisibleSystemMessage(long sessionId, String content, Long compactedThroughTurnId) {
@@ -817,7 +828,7 @@ public class AppStateService {
         ChangedFileView selected = reviewSource == ReviewSource.GIT
                 ? null
                 : session.selectedChangedFileId() == null ? null : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
-        return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
+        return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath(), session.chatDraft());
     }
 
     public DisplayImageView loadDisplayImageView(long sessionId, String toolCallId) {

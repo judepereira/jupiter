@@ -96,7 +96,7 @@ public final class Persistence {
     }
 
     public record SessionDetailView(List<ChatMessageView> chatMessages, List<ChangedFileView> changedFiles, boolean reviewPanelOpen,
-                                    ReviewSource reviewSource, ChangedFileView selectedFile, String workspaceRoot) {
+                                    ReviewSource reviewSource, ChangedFileView selectedFile, String workspaceRoot, String chatDraft) {
     }
 
     public record SubagentSessionDetailView(SessionDetailView sessionDetail, Long parentSessionId, String parentToolCallId,
