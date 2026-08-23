@@ -8,6 +8,64 @@ and other instructions for working with this project.
    This is on purpose to simplify coding and building.
 4. The build process for this project is Maven. Always use the bundled Maven wrapper (./mvnw)
 
+## Project Structure & Architecture
+This section is intentionally stable: document the repository layout and long-lived design decisions, not short-lived implementation details.
+
+### Runtime and build
+- Spring Boot application entry point: `src/main/java/com/judepereira/jupiter/Jupiter.java`.
+- Maven is the only supported build tool; use `./mvnw` for all builds and tests.
+- The app targets Java 25 and uses Lombok plus Java records heavily for DTOs and view models.
+- Main runtime dependencies are Spring WebMVC, Thymeleaf, WebSocket, JDBC/Flyway, SQLite, Pty4J, and LangChain4j/OpenAI integrations.
+- Frontend libraries are brought in via WebJars, not CDN URLs.
+
+### Backend package layout
+- `com.judepereira.jupiter.ui`: HTMX-facing MVC controllers plus UI-facing services/listeners.
+- `com.judepereira.jupiter.ui.command`: thin command endpoint layer used by the browser UI.
+- `com.judepereira.jupiter.ui.balloon` and `com.judepereira.jupiter.ui.rail`: SSE-backed UI side channels for system balloons and workspace rail refreshes.
+- `com.judepereira.jupiter.terminal`: terminal session state, terminal lifecycle management, and the WebSocket handler for terminal I/O.
+- `com.judepereira.jupiter.command`: command catalog, execution, and command streaming infrastructure.
+- `com.judepereira.jupiter.agent`: agent orchestration, model selection, tool registration/execution, harnessing, and subagent task support.
+- `com.judepereira.jupiter.persistence`: SQLite-backed application state, repositories, view projections, and persistence services.
+- `com.judepereira.jupiter.config`: infrastructure wiring such as SQLite and WebSocket configuration.
+- `com.judepereira.jupiter.openai.oauth`: OpenAI OAuth/device-flow support.
+
+### Frontend and HTMX organization
+- Server-rendered HTML lives in `src/main/resources/templates`.
+- Reusable HTMX partials live in `src/main/resources/templates/fragments`.
+- Static CSS lives in `src/main/resources/static/css`; static browser scripts live in `src/main/resources/static/js`.
+- `index.html` is the main shell; most UI updates swap fragments rather than rendering a SPA.
+- UI behavior is intentionally split between Thymeleaf fragments, HTMX requests, and small browser-side scripts for resize/keyboard/terminal behavior.
+
+### Agent and tooling architecture
+- Agent prompt/persona definitions live under `src/main/resources/agents`.
+- Command templates invoked by the UI live under `src/main/resources/commands`.
+- `agent/harness` coordinates a single agent turn, tool call tracing, and system prompt composition.
+- `agent/llm` abstracts model clients and request/response/tool-call mapping.
+- `agent/tools` contains the tool contract plus concrete implementations for file, shell, search, patch, task, and image operations.
+- `agent/catalog` provides the durable catalog of agent and model definitions used by the UI.
+
+### Persistence and migrations
+- SQLite is the application datastore.
+- Flyway migrations live in `src/main/resources/db/migration` and are the source of truth for schema changes.
+- Persistence is centered in `AppStateRepository`, `AppStateService`, and related view/record types in `Persistence.java`.
+- Configuration files with the `.sql.conf` suffix are companion metadata for specific migration steps; keep them aligned with the matching SQL migration.
+- Prefer schema evolution through migrations rather than ad hoc initialization code.
+
+### Real-time interaction model
+- Chat turns stream over SSE from the UI layer.
+- Workspace rail refreshes and system balloons also use SSE channels.
+- Terminal interaction uses WebSockets (`TerminalWebSocketHandler`) with state managed separately from the main chat stream.
+- The UI may hold multiple live emitters per active stream; streaming state is coordinated through controller/service classes rather than the browser.
+- Failures are surfaced loudly to the frontend instead of being silently retried or hidden.
+
+### Testing conventions
+- Unit and integration-style tests live under `src/test/java` and generally mirror production package layout.
+- End-to-end browser tests live in `src/test/java/com/judepereira/jupiter/e2e` and use Playwright.
+- Template rendering tests validate Thymeleaf fragments and pages without a browser.
+- Shared test helpers live in `src/test/java/com/judepereira/jupiter/testsupport`.
+- Tests should avoid reflection; expose production code with the narrowest sensible visibility instead.
+- When a targeted test passes, run the full test suite afterward.
+
 ## Principles
 1. Follow YAGNI, DRY and KISS
 
