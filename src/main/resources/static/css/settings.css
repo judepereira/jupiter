@@ -44,14 +44,6 @@
     margin-bottom: 16px;
 }
 
-.project-form-cancel {
-    border: 1px solid #dbeafe;
-    background: #f8fbff;
-    color: #0b1220;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
 .project-form {
     display: flex;
     flex-direction: column;
@@ -120,35 +112,6 @@
 
 .settings-env-value {
     min-width: 0;
-}
-
-.settings-env-add,
-.settings-env-remove {
-    border-radius: 8px;
-    border: 1px solid #cfe0ff;
-    background: #f8fbff;
-    color: #0b1220;
-    padding: 8px 12px;
-    cursor: pointer;
-    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-
-.settings-env-add {
-    align-self: flex-start;
-    margin-top: 2px;
-    border-color: #b9cdf4;
-    background: #eef5ff;
-    color: #12408d;
-    font-weight: 600;
-}
-
-.settings-env-add:hover,
-.settings-env-remove:hover,
-.settings-env-add:focus-visible,
-.settings-env-remove:focus-visible {
-    background: #e9f1ff;
-    border-color: #9fbee9;
-    outline: none;
 }
 
 .settings-commands {
@@ -316,23 +279,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 6px 10px;
-    border: 1px solid #dbeafe;
-    border-radius: 8px;
-    background: #ffffff;
-    color: #0b1220;
-    cursor: pointer;
-    text-align: left;
     justify-content: flex-start;
-    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
-    box-shadow: 0 1px 0 rgba(16, 24, 40, 0.03);
-}
-
-.directory-node-row:hover,
-.directory-node-row:focus-visible {
-    background: #eef4fc;
-    border-color: #bfd4f1;
-    outline: none;
 }
 
 .directory-node-name {
@@ -350,19 +297,6 @@
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-}
-
-.project-form-cancel,
-.project-form-submit {
-    padding: 10px 14px;
-}
-
-.project-form-submit {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-    border-radius: 8px;
-    border-style: solid;
 }
 
 .workspace-close-modal-card {
@@ -406,7 +340,3 @@
     gap: 6px;
 }
 
-.workspace-close-submit {
-    background: #c2410c;
-    border-color: #c2410c;
-}

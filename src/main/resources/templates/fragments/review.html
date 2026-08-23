@@ -25,6 +25,7 @@
                             th:attr="hx-get=@{/ui/review/file(source=${f.source},key=${f.key},close=${isSelected})}"
                             hx-target="#review"
                             hx-swap="outerHTML"
+                            class="btn btn-light d-flex align-items-center w-100 text-start py-0 lh-sm"
                             th:classappend="${isSelected} ? ' active' : ''"
                             th:text="${f.path}"></button>
                     <th:block th:if="${isSelected}">

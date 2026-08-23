@@ -8,6 +8,10 @@ body {
     font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, Roboto, 'Segoe UI', Helvetica, Arial, sans-serif;
 }
 
+button {
+    font-size: 14px;
+}
+
 b, strong {
     font-weight: 600;
 }
@@ -15,10 +19,6 @@ b, strong {
 input[type=radio] {
     width: auto !important;
 }
-button {
-    font-size: 14px;
-}
-
 input:focus, textarea:focus {
     border: 1px solid var(--accent) !important;
     outline: none;

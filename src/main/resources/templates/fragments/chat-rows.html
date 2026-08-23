@@ -23,7 +23,7 @@
                              th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
                             <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
                                 <button type="button"
-                                        class="tool-call-subagent-button"
+                                        class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                         th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
                                     Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
                                 </button>

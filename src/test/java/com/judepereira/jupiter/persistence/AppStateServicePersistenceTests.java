@@ -150,6 +150,30 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void stopAssistantMessagePersistsStoppedTextAndClearsPendingFlag(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn queuedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "hello");
+
+        ChatMessageView stopped = service.stopAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "partial reply");
+
+        assertThat(stopped.pending()).isFalse();
+        assertThat(stopped.completedTs()).isNotNull();
+        assertThat(stopped.text()).isEqualTo("partial reply\n\nAction Interrupted");
+
+        ChatMessageView threaded = service.loadSessionDetail(sessionId).chatMessages().stream()
+                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(threaded.pending()).isFalse();
+        assertThat(threaded.text()).isEqualTo("partial reply\n\nAction Interrupted");
+    }
+
+    @Test
     public void completedTaskToolCallKeepsItsPersistedToolCallIdAfterCompletionClearsToolCallsJson(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
         AppStateService service = context.service();

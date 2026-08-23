@@ -224,7 +224,7 @@
                                            name="environmentVariableValues"
                                            placeholder="Value"
                                            autocomplete="off">
-                                    <button type="button" class="settings-env-remove" data-settings-env-remove>Remove</button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-env-remove>Remove</button>
                                 </div>
                                 <div th:each="environmentVariable : ${environmentVariablesValue}" class="settings-env-row" data-settings-env-row>
                                     <input type="text"
@@ -239,7 +239,7 @@
                                            placeholder="Value"
                                            autocomplete="off"
                                            th:value="${environmentVariable.value}">
-                                    <button type="button" class="settings-env-remove" data-settings-env-remove>Remove</button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-env-remove>Remove</button>
                                 </div>
                             </div>
                             <template data-settings-env-template>
@@ -254,10 +254,10 @@
                                            name="environmentVariableValues"
                                            placeholder="Value"
                                            autocomplete="off">
-                                    <button type="button" class="settings-env-remove" data-settings-env-remove>Remove</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-settings-env-remove>Remove</button>
                                 </div>
                             </template>
-                            <button type="button" class="settings-env-add" data-settings-env-add>Add Variable</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-settings-env-add>Add Variable</button>
                         </div>
 
                         <label class="project-form-field settings-commands-field">
@@ -270,8 +270,8 @@
                         </label>
 
                         <div class="project-form-actions">
-                            <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                            <button type="submit" class="project-form-submit">Save</button>
+                            <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save</button>
                         </div>
                     </section>
                 </form>
@@ -307,13 +307,13 @@
 
         <div class="project-form-actions">
             <button type="button"
-                    class="project-form-submit"
+                    class="btn btn-outline-danger"
                     th:if="${connected}"
                     hx-post="/ui/settings/openai/logout"
                     hx-target="#openai-oauth-section"
                     hx-swap="outerHTML">Disconnect ChatGPT/OpenAI subscription</button>
             <button type="button"
-                    class="project-form-submit"
+                    class="btn btn-primary"
                     th:if="${!pending and !connected}"
                     hx-post="/ui/settings/openai/start"
                     hx-target="#openai-oauth-section"
@@ -352,8 +352,8 @@
                 </section>
 
                 <div class="project-form-actions">
-                    <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                    <button type="submit" class="project-form-submit">Open</button>
+                    <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Open</button>
                 </div>
             </form>
         </div>
@@ -410,8 +410,8 @@
                 </label>
 
                 <div class="project-form-actions">
-                    <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                    <button type="submit" class="project-form-submit">Create workspace</button>
+                    <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create workspace</button>
                 </div>
             </form>
         </div>
@@ -448,9 +448,9 @@
             </div>
 
             <div class="project-form-actions">
-                <button type="button" class="project-form-cancel" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
                 <button type="button"
-                        class="project-form-submit workspace-close-submit"
+                        class="btn btn-primary"
                         th:attr="hx-post=@{/ui/workspaces/{id}/close/confirm(id=${workspaceId})}, hx-target='#shell', hx-swap='none'">Close workspace</button>
             </div>
         </div>

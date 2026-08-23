@@ -2,6 +2,8 @@ package com.judepereira.jupiter.ui;
 
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -47,6 +49,18 @@ public class ActiveStreamRegistryService {
 
     public boolean hasActiveStreamForAssistantId(String assistantId) {
         return assistantId != null && streamsByAssistantId.containsKey(assistantId);
+    }
+
+    public Optional<Long> sessionIdForAssistantId(String assistantId) {
+        StreamRef ref = assistantId == null ? null : streamsByAssistantId.get(assistantId);
+        return ref == null ? Optional.empty() : Optional.of(ref.sessionId());
+    }
+
+    public Optional<String> assistantIdForSession(long sessionId) {
+        return streamsByAssistantId.entrySet().stream()
+                .filter(entry -> entry.getValue().sessionId() == sessionId)
+                .map(Map.Entry::getKey)
+                .findFirst();
     }
 
     private record StreamRef(long sessionId, String workspaceRoot) {}

@@ -67,6 +67,20 @@
     border-color: #9fb3d4;
 }
 
+.terminal-tab-group:hover,
+.terminal-tab-add:hover {
+    filter: brightness(1.08);
+}
+
+.terminal-tab-close:hover {
+    background: rgba(51, 65, 85, 0.08);
+}
+
+.terminal-tab-group.active .terminal-tab,
+.terminal-tab-group.active .terminal-tab-close {
+    color: #334155;
+}
+
 .terminal-tab {
     padding: 0 12px;
     display: inline-flex;
@@ -74,12 +88,12 @@
     justify-content: flex-start;
     min-width: 0;
     flex: 1 1 auto;
+    height: 100%;
     color: inherit;
     border: 0;
     background: transparent;
     box-shadow: none;
     border-radius: 0;
-    height: 100%;
 }
 
 .terminal-tab-close {
@@ -133,6 +147,10 @@
 .terminal-empty-button {
     padding: 0 12px;
     height: 32px;
+}
+
+.terminal-tab-group .terminal-tab {
+    height: 100%;
 }
 
 .terminal-body {

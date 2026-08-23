@@ -74,9 +74,8 @@
 
             const close = document.createElement('button');
             close.type = 'button';
-            close.className = 'system-balloon__close';
+            close.className = 'btn-close';
             close.setAttribute('aria-label', 'Close notification');
-            close.textContent = '×';
             close.addEventListener('click', () => removeBalloon(id, true));
 
             node.appendChild(content);

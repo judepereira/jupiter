@@ -21,14 +21,6 @@
     background: var(--panel-bg);
 }
 
-.review-toggle {
-    background: transparent;
-    border: 1px solid var(--panel-border);
-    padding: 6px 8px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
 /* Previously there was a compact "rail-like" stub when the review shell was closed
    that left a layout footprint. That behavior is removed so closing the review
    removes its layout footprint entirely. Internal content is still hidden when
@@ -87,30 +79,6 @@
     gap: 6px;
 }
 
-.changed-file-item button {
-    display: flex;
-    align-items: center;
-    min-height: 24px;
-    padding: 0 38px 0 0;
-    width: 100%;
-    border: 1px solid transparent;
-    background: transparent;
-    border-radius: 6px;
-    color: #131d32;
-    cursor: pointer;
-    text-align: left;
-    font: inherit;
-    line-height: 1.2;
-}
-
-.changed-file-item button.active {
-    background: #eaf1fb;
-    font-weight: 600;
-}
-
-.changed-file-item button:hover {
-    background: #eef4fc;
-}
 
 .review-panel {
     overflow: scroll;

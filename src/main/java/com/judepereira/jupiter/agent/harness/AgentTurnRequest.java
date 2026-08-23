@@ -15,6 +15,7 @@ public class AgentTurnRequest {
     private final String modelId;
     private final ThinkingLevel thinkingLevel;
     private final Long sessionId;
+    private final CancellationToken cancellationToken;
 
     public AgentTurnRequest(String systemPrompt, String userPrompt) {
         this(systemPrompt, List.of(new Message(Message.Role.USER, userPrompt)), null, null, null, null, null);
@@ -35,6 +36,12 @@ public class AgentTurnRequest {
 
     public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
                             String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId) {
+        this(systemPrompt, conversationHistory, workspaceRoot, agentId, modelId, thinkingLevel, sessionId, null);
+    }
+
+    public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
+                            String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,
+                            CancellationToken cancellationToken) {
         this.systemPrompt = systemPrompt;
         this.conversationHistory = List.copyOf(conversationHistory);
         this.workspaceRoot = workspaceRoot;
@@ -42,5 +49,6 @@ public class AgentTurnRequest {
         this.modelId = modelId;
         this.thinkingLevel = thinkingLevel;
         this.sessionId = sessionId;
+        this.cancellationToken = cancellationToken;
     }
 }
