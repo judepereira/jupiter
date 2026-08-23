@@ -2,44 +2,26 @@ package com.judepereira.jupiter.ui;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.*;
 import com.judepereira.jupiter.agent.config.AgentProperties;
-import com.judepereira.jupiter.agent.catalog.AgentDefinition;
-import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
-import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
-import com.judepereira.jupiter.agent.catalog.ModelDefinition;
-import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CancellationToken;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
-import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
 import com.judepereira.jupiter.persistence.GitWorktreeException;
 import com.judepereira.jupiter.persistence.InvalidGitBranchNameException;
-import com.judepereira.jupiter.persistence.Persistence.AppStateView;
-import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
-import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
-import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
-import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
-import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
-import com.judepereira.jupiter.persistence.Persistence.ProjectView;
-import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
-import com.judepereira.jupiter.persistence.Persistence.RailStatus;
-import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
-import com.judepereira.jupiter.persistence.Persistence.SubagentSessionDetailView;
-import com.judepereira.jupiter.persistence.Persistence.SessionDetailView;
-import com.judepereira.jupiter.persistence.Persistence.SessionView;
-import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
-import com.judepereira.jupiter.persistence.Persistence.WorkspaceView;
-import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
-import com.judepereira.jupiter.terminal.TerminalManager;
+import com.judepereira.jupiter.persistence.Persistence.*;
 import com.judepereira.jupiter.terminal.TerminalHandle;
+import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalPanelState;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
@@ -48,6 +30,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -62,14 +46,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -599,6 +576,26 @@ public class UiController {
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         return "fragments/chat :: chat";
+    }
+
+    @GetMapping("/ui/chat/image/{sessionId}/{toolCallId}")
+    ResponseEntity<byte[]> streamDisplayImage(@PathVariable long sessionId, @PathVariable String toolCallId) throws Exception {
+        AppStateService.DisplayImageView view = appStateService.loadDisplayImageView(sessionId, toolCallId);
+        Path workspace = Path.of(view.workspaceRoot());
+        Path resolved = FileUtils.resolveWorkspacePath(workspace, view.path());
+        if (!Files.exists(resolved) || !Files.isRegularFile(resolved)) {
+            throw new IllegalStateException("Image file not found: " + view.path());
+        }
+        String mediaType = FileUtils.resolveAllowedImageMediaType(Files.probeContentType(resolved), view.path());
+        if (mediaType == null) {
+            throw new IllegalStateException("Unsupported image type: " + view.path());
+        }
+        byte[] bytes = Files.readAllBytes(resolved);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, mediaType)
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(bytes);
     }
 
     @GetMapping("/ui/chat/primary")
@@ -1332,7 +1329,7 @@ public class UiController {
 
     private ToolCallView toToolCallView(com.judepereira.jupiter.persistence.Persistence.ToolCallView view) {
         return new ToolCallView(view.toolCallId(), view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated(),
-                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status());
+                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status(), view.imageUrl(), view.imageAlt(), view.imagePath(), view.imageMediaType());
     }
 
     private ChangedFile toChangedFile(ChangedFileView view) {
@@ -1431,10 +1428,16 @@ public class UiController {
     private record ProviderError(String message) {}
 
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
+                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
+                                String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
+        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null);
+        }
+
         public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                             Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null);
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null);
         }
     }
 

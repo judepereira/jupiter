@@ -2,15 +2,19 @@
 #shell.shell-root {
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
-    grid-template-columns: var(--rail-width) minmax(0, 1fr) 0 var(--review-width);
-    gap: 6px;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr) 5px var(--review-width);
     align-items: stretch;
     background: var(--shell-bg);
-    height: calc(100vh - var(--topbar-height) - var(--bottom-nav-height));
     box-sizing: border-box;
     padding: 0;
-    margin-top: var(--topbar-height);
+    margin-top: 0;
     overflow-x: hidden;
+    position: fixed;
+    top: var(--topbar-height);
+    right: 0;
+    bottom: var(--bottom-nav-height);
+    left: 0;
+    height: auto;
 }
 
 /* open: include divider + review column */
@@ -41,6 +45,7 @@
     grid-row: 1 / span 2;
 }
 
+
 .bottom-rail {
     position: fixed;
     left: 0;
@@ -50,7 +55,6 @@
     width: 100%;
     height: var(--bottom-nav-height);
     padding: 0;
-    background: var(--topbar-bg);
     border: 0;
     border-top: 1px solid rgba(135, 163, 205, 0.18);
     box-shadow: none;
@@ -72,12 +76,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 33px;
-    height: 29px;
-    border-radius: 6px;
-    background: #0b1931;
-    color: #ffffff;
-    border: 1px solid rgba(181, 202, 237, 0.24);
+    width: 40px;
+    height: var(--topbar-height);
+    background: none;
+    color: var(--accent);
+    border: none;
     cursor: pointer;
     box-shadow: none;
 }
@@ -89,10 +92,7 @@
 /* Main panels */
 .main-panel {
     background: var(--panel-bg);
-    border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
-    border: 1px solid var(--panel-border);
-    padding: 8px;
+    padding: 15px;
     overflow: hidden;
     min-height: 0;
 }
@@ -104,7 +104,8 @@
     flex-direction: column;
     gap: 0;
     min-height: 0;
-    margin: 8px 0 0 0;
+    margin: 0;
+    padding: 0 15px 15px 15px;
 }
 
 .review-panel {
@@ -113,19 +114,19 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    background: var(--conversation-panel-bg);
+    background: var(--rail-bg);
     /* allow the review column to fully collapse when the shell
        requests it (review-closed). Some browsers will honor an
        element's min-width even when grid column is 0 which can
        produce off-canvas overflow; using 0 here + a stronger
        min-width when open prevents that. */
     min-width: 0;
-    margin: 8px 8px 0 0;
+    margin: 0 8px 0 0;
 }
 
 .terminal-panel,
 #bottom-panel {
-    /*grid-column: 2 / -1;*/
+    grid-column: 2 / -1;
     grid-row: 2;
     display: flex;
     flex-direction: column;
@@ -134,8 +135,36 @@
     height: var(--terminal-panel-height);
     min-height: 0;
     padding: 0;
-    margin: 0 8px 8px 0;
+    margin: 0 8px 0 0;
     overflow: hidden;
+    border-top: 1px solid #dce5f2
+}
+
+/* Divider between left rail and left panel */
+.left-rail-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--rail-width);
+    width: 10px;
+    transform: translateX(-50%);
+    background: transparent;
+    cursor: col-resize;
+    display: block;
+    align-self: stretch;
+    touch-action: none;
+    z-index: 3;
+    transition: background-color 120ms ease;
+}
+
+.left-rail-divider:hover,
+.left-rail-divider:active,
+.left-rail-divider.dragging {
+    background: var(--divider-background-hover);
+}
+
+.left-rail-divider.hidden {
+    display: none;
 }
 
 /* Divider between left panel and review */
@@ -146,13 +175,13 @@
     cursor: col-resize;
     display: block;
     align-self: stretch;
+    justify-self: end;
+    touch-action: none;
+    z-index: 3;
     transition: background-color 120ms ease;
 }
 
-.panel-divider:hover {
-    background: var(--divider-background-hover);
-}
-
+.panel-divider:hover,
 .panel-divider:active,
 .panel-divider.dragging {
     background: var(--divider-background-hover);
@@ -204,12 +233,38 @@
     overflow: hidden !important;
 }
 
+#shell.shell-root.left-rail-closed .left-rail {
+    min-width: 0 !important;
+    max-width: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+}
+
+#shell.shell-root.left-rail-closed .left-rail-divider {
+    left: 0;
+    transform: none;
+}
+
+/* Mobile off-canvas rail never uses the desktop collapsed state. */
+@media (max-width: 900px) {
+    #shell.shell-root.left-rail-closed .left-rail {
+        min-width: initial !important;
+        max-width: none !important;
+        width: auto !important;
+        overflow: visible !important;
+    }
+}
+
 /* When review is explicitly open on desktop ensure a reasonable
    minimum width is respected for usability. The JS drag clamp will
    also enforce a pixel minimum, but adding this rule preserves the
    previous visual behavior while avoiding overflow when closed. */
 #shell.shell-root.review-open .review-panel {
     min-width: 138px;
+}
+
+#shell.shell-root.left-rail-open .left-rail {
+    min-width: 96px;
 }
 
 /* Chat area: scroll history + pinned composer */

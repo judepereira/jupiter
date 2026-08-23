@@ -244,13 +244,14 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             return conversation;
         }
 
-        Message first = conversation.get(0);
-        if (first.getRole() != Message.Role.SYSTEM) {
-            return conversation;
+        List<Message> transformed = new java.util.ArrayList<>(conversation.size());
+        for (Message message : conversation) {
+            if (message.getRole() == Message.Role.SYSTEM) {
+                transformed.add(new Message(Message.Role.USER, message.getContent(), message.getToolCallId(), message.getToolCalls()));
+            } else {
+                transformed.add(message);
+            }
         }
-
-        List<Message> transformed = new java.util.ArrayList<>(conversation);
-        transformed.set(0, new Message(Message.Role.USER, first.getContent()));
         return transformed;
     }
 

@@ -6,40 +6,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
-import com.judepereira.jupiter.persistence.Persistence.AppStateView;
-import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
-import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
-import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
-import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
-import com.judepereira.jupiter.persistence.Persistence.ProjectView;
-import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
-import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
-import com.judepereira.jupiter.persistence.Persistence.SessionDetailView;
-import com.judepereira.jupiter.persistence.Persistence.RailStatus;
-import com.judepereira.jupiter.persistence.Persistence.SessionView;
-import com.judepereira.jupiter.persistence.Persistence.SubagentSessionDetailView;
-import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
-import com.judepereira.jupiter.persistence.Persistence.ToolCallView;
-import com.judepereira.jupiter.persistence.Persistence.WorkspaceView;
+import com.judepereira.jupiter.persistence.Persistence.*;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-
-import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
+import java.time.Instant;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -413,7 +391,7 @@ public class AppStateService {
         ToolCallTraceInput normalizedTrace = new ToolCallTraceInput(toolCallId, trace.toolName(), trace.args(), trace.success(), trace.textSummary(), trace.machineSummary());
         List<ToolCallPayload> payloads = toolCallPayloads(assistantMessage.toolCallsJson());
         if (payloads.stream().anyMatch(payload -> toolCallId.equals(payload.toolCallId()))) {
-            return traceToView(normalizedTrace);
+            return traceToView(normalizedTrace, sessionId);
         }
 
         String argsJson = json(normalizedTrace.args());
@@ -431,7 +409,7 @@ public class AppStateService {
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,
                 normalizedTrace.textSummary() == null ? "" : normalizedTrace.textSummary(), toolCallId, null, false, true, false, now);
 
-        return traceToView(normalizedTrace);
+        return traceToView(normalizedTrace, sessionId);
     }
 
     @Transactional
@@ -856,6 +834,27 @@ public class AppStateService {
         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath());
     }
 
+    public DisplayImageView loadDisplayImageView(long sessionId, String toolCallId) {
+        if (toolCallId == null || toolCallId.isBlank()) {
+            throw new IllegalArgumentException("Tool call id is required");
+        }
+        var session = repository.findSession(sessionId);
+        var workspace = repository.findWorkspace(session.workspaceId());
+        AppStateRepository.ToolCallTraceRow trace = repository.listToolCallTracesBySession(sessionId).stream()
+                .filter(row -> toolCallId.equals(row.toolCallId()) && "display_image".equals(row.toolName()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Display image tool call not found: " + toolCallId));
+        Map<String, Object> machineSummary = readMap(trace.machineSummaryJson());
+        if (!"image".equals(asString(machineSummary.get("displayType")))) {
+            throw new IllegalStateException("Tool call is not a display_image trace: " + toolCallId);
+        }
+        String path = asString(machineSummary.get("path"));
+        if (path == null || path.isBlank()) {
+            throw new IllegalStateException("Display image path is required: " + toolCallId);
+        }
+        return new DisplayImageView(session.id(), workspace.normalizedPath(), toolCallId, path, asString(machineSummary.get("alt")), asString(machineSummary.get("mediaType")));
+    }
+
     private List<ChatMessageView> injectSyntheticFailedAssistantMessage(long sessionId, List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
         if (messages.isEmpty()) {
             return messages;
@@ -1013,7 +1012,7 @@ public class AppStateService {
         for (int i = 0; i < traces.size(); i++) {
             AppStateRepository.ToolCallTraceRow trace = traces.get(i);
             String toolCallId = trace.toolCallId() != null ? trace.toolCallId() : i < payloads.size() ? payloads.get(i).toolCallId() : null;
-            toolCalls.add(toToolCallView(trace, toolCallId));
+            toolCalls.add(toToolCallView(trace, toolCallId, sessionId));
         }
         return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(),
                 message.completedAt() == null ? null : message.completedAt().toEpochMilli(), toolCalls,
@@ -1021,11 +1020,17 @@ public class AppStateService {
                         new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel()));
     }
 
-    private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace, String toolCallId) {
-        return traceToView(new ToolCallTraceInput(toolCallId, trace.toolName(), readMap(trace.argsJson()), trace.success(), trace.textSummary(), readMap(trace.machineSummaryJson())));
+    private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace, String toolCallId, long sessionId) {
+        Map<String, Object> machineSummary = readMap(trace.machineSummaryJson());
+        if (machineSummary != null && !machineSummary.isEmpty()) {
+            machineSummary = new LinkedHashMap<>(machineSummary);
+            machineSummary.putIfAbsent("sessionId", sessionId);
+            machineSummary.putIfAbsent("toolCallId", toolCallId);
+        }
+        return traceToView(new ToolCallTraceInput(toolCallId, trace.toolName(), readMap(trace.argsJson()), trace.success(), trace.textSummary(), machineSummary), sessionId);
     }
 
-    private ToolCallView traceToView(ToolCallTraceInput trace) {
+    private ToolCallView traceToView(ToolCallTraceInput trace, long sessionId) {
         String input = jsonPretty(trace.args());
         String output = trace.textSummary() == null ? "" : trace.textSummary();
         boolean[] inTr = new boolean[1];
@@ -1033,8 +1038,29 @@ public class AppStateService {
         String inPreview = previewAndTruncate(input, 2000, inTr);
         String outPreview = previewAndTruncate(output, 2000, outTr);
         SubagentLinkInfo subagent = subagentLinkInfo(trace.machineSummary());
+        ImageLinkInfo image = imageLinkInfo(trace, trace.machineSummary(), sessionId);
         return new ToolCallView(trace.toolCallId(), trace.toolName(), trace.success(), inPreview, outPreview, inTr[0], outTr[0], subagent.subagentSessionId(),
-                subagent.subagentAgentId(), subagent.subagentAgentName(), null);
+                subagent.subagentAgentId(), subagent.subagentAgentName(), null, image.imageUrl(), image.imageAlt(), image.imagePath(), image.imageMediaType());
+    }
+
+    private ToolCallView traceToView(ToolCallTraceInput trace) {
+        return traceToView(trace, -1L);
+    }
+
+    private ImageLinkInfo imageLinkInfo(ToolCallTraceInput trace, Map<String, Object> machineSummary, long sessionId) {
+        if (machineSummary == null || machineSummary.isEmpty()) {
+            return new ImageLinkInfo(null, null, null, null);
+        }
+        if (!"image".equals(asString(machineSummary.get("displayType")))) {
+            return new ImageLinkInfo(null, null, null, null);
+        }
+        String path = asString(machineSummary.get("path"));
+        if (path == null || path.isBlank()) {
+            return new ImageLinkInfo(null, null, null, null);
+        }
+        String toolCallId = trace.toolCallId();
+        String imageUrl = toolCallId == null || toolCallId.isBlank() ? null : "/ui/chat/image/" + sessionId + "/" + toolCallId;
+        return new ImageLinkInfo(imageUrl, asString(machineSummary.get("alt")), path, asString(machineSummary.get("mediaType")));
     }
 
     private SubagentLinkInfo subagentLinkInfo(Map<String, Object> machineSummary) {
@@ -1173,6 +1199,10 @@ public class AppStateService {
     }
 
     private record SubagentLinkInfo(Long subagentSessionId, String subagentAgentId, String subagentAgentName) {}
+
+    public record DisplayImageView(long sessionId, String workspaceRoot, String toolCallId, String path, String alt, String mediaType) {}
+
+    private record ImageLinkInfo(String imageUrl, String imageAlt, String imagePath, String imageMediaType) {}
 
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
         String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank() ? null : row.workspaceInitCommands();

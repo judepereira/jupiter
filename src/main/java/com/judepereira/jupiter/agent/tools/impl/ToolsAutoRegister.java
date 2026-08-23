@@ -9,6 +9,7 @@ public class ToolsAutoRegister {
         registry.register(new SearchCodeTool());
         registry.register(new WriteFileTool());
         registry.register(new ApplyPatchTool());
+        registry.register(new DisplayImageTool());
         registry.register(runCommandTool);
     }
 }

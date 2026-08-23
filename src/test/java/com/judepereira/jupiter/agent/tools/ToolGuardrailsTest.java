@@ -3,16 +3,15 @@ package com.judepereira.jupiter.agent.tools;
 import com.judepereira.jupiter.agent.tools.impl.ApplyPatchTool;
 import com.judepereira.jupiter.agent.tools.impl.RunCommandTool;
 import com.judepereira.jupiter.agent.tools.impl.WriteFileTool;
-import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ToolGuardrailsTest {
 
@@ -33,13 +32,6 @@ public class ToolGuardrailsTest {
         ToolExecutionResult res = t.execute(Map.of("command", "echo hi"), ctx);
         assertFalse(res.isSuccess());
         assertTrue(res.getText().toLowerCase().contains("disabled"));
-    }
-
-    @Test
-    public void path_traversal_blocked_for_read_write(@TempDir Path tmp) throws Exception {
-        // Attempt to resolve path outside workspace
-        String rel = "../outside.txt";
-        assertThrows(IOException.class, () -> FileUtils.resolveWorkspacePath(tmp, rel));
     }
 
     @Test

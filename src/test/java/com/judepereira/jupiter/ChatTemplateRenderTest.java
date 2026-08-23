@@ -17,8 +17,8 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -108,32 +108,9 @@ public class ChatTemplateRenderTest {
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
     }
 
-    private static SpringTemplateEngine engine() {
-        SpringTemplateEngine engine = new SpringTemplateEngine();
-        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
-        resolver.setPrefix("templates/");
-        resolver.setSuffix(".html");
-        resolver.setTemplateMode(TemplateMode.HTML);
-        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        resolver.setCacheable(false);
-        engine.setTemplateResolver(resolver);
-        return engine;
-    }
-
     @Test
     public void chatResponseFragmentRendersOpenSubagentLinkForTaskToolTraces() {
-        AgentDefinitionService agentService = new AgentDefinitionService(new ObjectMapper());
-        var modelService = ModelCatalogTestSupport.modelCatalogService();
-
-        SpringTemplateEngine engine = new SpringTemplateEngine();
-        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
-        resolver.setPrefix("templates/");
-        resolver.setSuffix(".html");
-        resolver.setTemplateMode(TemplateMode.HTML);
-        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        resolver.setCacheable(false);
-        engine.setTemplateResolver(resolver);
-
+        SpringTemplateEngine engine = engine();
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
         context.setVariable("reviewOob", false);
@@ -153,15 +130,30 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
+    public void chatResponseFragmentOpensDisplayImageDetailsAndRendersImagePreview() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("reviewSource", null);
+        context.setVariable("selectedFile", null);
+        context.setVariable("newChatMessages", List.of(
+                new UiController.ChatMessage("assistant", "Done", 1L, false, "assistant-1",
+                        null, List.of(new UiController.ToolCallView("tool-call-1", "display_image", true, "{\"path\": \"images/cat.png\"}", "Displayed image: images/cat.png", false, false,
+                                null, null, null, null, "/ui/chat/image/1/tool-call-1", "Cat", "images/cat.png", "image/png")), null)
+        ));
+
+        String html = engine.process("fragments/chat-response", context);
+
+        assertThat(html).contains("<details", "open", "<img", "src=\"/ui/chat/image/1/tool-call-1\"", "alt=\"Cat\"", "images/cat.png", "tool-call-image-caption", ">Cat<");
+        assertThat(html).doesNotContain("Displayed image: images/cat.png");
+    }
+
+    @Test
     public void chatResponseFragmentGroupsOnlyContiguousToolCalls() {
-        SpringTemplateEngine engine = new SpringTemplateEngine();
-        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
-        resolver.setPrefix("templates/");
-        resolver.setSuffix(".html");
-        resolver.setTemplateMode(TemplateMode.HTML);
-        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        resolver.setCacheable(false);
-        engine.setTemplateResolver(resolver);
+        SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
@@ -191,15 +183,7 @@ public class ChatTemplateRenderTest {
 
     @Test
     public void chatResponseFragmentDoesNotCollapseConsecutiveTaskToolCalls() {
-        SpringTemplateEngine engine = new SpringTemplateEngine();
-        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
-        resolver.setPrefix("templates/");
-        resolver.setSuffix(".html");
-        resolver.setTemplateMode(TemplateMode.HTML);
-        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        resolver.setCacheable(false);
-        engine.setTemplateResolver(resolver);
-
+        SpringTemplateEngine engine = engine();
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
         context.setVariable("reviewOob", false);
@@ -314,6 +298,18 @@ public class ChatTemplateRenderTest {
         assertThat(html).doesNotContain("subagent-activities");
     }
 
+    private static SpringTemplateEngine engine() {
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+        return engine;
+    }
+
     private static WebContext webContext() {
         MockServletContext servletContext = new MockServletContext();
         JakartaServletWebApplication application = JakartaServletWebApplication.buildApplication(servletContext);
@@ -323,5 +319,4 @@ public class ChatTemplateRenderTest {
         request.setRequestURI("/");
         return new WebContext(application.buildExchange(request, new MockHttpServletResponse()), Locale.US);
     }
-
 }

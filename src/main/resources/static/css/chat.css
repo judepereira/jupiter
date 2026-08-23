@@ -120,8 +120,7 @@
 
 /* Inline code: subtle background and allow wrapping if needed */
 .chat-message-text code {
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 2px 0;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
     white-space: pre-wrap;
 }
@@ -135,12 +134,9 @@
 #chat-history.messages {
     flex: 1 1 auto;
     overflow: auto;
-    padding: 8px;
-    border-radius: 6px;
-    background: var(--conversation-panel-bg);
-    border: 1px solid #e8f0fb;
     /* Prevent browser auto-adjusting scroll during incremental streaming updates */
     overflow-anchor: none;
+    margin-bottom: 15px;
 }
 
 #chat-messages-list {
@@ -159,7 +155,7 @@
     flex-direction: column;
     gap: 8px;
     padding-top: 8px;
-    border-top: 1px solid #f0f4f8;
+    border-top: 1px solid var(--outline-colour);
 }
 
 .chat-controls {
@@ -174,11 +170,11 @@
     gap: 4px;
     min-width: 0;
     font-size: 12px;
-    color: var(--muted);
+    color: #131d32;
 }
 
 .chat-control-label {
-    font-weight: 600;
+    font-weight: 300;
 }
 
 .chat-controls select,
@@ -197,10 +193,11 @@
 .chat-form textarea,
 #chat-input {
     flex: 1 1 auto;
-    padding: 8px 10px;
+    padding: 8px 35px 8px 10px;
     border-radius: 6px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--outline-colour);
     font: inherit;
+    text-overflow: ellipsis;
 }
 
 /* Textarea specific: prevent manual resize, keep single-line height and
@@ -235,7 +232,7 @@
 .command-modal {
     position: fixed;
     inset: 0;
-    z-index: 1200;
+    z-index: 12000;
 }
 
 .command-modal-backdrop {
@@ -251,8 +248,7 @@
     margin: 10vh auto 0;
     background: #fff;
     border: 1px solid rgba(148, 163, 184, 0.28);
-    border-radius: 18px;
-    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+    border-radius: 6px;
     overflow: hidden;
 }
 
@@ -268,7 +264,7 @@
 .command-modal-header h4 {
     margin: 0;
     font-size: 16px;
-    font-weight: 700;
+    font-weight: 400;
 }
 
 .command-modal-body {
@@ -279,7 +275,7 @@
     width: 100%;
     box-sizing: border-box;
     border: 1px solid #cbd5e1;
-    border-radius: 12px;
+    border-radius: 6px;
     padding: 10px 12px;
     font: inherit;
     margin-bottom: 10px;
@@ -301,7 +297,7 @@
     align-items: flex-start;
     gap: 10px;
     padding: 10px 12px;
-    border-radius: 12px;
+    border-radius: 6px;
     border: 1px solid transparent;
     cursor: pointer;
 }
@@ -312,7 +308,7 @@
 }
 
 .command-modal-item-command {
-    font-weight: 700;
+    font-weight: 400;
     color: #0f172a;
 }
 
@@ -331,6 +327,34 @@
 }
 
 /* Tool call rendering (compact) */
+.tool-call-image-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+}
+
+.tool-call-image-preview img {
+    display: block;
+    max-width: min(100%, 720px);
+    height: auto;
+    border-radius: 10px;
+    border: 1px solid #dbeafe;
+    background: #fff;
+}
+
+.tool-call-image-preview figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.tool-call-image-preview small {
+    color: #64748b;
+}
+
 .tool-calls {
     margin-top: 6px;
     display: flex;

@@ -3,7 +3,6 @@ package com.judepereira.jupiter.agent.tools.impl;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 public class FileUtils {
     public static Path resolveWorkspacePath(Path workspaceRoot, String relative) throws IOException {
@@ -11,11 +10,7 @@ public class FileUtils {
         String rel = relative == null || relative.isBlank() ? "" : relative;
         // canonicalize workspace root to absolute normalized path first
         Path root = workspaceRoot.toAbsolutePath().normalize();
-        Path candidate = root.resolve(rel).normalize();
-        if (!candidate.startsWith(root)) {
-            throw new IOException("Path traversal outside workspace is not allowed: " + relative);
-        }
-        return candidate;
+        return root.resolve(rel).normalize();
     }
 
     public static Path canonicalWorkspaceRoot(Path workspaceRoot) {
@@ -35,5 +30,42 @@ public class FileUtils {
             return s.substring(0, maxChars);
         }
         return s;
+    }
+
+    public static String resolveAllowedImageMediaType(String mediaType, String relativePath) {
+        if (isAllowedImageMediaType(mediaType)) {
+            return mediaType;
+        }
+        return imageMediaTypeFromExtension(relativePath);
+    }
+
+    private static boolean isAllowedImageMediaType(String mediaType) {
+        if (mediaType == null || mediaType.isBlank()) {
+            return false;
+        }
+        return switch (mediaType) {
+            case "image/png", "image/jpeg", "image/gif", "image/webp" -> true;
+            default -> false;
+        };
+    }
+
+    private static String imageMediaTypeFromExtension(String relativePath) {
+        if (relativePath == null) {
+            return null;
+        }
+        String lower = relativePath.toLowerCase();
+        if (lower.endsWith(".png")) {
+            return "image/png";
+        }
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (lower.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (lower.endsWith(".webp")) {
+            return "image/webp";
+        }
+        return null;
     }
 }

@@ -21,7 +21,7 @@
                          th:attr="data-start-ts=${m.ts}, data-completed-ts=${m.completedTs}, data-agent-label=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentName + ' (' + m.metadata.agentId + ')'} : null, data-agent-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentId} : null, data-model-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.modelId} : null, data-thinking-level=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.thinkingLevel} : null"></div>
 
                     <div th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls">
-                        <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}">
+                        <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image'}">
                             <summary class="tool-call-summary">
                                 <span class="tool-call-name" th:text="${group.displayLabel}"></span>
                                 <span class="tool-call-status" th:classappend="${group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
@@ -52,7 +52,16 @@
                                             <div class="tool-call-label">Output
                                                 <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
                                             </div>
-                                            <pre class="tool-call-pre" th:text="${call.outputPreview}"></pre>
+                                            <th:block th:if="${call.imageUrl != null}">
+                                                <figure class="tool-call-image-preview">
+                                                    <img th:src="${call.imageUrl}" th:alt="${call.imageAlt}"/>
+                                                    <figcaption>
+                                                        <span class="tool-call-image-caption" th:text="${call.imageAlt}"></span>
+                                                        <small th:if="${call.imagePath != null}" th:text="${call.imagePath}"></small>
+                                                    </figcaption>
+                                                </figure>
+                                            </th:block>
+                                            <pre th:unless="${call.imageUrl != null}" class="tool-call-pre" th:text="${call.outputPreview}"></pre>
                                         </section>
                                     </div>
                                 </div>
@@ -68,7 +77,7 @@
             <div class="chat-controls">
                 <label>
                     <span class="chat-control-label">Agent</span>
-                    <select id="chat-agent-select" name="agentId">
+                    <select id="chat-agent-select" name="agentId" class="form-select">
                         <option th:each="agent : ${agents}"
                                 th:value="${agent.id}"
                                 th:selected="${selectedAgent != null and selectedAgent.id == agent.id}"
@@ -79,7 +88,7 @@
 
                 <label>
                     <span class="chat-control-label">Model</span>
-                    <select id="chat-model-select" name="modelId">
+                    <select id="chat-model-select" name="modelId" class="form-select">
                         <option th:each="modelDef : ${models}"
                                 th:value="${modelDef.id}"
                                 th:selected="${selectedModel != null and selectedModel.id == modelDef.id}"
@@ -89,7 +98,7 @@
 
                 <label>
                     <span class="chat-control-label">Thinking</span>
-                    <select id="chat-thinking-select" name="thinkingLevel">
+                    <select id="chat-thinking-select" name="thinkingLevel" class="form-select">
                         <option th:each="level : ${thinkingLevels}"
                                 th:value="${level}"
                                 th:selected="${selectedThinking != null and selectedThinking == level}"

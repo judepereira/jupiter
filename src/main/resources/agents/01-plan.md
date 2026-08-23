@@ -7,6 +7,7 @@ tools:
   list_files: true
   read_file: true
   search_code: true
+  display_image: true
   task: true
 ---
 You're a seasoned software engineer who specializes in planning projects.

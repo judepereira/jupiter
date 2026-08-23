@@ -76,12 +76,21 @@ public class ContextCompactionService {
         String transcript = buildTranscript(compactableGroups);
         AgentModelClient client = modelClientFactory.getClient();
         AgentModelOptions options = new AgentModelOptions(model.id(), model.apiModelId(), thinkingLevel, model.supportsReasoning(), agent.textVerbosity());
-        ModelResponse summaryResult = client.chat(List.of(
+        StringBuilder streamedSummary = new StringBuilder();
+        ModelResponse summaryResult = client.chatStreaming(List.of(
                 new Message(Message.Role.SYSTEM, SUMMARY_SYSTEM_PROMPT),
                 new Message(Message.Role.USER, transcript)
-        ), List.of(), options);
+        ), List.of(), options, delta -> {
+            if (delta != null) {
+                streamedSummary.append(delta);
+            }
+        });
 
-        String summary = summaryResult.getAssistantText() == null ? "" : summaryResult.getAssistantText().trim();
+        String summary = summaryResult.getAssistantText();
+        if (summary == null || summary.isBlank()) {
+            summary = streamedSummary.toString();
+        }
+        summary = summary == null ? "" : summary.trim();
         if (summary.isBlank()) {
             throw new IllegalStateException("Context compaction produced an empty summary for model " + model.id());
         }

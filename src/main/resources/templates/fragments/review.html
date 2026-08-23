@@ -2,8 +2,8 @@
 <aside th:fragment="panel" id="review" class="main-panel review-panel" th:classappend="${!reviewPanelOpen} ? 'closed' : ''" th:attr="data-open=${reviewPanelOpen}, hx-swap-oob=${reviewOob} ? 'outerHTML' : null">
     <div id="review-panel" class="review-shell" th:if="${reviewPanelOpen}">
         <div class="review-header">
-            <h5>Review</h5>
-            <select class="review-source-select"
+            <h5>Changes</h5>
+            <select class="review-source-select form-select"
                     name="source"
                     hx-post="/ui/review/source"
                     hx-trigger="change"
@@ -14,8 +14,11 @@
             </select>
         </div>
 
+        <div th:if="${changedFiles.isEmpty()}">
+            No files changed yet
+        </div>
+
         <nav id="changed-files-list" class="changed-files">
-            <h6>Changed files</h6>
             <ul>
                 <li th:each="f : ${changedFiles}" class="changed-file-item" th:with="isSelected=${selectedFile != null and selectedFile.source == f.source and (selectedFile.key eq f.key or (selectedFile.id != null and f.id != null and selectedFile.id == f.id) or selectedFile.path eq f.path)}">
                     <button type="button"
