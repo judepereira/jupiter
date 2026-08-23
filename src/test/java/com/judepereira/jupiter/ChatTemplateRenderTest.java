@@ -109,6 +109,23 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
+    public void chatRowsFragmentRendersOnlyLiRows() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("messages", List.of(
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, true, "assistant-pending", null, List.of(), null)
+        ));
+        context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
+        context.setVariable("subagentView", false);
+
+        String html = engine.process("fragments/chat-rows", context);
+
+        assertThat(html).contains("<li", "data-id=\"assistant-pending\"", "data-stream-url=\"/ui/chat/stream/assistant-pending\"");
+        assertThat(html).doesNotContain("<ul", "chat-send-form", "chat-container");
+    }
+
+    @Test
     public void chatResponseFragmentRendersOpenSubagentLinkForTaskToolTraces() {
         SpringTemplateEngine engine = engine();
         WebContext context = webContext();
