@@ -52,7 +52,7 @@
             <div class="chat-compose-row">
                 <label for="chat-input" class="sr-only">Message</label>
                 <textarea id="chat-input" name="message" rows="1" autocomplete="off" th:text="${chatDraft ?: ''}"></textarea>
-                <button id="chat-send-btn" type="submit" class="btn btn-primary">Send</button>
+                <button id="chat-send-btn" type="submit" class="btn btn-outline-primary"><i class="bi bi-send"></i> Send</button>
             </div>
         </form>
     </section>
