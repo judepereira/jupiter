@@ -652,7 +652,7 @@ public class UiControllerAsyncStreamingTests {
                 .orElseThrow();
 
         assertThat(((UiController.ChatMessage) assistant).pending()).isFalse();
-        assertThat(((UiController.ChatMessage) assistant).text()).isEqualTo("partial\n\nStopped by user.");
+        assertThat(((UiController.ChatMessage) assistant).text()).isEqualTo("partial\n\nAction Interrupted");
     }
     private static String assistantId(ConcurrentModel model) throws Exception {
         List<?> msgs = (List<?>) model.getAttribute("chatMessages");

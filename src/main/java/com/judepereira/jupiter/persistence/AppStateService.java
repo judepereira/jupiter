@@ -449,7 +449,7 @@ public class AppStateService {
             return toChatMessageView(assistantMessage, sessionId);
         }
         String base = partialText == null ? "" : partialText.trim();
-        String stoppedText = base.isEmpty() ? "Stopped by user." : base + "\n\nStopped by user.";
+        String stoppedText = base.isEmpty() ? "Action Interrupted" : base + "\n\nAction Interrupted";
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), stoppedText, false, false, Instant.now());
         markUnreadIfInactive(sessionId);

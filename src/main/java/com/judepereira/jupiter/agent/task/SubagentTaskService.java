@@ -130,7 +130,7 @@ public class SubagentTaskService {
                 public void onError(Exception e) {
                     if (e instanceof StreamCancelledException) {
                         appStateService.stopAssistantMessage(childSessionId, assistantPublicId, accumulated.toString());
-                        sink.onError(new SubagentTaskError(childSessionId, request.parentToolCallId(), subagent.id(), subagent.name(), "Stopped by user."));
+                        sink.onError(new SubagentTaskError(childSessionId, request.parentToolCallId(), subagent.id(), subagent.name(), "Action Interrupted"));
                         closed.set(true);
                         return;
                     }
@@ -145,7 +145,7 @@ public class SubagentTaskService {
             persistChangedFiles(childSessionId, request.parentSessionId(), drafts);
             return new SubagentTaskResult(true, childSessionId, subagent.id(), subagent.name(), result.getFinalText(), drafts, traces, null);
         } catch (Exception e) {
-            String message = e instanceof StreamCancelledException ? "Stopped by user." : (e.getMessage() == null ? e.toString() : e.getMessage());
+            String message = e instanceof StreamCancelledException ? "Action Interrupted" : (e.getMessage() == null ? e.toString() : e.getMessage());
             if (!closed.get()) {
                 try {
                     if (e instanceof StreamCancelledException) {

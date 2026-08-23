@@ -923,8 +923,8 @@
                 const activeRow = activePrimaryPendingAssistantRow();
                 const running = Boolean(activeRow);
                 form.dataset.chatRunning = running ? 'true' : 'false';
-                button.classList.toggle('chat-stop-button', running);
-                button.classList.toggle('chat-stopping-button', stopRequestInFlight);
+                button.classList.toggle('btn-danger', running);
+                button.classList.toggle('btn-light', stopRequestInFlight);
                 if (stopRequestInFlight) {
                     button.textContent = 'Stopping...';
                     button.setAttribute('aria-label', 'Stopping current response');

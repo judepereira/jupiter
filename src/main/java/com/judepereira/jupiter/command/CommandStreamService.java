@@ -176,7 +176,7 @@ public class CommandStreamService {
         } catch (Exception ignored) {
         }
         Object completedTs = stoppedMessage == null ? null : stoppedMessage.completedTs();
-        String message = stoppedMessage == null ? "Stopped by user." : stoppedMessage.text();
+        String message = stoppedMessage == null ? "Action Interrupted" : stoppedMessage.text();
         broadcastEvent(active, assistantId, "stopped", completedTs == null ? Map.of("message", message) : Map.of("message", message, "completedTs", completedTs));
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
