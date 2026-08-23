@@ -67,4 +67,39 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
             }
         }
     }
+
+    @Test
+    void slashCommandPickerRestoresChatInputFocusOnEscape(@TempDir Path tempDir) throws Exception {
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        String previousHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+
+        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+             RunningApp app = startApp(fakeHome, sqliteDbFile);
+             BrowserContext context = browser.newContext()) {
+            Page page = context.newPage();
+
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+
+            openProject(page, "Alpha", projectDir);
+
+            page.locator("#chat-input").fill("/");
+            page.getByRole(AriaRole.DIALOG).waitFor();
+            page.locator(".command-modal-input").press("Escape");
+
+            assertThat(page.getByRole(AriaRole.DIALOG)).hasCount(0);
+            assertThat(page.locator("#chat-input")).isFocused();
+        } finally {
+            if (previousHome == null) {
+                System.clearProperty("user.home");
+            } else {
+                System.setProperty("user.home", previousHome);
+            }
+        }
+    }
 }
