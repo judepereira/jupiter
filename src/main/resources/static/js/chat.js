@@ -831,6 +831,29 @@
                 .catch(error => console.error(error));
         }
 
+        const chatMobileViewportQuery = window.matchMedia('(max-width: 600px)');
+
+        function isMobileChatViewport() {
+            return chatMobileViewportQuery.matches;
+        }
+
+        function insertChatTextareaNewline(textarea) {
+            if (!textarea) return;
+            const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
+            const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : textarea.value.length;
+            if (typeof textarea.setRangeText === 'function') {
+                textarea.setRangeText('\n', start, end, 'end');
+            } else {
+                const value = textarea.value || '';
+                textarea.value = value.slice(0, start) + '\n' + value.slice(end);
+                const cursor = start + 1;
+                if (typeof textarea.setSelectionRange === 'function') {
+                    textarea.setSelectionRange(cursor, cursor);
+                }
+            }
+            textarea.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+
         function resizeChatTextarea(textarea) {
             if (!textarea) return;
             textarea.style.height = 'auto';
@@ -872,7 +895,12 @@
                         const isEnter = e.key === 'Enter' || e.keyCode === 13;
                         if (!isEnter) return;
                         if (e.isComposing) return;
-                        if (e.altKey) return;
+
+                        if (e.altKey || isMobileChatViewport()) {
+                            e.preventDefault();
+                            insertChatTextareaNewline(textarea);
+                            return;
+                        }
 
                         e.preventDefault();
                         if (activePrimaryPendingAssistantRow()) {
