@@ -3,7 +3,7 @@
     <!-- HTMX polling attributes are applied to the messages list when hasPending is true -->
     <section id="chat" class="chat-shell">
         <div th:if="${subagentView ?: false}" class="subagent-bar">
-            <button type="button" class="btn btn-outline-secondary btn-sm subagent-back-button" hx-get="/ui/chat/primary" hx-target="#chat-container" hx-swap="outerHTML">Back</button>
+            <button type="button" class="btn btn-outline-primary btn-sm subagent-back-button" hx-get="/ui/chat/primary" hx-target="#chat-container" hx-swap="outerHTML">Back</button>
             <span class="subagent-bar-label">Subagent:</span>
             <strong class="subagent-bar-name" th:text="${subagentAgentName}"></strong>
         </div>
