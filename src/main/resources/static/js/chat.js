@@ -40,6 +40,20 @@
             }
         }
 
+        function syncFaviconWithRail() {
+            try {
+                const unreadDotPresent = !!document.querySelector('#workspace-session-rail .unread-dot');
+                const favicon32 = document.getElementById('favicon-32x32');
+                const favicon16 = document.getElementById('favicon-16x16');
+                if (!favicon32 || !favicon16) return;
+                const base = unreadDotPresent ? '/favicon-complete' : '/favicon';
+                favicon32.setAttribute('href', base + '-32x32.png');
+                favicon16.setAttribute('href', base + '-16x16.png');
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
         function getChatComposerForm() {
             return document.getElementById('chat-send-form');
         }
@@ -820,6 +834,29 @@
                 .catch(error => console.error(error));
         }
 
+        const chatMobileViewportQuery = window.matchMedia('(max-width: 600px)');
+
+        function isMobileChatViewport() {
+            return chatMobileViewportQuery.matches;
+        }
+
+        function insertChatTextareaNewline(textarea) {
+            if (!textarea) return;
+            const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
+            const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : textarea.value.length;
+            if (typeof textarea.setRangeText === 'function') {
+                textarea.setRangeText('\n', start, end, 'end');
+            } else {
+                const value = textarea.value || '';
+                textarea.value = value.slice(0, start) + '\n' + value.slice(end);
+                const cursor = start + 1;
+                if (typeof textarea.setSelectionRange === 'function') {
+                    textarea.setSelectionRange(cursor, cursor);
+                }
+            }
+            textarea.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+
         function resizeChatTextarea(textarea) {
             if (!textarea) return;
             textarea.style.height = 'auto';
@@ -861,7 +898,12 @@
                         const isEnter = e.key === 'Enter' || e.keyCode === 13;
                         if (!isEnter) return;
                         if (e.isComposing) return;
-                        if (e.altKey) return;
+
+                        if (e.altKey || isMobileChatViewport()) {
+                            e.preventDefault();
+                            insertChatTextareaNewline(textarea);
+                            return;
+                        }
 
                         e.preventDefault();
                         if (activePrimaryPendingAssistantRow()) {
@@ -1051,7 +1093,7 @@
                 if (!subtitle || !subtitle.dataset) return;
                 const metadataParts = [
                     subtitle.dataset.agentLabel,
-                    subtitle.dataset.modelId,
+                    subtitle.dataset.modelLabel || subtitle.dataset.modelId,
                     subtitle.dataset.thinkingLevel
                 ].filter(part => part != null && String(part).trim());
                 const metadataText = metadataParts.join(' · ');
@@ -1101,6 +1143,7 @@
                 subtitle.dataset.agentLabel = subtitle.dataset.agentLabel || row.dataset.agentLabel || '';
                 subtitle.dataset.agentId = subtitle.dataset.agentId || row.dataset.agentId || '';
                 subtitle.dataset.modelId = subtitle.dataset.modelId || row.dataset.modelId || '';
+                subtitle.dataset.modelLabel = subtitle.dataset.modelLabel || row.dataset.modelLabel || '';
                 subtitle.dataset.thinkingLevel = subtitle.dataset.thinkingLevel || row.dataset.thinkingLevel || '';
                 formatChatSubtitle(subtitle);
             } catch (_) {
@@ -1245,6 +1288,7 @@
                 .then(html => {
                     rail.outerHTML = html;
                     if (window.htmx) window.htmx.process(document.getElementById('workspace-session-rail'));
+                    syncFaviconWithRail();
                 })
                 .catch(error => {
                     console.error(error);
@@ -2655,11 +2699,18 @@
 
         // Run binding after HTMX swaps/settles and on initial load
         bindPendingStreams();
+        syncFaviconWithRail();
         document.body.addEventListener('htmx:afterSwap', function (evt) {
-            Promise.resolve().then(bindPendingStreams);
+            Promise.resolve().then(() => {
+                bindPendingStreams();
+                syncFaviconWithRail();
+            });
         }, true);
         document.body.addEventListener('htmx:afterSettle', function (evt) {
-            Promise.resolve().then(bindPendingStreams);
+            Promise.resolve().then(() => {
+                bindPendingStreams();
+                syncFaviconWithRail();
+            });
         }, true);
 
         // Re-render markdown after HTMX swaps so server-rendered escaped text

@@ -276,7 +276,7 @@ public class UiControllerAsyncStreamingTests {
 
         assertThat(fake.requests).isNotEmpty();
         AgentTurnRequest lastRequest = fake.requests.getLast();
-        assertThat(render(lastRequest.getConversationHistory())).anyMatch(row -> row.contains("SYSTEM:compact summary"));
+        assertThat(render(lastRequest.getConversationHistory())).anyMatch(row -> row.contains("USER:Previous conversation summary:\n\ncompact summary"));
         assertThat(render(lastRequest.getConversationHistory())).anyMatch(row -> row.contains("USER:turn-8"));
     }
 
@@ -420,7 +420,7 @@ public class UiControllerAsyncStreamingTests {
 
         assertThat(model.conversations).hasSize(2);
         List<String> second = render(model.conversations.get(1));
-        assertThat(second).anyMatch(row -> row.contains("SYSTEM:compact summary"));
+        assertThat(second).anyMatch(row -> row.contains("USER:Previous conversation summary:\n\ncompact summary"));
         assertThat(second).anyMatch(row -> row.contains("USER:current turn"));
         assertThat(second).anyMatch(row -> row.contains("TOOL:tool-result-"));
         assertThat(second).anyMatch(row -> row.contains("ASSISTANT:"));

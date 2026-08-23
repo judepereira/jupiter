@@ -43,7 +43,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("selectedFile", null);
         context.setVariable("chatMessages", List.of(
                 new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(),
-                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"))
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"), "GPT-5.5")
         ));
         context.setVariable("agents", agentService.listPrimaryAgents());
         context.setVariable("models", modelService.list());
@@ -55,7 +55,7 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("id=\"chat-agent-select\"", "id=\"chat-model-select\"", "id=\"chat-thinking-select\"");
-        assertThat(html).contains("class=\"chat-message-subtitle\"", "data-agent-label=\"Plan (plan)\"", "data-agent-id=\"plan\"", "data-model-id=\"openai/gpt-5.5\"", "data-thinking-level=\"HIGH\"");
+        assertThat(html).contains("class=\"chat-message-subtitle\"", "data-agent-label=\"Plan\"", "data-agent-id=\"plan\"", "data-model-id=\"openai/gpt-5.5\"", "data-model-label=\"GPT-5.5\"", "data-thinking-level=\"HIGH\"");
         assertThat(html).doesNotContain("chat-message-meta", "chat-meta-chip", "Explore");
     }
 
@@ -73,14 +73,15 @@ public class ChatTemplateRenderTest {
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
         context.setVariable("chatMessages", List.of(
-                new UiController.ChatMessage("assistant", "Done", 1L, false, "assistant-done", 2L, List.of(), null),
+                new UiController.ChatMessage("assistant", "Done", 1L, false, "assistant-done", 2L, List.of(),
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"), "GPT-5.5"),
                 new UiController.ChatMessage("assistant", "Thinking…", 3L, true, "assistant-pending", null, List.of(), null)
         ));
 
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("data-completed-ts=\"2\"");
-        assertThat(html).contains("assistant-done");
+        assertThat(html).contains("assistant-done", "data-model-id=\"openai/gpt-5.5\"", "data-model-label=\"GPT-5.5\"");
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
         assertThat(html).contains("chat-message-subtitle");
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
