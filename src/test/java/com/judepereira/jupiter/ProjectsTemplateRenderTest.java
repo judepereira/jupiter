@@ -97,7 +97,7 @@ public class ProjectsTemplateRenderTest {
     }
 
     @Test
-    public void settingsModalRendersExistingProjectEnvironmentVariablesAndAddButton() {
+    public void settingsModalRendersExistingProjectEnvironmentVariablesAndMcpCatalog() {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
@@ -106,6 +106,9 @@ public class ProjectsTemplateRenderTest {
                 new ProjectEnvironmentVariable("API_URL", "https://example.test"),
                 new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
         ))));
+        context.setVariable("visibleProjects", List.of(new Project(1L, "Alpha", "/repo", ""), new Project(2L, "Beta", "/repo-b", "")));
+        context.setVariable("mcpServers", List.of(new com.judepereira.jupiter.persistence.Persistence.McpServerView(9L, "Local MCP", "http://localhost:3000/mcp", true,
+                List.of(new com.judepereira.jupiter.persistence.Persistence.McpServerHeader("Authorization", "Bearer token")), List.of(1L))));
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", "", List.of(
                 new ProjectEnvironmentVariable("API_URL", "https://example.test"),
                 new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
@@ -128,6 +131,7 @@ public class ProjectsTemplateRenderTest {
         String html = engine.process("fragments/projects", context);
 
         assertThat(html).contains("id=\"settings-modal\"", "Environment variables", "API_URL", "https://example.test", "FEATURE_FLAG", "true", "Add Variable");
+        assertThat(html).contains("MCP servers", "Local MCP", "http://localhost:3000/mcp", "Header name", "Authorization", "Bearer token", "Exposed projects");
         assertThat(html.split("data-settings-env-row", -1)).hasSize(4);
     }
 

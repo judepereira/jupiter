@@ -305,6 +305,49 @@ public class AppStateService {
         repository.updateProjectEnvironmentVariables(projectId, json(normalizeEnvironmentVariables(environmentVariables)));
     }
 
+    @Transactional
+    public McpServerView createMcpServer(String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
+        String normalizedName = normalizeRequiredName(name, "MCP server name");
+        String normalizedUrl = normalizeRequiredName(url, "MCP server URL");
+        Instant now = Instant.now();
+        long mcpServerId = repository.insertMcpServer(normalizedName, normalizedUrl, enabled, json(normalizeMcpServerHeaders(headers)), now);
+        repository.replaceMcpServerProjectExposures(mcpServerId, normalizeProjectIds(exposedProjectIds));
+        return toMcpServerView(repository.findMcpServer(mcpServerId).orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId)));
+    }
+
+    @Transactional
+    public McpServerView updateMcpServer(long mcpServerId, String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
+        repository.findMcpServer(mcpServerId).orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId));
+        String normalizedName = normalizeRequiredName(name, "MCP server name");
+        String normalizedUrl = normalizeRequiredName(url, "MCP server URL");
+        repository.updateMcpServer(mcpServerId, normalizedName, normalizedUrl, enabled, json(normalizeMcpServerHeaders(headers)));
+        repository.replaceMcpServerProjectExposures(mcpServerId, normalizeProjectIds(exposedProjectIds));
+        return toMcpServerView(repository.findMcpServer(mcpServerId).orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId)));
+    }
+
+    @Transactional
+    public void deleteMcpServer(long mcpServerId) {
+        repository.findMcpServer(mcpServerId).orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId));
+        repository.deleteMcpServer(mcpServerId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<McpServerView> listMcpServers() {
+        return repository.listMcpServers().stream().map(this::toMcpServerView).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<McpServerView> loadEnabledMcpServersForProject(long projectId) {
+        return repository.listEnabledMcpServersByProject(projectId).stream().map(this::toMcpServerView).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public long loadSessionProjectId(long sessionId) {
+        var session = repository.findSession(sessionId);
+        var workspace = repository.findWorkspace(session.workspaceId());
+        return workspace.projectId();
+    }
+
     @Transactional(readOnly = true)
     public Map<String, String> loadSessionProjectEnvironmentVariables(long sessionId) {
         var session = repository.findSession(sessionId);
@@ -1144,14 +1187,48 @@ public class AppStateService {
             if (environmentVariable == null) {
                 continue;
             }
-            String name = environmentVariable.name() == null ? "" : environmentVariable.name().trim();
-            if (name.isBlank()) {
+            String name = normalizeName(environmentVariable.name());
+            if (name == null) {
                 continue;
             }
             deduped.remove(name);
             deduped.put(name, new ProjectEnvironmentVariable(name, environmentVariable.value()));
         }
         return List.copyOf(deduped.values());
+    }
+
+    private List<McpServerHeader> normalizeMcpServerHeaders(List<McpServerHeader> headers) {
+        if (headers == null || headers.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, McpServerHeader> deduped = new LinkedHashMap<>();
+        for (McpServerHeader header : headers) {
+            if (header == null) {
+                continue;
+            }
+            String name = normalizeName(header.name());
+            if (name == null) {
+                continue;
+            }
+            String value = header.value() == null ? "" : header.value().trim();
+            deduped.remove(name);
+            deduped.put(name, new McpServerHeader(name, value));
+        }
+        return List.copyOf(deduped.values());
+    }
+
+    private List<Long> normalizeProjectIds(List<Long> projectIds) {
+        if (projectIds == null || projectIds.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<Long> deduped = new LinkedHashSet<>();
+        for (Long projectId : projectIds) {
+            if (projectId != null) {
+                deduped.add(projectId);
+            }
+        }
+        return List.copyOf(deduped);
     }
 
     private List<ProjectEnvironmentVariable> projectEnvironmentVariables(String json) {
@@ -1163,6 +1240,22 @@ public class AppStateService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to read project environment variables JSON", e);
         }
+    }
+
+    private String normalizeRequiredName(String value, String label) {
+        String normalized = normalizeName(value);
+        if (normalized == null) {
+            throw new IllegalStateException(label + " is required");
+        }
+        return normalized;
+    }
+
+    private String normalizeName(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isBlank() ? null : normalized;
     }
 
     private Map<String, String> toEnvironmentVariables(List<ProjectEnvironmentVariable> environmentVariables) {
@@ -1267,6 +1360,21 @@ public class AppStateService {
 
     private ChangedFileView toChangedFileView(GitChangedFile file) {
         return new ChangedFileView("git:" + file.path(), ReviewSource.GIT, null, file.path(), file.diff());
+    }
+
+    private McpServerView toMcpServerView(AppStateRepository.McpServerRow row) {
+        return new McpServerView(row.id(), row.name(), row.url(), row.enabled(), mcpServerHeaders(row.headersJson()), row.exposedProjectIds());
+    }
+
+    private List<McpServerHeader> mcpServerHeaders(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return normalizeMcpServerHeaders(objectMapper.readValue(json, new TypeReference<List<McpServerHeader>>() {}));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read MCP server headers JSON", e);
+        }
     }
 
     private record ToolCallPayload(String toolCallId, String toolName, Map<String, Object> arguments) {}

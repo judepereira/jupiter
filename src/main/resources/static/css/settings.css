@@ -65,6 +65,13 @@
     margin: 0;
 }
 
+.settings-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
 .settings-project-meta {
     display: grid;
     gap: 6px;
@@ -124,6 +131,84 @@
 .settings-app-section {
     padding-top: 4px;
     border-top: 1px solid #e6eef6;
+}
+
+.settings-mcp-section {
+    padding: 14px;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+.settings-mcp-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.settings-mcp-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #cfe0ff;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.settings-mcp-card-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.settings-mcp-name,
+.settings-mcp-url,
+.settings-mcp-header-name,
+.settings-mcp-header-value {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    padding: 8px 10px;
+    font: inherit;
+    background: #ffffff;
+}
+
+.settings-mcp-enabled {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.settings-mcp-projects {
+    width: 100%;
+    min-height: 112px;
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    padding: 8px;
+    font: inherit;
+    background: #ffffff;
+}
+
+.settings-mcp-header-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-mcp-header-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.settings-mcp-headers-field,
+.settings-mcp-projects-field {
+    gap: 8px;
 }
 
 .settings-openai-section {
