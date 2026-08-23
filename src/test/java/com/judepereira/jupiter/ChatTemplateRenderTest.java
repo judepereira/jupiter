@@ -164,7 +164,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("<details", "open", "<img", "src=\"/ui/chat/image/1/tool-call-1\"", "alt=\"Cat\"", "images/cat.png", "tool-call-image-caption", ">Cat<");
+        assertThat(html).contains("tool-call-bundle", "1 tool used: display_image", "<details", "open", "<img", "src=\"/ui/chat/image/1/tool-call-1\"", "alt=\"Cat\"", "images/cat.png", "tool-call-image-caption", ">Cat<");
         assertThat(html).doesNotContain("Displayed image: images/cat.png");
     }
 
@@ -190,6 +190,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
+        assertThat(html).contains("4 tools used: read (3), task");
         assertThat(html.split("class=\"tool-call\"", -1)).hasSize(4);
         assertThat(html.split("class=\"tool-call-call\"", -1)).hasSize(5);
         assertThat(html).contains("read (2)", "<span class=\"tool-call-name\">task</span>");
@@ -224,7 +225,7 @@ public class ChatTemplateRenderTest {
         assertThat(toolCallCount).isEqualTo(4);
         assertThat(html.split("class=\"tool-call-call\"", -1)).hasSize(6);
         assertThat(html.split(Pattern.quote("read (2)"), -1)).hasSize(2);
-        assertThat(html).doesNotContain("task (2)");
+        assertThat(html).contains("task (2)");
         assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");
         assertThat(html).contains("Open subagent: <strong>Engineer 1</strong>", "Open subagent: <strong>Engineer 2</strong>");
     }

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 class UiControllerChatMessageGroupingTests {
 
@@ -48,6 +49,40 @@ class UiControllerChatMessageGroupingTests {
         assertThat(groups.get(0).displayLabel()).isEqualTo("write_file (2)");
         assertThat(groups.get(0).count()).isEqualTo(2);
         assertThat(groups.get(0).success()).isTrue();
+    }
+
+    @Test
+    void exploratoryToolCallsKeepSegmentedDisplayLabels() {
+        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
+                toolCall("read-1", "read_file", true),
+                toolCall("read-2", "read_file", false),
+                toolCall("list-1", "list_files", true),
+                toolCall("read-3", "read_file", true)
+        ), null);
+
+        List<UiController.ToolCallGroupView> groups = message.toolCallGroups();
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0).displayLabel()).isEqualTo("read_file (2), list_files, read_file");
+        assertThat(groups.get(0).count()).isEqualTo(4);
+        assertThat(groups.get(0).success()).isFalse();
+    }
+
+    @Test
+    void toolCallSummaryAggregatesTotalsInFirstSeenOrder() {
+        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
+                toolCall("read-1", "read_file", true),
+                toolCall("read-2", "read_file", false),
+                toolCall("list-1", "list_files", true),
+                toolCall("read-3", "read_file", true)
+        ), null);
+
+        UiController.ToolCallSummaryView summary = message.toolCallSummary();
+
+        assertThat(summary.displayLabel()).isEqualTo("4 tools used: read_file (3), list_files");
+        assertThat(summary.totalCount()).isEqualTo(4);
+        assertThat(summary.items()).extracting(UiController.ToolCallSummaryItemView::toolName, UiController.ToolCallSummaryItemView::count)
+                .containsExactly(tuple("read_file", 3), tuple("list_files", 1));
     }
 
     private static UiController.ToolCallView toolCall(String id, String toolName, boolean success) {

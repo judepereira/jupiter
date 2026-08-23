@@ -1454,9 +1454,28 @@ public class UiController {
     }
 
     public record ToolCallGroupView(String toolName, String displayLabel, boolean success, int count, List<ToolCallView> calls) {}
+    public record ToolCallSummaryItemView(String toolName, int count) {}
+    public record ToolCallSummaryView(String displayLabel, int totalCount, List<ToolCallSummaryItemView> items) {}
 
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
         private static final Set<String> EXPLORATORY_TOOL_NAMES = Set.of("list_files", "read_file", "search_code");
+
+        public ToolCallSummaryView toolCallSummary() {
+            if (toolCalls.isEmpty()) {
+                return null;
+            }
+
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            for (ToolCallView call : toolCalls) {
+                counts.merge(call.toolName(), 1, Integer::sum);
+            }
+
+            List<ToolCallSummaryItemView> items = counts.entrySet().stream()
+                    .map(entry -> new ToolCallSummaryItemView(entry.getKey(), entry.getValue()))
+                    .toList();
+            int totalCount = toolCalls.size();
+            return new ToolCallSummaryView(toolCallSummaryLabel(totalCount, items), totalCount, List.copyOf(items));
+        }
 
         public List<ToolCallGroupView> toolCallGroups() {
             if (toolCalls.isEmpty()) {
@@ -1502,6 +1521,29 @@ public class UiController {
         private ToolCallGroupView toGroup(List<ToolCallView> calls) {
             ToolCallView first = calls.get(0);
             return new ToolCallGroupView(first.toolName(), displayLabel(calls), calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
+        }
+
+        private String toolCallSummaryLabel(int totalCount, List<ToolCallSummaryItemView> items) {
+            StringBuilder label = new StringBuilder();
+            label.append(totalCount).append(' ').append(totalCount == 1 ? "tool used" : "tools used");
+            if (!items.isEmpty()) {
+                label.append(": ").append(displaySummaryItems(items));
+            }
+            return label.toString();
+        }
+
+        private String displaySummaryItems(List<ToolCallSummaryItemView> items) {
+            StringBuilder label = new StringBuilder();
+            for (ToolCallSummaryItemView item : items) {
+                if (!label.isEmpty()) {
+                    label.append(", ");
+                }
+                label.append(item.toolName());
+                if (item.count() > 1) {
+                    label.append(" (").append(item.count()).append(")");
+                }
+            }
+            return label.toString();
         }
 
         private String displayLabel(List<ToolCallView> calls) {

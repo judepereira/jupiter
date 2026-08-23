@@ -348,6 +348,42 @@
     gap: 6px;
 }
 
+.tool-call-bundle {
+    border-radius: 10px;
+    border: 1px solid #dbe7f2;
+    background: rgba(248, 250, 252, 0.7);
+}
+
+.tool-call-bundle-summary,
+.tool-call summary.tool-call-bundle-summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    font-weight: 600;
+    color: #0b1220;
+    background: rgba(11, 18, 32, 0.03);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.tool-call-bundle summary::-webkit-details-marker {
+    display: none;
+}
+
+.tool-call-bundle-summary {
+    background: rgba(15, 23, 42, 0.06);
+    padding: 8px 10px;
+    border-radius: 10px;
+}
+
+.tool-call-bundle-detail {
+    padding: 8px;
+}
+
 .chat-message-subtitle {
     margin-top: 4px;
     font-size: 12px;
