@@ -40,6 +40,20 @@
             }
         }
 
+        function syncFaviconWithRail() {
+            try {
+                const unreadDotPresent = !!document.querySelector('#workspace-session-rail .unread-dot');
+                const favicon32 = document.getElementById('favicon-32x32');
+                const favicon16 = document.getElementById('favicon-16x16');
+                if (!favicon32 || !favicon16) return;
+                const base = unreadDotPresent ? '/favicon-complete' : '/favicon';
+                favicon32.setAttribute('href', base + '-32x32.png');
+                favicon16.setAttribute('href', base + '-16x16.png');
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
         function getChatComposerForm() {
             return document.getElementById('chat-send-form');
         }
@@ -1242,6 +1256,7 @@
                 .then(html => {
                     rail.outerHTML = html;
                     if (window.htmx) window.htmx.process(document.getElementById('workspace-session-rail'));
+                    syncFaviconWithRail();
                 })
                 .catch(error => {
                     console.error(error);
@@ -2652,11 +2667,18 @@
 
         // Run binding after HTMX swaps/settles and on initial load
         bindPendingStreams();
+        syncFaviconWithRail();
         document.body.addEventListener('htmx:afterSwap', function (evt) {
-            Promise.resolve().then(bindPendingStreams);
+            Promise.resolve().then(() => {
+                bindPendingStreams();
+                syncFaviconWithRail();
+            });
         }, true);
         document.body.addEventListener('htmx:afterSettle', function (evt) {
-            Promise.resolve().then(bindPendingStreams);
+            Promise.resolve().then(() => {
+                bindPendingStreams();
+                syncFaviconWithRail();
+            });
         }, true);
 
         // Re-render markdown after HTMX swaps so server-rendered escaped text
