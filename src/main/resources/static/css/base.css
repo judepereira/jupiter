@@ -8,6 +8,10 @@ body {
     font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, Roboto, 'Segoe UI', Helvetica, Arial, sans-serif;
 }
 
+button {
+    font-size: 14px;
+}
+
 b, strong {
     font-weight: 600;
 }
