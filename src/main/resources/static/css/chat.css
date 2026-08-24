@@ -86,6 +86,30 @@
     font-weight: 600;
 }
 
+.chat-message-text h1 {
+    font-size: min(20px, 2em);
+}
+
+.chat-message-text h2 {
+    font-size: min(20px, 1.5em);
+}
+
+.chat-message-text h3 {
+    font-size: min(20px, 1.17em);
+}
+
+.chat-message-text h4 {
+    font-size: min(20px, 1em);
+}
+
+.chat-message-text h5 {
+    font-size: min(20px, 0.83em);
+}
+
+.chat-message-text h6 {
+    font-size: min(20px, 0.67em);
+}
+
 .chat-message-text ul,
 .chat-message-text ol {
     margin: 0 0 0.75em 1.25em;
