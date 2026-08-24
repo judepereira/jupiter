@@ -12,6 +12,8 @@ import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
+import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
@@ -67,6 +69,7 @@ public class UiController {
     private final ModelCatalogService modelCatalogService;
     private final ContextCompactionService contextCompactionService;
     private final CommandStreamService commandStreamService;
+    private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
     private final SystemBalloonService systemBalloonService;
@@ -85,6 +88,7 @@ public class UiController {
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
                         ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        McpProjectMcpServerRuntimeManager mcpRuntimeManager,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -93,6 +97,7 @@ public class UiController {
         this.modelCatalogService = modelCatalogService;
         this.contextCompactionService = contextCompactionService;
         this.commandStreamService = commandStreamService;
+        this.mcpRuntimeManager = mcpRuntimeManager;
         this.systemBalloonService = systemBalloonService;
         this.activeStreamRegistryService = activeStreamRegistryService;
         this.terminalManager = terminalManager;
@@ -105,13 +110,39 @@ public class UiController {
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                         SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        ActiveStreamRegistryService activeStreamRegistryService,
+                        TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, commandStreamService, null, appVersion);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
                         ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, appVersion);
+                openAiOAuthService, contextCompactionService, commandStreamService, null, appVersion);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                        String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager, appVersion);
     }
 
     @GetMapping("/")
@@ -630,8 +661,12 @@ public class UiController {
     }
 
     @GetMapping("/ui/system-balloons/stream")
-    public SseEmitter systemBalloonStream() {
-        return systemBalloonService.connect();
+    public SseEmitter systemBalloonStream(@RequestParam(value = "shellId", required = false) String shellId) {
+        SseEmitter emitter = systemBalloonService.connect();
+        if (systemBalloonService.markShellInitialized(shellId)) {
+            sendInitialMcpFailureBalloons(emitter);
+        }
+        return emitter;
     }
 
     @GetMapping("/ui/workspaces/rail/stream")
@@ -816,6 +851,11 @@ public class UiController {
         return applySettingsInternal(workspaceInitCommands, environmentVariableNames, environmentVariableValues, model);
     }
 
+    @PostMapping("/ui/settings/mcp/apply")
+    public String applyMcpSettings(@RequestParam("mcpCatalogJson") String mcpCatalogJson, Model model) {
+        return applyMcpSettingsInternal(mcpCatalogJson, model);
+    }
+
     String applySettingsInternal(String workspaceInitCommands,
                                  List<String> environmentVariableNames,
                                  List<String> environmentVariableValues,
@@ -835,7 +875,62 @@ public class UiController {
 
         appStateService.updateProjectWorkspaceInitCommands(view.activeProject().id(), workspaceInitCommands);
         appStateService.updateProjectEnvironmentVariables(view.activeProject().id(), environmentVariables);
+        reloadMcpRuntimeForProject(view.activeProject().id());
         return "fragments/projects :: modalClose";
+    }
+
+    String applyMcpSettingsInternal(String mcpCatalogJson, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeProject() == null) {
+            return "fragments/projects :: modalClose";
+        }
+
+        McpCatalogPayload payload;
+        try {
+            payload = SseJson.readValue(mcpCatalogJson, McpCatalogPayload.class);
+        } catch (Exception e) {
+            throw new IllegalStateException("Invalid MCP catalog payload", e);
+        }
+
+        List<McpServerView> currentServers = appStateService.listMcpServers();
+        Map<Long, McpServerView> currentById = new LinkedHashMap<>();
+        for (McpServerView server : currentServers) {
+            currentById.put(server.id(), server);
+        }
+
+        Set<Long> affectedProjects = new LinkedHashSet<>();
+        Set<Long> payloadServerIds = payload.serverIds();
+        List<McpServerPayload> servers = payload.servers() == null ? List.of() : payload.servers();
+        for (McpServerPayload server : servers) {
+            List<McpServerHeader> headers = server.headers() == null ? List.of() : server.headers().stream().map(header -> new McpServerHeader(header.name(), header.value())).toList();
+            List<Long> exposedProjectIds = server.exposedProjectIds() == null ? List.of() : List.copyOf(server.exposedProjectIds());
+            McpServerView saved;
+            if (server.id() != null && currentById.containsKey(server.id())) {
+                McpServerView current = currentById.get(server.id());
+                affectedProjects.addAll(current.exposedProjectIds());
+                saved = appStateService.updateMcpServer(server.id(), server.name(), server.url(), server.enabled(), headers, exposedProjectIds);
+            } else {
+                saved = appStateService.createMcpServer(server.name(), server.url(), server.enabled(), headers, exposedProjectIds);
+            }
+            affectedProjects.addAll(saved.exposedProjectIds());
+        }
+
+        for (McpServerView server : currentServers) {
+            if (payloadServerIds.contains(server.id())) {
+                continue;
+            }
+            affectedProjects.addAll(server.exposedProjectIds());
+            appStateService.deleteMcpServer(server.id());
+        }
+
+        affectedProjects.forEach(this::reloadMcpRuntimeForProject);
+        return "fragments/projects :: modalClose";
+    }
+
+    private void reloadMcpRuntimeForProject(long projectId) {
+        if (mcpRuntimeManager != null) {
+            mcpRuntimeManager.reloadProject(projectId);
+        }
     }
 
     @PostMapping("/ui/settings/openai/start")
@@ -1113,7 +1208,10 @@ public class UiController {
     }
 
     private void populateProjectModel(Model model, AppStateView view) {
-        model.addAttribute("projects", view.projects().stream().map(this::toProject).toList());
+        List<Project> projects = view.projects().stream().map(this::toProject).toList();
+        model.addAttribute("projects", projects);
+        model.addAttribute("visibleProjects", projects);
+        model.addAttribute("mcpServers", appStateService.listMcpServers());
         model.addAttribute("activeProject", toProject(view.activeProject()));
         model.addAttribute("workspaces", view.workspaces().stream().map(this::toWorkspace).toList());
         model.addAttribute("workspaceActions", view.workspaces().stream().map(workspace -> toWorkspaceAction(view.activeProject(), workspace)).toList());
@@ -1137,6 +1235,43 @@ public class UiController {
         model.addAttribute("reviewOob", true);
         model.addAttribute("activeSession", toSession(view.activeSession()));
         populateChatControlsModel(model, activeChatSelection(view));
+    }
+
+    private void sendInitialMcpFailureBalloons(SseEmitter emitter) {
+        if (mcpRuntimeManager == null) {
+            return;
+        }
+
+        AppStateView view = appStateService.loadViewData();
+        ProjectView project = view.activeProject();
+        if (project == null) {
+            return;
+        }
+
+        Map<Long, McpRuntimeEvents.ConnectionStatus> statuses = mcpRuntimeManager.connectionStatuses(project.id());
+        if (statuses.isEmpty()) {
+            return;
+        }
+
+        Map<Long, McpServerView> serversById = new LinkedHashMap<>();
+        for (McpServerView server : appStateService.loadEnabledMcpServersForProject(project.id())) {
+            serversById.put(server.id(), server);
+        }
+
+        for (Map.Entry<Long, McpRuntimeEvents.ConnectionStatus> entry : statuses.entrySet()) {
+            if (entry.getValue() != McpRuntimeEvents.ConnectionStatus.FAILED) {
+                continue;
+            }
+
+            McpServerView server = serversById.get(entry.getKey());
+            if (server == null) {
+                continue;
+            }
+
+            systemBalloonService.publishWarning(emitter,
+                    "MCP server failed: " + project.name() + " / " + server.name(),
+                    "An MCP server is unavailable for the active project.");
+        }
     }
 
     private ChatSelection activeChatSelection(AppStateView view) {
@@ -1419,6 +1554,27 @@ public class UiController {
             return null;
         }
         return message.substring(start, end + 1);
+    }
+
+    private record McpCatalogPayload(List<McpServerPayload> servers) {
+        private Set<Long> serverIds() {
+            if (servers == null) {
+                return Set.of();
+            }
+            Set<Long> ids = new LinkedHashSet<>();
+            for (McpServerPayload server : servers) {
+                if (server.id() != null) {
+                    ids.add(server.id());
+                }
+            }
+            return ids;
+        }
+    }
+
+    private record McpServerPayload(Long id, String name, String url, boolean enabled, List<McpServerHeaderPayload> headers, List<Long> exposedProjectIds) {
+    }
+
+    private record McpServerHeaderPayload(String name, String value) {
     }
 
     private enum BranchMode {

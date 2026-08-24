@@ -27,6 +27,7 @@ public class SystemBalloonService {
 
     private final ObjectMapper objectMapper;
     private final Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
+    private final Set<String> initializedShellIds = ConcurrentHashMap.newKeySet();
     private final List<SystemBalloon> publishedBalloons = new CopyOnWriteArrayList<>();
     private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
@@ -50,12 +51,20 @@ public class SystemBalloonService {
         return emitter;
     }
 
+    public boolean markShellInitialized(String shellId) {
+        if (shellId == null || shellId.isBlank()) {
+            return true;
+        }
+        return initializedShellIds.add(shellId);
+    }
+
     @EventListener
     public void onContextClosed(ContextClosedEvent event) {
         if (!shutdownStarted.compareAndSet(false, true)) {
             return;
         }
 
+        initializedShellIds.clear();
         List<SseEmitter> activeEmitters = List.copyOf(emitters);
         emitters.clear();
 
@@ -92,35 +101,44 @@ public class SystemBalloonService {
         publish(SystemBalloon.Type.WARNING, title, body);
     }
 
+    public void publishWarning(SseEmitter emitter, String title, String body) {
+        sendToEmitter(emitter, serialize(new SystemBalloon(UUID.randomUUID(), SystemBalloon.Type.WARNING, title, body, Instant.now())));
+    }
+
     private void publish(SystemBalloon.Type type, String title, String body) {
-        SystemBalloon balloon = new SystemBalloon(UUID.randomUUID(), type, title, body, Instant.now());
+        String payload = serialize(new SystemBalloon(UUID.randomUUID(), type, title, body, Instant.now()));
+        for (SseEmitter emitter : emitters) {
+            sendToEmitter(emitter, payload);
+        }
+    }
+
+    private String serialize(SystemBalloon balloon) {
         synchronized (publishedBalloons) {
             publishedBalloons.add(balloon);
             while (publishedBalloons.size() > MAX_PUBLISHED_BALLOONS) {
                 publishedBalloons.remove(0);
             }
         }
-        String payload;
         try {
-            payload = objectMapper.copy().findAndRegisterModules().writeValueAsString(balloon);
+            return objectMapper.copy().findAndRegisterModules().writeValueAsString(balloon);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize system balloon", e);
             throw new IllegalStateException("Failed to serialize system balloon", e);
         }
+    }
 
-        for (SseEmitter emitter : emitters) {
+    private void sendToEmitter(SseEmitter emitter, String payload) {
+        try {
+            emitter.send(SseEmitter.event().name("balloon").data(payload));
+        } catch (Exception e) {
+            if (!(e instanceof AsyncRequestNotUsableException)) {
+                log.error("Failed to send system balloon to SSE client", e);
+            }
+            disconnect(emitter);
             try {
-                emitter.send(SseEmitter.event().name("balloon").data(payload));
-            } catch (Exception e) {
-                if (!(e instanceof AsyncRequestNotUsableException)) {
-                    log.error("Failed to send system balloon to SSE client", e);
-                }
-                disconnect(emitter);
-                try {
-                    emitter.completeWithError(e);
-                } catch (Exception completionError) {
-                    log.error("Failed to close failed SSE client", completionError);
-                }
+                emitter.completeWithError(e);
+            } catch (Exception completionError) {
+                log.error("Failed to close failed SSE client", completionError);
             }
         }
     }

@@ -89,7 +89,20 @@
             trimBalloons();
         }
 
-        const source = new EventSource('/ui/system-balloons/stream');
+        const shellIdKey = 'jupiter.systemBalloonShellId';
+        let shellId = null;
+        try {
+            shellId = window.sessionStorage.getItem(shellIdKey);
+            if (!shellId) {
+                shellId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+                window.sessionStorage.setItem(shellIdKey, shellId);
+            }
+        } catch (error) {
+            shellId = null;
+        }
+
+        const sourceUrl = shellId ? '/ui/system-balloons/stream?shellId=' + encodeURIComponent(shellId) : '/ui/system-balloons/stream';
+        const source = new EventSource(sourceUrl);
         window.__systemBalloonSource = source;
 
         source.addEventListener('balloon', event => {

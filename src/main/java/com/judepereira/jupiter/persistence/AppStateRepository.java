@@ -12,6 +12,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -132,6 +134,98 @@ public class AppStateRepository {
     void updateProjectEnvironmentVariables(long projectId, String environmentVariablesJson) {
         jdbc.update("UPDATE projects SET environment_variables = :environmentVariables WHERE id = :projectId",
                 new MapSqlParameterSource().addValue("projectId", projectId).addValue("environmentVariables", environmentVariablesJson));
+    }
+
+    long insertMcpServer(String name, String url, boolean enabled, String headersJson, Instant now) {
+        return insertAndReturnId("""
+                INSERT INTO mcp_servers (name, url, enabled, headers_json, created_at)
+                VALUES (:name, :url, :enabled, :headersJson, :createdAt)
+                """, params -> params
+                .addValue("name", name)
+                .addValue("url", url)
+                .addValue("enabled", enabled)
+                .addValue("headersJson", headersJson)
+                .addValue("createdAt", Timestamp.from(now)));
+    }
+
+    void updateMcpServer(long mcpServerId, String name, String url, boolean enabled, String headersJson) {
+        jdbc.update("UPDATE mcp_servers SET name = :name, url = :url, enabled = :enabled, headers_json = :headersJson WHERE id = :mcpServerId",
+                new MapSqlParameterSource()
+                        .addValue("mcpServerId", mcpServerId)
+                        .addValue("name", name)
+                        .addValue("url", url)
+                        .addValue("enabled", enabled)
+                        .addValue("headersJson", headersJson));
+    }
+
+    void deleteMcpServer(long mcpServerId) {
+        jdbc.update("DELETE FROM project_mcp_servers WHERE mcp_server_id = :mcpServerId",
+                new MapSqlParameterSource("mcpServerId", mcpServerId));
+        jdbc.update("DELETE FROM mcp_servers WHERE id = :mcpServerId",
+                new MapSqlParameterSource("mcpServerId", mcpServerId));
+    }
+
+    void replaceMcpServerProjectExposures(long mcpServerId, List<Long> projectIds) {
+        jdbc.update("DELETE FROM project_mcp_servers WHERE mcp_server_id = :mcpServerId",
+                new MapSqlParameterSource("mcpServerId", mcpServerId));
+        if (projectIds == null || projectIds.isEmpty()) {
+            return;
+        }
+        for (Long projectId : projectIds) {
+            jdbc.update("INSERT INTO project_mcp_servers (mcp_server_id, project_id) VALUES (:mcpServerId, :projectId)",
+                    new MapSqlParameterSource()
+                            .addValue("mcpServerId", mcpServerId)
+                            .addValue("projectId", projectId));
+        }
+    }
+
+    Optional<McpServerRow> findMcpServer(long mcpServerId) {
+        return queryOne("SELECT * FROM mcp_servers WHERE id = :mcpServerId",
+                new MapSqlParameterSource("mcpServerId", mcpServerId), this::mapMcpServer)
+                .map(this::attachMcpServerProjectIds);
+    }
+
+    List<McpServerRow> listMcpServers() {
+        return attachMcpServerProjectIds(jdbc.query("SELECT * FROM mcp_servers ORDER BY name ASC, id ASC",
+                new MapSqlParameterSource(), this::mapMcpServer));
+    }
+
+    List<McpServerRow> listEnabledMcpServersByProject(long projectId) {
+        return attachMcpServerProjectIds(jdbc.query("""
+                SELECT ms.*
+                FROM mcp_servers ms
+                JOIN project_mcp_servers pms ON pms.mcp_server_id = ms.id
+                WHERE pms.project_id = :projectId AND ms.enabled = TRUE
+                ORDER BY ms.name ASC, ms.id ASC
+                """, new MapSqlParameterSource("projectId", projectId), this::mapMcpServer));
+    }
+
+    private McpServerRow attachMcpServerProjectIds(McpServerRow row) {
+        return attachMcpServerProjectIds(List.of(row)).getFirst();
+    }
+
+    private List<McpServerRow> attachMcpServerProjectIds(List<McpServerRow> rows) {
+        if (rows.isEmpty()) {
+            return rows;
+        }
+        var ids = rows.stream().map(McpServerRow::id).toList();
+        Map<Long, List<Long>> projectIdsByMcpServerId = new LinkedHashMap<>();
+        jdbc.query("""
+                SELECT mcp_server_id, project_id
+                FROM project_mcp_servers
+                WHERE mcp_server_id IN (:mcpServerIds)
+                ORDER BY project_id ASC, mcp_server_id ASC
+                """, new MapSqlParameterSource("mcpServerIds", ids), (java.sql.ResultSet rs) -> {
+            while (rs.next()) {
+                long mcpServerId = rs.getLong("mcp_server_id");
+                projectIdsByMcpServerId.computeIfAbsent(mcpServerId, ignored -> new ArrayList<>()).add(rs.getLong("project_id"));
+            }
+            return null;
+        });
+        return rows.stream()
+                .map(row -> new McpServerRow(row.id(), row.name(), row.url(), row.enabled(), row.headersJson(), row.createdAt(),
+                        List.copyOf(projectIdsByMcpServerId.getOrDefault(row.id(), List.of()))))
+                .toList();
     }
 
     WorkspaceRow findWorkspace(long workspaceId) {
@@ -707,6 +801,10 @@ public class AppStateRepository {
                 timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")), rs.getBoolean("unread"), rs.getBoolean("in_progress"));
     }
 
+    private McpServerRow mapMcpServer(ResultSet rs, int rowNum) throws SQLException {
+        return new McpServerRow(rs.getLong("id"), rs.getString("name"), rs.getString("url"), rs.getBoolean("enabled"), rs.getString("headers_json"), timestampToInstant(rs.getTimestamp("created_at")), List.of());
+    }
+
     private SessionRow mapSession(ResultSet rs, int rowNum) throws SQLException {
         Long selectedChangedFileId = nullableLong(rs, "selected_changed_file_id");
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
@@ -748,6 +846,7 @@ public class AppStateRepository {
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
+    record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt, List<Long> exposedProjectIds) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt, boolean unread, boolean inProgress) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
                       String chatDraft, boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
