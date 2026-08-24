@@ -278,6 +278,59 @@ public class AppStateService {
         return sessionId;
     }
 
+    @Transactional
+    public long forkPrimarySessionAtAssistantMessage(long sourceSessionId, String assistantPublicId) {
+        var sourceSession = repository.findSession(sourceSessionId);
+        if (sourceSession.hidden()) {
+            throw new IllegalStateException("Hidden sessions cannot be forked: " + sourceSessionId);
+        }
+
+        var appState = repository.loadAppState();
+        if (appState.activeSessionId() == null || appState.activeSessionId() != sourceSessionId) {
+            throw new IllegalStateException("Only the active primary session can be forked: " + sourceSessionId);
+        }
+
+        var assistantMessage = repository.findMessageBySessionAndPublicId(sourceSessionId, assistantPublicId);
+        if (!"assistant".equals(assistantMessage.role())) {
+            throw new IllegalStateException("Can only fork from an assistant message: " + assistantPublicId);
+        }
+        if (assistantMessage.pending()) {
+            throw new IllegalStateException("Cannot fork from a pending assistant message: " + assistantPublicId);
+        }
+        if (assistantMessage.completedAt() == null) {
+            throw new IllegalStateException("Cannot fork from an incomplete assistant message: " + assistantPublicId);
+        }
+
+        var workspace = repository.findWorkspace(sourceSession.workspaceId());
+        Instant now = Instant.now();
+        long position = repository.nextSessionPosition(workspace.id());
+        long forkedSessionId = repository.insertSession(workspace.id(), "Fork of " + sourceSession.name(), position, now, false, ReviewSource.SESSION, null);
+
+        Map<Long, Long> messageIdRemap = new LinkedHashMap<>();
+        for (var message : repository.listMessagesThroughTurnId(sourceSessionId, assistantMessage.turnId())) {
+            long copiedMessageId = repository.insertConversationMessage(forkedSessionId, UUID.randomUUID().toString(), message.role(), message.turnId(), message.sequence(), message.content(),
+                    message.toolCallId(), message.toolCallsJson(), message.showInChat(), message.includeInModel(), message.pending(), message.agentId(), message.agentName(),
+                    message.modelId(), message.thinkingLevel(), message.compactedThroughTurnId(), message.completedAt(), message.createdAt());
+            messageIdRemap.put(message.id(), copiedMessageId);
+        }
+
+        for (var trace : repository.listToolCallTracesBySession(sourceSessionId)) {
+            Long remappedAssistantMessageId = messageIdRemap.get(trace.assistantMessageId());
+            if (remappedAssistantMessageId == null) {
+                continue;
+            }
+            repository.insertToolCallTrace(forkedSessionId, remappedAssistantMessageId, trace.sequence(), trace.toolCallId(), trace.toolName(), trace.success(),
+                    trace.argsJson(), trace.textSummary(), strippedForkMachineSummaryJson(trace.machineSummaryJson()), trace.createdAt());
+        }
+
+        repository.updateProjectLastOpened(workspace.projectId(), now);
+        repository.updateWorkspaceLastOpened(workspace.id(), now);
+        repository.updateSessionLastOpened(forkedSessionId, now);
+        repository.updateAppState(workspace.projectId(), workspace.id(), forkedSessionId);
+        applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
+        return forkedSessionId;
+    }
+
     public AppStateView loadViewData() {
         var appState = repository.loadAppState();
         Set<Long> activeSessionIds = activeStreamRegistryService.activeSessionIdsSnapshot();
@@ -1285,6 +1338,18 @@ public class AppStateService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to parse JSON", e);
         }
+    }
+
+    private String strippedForkMachineSummaryJson(String machineSummaryJson) {
+        Map<String, Object> machineSummary = readMap(machineSummaryJson);
+        if (machineSummary.isEmpty()) {
+            return machineSummaryJson;
+        }
+
+        boolean removed = machineSummary.remove("subagentSessionId") != null;
+        removed |= machineSummary.remove("subagentAgentId") != null;
+        removed |= machineSummary.remove("subagentAgentName") != null;
+        return removed ? json(machineSummary) : machineSummaryJson;
     }
 
     private static String previewAndTruncate(String s, int max, boolean[] truncatedFlag) {

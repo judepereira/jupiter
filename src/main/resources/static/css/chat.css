@@ -372,8 +372,16 @@
     gap: 6px;
 }
 
+.chat-message-fork-button {
+    font-size: inherit;
+    padding: 0;
+}
+
 .chat-message-subtitle {
     margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 12px;
     color: var(--muted);
     line-height: 1.35;

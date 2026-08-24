@@ -5,7 +5,7 @@
   maintain the id and attributes required for future swaps/polling.
   Use a th:block as the fragment host so it doesn't render an extra wrapper.
 -->
-<th:block th:fragment="response">
+<th:block th:fragment="response" th:with="sessionId=${activeSession != null ? activeSession.id : null}">
     <th:block th:if="${shellRefresh}">
         <th:block th:replace="~{fragments/projects :: shellUpdates}"></th:block>
     </th:block>
