@@ -188,7 +188,7 @@
     <div id="modal-root" hx-swap-oob="innerHTML"></div>
 </th:block>
 
-<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}">
+<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}">
     <div id="settings-modal" class="project-modal settings-modal">
         <div class="project-modal-backdrop"
              hx-get="/ui/projects/modal/close"
@@ -274,6 +274,137 @@
                             <button type="submit" class="btn btn-primary">Save</button>
                         </div>
                     </section>
+                </form>
+
+                <form class="settings-form settings-mcp-form" hx-post="/ui/settings/mcp/apply" hx-target="#modal-root" hx-swap="innerHTML" data-settings-mcp-form>
+                    <input type="hidden" name="mcpCatalogJson" value="">
+                    <section class="settings-section settings-mcp-section" data-settings-mcp-field>
+                        <div class="settings-section-header">
+                            <h5>MCP servers</h5>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-server>Add Server</button>
+                        </div>
+
+                        <div class="settings-mcp-list" data-settings-mcp-list>
+                            <div th:if="${#lists.isEmpty(mcpServersValue)}" class="settings-mcp-card" data-settings-mcp-server>
+                                <div class="settings-mcp-card-header">
+                                    <input type="text" class="settings-mcp-name" data-mcp-server-name placeholder="Server name" autocomplete="off">
+                                    <label class="settings-mcp-enabled"><input type="checkbox" data-mcp-server-enabled checked> Enabled</label>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-server>Remove Server</button>
+                                </div>
+                                <label class="project-form-field">
+                                    <span>URL</span>
+                                    <input type="url" class="settings-mcp-url" data-mcp-server-url placeholder="https://example.test/mcp" autocomplete="off">
+                                </label>
+                                <div class="project-form-field settings-mcp-projects-field">
+                                    <span>Exposed projects</span>
+                                    <select class="settings-mcp-projects" data-mcp-server-projects multiple size="4">
+                                        <option th:each="project : ${visibleProjectsValue}" th:value="${project.id}" th:text="${project.name}"></option>
+                                    </select>
+                                </div>
+                                <div class="project-form-field settings-mcp-headers-field" data-settings-mcp-headers>
+                                    <span>Headers</span>
+                                    <div class="settings-mcp-header-list" data-settings-mcp-header-list>
+                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
+                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
+                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-header>Remove Header</button>
+                                        </div>
+                                    </div>
+                                    <template data-settings-mcp-header-template>
+                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
+                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
+                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" data-settings-mcp-remove-header>Remove Header</button>
+                                        </div>
+                                    </template>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-header>Add Header</button>
+                                </div>
+                            </div>
+
+                            <div th:each="server : ${mcpServersValue}" class="settings-mcp-card" data-settings-mcp-server th:attr="data-mcp-server-id=${server.id}">
+                                <div class="settings-mcp-card-header">
+                                    <input type="text" class="settings-mcp-name" data-mcp-server-name placeholder="Server name" autocomplete="off" th:value="${server.name}">
+                                    <label class="settings-mcp-enabled"><input type="checkbox" data-mcp-server-enabled th:checked="${server.enabled}"> Enabled</label>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-server>Remove Server</button>
+                                </div>
+                                <label class="project-form-field">
+                                    <span>URL</span>
+                                    <input type="url" class="settings-mcp-url" data-mcp-server-url placeholder="https://example.test/mcp" autocomplete="off" th:value="${server.url}">
+                                </label>
+                                <div class="project-form-field settings-mcp-projects-field">
+                                    <span>Exposed projects</span>
+                                    <select class="settings-mcp-projects" data-mcp-server-projects multiple size="4">
+                                        <option th:each="project : ${visibleProjectsValue}" th:value="${project.id}" th:text="${project.name}" th:selected="${server.exposedProjectIds.contains(project.id)}"></option>
+                                    </select>
+                                </div>
+                                <div class="project-form-field settings-mcp-headers-field" data-settings-mcp-headers>
+                                    <span>Headers</span>
+                                    <div class="settings-mcp-header-list" data-settings-mcp-header-list>
+                                        <div th:if="${#lists.isEmpty(server.headers)}" class="settings-mcp-header-row" data-mcp-server-header-row>
+                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
+                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-header>Remove Header</button>
+                                        </div>
+                                        <div th:each="header : ${server.headers}" class="settings-mcp-header-row" data-mcp-server-header-row>
+                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off" th:value="${header.name}">
+                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off" th:value="${header.value}">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-header>Remove Header</button>
+                                        </div>
+                                    </div>
+                                    <template data-settings-mcp-header-template>
+                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
+                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
+                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" data-settings-mcp-remove-header>Remove Header</button>
+                                        </div>
+                                    </template>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-header>Add Header</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <template data-settings-mcp-server-template>
+                            <div class="settings-mcp-card" data-settings-mcp-server>
+                                <div class="settings-mcp-card-header">
+                                    <input type="text" class="settings-mcp-name" data-mcp-server-name placeholder="Server name" autocomplete="off">
+                                    <label class="settings-mcp-enabled"><input type="checkbox" data-mcp-server-enabled checked> Enabled</label>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-server>Remove Server</button>
+                                </div>
+                                <label class="project-form-field">
+                                    <span>URL</span>
+                                    <input type="url" class="settings-mcp-url" data-mcp-server-url placeholder="https://example.test/mcp" autocomplete="off">
+                                </label>
+                                <div class="project-form-field settings-mcp-projects-field">
+                                    <span>Exposed projects</span>
+                                    <select class="settings-mcp-projects" data-mcp-server-projects multiple size="4">
+                                        <option th:each="project : ${visibleProjectsValue}" th:value="${project.id}" th:text="${project.name}"></option>
+                                    </select>
+                                </div>
+                                <div class="project-form-field settings-mcp-headers-field" data-settings-mcp-headers>
+                                    <span>Headers</span>
+                                    <div class="settings-mcp-header-list" data-settings-mcp-header-list>
+                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
+                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
+                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-header>Remove Header</button>
+                                        </div>
+                                    </div>
+                                    <template data-settings-mcp-header-template>
+                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
+                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
+                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" data-settings-mcp-remove-header>Remove Header</button>
+                                        </div>
+                                    </template>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-header>Add Header</button>
+                                </div>
+                            </div>
+                        </template>
+                    </section>
+
+                    <div class="project-form-actions">
+                        <button type="submit" class="btn btn-primary">Apply MCP Catalog</button>
+                    </div>
                 </form>
 
                 <section class="settings-section settings-app-section">

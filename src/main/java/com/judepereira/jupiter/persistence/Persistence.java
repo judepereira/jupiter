@@ -28,6 +28,15 @@ public final class Persistence {
     public record ProjectEnvironmentVariable(String name, String value) {
     }
 
+    public record McpServerHeader(String name, String value) {
+    }
+
+    public record McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
+        public McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers) {
+            this(id, name, url, enabled, headers, List.of());
+        }
+    }
+
     public record WorkspaceView(long id, String name, String path, boolean unread, RailStatus railStatus) {
         public WorkspaceView(long id, String name, String path, boolean unread) {
             this(id, name, path, unread, RailStatus.NONE);

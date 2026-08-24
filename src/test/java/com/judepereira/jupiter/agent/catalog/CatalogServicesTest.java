@@ -92,6 +92,8 @@ public class CatalogServicesTest {
         expectedPrimaryTools.add("task");
 
         assertThat(primary.allowedTools()).containsExactlyElementsOf(expectedPrimaryTools);
+        assertThat(primary.allowedTools()).contains("mcp:*");
+        assertThat(subagent.allowedTools()).contains("mcp:*");
         assertThat(subagent.allowedTools()).doesNotContain("task");
     }
 
