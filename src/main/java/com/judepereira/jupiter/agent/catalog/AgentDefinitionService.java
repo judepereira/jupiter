@@ -227,10 +227,9 @@ public class AgentDefinitionService {
             throw new IllegalStateException("tools is required for agent: " + agentId);
         }
         if (Boolean.TRUE.equals(tools.get("*"))) {
-            if (mode == AgentMode.SUBAGENT) {
-                return SUPPORTED_TOOLS.stream().filter(tool -> !"task".equals(tool)).toList();
-            }
-            return SUPPORTED_TOOLS;
+            return mode == AgentMode.SUBAGENT
+                    ? List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "display_image", "run_command", "mcp:*")
+                    : List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "display_image", "run_command", "mcp:*", "task");
         }
         List<String> allowed = tools.entrySet().stream()
                 .filter(entry -> Boolean.TRUE.equals(entry.getValue()))
@@ -246,6 +245,9 @@ public class AgentDefinitionService {
     private static void validateToolName(String tool) {
         if (tool == null || tool.isBlank()) {
             throw new IllegalStateException("tools contains a blank tool");
+        }
+        if ("mcp:*".equals(tool)) {
+            return;
         }
         if (!SUPPORTED_TOOLS.contains(tool)) {
             throw new IllegalStateException("Unknown tool in agent definition: " + tool);

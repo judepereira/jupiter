@@ -11,6 +11,9 @@ import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
+import com.judepereira.jupiter.agent.mcp.McpProjectToolExecutor;
+import com.judepereira.jupiter.agent.mcp.McpProjectToolSnapshot;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
@@ -41,33 +44,42 @@ public class CodingAgentHarness {
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
     private final AppStateService appStateService;
+    private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
     private final SystemPromptComposer systemPromptComposer;
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props) {
-        this(modelFactory, registry, props, null, null, null, new SystemPromptComposer());
+        this(modelFactory, registry, props, null, null, null, null, new SystemPromptComposer());
     }
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, null, new SystemPromptComposer());
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, null, null, new SystemPromptComposer());
     }
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                               AppStateService appStateService) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, new SystemPromptComposer());
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, null, new SystemPromptComposer());
+    }
+
+    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
+                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                              AppStateService appStateService, McpProjectMcpServerRuntimeManager mcpRuntimeManager) {
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, mcpRuntimeManager, new SystemPromptComposer());
     }
 
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                              AppStateService appStateService, SystemPromptComposer systemPromptComposer) {
+                              AppStateService appStateService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                              SystemPromptComposer systemPromptComposer) {
         this.modelFactory = modelFactory;
         this.registry = registry;
         this.props = props;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
         this.appStateService = appStateService;
+        this.mcpRuntimeManager = mcpRuntimeManager;
         this.systemPromptComposer = systemPromptComposer;
     }
 
@@ -106,8 +118,11 @@ public class CodingAgentHarness {
                 environmentVariables,
                 ToolProgressSink.noop());
 
+        long projectId = resolveProjectId(request.getSessionId());
+        McpProjectToolSnapshot mcpSnapshot = resolveMcpSnapshot(projectId);
+
         Set<String> allowedTools = resolveAllowedTools(agent);
-        List<ToolDefinition> defs = resolveToolDefinitions(allowedTools);
+        List<ToolDefinition> defs = resolveToolDefinitions(allowedTools, mcpSnapshot);
 
         StringBuilder accumulated = new StringBuilder();
         CancellationToken cancellationToken = request.getCancellationToken();
@@ -158,7 +173,7 @@ public class CodingAgentHarness {
                         listener.onStatus("tool_error:missing_tool_name");
                         continue;
                     }
-                    if (!allowedTools.contains(toolName)) {
+                    if (!isToolAllowed(toolName, allowedTools)) {
                         String toolMsg = "[tool_error] Tool not allowed for selected agent: " + toolName;
                         convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
                         ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg,
@@ -183,7 +198,7 @@ public class CodingAgentHarness {
                                 execCtxTemplate.getEnvironmentVariables(),
                                 (eventName, payload) -> listener.onToolCallProgress(toolCallId, toolName, eventName, payload),
                                 cancellationToken);
-                        ToolExecutionResult result = registry.executeByName(toolName, args, execCtx);
+                        ToolExecutionResult result = executeTool(toolName, args, execCtx, mcpSnapshot);
                         String toolText = result.getText() == null ? "" : result.getText();
                         convo.add(new Message(Message.Role.TOOL, toolText, toolCallId));
                         ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, result.isSuccess(), result.getText(), result.getMachine());
@@ -313,14 +328,60 @@ public class CodingAgentHarness {
         return allowed;
     }
 
-    private List<ToolDefinition> resolveToolDefinitions(Set<String> allowedTools) {
-        if (allowedTools == null) {
-            return registry.all().values().stream().map(tool -> tool.definition()).collect(Collectors.toList());
-        }
-        return registry.all().values().stream()
-                .filter(tool -> allowedTools.contains(tool.name()))
+    private List<ToolDefinition> resolveToolDefinitions(Set<String> allowedTools, McpProjectToolSnapshot mcpSnapshot) {
+        List<ToolDefinition> builtIns = registry.all().values().stream()
+                .filter(tool -> allowedTools != null && allowedTools.contains(tool.name()))
                 .map(tool -> tool.definition())
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (!allowsMcpTools(allowedTools)) {
+            return builtIns;
+        }
+        if (mcpSnapshot == null) {
+            return builtIns;
+        }
+        List<ToolDefinition> defs = new ArrayList<>(builtIns.size() + mcpSnapshot.toolDefinitions().size());
+        defs.addAll(builtIns);
+        defs.addAll(mcpSnapshot.toolDefinitions());
+        return defs;
+    }
+
+    private ToolExecutionResult executeTool(String toolName, Map<String, Object> args, ToolExecutionContext context,
+                                           McpProjectToolSnapshot mcpSnapshot) throws Exception {
+        if (registry.get(toolName) != null) {
+            return registry.executeByName(toolName, args, context);
+        }
+        if (mcpSnapshot != null) {
+            McpProjectToolExecutor executor = mcpSnapshot.executors().get(toolName);
+            if (executor != null) {
+                return executor.execute(args, context);
+            }
+        }
+        throw new IllegalArgumentException("Unknown tool: " + toolName);
+    }
+
+    private boolean isToolAllowed(String toolName, Set<String> allowedTools) {
+        if (allowedTools == null) {
+            return false;
+        }
+        if (allowedTools.contains(toolName)) {
+            return true;
+        }
+        return isMcpTool(toolName) && allowsMcpTools(allowedTools);
+    }
+
+    private boolean isMcpTool(String toolName) {
+        return toolName != null && toolName.startsWith("mcp__");
+    }
+
+    private boolean allowsMcpTools(Set<String> allowedTools) {
+        return allowedTools != null && (allowedTools.contains("mcp:*") || allowedTools.contains("*"));
+    }
+
+    private long resolveProjectId(Long sessionId) {
+        if (sessionId == null || appStateService == null) {
+            return -1L;
+        }
+        return appStateService.loadSessionProjectId(sessionId);
     }
 
     private Map<String, String> resolveEnvironmentVariables(Long sessionId) {
@@ -328,5 +389,12 @@ public class CodingAgentHarness {
             return Map.of();
         }
         return appStateService.loadSessionProjectEnvironmentVariables(sessionId);
+    }
+
+    private McpProjectToolSnapshot resolveMcpSnapshot(long projectId) {
+        if (projectId < 0 || mcpRuntimeManager == null) {
+            return new McpProjectToolSnapshot(projectId, List.of(), Map.of());
+        }
+        return mcpRuntimeManager.snapshot(projectId);
     }
 }

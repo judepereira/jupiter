@@ -19,6 +19,8 @@ import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
+import com.judepereira.jupiter.persistence.Persistence.McpServerHeader;
+import com.judepereira.jupiter.persistence.Persistence.McpServerView;
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import com.judepereira.jupiter.persistence.Persistence.ProjectView;
 import com.judepereira.jupiter.persistence.Persistence.SessionView;
@@ -701,6 +703,50 @@ public class AppStateServicePersistenceTests {
                 .containsEntry("API_URL", "https://override.test")
                 .containsEntry("FEATURE_FLAG", "true")
                 .doesNotContainKey("");
+    }
+
+    @Test
+    public void mcpServerRoundTripsHeadersAndExposures(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long projectId = service.loadViewData().activeProject().id();
+
+        McpServerView created = service.createMcpServer("  Local MCP  ", "  http://localhost:3000/mcp  ", true, List.of(
+                new McpServerHeader(" Authorization ", "  Bearer token  "),
+                new McpServerHeader("Authorization", "Bearer override"),
+                new McpServerHeader("X-Trace", " 1 ")
+        ), List.of(projectId, projectId));
+
+        assertThat(created.name()).isEqualTo("Local MCP");
+        assertThat(created.url()).isEqualTo("http://localhost:3000/mcp");
+        assertThat(created.headers()).containsExactly(
+                new McpServerHeader("Authorization", "Bearer override"),
+                new McpServerHeader("X-Trace", "1")
+        );
+        assertThat(created.exposedProjectIds()).containsExactly(projectId);
+
+        assertThat(service.loadEnabledMcpServersForProject(projectId)).singleElement().extracting(McpServerView::id).isEqualTo(created.id());
+    }
+
+    @Test
+    public void reopeningAClosedProjectPreservesMcpServerExposureAssignments(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long projectId = initial.activeProject().id();
+
+        McpServerView server = service.createMcpServer("Server", "http://localhost:3000", true,
+                List.of(new McpServerHeader("Authorization", "Bearer token")), List.of(projectId));
+        assertThat(service.loadEnabledMcpServersForProject(projectId)).extracting(McpServerView::id).containsExactly(server.id());
+
+        service.closeProject(projectId);
+        service.addOrReopenProject("Alpha", projectPath.toString());
+
+        AppStateView reopened = service.loadViewData();
+        long reopenedProjectId = reopened.activeProject().id();
+        assertThat(reopenedProjectId).isEqualTo(projectId);
+        assertThat(service.loadEnabledMcpServersForProject(reopenedProjectId)).extracting(McpServerView::id).containsExactly(server.id());
     }
 
     @Test
