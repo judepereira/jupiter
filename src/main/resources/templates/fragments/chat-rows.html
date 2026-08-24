@@ -8,7 +8,7 @@
         <div class="chat-message-subtitle" th:if="${m.role == 'assistant' and (m.metadata != null or m.completedTs != null)}"
              th:attr="data-start-ts=${m.ts}, data-completed-ts=${m.completedTs}, data-agent-label=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentName} : null, data-agent-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentId} : null, data-model-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.modelId} : null, data-model-label=${m.role == 'assistant' and m.modelLabel != null} ? ${m.modelLabel} : null, data-thinking-level=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.thinkingLevel} : null">
             <span class="chat-message-subtitle-text"></span>
-            <button type="button" class="chat-message-fork-button"
+            <button type="button" class="chat-message-fork-button btn btn-link"
                     th:if="${m.role == 'assistant' and m.completedTs != null and !m.pending and !(subagentView ?: false)}"
                     th:attr="hx-post=@{/ui/chat/fork/{assistantPublicId}(assistantPublicId=${m.id})}, hx-target='#shell', hx-swap='none'">
                 Fork
