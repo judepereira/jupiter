@@ -52,6 +52,12 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
             assertThat(page.locator("#chat-messages-list li")).hasCount(3);
             assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText("hello there");
             assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
+            var assistantRow = page.locator("#chat-messages-list li").nth(2);
+            var forkButton = assistantRow.locator(".chat-message-fork-button");
+            assertThat(assistantRow.locator(".chat-message-subtitle")).containsText("Fork");
+            org.assertj.core.api.Assertions.assertThat(forkButton.getAttribute("hx-post")).isEqualTo("/ui/chat/fork/" + assistantRow.getAttribute("data-id"));
+            assertThat(forkButton).hasAttribute("hx-target", "#shell");
+            assertThat(forkButton).hasAttribute("hx-swap", "none");
             assertThat(page.locator("#chat-input")).hasValue("");
         } finally {
             if (previousHome == null) {

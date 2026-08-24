@@ -1,5 +1,5 @@
 <!doctype html>
-<div th:fragment="chat" id="chat-container" th:attr="hx-swap-oob=${shellRefresh ?: false} ? 'outerHTML' : null, data-subagent-session-id=${subagentView ?: false} ? ${subagentSessionId} : null" th:with="pendingStreamUrlPrefix=${'/ui/chat/stream'}">
+<div th:fragment="chat" id="chat-container" th:attr="hx-swap-oob=${shellRefresh ?: false} ? 'outerHTML' : null, data-subagent-session-id=${subagentView ?: false} ? ${subagentSessionId} : null, data-session-id=${activeSession != null ? activeSession.id : null}" th:with="pendingStreamUrlPrefix=${'/ui/chat/stream'}, sessionId=${activeSession != null ? activeSession.id : null}">
     <!-- HTMX polling attributes are applied to the messages list when hasPending is true -->
     <section id="chat" class="chat-shell">
         <div th:if="${subagentView ?: false}" class="subagent-bar">

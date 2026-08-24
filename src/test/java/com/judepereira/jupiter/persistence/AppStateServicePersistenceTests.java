@@ -203,7 +203,76 @@ public class AppStateServicePersistenceTests {
                 .orElseThrow();
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.toolCallId()).isEqualTo("task-1"));
     }
+    @Test
+    public void forkPrimarySessionCopiesConversationAndToolCallStateWithoutDraftOrReviewState(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sourceSessionId = service.loadViewData().activeSession().id();
+        service.updateSessionDraft(sourceSessionId, "draft text");
+        service.addChangedFilesToSession(sourceSessionId, List.of(new ChangedFileDraft("src/Fork.java", "diff")));
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5", "HIGH");
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sourceSessionId, "user-1", "assistant-1", "use a task", metadata);
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "task output", Map.of("sessionId", sourceSessionId));
+        service.appendToolCallTrace(sourceSessionId, turn.assistantMessage().id(), trace);
+        service.completeAssistantMessage(sourceSessionId, turn.assistantMessage().id(), "final reply", List.of(trace));
+        long forkedSessionId = service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.assistantMessage().id());
+        AppStateView forkedView = service.loadViewData();
+        assertThat(forkedView.activeSession().id()).isEqualTo(forkedSessionId);
+        assertThat(forkedView.activeSessionDetail().chatDraft()).isEmpty();
+        assertThat(forkedView.activeSessionDetail().changedFiles()).isEmpty();
+        var sourceMessages = repository.listMessagesBySession(sourceSessionId);
+        var forkMessages = repository.listMessagesBySession(forkedSessionId);
+        assertThat(forkMessages).hasSize(sourceMessages.size());
+        assertThat(forkMessages).extracting(AppStateRepository.ConversationMessageRow::publicId)
+                .doesNotContainAnyElementsOf(sourceMessages.stream().map(AppStateRepository.ConversationMessageRow::publicId).toList());
+        var forkAssistant = forkMessages.stream().filter(message -> "assistant".equals(message.role()) && message.showInChat()).findFirst().orElseThrow();
+        var sourceAssistant = repository.findMessageBySessionAndPublicId(sourceSessionId, turn.assistantMessage().id());
+        assertThat(forkAssistant.completedAt()).isNotNull();
+        assertThat(forkAssistant.pending()).isFalse();
+        assertThat(forkAssistant.content()).isEqualTo("final reply");
+        assertThat(forkAssistant.agentId()).isEqualTo(sourceAssistant.agentId());
+        assertThat(forkAssistant.modelId()).isEqualTo(sourceAssistant.modelId());
+        assertThat(forkAssistant.thinkingLevel()).isEqualTo(sourceAssistant.thinkingLevel());
+        var sourceTraces = repository.listToolCallTracesBySession(sourceSessionId);
+        var forkTraces = repository.listToolCallTracesBySession(forkedSessionId);
+        assertThat(forkTraces).hasSize(sourceTraces.size());
+        assertThat(forkTraces).allSatisfy(traceRow -> {
+            assertThat(traceRow.assistantMessageId()).isEqualTo(forkAssistant.id());
+            assertThat(traceRow.machineSummaryJson()).doesNotContain("subagentSessionId", "subagentAgentId", "subagentAgentName");
+        });
+    }
+    @Test
+    public void forkPrimarySessionFailsLoudlyForHiddenSessionsNonAssistantPendingAndForeignMessages(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sourceSessionId = service.loadViewData().activeSession().id();
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sourceSessionId, "hello");
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "hidden", AgentMode.SUBAGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        long hiddenSessionId = service.createHiddenSubagentSession(sourceSessionId, "task-1", subagent);
+        QueuedChatTurn hiddenTurn = service.appendUserMessageAndPendingAssistant(hiddenSessionId, "child");
+        assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.userMessage().id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("assistant message");
+        assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.assistantMessage().id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("pending assistant message");
+        assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(hiddenSessionId, hiddenTurn.assistantMessage().id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Hidden sessions");
 
+        service.addOrReopenProject("Beta", projectPath.resolveSibling("beta").toString());
+        long foreignSessionId = service.loadViewData().activeSession().id();
+        QueuedChatTurn foreignTurn = service.appendUserMessageAndPendingAssistant(foreignSessionId, "foreign");
+        service.completeAssistantMessage(foreignSessionId, foreignTurn.assistantMessage().id(), "foreign reply", List.of());
+        service.activateSession(sourceSessionId);
+        assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(sourceSessionId, foreignTurn.assistantMessage().id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("message");
+    }
     @Test
     public void completedTaskTurnWithHiddenChildSessionDoesNotSynthesizeTheOldCallOntoALaterPendingTurn(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});

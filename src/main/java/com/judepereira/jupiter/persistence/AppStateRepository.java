@@ -558,6 +558,11 @@ public class AppStateRepository {
                 new MapSqlParameterSource("sessionId", sessionId), this::mapConversationMessage);
     }
 
+    List<ConversationMessageRow> listMessagesThroughTurnId(long sessionId, long maxTurnId) {
+        return jdbc.query("SELECT * FROM conversation_messages WHERE session_id = :sessionId AND turn_id <= :maxTurnId ORDER BY sequence ASC",
+                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("maxTurnId", maxTurnId), this::mapConversationMessage);
+    }
+
     long nextMessageSequence(long sessionId) {
         Long value = jdbc.queryForObject("SELECT COALESCE(MAX(sequence), 0) + 1 FROM conversation_messages WHERE session_id = :sessionId",
                 new MapSqlParameterSource("sessionId", sessionId), Long.class);

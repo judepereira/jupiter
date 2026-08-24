@@ -350,9 +350,27 @@
 
 .chat-message-subtitle {
     margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 12px;
     color: var(--muted);
     line-height: 1.35;
+}
+
+.chat-message-fork-button {
+    border: 1px solid #d6e4f5;
+    background: #f8fbff;
+    color: #1d4ed8;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.chat-message-fork-button:hover {
+    background: #eff6ff;
+    border-color: #b6cdf7;
 }
 
 .tool-call {
