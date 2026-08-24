@@ -386,6 +386,19 @@
     overflow: hidden;
 }
 
+.tool-call-bundle {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+}
+
+.tool-call-bundle > summary.tool-call-summary {
+    background: rgba(59, 130, 246, 0.06);
+}
+
+.tool-call-bundle > .tool-call-detail {
+    background: #fff;
+}
+
 .tool-call summary.tool-call-summary {
     list-style: none;
     cursor: pointer;

@@ -19,7 +19,6 @@ import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -170,7 +169,7 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
-    public void chatResponseFragmentGroupsOnlyContiguousToolCalls() {
+    public void chatResponseFragmentBundlesNormalToolCallsAndLeavesSpecialCallsStandalone() {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
@@ -182,21 +181,35 @@ public class ChatTemplateRenderTest {
         context.setVariable("selectedFile", null);
         context.setVariable("newChatMessages", List.of(
                 new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(
-                        new UiController.ToolCallView("read-1", "read", true, "read-1 input", "read-1 output", false, false, null, null, null),
-                        new UiController.ToolCallView("read-2", "read", true, "read-2 input", "read-2 output", false, false, null, null, null),
-                        new UiController.ToolCallView("task-1", "task", true, "task input", "task output", false, false, null, null, null),
-                        new UiController.ToolCallView("read-3", "read", true, "read-3 input", "read-3 output", false, false, null, null, null)
+                        new UiController.ToolCallView("read-1", "read_file", true, "read-1 input", "read-1 output", false, false, null, null, null),
+                        new UiController.ToolCallView("read-2", "read_file", true, "read-2 input", "read-2 output", false, false, null, null, null),
+                        new UiController.ToolCallView("task-1", "task", true, "task input", "task output", false, false, 41L, "engineer-1", "Engineer 1"),
+                        new UiController.ToolCallView("read-3", "read_file", true, "read-3 input", "read-3 output", false, false, null, null, null),
+                        new UiController.ToolCallView("display-1", "display_image", true, "display input", "display output", false, false, null, null, null, null, "/ui/chat/image/1/display-1", "Cat", "images/cat.png", "image/png")
                 ), null)
         ));
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html.split("class=\"tool-call\"", -1)).hasSize(4);
-        assertThat(html.split("class=\"tool-call-call\"", -1)).hasSize(5);
-        assertThat(html).contains("read (2)", "<span class=\"tool-call-name\">task</span>");
-        assertThat(html.split(Pattern.quote("read (2)"), -1)).hasSize(2);
-        assertThat(html.split(Pattern.quote("<span class=\"tool-call-name\">read</span>"), -1)).hasSize(2);
-        assertThat(html).contains("read-1 input", "read-1 output", "read-2 input", "read-2 output", "task input", "task output", "read-3 input", "read-3 output");
+        int firstBundle = html.indexOf("Tool Usage: read_file (2)");
+        int taskIndex = html.indexOf("data-tool-call-tool-name=\"task\"");
+        int secondBundle = html.indexOf("Tool Usage: read_file", firstBundle + 1);
+
+        assertThat(firstBundle).isGreaterThanOrEqualTo(0);
+        assertThat(taskIndex).isGreaterThan(firstBundle);
+        assertThat(secondBundle).isGreaterThan(taskIndex);
+        assertThat(html).contains("<span class=\"tool-call-name\">task</span>", "Open subagent: <strong>Engineer 1</strong>");
+        assertThat(html).contains("<span class=\"tool-call-name\">display_image</span>", "src=\"/ui/chat/image/1/display-1\"", "tool-call-image-caption");
+        assertThat(html).contains("read-1 input", "read-2 input", "read-3 input");
+
+        int bundleTagStart = html.lastIndexOf("<details", firstBundle);
+        int bundleTagEnd = html.indexOf(">", bundleTagStart);
+        int displayImageIndex = html.indexOf("tool-call-name\">display_image");
+        int displayImageTagStart = html.lastIndexOf("<details", displayImageIndex);
+        int displayImageTagEnd = html.indexOf(">", displayImageTagStart);
+
+        assertThat(html.substring(bundleTagStart, bundleTagEnd)).doesNotContain("open");
+        assertThat(html.substring(displayImageTagStart, displayImageTagEnd)).contains("open");
     }
 
     @Test
@@ -221,13 +234,18 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
-        long toolCallCount = html.split("class=\"tool-call\"", -1).length - 1;
-        assertThat(toolCallCount).isEqualTo(4);
-        assertThat(html.split("class=\"tool-call-call\"", -1)).hasSize(6);
-        assertThat(html.split(Pattern.quote("read (2)"), -1)).hasSize(2);
-        assertThat(html).doesNotContain("task (2)");
-        assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");
+        int firstBundle = html.indexOf("Tool Usage: read (2)");
+        int firstTask = html.indexOf("data-tool-call-tool-name=\"task\"");
+        int secondTask = html.indexOf("data-tool-call-tool-name=\"task\"", firstTask + 1);
+        int secondBundle = html.indexOf("Tool Usage: read", firstBundle + 1);
+
+        assertThat(firstBundle).isGreaterThanOrEqualTo(0);
+        assertThat(firstTask).isGreaterThan(firstBundle);
+        assertThat(secondTask).isGreaterThan(firstTask);
+        assertThat(secondBundle).isGreaterThan(secondTask);
+        assertThat(html).contains("tool-call-bundle");
         assertThat(html).contains("Open subagent: <strong>Engineer 1</strong>", "Open subagent: <strong>Engineer 2</strong>");
+        assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");
     }
 
     @Test

@@ -50,6 +50,23 @@ class UiControllerChatMessageGroupingTests {
         assertThat(groups.get(0).success()).isTrue();
     }
 
+    @Test
+    void toolCallBlocksPreserveChronologicalOrderAcrossStandaloneSpecialTools() {
+        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
+                toolCall("read-1", "read_file", true),
+                toolCall("read-2", "read_file", true),
+                toolCall("task-1", "task", true),
+                toolCall("read-3", "read_file", true)
+        ), null);
+
+        List<UiController.ToolCallBlockView> blocks = message.toolCallBlocks();
+
+        assertThat(blocks).hasSize(3);
+        assertThat(blocks.get(0).bundle().summaryLabel()).isEqualTo("Tool Usage: read_file (2)");
+        assertThat(blocks.get(1).group().toolName()).isEqualTo("task");
+        assertThat(blocks.get(2).bundle().summaryLabel()).isEqualTo("Tool Usage: read_file");
+    }
+
     private static UiController.ToolCallView toolCall(String id, String toolName, boolean success) {
         return new UiController.ToolCallView(id, toolName, success, "input", "output", false, false, null, null, null);
     }

@@ -1623,12 +1623,25 @@ public class UiController {
 
     public record ToolCallGroupView(String toolName, String displayLabel, boolean success, int count, List<ToolCallView> calls) {}
 
+    public record ToolCallBundleView(String summaryLabel, boolean success, List<ToolCallGroupView> groups) {}
+
+    public record ToolCallBlockView(ToolCallBundleView bundle, ToolCallGroupView group) {
+        public static ToolCallBlockView bundle(ToolCallBundleView bundle) {
+            return new ToolCallBlockView(bundle, null);
+        }
+
+        public static ToolCallBlockView group(ToolCallGroupView group) {
+            return new ToolCallBlockView(null, group);
+        }
+    }
+
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata, String modelLabel) {
         public ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
             this(role, text, ts, pending, id, completedTs, toolCalls, metadata, null);
         }
 
         private static final Set<String> EXPLORATORY_TOOL_NAMES = Set.of("list_files", "read_file", "search_code");
+        private static final Set<String> SPECIAL_TOOL_NAMES = Set.of("task", "display_image");
 
         public List<ToolCallGroupView> toolCallGroups() {
             if (toolCalls.isEmpty()) {
@@ -1655,8 +1668,43 @@ public class UiController {
             return List.copyOf(groups);
         }
 
+        public List<ToolCallBlockView> toolCallBlocks() {
+            if (toolCalls.isEmpty()) {
+                return List.of();
+            }
+
+            List<ToolCallBlockView> blocks = new ArrayList<>();
+            List<ToolCallGroupView> currentBundleGroups = new ArrayList<>();
+            for (ToolCallGroupView group : toolCallGroups()) {
+                if (isSpecialStandalone(group.toolName())) {
+                    if (!currentBundleGroups.isEmpty()) {
+                        blocks.add(ToolCallBlockView.bundle(toBundle(currentBundleGroups)));
+                        currentBundleGroups = new ArrayList<>();
+                    }
+                    blocks.add(ToolCallBlockView.group(group));
+                    continue;
+                }
+
+                currentBundleGroups.add(group);
+            }
+
+            if (!currentBundleGroups.isEmpty()) {
+                blocks.add(ToolCallBlockView.bundle(toBundle(currentBundleGroups)));
+            }
+
+            return List.copyOf(blocks);
+        }
+
+        private ToolCallBundleView toBundle(List<ToolCallGroupView> groups) {
+            return new ToolCallBundleView(toolUsageSummaryLabel(groups), groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
+        }
+
+        private String toolUsageSummaryLabel(List<ToolCallGroupView> groups) {
+            return "Tool Usage: " + toolUsageLabel(groups);
+        }
+
         private boolean startsNewGroup(ToolCallView previous, ToolCallView current) {
-            if ("task".equals(previous.toolName()) || "task".equals(current.toolName())) {
+            if (isSpecialStandalone(previous.toolName()) || isSpecialStandalone(current.toolName())) {
                 return true;
             }
 
@@ -1671,9 +1719,33 @@ public class UiController {
             return EXPLORATORY_TOOL_NAMES.contains(toolName);
         }
 
+        private boolean isSpecialStandalone(String toolName) {
+            return SPECIAL_TOOL_NAMES.contains(toolName);
+        }
+
         private ToolCallGroupView toGroup(List<ToolCallView> calls) {
             ToolCallView first = calls.get(0);
             return new ToolCallGroupView(first.toolName(), displayLabel(calls), calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
+        }
+
+        private String toolUsageLabel(List<ToolCallGroupView> groups) {
+            LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
+            for (ToolCallGroupView group : groups) {
+                for (ToolCallView call : group.calls()) {
+                    counts.merge(call.toolName(), 1, Integer::sum);
+                }
+            }
+            StringBuilder label = new StringBuilder();
+            for (var entry : counts.entrySet()) {
+                if (!label.isEmpty()) {
+                    label.append(", ");
+                }
+                label.append(entry.getKey());
+                if (entry.getValue() > 1) {
+                    label.append(" (").append(entry.getValue()).append(")");
+                }
+            }
+            return label.toString();
         }
 
         private String displayLabel(List<ToolCallView> calls) {
