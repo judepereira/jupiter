@@ -153,6 +153,26 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
+    public void chatRowsFragmentRendersToolCallsAboveAssistantTextAndSubtitleBelow() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("messages", List.of(
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-done", 2L,
+                        List.of(new UiController.ToolCallView("tool-call-1", "read_file", true, "input", "output", false, false, null, null, null)),
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"),
+                        "GPT-5.5")
+        ));
+        context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
+        context.setVariable("subagentView", false);
+
+        String html = engine.process("fragments/chat-rows", context);
+
+        assertThat(html).containsSubsequence("class=\"tool-calls\"", "class=\"chat-message-text\"", "class=\"chat-message-subtitle\"");
+        assertThat(html).contains("data-completed-ts=\"2\"", "data-agent-label=\"Plan\"", "data-model-label=\"GPT-5.5\"");
+    }
+
+    @Test
     public void chatResponseFragmentRendersOpenSubagentLinkForTaskToolTraces() {
         SpringTemplateEngine engine = engine();
         WebContext context = webContext();
