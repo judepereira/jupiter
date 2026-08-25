@@ -15,53 +15,113 @@
             </button>
         </div>
 
-        <div th:if="${!#lists.isEmpty(m.toolCallGroups)}" class="tool-calls">
-            <details th:each="group : ${m.toolCallGroups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image'}">
-                <summary class="tool-call-summary">
-                    <span class="tool-call-name" th:text="${group.displayLabel}"></span>
-                    <span class="tool-call-status" th:classappend="${group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
-                          th:text="${group.success} ? 'success' : 'failure'"></span>
-                </summary>
+        <div th:if="${!#lists.isEmpty(m.toolCallBlocks)}" class="tool-calls">
+            <th:block th:each="block : ${m.toolCallBlocks}">
+                <details th:if="${block.bundle != null}" class="tool-call tool-call-bundle"
+                         th:attr="data-tool-call-kind='bundle', data-tool-call-state=${block.bundle.success} ? 'done' : 'error', data-tool-call-success=${block.bundle.success} ? 'true' : 'false'">
+                    <summary class="tool-call-summary">
+                        <span class="tool-call-name" th:text="${block.bundle.summaryLabel}"></span>
+                    </summary>
 
-                <div class="tool-call-detail">
-                    <div class="tool-call-calls">
-                        <div th:each="call : ${group.calls}"
-                             class="tool-call-call"
-                             th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
-                            <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
-                                <button type="button"
-                                        class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
-                                        th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                    Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
-                                </button>
-                            </div>
+                    <div class="tool-call-detail">
+                        <div class="tool-call-calls">
+                            <details th:each="group : ${block.bundle.groups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image'}">
+                                <summary class="tool-call-summary">
+                                    <span class="tool-call-name" th:text="${group.displayLabel}"></span>
+                                    <span class="tool-call-status" th:classappend="${group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
+                                          th:text="${group.success} ? 'success' : 'failure'"></span>
+                                </summary>
 
-                            <section class="tool-call-section" data-tool-call-field="input">
-                                <div class="tool-call-label">Input
-                                    <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
+                                <div class="tool-call-detail">
+                                    <div class="tool-call-calls">
+                                        <div th:each="call : ${group.calls}"
+                                             class="tool-call-call"
+                                             th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
+                                            <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
+                                                <button type="button"
+                                                        class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
+                                                        th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                                    Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                                                </button>
+                                            </div>
+
+                                            <section class="tool-call-section" data-tool-call-field="input">
+                                                <div class="tool-call-label">Input
+                                                    <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
+                                                </div>
+                                                <pre class="tool-call-pre" th:text="${call.inputPreview}"></pre>
+                                            </section>
+
+                                            <section class="tool-call-section" data-tool-call-field="output">
+                                                <div class="tool-call-label">Output
+                                                    <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
+                                                </div>
+                                                <th:block th:if="${call.imageUrl != null}">
+                                                    <figure class="tool-call-image-preview">
+                                                        <img th:src="${call.imageUrl}" th:alt="${call.imageAlt}"/>
+                                                        <figcaption>
+                                                            <span class="tool-call-image-caption" th:text="${call.imageAlt}"></span>
+                                                            <small th:if="${call.imagePath != null}" th:text="${call.imagePath}"></small>
+                                                        </figcaption>
+                                                    </figure>
+                                                </th:block>
+                                                <pre th:unless="${call.imageUrl != null}" class="tool-call-pre" th:text="${call.outputPreview}"></pre>
+                                            </section>
+                                        </div>
+                                    </div>
                                 </div>
-                                <pre class="tool-call-pre" th:text="${call.inputPreview}"></pre>
-                            </section>
-
-                            <section class="tool-call-section" data-tool-call-field="output">
-                                <div class="tool-call-label">Output
-                                    <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
-                                </div>
-                                <th:block th:if="${call.imageUrl != null}">
-                                    <figure class="tool-call-image-preview">
-                                        <img th:src="${call.imageUrl}" th:alt="${call.imageAlt}"/>
-                                        <figcaption>
-                                            <span class="tool-call-image-caption" th:text="${call.imageAlt}"></span>
-                                            <small th:if="${call.imagePath != null}" th:text="${call.imagePath}"></small>
-                                        </figcaption>
-                                    </figure>
-                                </th:block>
-                                <pre th:unless="${call.imageUrl != null}" class="tool-call-pre" th:text="${call.outputPreview}"></pre>
-                            </section>
+                            </details>
                         </div>
                     </div>
-                </div>
-            </details>
+                </details>
+
+                <details th:if="${block.group != null}" class="tool-call" th:attr="data-tool-call-tool-name=${block.group.toolName}, data-tool-call-count=${block.group.count}, data-tool-call-state=${block.group.success} ? 'done' : 'error', data-tool-call-success=${block.group.success}" th:open="${block.group.toolName == 'display_image'}">
+                    <summary class="tool-call-summary">
+                        <span class="tool-call-name" th:text="${block.group.displayLabel}"></span>
+                        <span class="tool-call-status" th:classappend="${block.group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
+                              th:text="${block.group.success} ? 'success' : 'failure'"></span>
+                    </summary>
+
+                    <div class="tool-call-detail">
+                        <div class="tool-call-calls">
+                            <div th:each="call : ${block.group.calls}"
+                                 class="tool-call-call"
+                                 th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
+                                <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
+                                            th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                        Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                                    </button>
+                                </div>
+
+                                <section class="tool-call-section" data-tool-call-field="input">
+                                    <div class="tool-call-label">Input
+                                        <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small>
+                                    </div>
+                                    <pre class="tool-call-pre" th:text="${call.inputPreview}"></pre>
+                                </section>
+
+                                <section class="tool-call-section" data-tool-call-field="output">
+                                    <div class="tool-call-label">Output
+                                        <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small>
+                                    </div>
+                                    <th:block th:if="${call.imageUrl != null}">
+                                        <figure class="tool-call-image-preview">
+                                            <img th:src="${call.imageUrl}" th:alt="${call.imageAlt}"/>
+                                            <figcaption>
+                                                <span class="tool-call-image-caption" th:text="${call.imageAlt}"></span>
+                                                <small th:if="${call.imagePath != null}" th:text="${call.imagePath}"></small>
+                                            </figcaption>
+                                        </figure>
+                                    </th:block>
+                                    <pre th:unless="${call.imageUrl != null}" class="tool-call-pre" th:text="${call.outputPreview}"></pre>
+                                </section>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </th:block>
         </div>
     </li>
 </th:block>

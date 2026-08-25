@@ -394,6 +394,15 @@
     overflow: hidden;
 }
 
+.tool-call-bundle {
+    border: 0;
+    background: inherit;
+}
+
+.tool-call-bundle > .tool-call-detail {
+    background: #fff;
+}
+
 .tool-call summary.tool-call-summary {
     list-style: none;
     cursor: pointer;
@@ -407,6 +416,14 @@
     background: rgba(11, 18, 32, 0.03);
     border-radius: 6px;
     font-size: 14px;
+}
+
+.tool-call-bundle > summary.tool-call-summary {
+    padding: 0;
+    background: inherit;
+    font-weight: inherit;
+    font-size: inherit;
+    font-style: italic;
 }
 
 .tool-call-name {
