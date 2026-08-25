@@ -37,6 +37,8 @@ public class CommandStreamService {
     private final RunCommandTool runCommandTool;
     private final ActiveStreamRegistryService activeStreamRegistryService;
 
+    private static final String NO_OUTPUT_MESSAGE = "command completed with no output";
+
     private final ConcurrentMap<String, ActiveCommandStream> activeStreams = new ConcurrentHashMap<>();
 
     public void queue(long sessionId, String assistantId, String commandId, String workspaceRoot, Map<String, String> environmentVariables) {
@@ -108,12 +110,12 @@ public class CommandStreamService {
             var storedCall = appStateService.appendToolCallTrace(pending.sessionId(), assistantId, traceInput);
             broadcastEvent(active, assistantId, "tool_call", storedCall);
 
-            String finalText = summarizeOutput(fullOutput);
+            String finalText = formatCommandOutput(fullOutput);
             var completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, List.of(traceInput));
             broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls(), "assistantMessageId", assistantId));
             finish(active, assistantId, completed);
         } catch (StreamCancelledException e) {
-            stopActiveStream(assistantId, active, accumulated.toString());
+            stopActiveStream(assistantId, active, formatPartialCommandOutput(accumulated.toString()));
         } catch (Exception e) {
             fail(active, assistantId, e);
         }
@@ -121,19 +123,56 @@ public class CommandStreamService {
 
     private String summarizeOutput(String output) {
         if (output == null || output.isBlank()) {
-            return "command completed with no output";
+            return NO_OUTPUT_MESSAGE;
         }
         List<String> lines = output.lines().filter(line -> line != null && !line.isBlank()).toList();
         if (lines.isEmpty()) {
-            return "command completed with no output";
+            return NO_OUTPUT_MESSAGE;
         }
         int from = Math.max(0, lines.size() - 10);
         return String.join("\n", lines.subList(from, lines.size()));
     }
 
+    private String formatCommandOutput(String output) {
+        if (output == null || output.isBlank()) {
+            return NO_OUTPUT_MESSAGE;
+        }
+        if (output.lines().anyMatch(line -> line != null && !line.isBlank())) {
+            return fencedCodeBlock(summarizeOutput(output));
+        }
+        return NO_OUTPUT_MESSAGE;
+    }
+
+    private String formatPartialCommandOutput(String output) {
+        if (output == null || output.isBlank()) {
+            return "";
+        }
+        return fencedCodeBlock(output);
+    }
+
+    private String fencedCodeBlock(String content) {
+        int backtickRun = longestBacktickRun(content);
+        String fence = "`".repeat(Math.max(3, backtickRun + 1));
+        return fence + "\n" + content + "\n" + fence;
+    }
+
+    private int longestBacktickRun(String content) {
+        int longest = 0;
+        int current = 0;
+        for (int i = 0; i < content.length(); i++) {
+            if (content.charAt(i) == '`') {
+                current++;
+                longest = Math.max(longest, current);
+            } else {
+                current = 0;
+            }
+        }
+        return longest;
+    }
+
     private void fail(ActiveCommandStream active, String assistantId, Exception e) {
         if (e instanceof StreamCancelledException) {
-            stopActiveStream(assistantId, active, active.accumulatedText().get().toString());
+            stopActiveStream(assistantId, active, formatPartialCommandOutput(active.accumulatedText().get().toString()));
             return;
         }
         try {
