@@ -24,7 +24,7 @@ import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertTha
 class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
 
     @Test
-    void cleanWorkspaceWithoutUpstreamClosesWithoutConfirmationModal(@TempDir Path tempDir) throws Exception {
+    void unpushedWorkspaceWithoutUpstreamShowsConfirmationModal(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = fakeHome.resolve("sample-repo");
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
@@ -59,9 +59,10 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
                 assertThat(closeButton).isVisible();
                 closeButton.click();
 
-                assertThat(page.locator("#workspace-close-modal")).hasCount(0);
-                assertThat(page.locator(".workspace-group")).hasCount(1);
-                assertThat(page.locator(".workspace-group .workspace-label")).hasText("Default Workspace");
+                assertThat(page.locator("#workspace-close-modal")).isVisible();
+                assertThat(page.locator("#workspace-close-modal")).containsText("Local commits detected, that haven't been pushed");
+                assertThat(page.locator(".workspace-group")).hasCount(2);
+                assertThat(page.locator(".workspace-group .workspace-label")).containsText(new String[]{"Default Workspace", "feature-clean-close"});
             }
         } finally {
             if (previousHome == null) {
