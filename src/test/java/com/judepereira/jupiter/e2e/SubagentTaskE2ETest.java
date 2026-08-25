@@ -63,8 +63,9 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-name")).hasText("task");
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-name")).hasText("Explore");
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-status")).hasText("success");
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-summary-task-body")).hasText("Inspect the task flow and report back.");
 
             taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
@@ -181,8 +182,9 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             TestAppConfig.awaitSubagentStarted();
             var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
             taskToolCall.waitFor();
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-name")).hasText("task");
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-name")).hasText("Explore");
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-status")).hasText("running");
+            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary > .tool-call-summary-task-body")).hasText("Inspect the task flow and report back.");
             taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
@@ -385,6 +387,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                 }
                 Map<String, Object> taskArgs = Map.of(
                         "agentId", "explore",
+                        "requestSummary", "Inspect the task flow and report back.",
                         "task", "Inspect the task flow and report back.",
                         "expectedOutput", "Explore subagent finished"
                 );
@@ -392,6 +395,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                 listener.onToolCallStarted(new ToolCallTrace("task-1", "task", taskArgs, false, "", Map.of()));
                 ToolExecutionResult taskResult = taskTool.execute(Map.of(
                         "agentId", "explore",
+                        "requestSummary", "Inspect the task flow and report back.",
                         "task", "Inspect the task flow and report back.",
                         "expectedOutput", "Explore subagent finished"
                 ), new ToolExecutionContext(Path.of(request.getWorkspaceRoot()), false, false, 30,
@@ -400,6 +404,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
 
                 ToolCallTrace trace = new ToolCallTrace("task-1", "task", Map.of(
                         "agentId", "explore",
+                        "requestSummary", "Inspect the task flow and report back.",
                         "task", "Inspect the task flow and report back.",
                         "expectedOutput", "Explore subagent finished"
                 ), true, taskResult.getText(), taskResult.getMachine());

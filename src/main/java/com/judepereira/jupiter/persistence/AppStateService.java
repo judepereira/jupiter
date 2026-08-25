@@ -1155,7 +1155,12 @@ public class AppStateService {
         if (!"task".equals(trace.toolName())) {
             return null;
         }
-        Object value = trace.args() == null ? null : trace.args().get("task");
+        Map<String, Object> args = trace.args();
+        Object value = args == null ? null : args.get("requestSummary");
+        if (value instanceof String requestSummary && !requestSummary.isBlank()) {
+            return requestSummary;
+        }
+        value = args == null ? null : args.get("task");
         return value instanceof String task && !task.isBlank() ? task : null;
     }
 

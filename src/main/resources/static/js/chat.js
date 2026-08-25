@@ -1410,15 +1410,26 @@
         function taskToolCallBody(payload) {
             try {
                 if (!payload) return '';
+                if (payload.requestSummary != null && String(payload.requestSummary).trim()) {
+                    return String(payload.requestSummary);
+                }
+                if (payload.args && typeof payload.args === 'object' && payload.args.requestSummary != null && String(payload.args.requestSummary).trim()) {
+                    return String(payload.args.requestSummary);
+                }
+                const args = payload.args;
+                if (args && typeof args === 'object') {
+                    if (args.taskBody != null && String(args.taskBody).trim()) {
+                        return String(args.taskBody);
+                    }
+                    if (args.task != null && String(args.task).trim()) {
+                        return String(args.task);
+                    }
+                }
                 if (payload.taskBody != null && String(payload.taskBody).trim()) {
                     return String(payload.taskBody);
                 }
                 if (payload.task != null && String(payload.task).trim()) {
                     return String(payload.task);
-                }
-                const args = payload.args;
-                if (args && typeof args === 'object' && args.task != null && String(args.task).trim()) {
-                    return String(args.task);
                 }
                 return '';
             } catch (_) {

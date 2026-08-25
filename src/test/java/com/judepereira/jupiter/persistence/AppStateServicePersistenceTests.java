@@ -185,7 +185,7 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "running", Map.of());
 
         service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
@@ -205,7 +205,7 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void taskToolCallViewDerivesTaskBodyFromStructuredArgs(@TempDir Path projectPath) {
+    public void taskToolCallViewPrefersRequestSummaryAndFallsBackToLegacyTaskBody(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
         AppStateService service = context.service();
 
@@ -213,7 +213,32 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "task", "Implement the parser"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of(
+                "agentId", "engineer",
+                "requestSummary", "Implement the parser",
+                "task", "Write the parser implementation"
+        ), true, "running", Map.of());
+
+        service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
+        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
+
+        ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
+    }
+
+    @Test
+    public void taskToolCallViewDerivesTaskBodyFromLegacyTaskField(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Implement the parser", "task", "Write the parser implementation"), true, "running", Map.of());
 
         service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
@@ -235,7 +260,7 @@ public class AppStateServicePersistenceTests {
         service.addChangedFilesToSession(sourceSessionId, List.of(new ChangedFileDraft("src/Fork.java", "diff")));
         ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5", "HIGH");
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sourceSessionId, "user-1", "assistant-1", "use a task", metadata);
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "task output", Map.of("sessionId", sourceSessionId));
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "task output", Map.of("sessionId", sourceSessionId));
         service.appendToolCallTrace(sourceSessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sourceSessionId, turn.assistantMessage().id(), "final reply", List.of(trace));
         long forkedSessionId = service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.assistantMessage().id());
@@ -303,7 +328,7 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Use a task"), true, "running", Map.of());
         service.appendToolCallTrace(sessionId, firstTurn.assistantMessage().id(), trace);
 
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
@@ -366,7 +391,7 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Use a task again"), true, "running", Map.of());
         service.appendToolCallTrace(sessionId, firstTurn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, firstTurn.assistantMessage().id(), "done", List.of(trace));
 
