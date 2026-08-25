@@ -840,12 +840,8 @@ public class AppStateService {
         boolean unpushedCommits = false;
         GitCommandResult head = runGitCommandAllowingMissingHead(workspacePath, List.of("git", "rev-parse", "--verify", "--quiet", "HEAD"));
         if (head.exists()) {
-            GitCommandResult upstream = runGitCommandAllowingMissingUpstream(workspacePath,
-                    List.of("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"));
-            if (upstream.exists()) {
-                String count = runGitCommand(workspacePath, List.of("git", "rev-list", "--count", upstream.stdout().trim() + "..HEAD")).stdout().trim();
-                unpushedCommits = !count.isBlank() && Long.parseLong(count) > 0;
-            }
+            String count = runGitCommand(workspacePath, List.of("git", "rev-list", "--count", "HEAD", "--not", "--remotes=origin")).stdout().trim();
+            unpushedCommits = !count.isBlank() && Long.parseLong(count) > 0;
         }
 
         List<String> reasons = new ArrayList<>();
@@ -870,29 +866,6 @@ public class AppStateService {
                 throw new IllegalStateException("git command failed with exit code " + exitCode + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr);
             }
             return new GitCommandResult(stdout, stderr, false);
-        } catch (Exception e) {
-            if (e instanceof IllegalStateException) {
-                throw (IllegalStateException) e;
-            }
-            throw new IllegalStateException("git command failed", e);
-        }
-    }
-
-    private GitCommandResult runGitCommandAllowingMissingUpstream(Path cwd, List<String> command) {
-        try {
-            Process process = new ProcessBuilder(command)
-                    .directory(cwd.toFile())
-                    .start();
-            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
-            int exitCode = process.waitFor();
-            if (exitCode == 0) {
-                return new GitCommandResult(stdout, stderr, false);
-            }
-            if (stderr.contains("no upstream")) {
-                return new GitCommandResult(stdout, stderr, true);
-            }
-            throw new IllegalStateException("git command failed with exit code " + exitCode + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr);
         } catch (Exception e) {
             if (e instanceof IllegalStateException) {
                 throw (IllegalStateException) e;
