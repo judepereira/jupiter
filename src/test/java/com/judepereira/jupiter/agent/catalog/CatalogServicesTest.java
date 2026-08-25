@@ -98,6 +98,15 @@ public class CatalogServicesTest {
     }
 
     @Test
+    public void planAgentIncludesMcpWildcardAndRemainsReadOnly() {
+        AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
+        AgentDefinition plan = service.getRequired("plan");
+
+        assertThat(plan.allowedTools()).contains("list_files", "read_file", "search_code", "display_image", "task", "mcp:*");
+        assertThat(plan.allowedTools()).doesNotContain("write_file", "apply_patch", "run_command");
+    }
+
+    @Test
     public void agentModeRejectsInvalidValues() {
         assertThatThrownBy(() -> AgentMode.fromValue("invalid"))
                 .isInstanceOf(IllegalArgumentException.class)
