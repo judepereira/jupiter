@@ -1174,8 +1174,7 @@
                     const text = document.createElement('span');
                     text.className = 'chat-message-subtitle-text';
                     subtitle.appendChild(text);
-                    const before = row.querySelector('.tool-calls');
-                    row.insertBefore(subtitle, before);
+                    row.appendChild(subtitle);
                 }
                 subtitle.dataset.startTs = subtitle.dataset.startTs || row.dataset.startTs || '';
                 subtitle.dataset.completedTs = completed;
@@ -1477,7 +1476,15 @@
                 if (!container) {
                     container = document.createElement('div');
                     container.className = 'tool-calls';
-                    target.appendChild(container);
+                    const text = target.querySelector && target.querySelector('.chat-message-text');
+                    const subtitle = target.querySelector && target.querySelector('.chat-message-subtitle');
+                    if (text && text.parentNode === target) {
+                        target.insertBefore(container, text);
+                    } else if (subtitle && subtitle.parentNode === target) {
+                        target.insertBefore(container, subtitle);
+                    } else {
+                        target.appendChild(container);
+                    }
                 }
                 return container;
             } catch (_) {
