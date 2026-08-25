@@ -220,6 +220,7 @@ public class UiController {
         populateSessionModel(model, view);
         model.addAttribute("newChatMessages", List.copyOf(newChatMessages));
         model.addAttribute("pendingStreamBaseUrl", "/ui/chat/stream");
+        model.addAttribute("subagentView", false);
         boolean hasPending = view.activeSessionDetail() != null && view.activeSessionDetail().chatMessages().stream().anyMatch(ChatMessageView::pending);
         model.addAttribute("hasPending", hasPending);
         model.addAttribute("shellRefresh", shellRefresh);
@@ -640,6 +641,7 @@ public class UiController {
         model.addAttribute("activeSession", toSession(view.activeSession()));
         model.addAttribute("chatDraft", view.activeSessionDetail().chatDraft());
         populateChatModel(model, view.activeSessionDetail().chatMessages(), false, null, null, null);
+        model.addAttribute("forkSessionId", view.activeSession().id());
         return "fragments/chat :: chat";
     }
 
@@ -658,6 +660,20 @@ public class UiController {
         populateChatControlsModel(model, defaultChatSelection());
         populateChatModel(model, subagent.sessionDetail().chatMessages(), true, subagent.subagentAgentName(), subagent.subagentAgentId(), sessionId);
         return "fragments/chat :: chat";
+    }
+
+    @PostMapping("/ui/chat/fork/{assistantPublicId}")
+    public String forkPrimaryChat(@PathVariable String assistantPublicId, Model model) {
+        AppStateView before = appStateService.loadViewData();
+        if (before.activeSession() == null) {
+            throw new IllegalStateException("No active primary session");
+        }
+        appStateService.forkPrimarySessionAtAssistantMessage(before.activeSession().id(), assistantPublicId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
     }
 
     @GetMapping("/ui/system-balloons/stream")
@@ -1162,6 +1178,7 @@ public class UiController {
             model.addAttribute("reviewOob", false);
             model.addAttribute("workspaceRoot", view.activeWorkspace() == null ? null : view.activeWorkspace().path());
             model.addAttribute("chatDraft", "");
+            model.addAttribute("forkSessionId", null);
             model.addAttribute("terminalTabs", terminalState.terminalTabs());
             model.addAttribute("activeTerminal", terminalState.activeTerminal());
             model.addAttribute("bottomPanelMode", terminalState.bottomPanelMode());
@@ -1183,6 +1200,7 @@ public class UiController {
         model.addAttribute("reviewOob", !hasPending && detail.reviewPanelOpen());
         model.addAttribute("workspaceRoot", detail.workspaceRoot());
         model.addAttribute("chatDraft", detail.chatDraft());
+        model.addAttribute("forkSessionId", session.id());
         model.addAttribute("terminalTabs", terminalState.terminalTabs());
         model.addAttribute("activeTerminal", terminalState.activeTerminal());
         model.addAttribute("bottomPanelMode", terminalState.bottomPanelMode());
@@ -1201,6 +1219,7 @@ public class UiController {
         model.addAttribute("subagentAgentName", subagentAgentName);
         model.addAttribute("subagentAgentId", subagentAgentId);
         model.addAttribute("subagentSessionId", subagentSessionId);
+        model.addAttribute("forkSessionId", null);
     }
 
     private boolean isTerminalPanelOpen(AppStateView view) {

@@ -1097,7 +1097,8 @@
                 const duration = formatChatDuration(subtitle.dataset.startTs, subtitle.dataset.completedTs);
                 const completedTs = formatChatCompletedTs(subtitle.dataset.completedTs);
                 const completionText = duration && completedTs ? duration + ' · ' + completedTs : (duration || completedTs);
-                subtitle.textContent = metadataText && completionText ? metadataText + ' · ' + completionText : (metadataText || completionText);
+                const textNode = subtitle.querySelector('.chat-message-subtitle-text') || subtitle;
+                textNode.textContent = metadataText && completionText ? metadataText + ' · ' + completionText : (metadataText || completionText);
             } catch (_) {
             }
         }
@@ -1121,6 +1122,41 @@
             }
         }
 
+        function processHtmxElement(element) {
+            try {
+                if (!element || (element.dataset && element.dataset.htmxProcessed === 'true')) return;
+                if (window.htmx && typeof window.htmx.process === 'function') {
+                    window.htmx.process(element);
+                }
+                element.dataset.htmxProcessed = 'true';
+            } catch (_) {
+            }
+        }
+
+        function ensureChatMessageForkButton(row, subtitle) {
+            try {
+                if (!row || !subtitle || !row.dataset || row.dataset.role !== 'assistant') return;
+                if (getCurrentOpenSubagentSessionId()) return;
+
+                const assistantPublicId = row.dataset.id != null ? String(row.dataset.id).trim() : '';
+                if (!assistantPublicId) return;
+
+                let button = subtitle.querySelector('.chat-message-fork-button');
+                if (!button) {
+                    button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'chat-message-fork-button';
+                    button.textContent = 'Fork';
+                    subtitle.appendChild(button);
+                }
+                button.setAttribute('hx-post', '/ui/chat/fork/' + encodeURIComponent(assistantPublicId));
+                button.setAttribute('hx-target', '#shell');
+                button.setAttribute('hx-swap', 'none');
+                processHtmxElement(button);
+            } catch (_) {
+            }
+        }
+
         function ensureChatMessageSubtitle(row, completedTs) {
             try {
                 if (!row || !row.dataset || row.dataset.role !== 'assistant') return;
@@ -1132,6 +1168,9 @@
                 if (!subtitle) {
                     subtitle = document.createElement('div');
                     subtitle.className = 'chat-message-subtitle';
+                    const text = document.createElement('span');
+                    text.className = 'chat-message-subtitle-text';
+                    subtitle.appendChild(text);
                     const before = row.querySelector('.tool-calls');
                     row.insertBefore(subtitle, before);
                 }
@@ -1142,6 +1181,7 @@
                 subtitle.dataset.modelId = subtitle.dataset.modelId || row.dataset.modelId || '';
                 subtitle.dataset.modelLabel = subtitle.dataset.modelLabel || row.dataset.modelLabel || '';
                 subtitle.dataset.thinkingLevel = subtitle.dataset.thinkingLevel || row.dataset.thinkingLevel || '';
+                ensureChatMessageForkButton(row, subtitle);
                 formatChatSubtitle(subtitle);
             } catch (_) {
             }

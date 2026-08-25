@@ -82,6 +82,25 @@ public class UiControllerSubagentChatTests {
     }
 
     @Test
+    public void forkedPrimaryChatReturnsShellUpdatesForRefreshTargets(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        var turn = appStateService.appendUserMessageAndPendingAssistant(sessionId, "hello");
+        appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of());
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        String view = controller.forkPrimaryChat(turn.assistantMessage().id(), model);
+
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(model.getAttribute("shellRefresh")).isEqualTo(true);
+        assertThat(model.getAttribute("includeChatContainer")).isEqualTo(true);
+        assertThat(model.getAttribute("reviewOob")).isEqualTo(true);
+        assertThat(model.getAttribute("terminalOob")).isEqualTo(true);
+    }
+
+    @Test
     public void loadPrimaryChatPrefersLatestAssistantMetadataForPrimaryControls(@TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());

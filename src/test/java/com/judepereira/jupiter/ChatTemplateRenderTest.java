@@ -87,6 +87,33 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
+    public void chatFragmentOnlyRendersForkButtonForCompletedPrimaryAssistantMessages() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("hasPending", false);
+        context.setVariable("reviewOob", false);
+        context.setVariable("reviewPanelOpen", false);
+        context.setVariable("subagentView", false);
+        context.setVariable("changedFiles", List.of());
+        context.setVariable("reviewSource", null);
+        context.setVariable("selectedFile", null);
+        context.setVariable("chatMessages", List.of(
+                new UiController.ChatMessage("assistant", "Broken metadata row", 1L, false, "assistant-broken", null,
+                        List.of(), new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"), "GPT-5.5"),
+                new UiController.ChatMessage("assistant", "Done", 3L, false, "assistant-done", 4L, List.of(),
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"), "GPT-5.5")
+        ));
+
+        String html = engine.process("fragments/chat", context);
+
+        String brokenRow = html.substring(html.indexOf("assistant-broken"), html.indexOf("</li>", html.indexOf("assistant-broken")));
+        assertThat(brokenRow).doesNotContain("chat-message-fork-button", "hx-post=\"/ui/chat/fork/assistant-broken\"");
+        assertThat(html).contains("assistant-done", "Fork", "hx-post=\"/ui/chat/fork/assistant-done\"", "hx-target=\"#shell\"", "hx-swap=\"none\"");
+    }
+
+    @Test
     public void chatResponseFragmentRendersCompletedAssistantSubtitleButNotPendingOne() {
         SpringTemplateEngine engine = engine();
 
