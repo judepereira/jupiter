@@ -23,7 +23,8 @@ import java.util.*;
 @RequiredArgsConstructor
 public class AppStateService {
 
-    private static final TypeReference<List<ToolCallPayload>> TOOL_CALLS_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<ToolCallPayload>> TOOL_CALLS_TYPE = new TypeReference<>() {
+    };
 
     private final AppStateRepository repository;
     private final ObjectMapper objectMapper;
@@ -849,10 +850,10 @@ public class AppStateService {
 
         List<String> reasons = new ArrayList<>();
         if (uncommittedChanges) {
-            reasons.add("uncommitted changes");
+            reasons.add("Uncommitted changes detected");
         }
         if (unpushedCommits) {
-            reasons.add("unpushed commits");
+            reasons.add("Local commits detected, that haven't been pushed");
         }
         return new GitCloseStatus(uncommittedChanges, unpushedCommits, reasons);
     }
@@ -1291,7 +1292,8 @@ public class AppStateService {
             return List.of();
         }
         try {
-            return normalizeEnvironmentVariables(objectMapper.readValue(json, new TypeReference<List<ProjectEnvironmentVariable>>() {}));
+            return normalizeEnvironmentVariables(objectMapper.readValue(json, new TypeReference<List<ProjectEnvironmentVariable>>() {
+            }));
         } catch (Exception e) {
             throw new IllegalStateException("Failed to read project environment variables JSON", e);
         }
@@ -1334,7 +1336,8 @@ public class AppStateService {
             return Map.of();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {
+            });
         } catch (Exception e) {
             throw new IllegalStateException("Failed to parse JSON", e);
         }
@@ -1369,11 +1372,15 @@ public class AppStateService {
         return publicId == null || publicId.isBlank() ? UUID.randomUUID().toString() : publicId;
     }
 
-    private record SubagentLinkInfo(Long subagentSessionId, String subagentAgentId, String subagentAgentName) {}
+    private record SubagentLinkInfo(Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
+    }
 
-    public record DisplayImageView(long sessionId, String workspaceRoot, String toolCallId, String path, String alt, String mediaType) {}
+    public record DisplayImageView(long sessionId, String workspaceRoot, String toolCallId, String path, String alt,
+                                   String mediaType) {
+    }
 
-    private record ImageLinkInfo(String imageUrl, String imageAlt, String imagePath, String imageMediaType) {}
+    private record ImageLinkInfo(String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
+    }
 
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
         String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank() ? null : row.workspaceInitCommands();
@@ -1438,13 +1445,15 @@ public class AppStateService {
             return List.of();
         }
         try {
-            return normalizeMcpServerHeaders(objectMapper.readValue(json, new TypeReference<List<McpServerHeader>>() {}));
+            return normalizeMcpServerHeaders(objectMapper.readValue(json, new TypeReference<List<McpServerHeader>>() {
+            }));
         } catch (Exception e) {
             throw new IllegalStateException("Failed to read MCP server headers JSON", e);
         }
     }
 
-    private record ToolCallPayload(String toolCallId, String toolName, Map<String, Object> arguments) {}
+    private record ToolCallPayload(String toolCallId, String toolName, Map<String, Object> arguments) {
+    }
 
     private List<GitChangedFile> listGitChangedFiles(Path workspaceRoot) {
         boolean hasHead = runGitCommandAllowingMissingHead(workspaceRoot, List.of("git", "rev-parse", "--verify", "HEAD")).exists();
@@ -1508,14 +1517,19 @@ public class AppStateService {
         }
     }
 
-    private record GitStatusEntry(String path, boolean untracked) {}
+    private record GitStatusEntry(String path, boolean untracked) {
+    }
 
-    private record GitChangedFile(String path, String diff) {}
+    private record GitChangedFile(String path, String diff) {
+    }
 
-    public record WorkspaceCloseInspection(long workspaceId, String workspaceName, String workspacePath, String projectPath,
-                                            boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {}
+    public record WorkspaceCloseInspection(long workspaceId, String workspaceName, String workspacePath,
+                                           String projectPath,
+                                           boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {
+    }
 
-    private record GitCloseStatus(boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {}
+    private record GitCloseStatus(boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {
+    }
 
     private record GitCommandResult(String stdout, String stderr, boolean missingRef) {
         boolean exists() {
