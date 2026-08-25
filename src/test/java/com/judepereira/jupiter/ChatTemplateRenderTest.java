@@ -218,9 +218,9 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
-        int firstBundle = html.indexOf("Tool Usage: read_file (2)");
+        int firstBundle = html.indexOf("Used: read_file (2)");
         int taskIndex = html.indexOf("data-tool-call-tool-name=\"task\"");
-        int secondBundle = html.indexOf("Tool Usage: read_file", firstBundle + 1);
+        int secondBundle = html.indexOf("Used: read_file", firstBundle + 1);
 
         assertThat(firstBundle).isGreaterThanOrEqualTo(0);
         assertThat(taskIndex).isGreaterThan(firstBundle);
@@ -261,10 +261,10 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
-        int firstBundle = html.indexOf("Tool Usage: read (2)");
+        int firstBundle = html.indexOf("Used: read (2)");
         int firstTask = html.indexOf("data-tool-call-tool-name=\"task\"");
         int secondTask = html.indexOf("data-tool-call-tool-name=\"task\"", firstTask + 1);
-        int secondBundle = html.indexOf("Tool Usage: read", firstBundle + 1);
+        int secondBundle = html.indexOf("Used: read", firstBundle + 1);
 
         assertThat(firstBundle).isGreaterThanOrEqualTo(0);
         assertThat(firstTask).isGreaterThan(firstBundle);

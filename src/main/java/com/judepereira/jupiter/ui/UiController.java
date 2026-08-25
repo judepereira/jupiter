@@ -1719,7 +1719,7 @@ public class UiController {
         }
 
         private String toolUsageSummaryLabel(List<ToolCallGroupView> groups) {
-            return "Tool Usage: " + toolUsageLabel(groups);
+            return "Used: " + toolUsageLabel(groups);
         }
 
         private boolean startsNewGroup(ToolCallView previous, ToolCallView current) {

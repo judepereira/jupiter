@@ -395,12 +395,8 @@
 }
 
 .tool-call-bundle {
-    border-color: #cbd5e1;
-    background: #f8fafc;
-}
-
-.tool-call-bundle > summary.tool-call-summary {
-    background: rgba(59, 130, 246, 0.06);
+    border: 0;
+    background: inherit;
 }
 
 .tool-call-bundle > .tool-call-detail {
@@ -420,6 +416,14 @@
     background: rgba(11, 18, 32, 0.03);
     border-radius: 6px;
     font-size: 14px;
+}
+
+.tool-call-bundle > summary.tool-call-summary {
+    padding: 0;
+    background: inherit;
+    font-weight: inherit;
+    font-size: inherit;
+    font-style: italic;
 }
 
 .tool-call-name {

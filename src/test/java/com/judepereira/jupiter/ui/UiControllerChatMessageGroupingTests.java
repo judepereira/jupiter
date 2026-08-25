@@ -62,9 +62,9 @@ class UiControllerChatMessageGroupingTests {
         List<UiController.ToolCallBlockView> blocks = message.toolCallBlocks();
 
         assertThat(blocks).hasSize(3);
-        assertThat(blocks.get(0).bundle().summaryLabel()).isEqualTo("Tool Usage: read_file (2)");
+        assertThat(blocks.get(0).bundle().summaryLabel()).isEqualTo("Used: read_file (2)");
         assertThat(blocks.get(1).group().toolName()).isEqualTo("task");
-        assertThat(blocks.get(2).bundle().summaryLabel()).isEqualTo("Tool Usage: read_file");
+        assertThat(blocks.get(2).bundle().summaryLabel()).isEqualTo("Used: read_file");
     }
 
     private static UiController.ToolCallView toolCall(String id, String toolName, boolean success) {

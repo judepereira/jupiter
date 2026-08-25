@@ -1145,7 +1145,7 @@
                 if (!button) {
                     button = document.createElement('button');
                     button.type = 'button';
-                    button.className = 'chat-message-fork-button';
+                    button.className = 'chat-message-fork-button btn btn-link';
                     button.textContent = 'Fork';
                     subtitle.appendChild(button);
                 }
@@ -1551,7 +1551,7 @@
 
                 const refs = buildToolCallBundleRefs(bundle);
                 if (!refs) return null;
-                refs.nameSpan.textContent = 'Tool Usage';
+                refs.nameSpan.textContent = 'Used';
                 return refs;
             } catch (_) {
                 return null;
@@ -1587,7 +1587,7 @@
                 bundleRefs.bundle.dataset.toolCallKind = 'bundle';
                 bundleRefs.bundle.dataset.toolCallState = allSuccess ? 'done' : 'error';
                 bundleRefs.bundle.dataset.toolCallSuccess = allSuccess ? 'true' : 'false';
-                bundleRefs.bundle.dataset.toolCallSummaryLabel = label ? 'Tool Usage: ' + label : 'Tool Usage';
+                bundleRefs.bundle.dataset.toolCallSummaryLabel = label ? 'Used: ' + label : 'Used';
                 if (bundleRefs.nameSpan) {
                     bundleRefs.nameSpan.textContent = bundleRefs.bundle.dataset.toolCallSummaryLabel;
                 }
