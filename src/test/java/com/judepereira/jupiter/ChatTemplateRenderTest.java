@@ -185,12 +185,13 @@ public class ChatTemplateRenderTest {
         context.setVariable("newChatMessages", List.of(
                 new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null,
                         List.of(new UiController.ToolCallView("tool-call-1", "task", true, "{\"agentId\": \"engineer\"}", "child final", false, false,
-                                42L, "engineer", "Engineer")), null)
+                                42L, "engineer", "Engineer", "done", null, null, null, null, "Implement the parser")), null)
         ));
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("Open subagent:", "Engineer", "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).contains("tool-call-summary-task", "Implement the parser", "Open subagent: <strong>Engineer</strong>", "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).doesNotContain("tool-call-call\"\n                                            class=\"tool-call-subagent");
     }
 
     @Test
@@ -245,7 +246,7 @@ public class ChatTemplateRenderTest {
         assertThat(firstBundle).isGreaterThanOrEqualTo(0);
         assertThat(taskIndex).isGreaterThan(firstBundle);
         assertThat(secondBundle).isGreaterThan(taskIndex);
-        assertThat(html).contains("<span class=\"tool-call-name\">task</span>", "Open subagent: <strong>Engineer 1</strong>");
+        assertThat(html).contains("tool-call-summary-task", "Open subagent: <strong>Engineer 1</strong>");
         assertThat(html).contains("<span class=\"tool-call-name\">display_image</span>", "src=\"/ui/chat/image/1/display-1\"", "tool-call-image-caption");
         assertThat(html).contains("read-1 input", "read-2 input", "read-3 input");
 
@@ -376,7 +377,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat", context);
 
-        assertThat(html).contains("class=\"tool-call\"", "Open subagent:", "Engineer",
+        assertThat(html).contains("tool-call-summary-task", "Open subagent:", "Engineer",
                 "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("subagent-activities");
     }

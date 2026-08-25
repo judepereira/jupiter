@@ -203,6 +203,27 @@ public class AppStateServicePersistenceTests {
                 .orElseThrow();
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.toolCallId()).isEqualTo("task-1"));
     }
+
+    @Test
+    public void taskToolCallViewDerivesTaskBodyFromStructuredArgs(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "task", "Implement the parser"), true, "running", Map.of());
+
+        service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
+        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
+
+        ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
+    }
     @Test
     public void forkPrimarySessionCopiesConversationAndToolCallStateWithoutDraftOrReviewState(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});

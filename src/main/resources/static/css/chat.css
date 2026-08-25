@@ -44,6 +44,10 @@
     margin: 0;
 }
 
+.tool-call-summary-task .tool-call-subagent-button {
+    white-space: nowrap;
+}
+
 
 #chat-container {
     flex: 1 1 auto;
@@ -395,6 +399,10 @@
     overflow: hidden;
 }
 
+.tool-call.task-tool-call {
+    background: #f8fbff;
+}
+
 .tool-call-bundle {
     border: 0;
     background: inherit;
@@ -417,6 +425,56 @@
     background: rgba(11, 18, 32, 0.03);
     border-radius: 6px;
     font-size: 14px;
+}
+
+.tool-call-summary-task {
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 10px;
+}
+
+.tool-call-summary-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tool-call-summary-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.tool-call-summary-task .tool-call-name,
+.tool-call-summary-task .tool-call-summary-task-body {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+}
+
+.tool-call-summary-task .tool-call-name {
+    -webkit-line-clamp: 1;
+}
+
+.tool-call-summary-task-body {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.tool-call-summary-task .tool-call-status {
+    flex: 0 0 auto;
+}
+
+.tool-call-summary-task .tool-call-subagent-button {
+    flex: 0 0 auto;
+    align-self: flex-start;
 }
 
 .tool-call-bundle > summary.tool-call-summary {

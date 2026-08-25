@@ -13,22 +13,41 @@
 
                     <div class="tool-call-detail">
                         <div class="tool-call-calls">
-                            <details th:each="group : ${block.bundle.groups}" class="tool-call" th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}" th:open="${group.toolName == 'display_image'}">
-                                <summary class="tool-call-summary">
+                            <details th:each="group : ${block.bundle.groups}" class="tool-call" th:with="taskCall=${group.toolName == 'task' and !#lists.isEmpty(group.calls) ? group.calls[0] : null}"
+                                     th:classappend="${group.toolName == 'task'} ? ' task-tool-call' : ''"
+                                     th:attr="data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.success} ? 'done' : 'error', data-tool-call-success=${group.success}, data-tool-call-subagent-session-id=${taskCall != null and taskCall.subagentSessionId != null ? taskCall.subagentSessionId : null}, data-tool-call-subagent-agent-name=${taskCall != null and taskCall.subagentAgentName != null ? taskCall.subagentAgentName : null}, data-tool-call-task-body=${taskCall != null and taskCall.taskBody != null ? taskCall.taskBody : null}" th:open="${group.toolName == 'display_image'}">
+                                <summary th:if="${group.toolName != 'task'}" class="tool-call-summary">
                                     <span class="tool-call-name" th:text="${group.displayLabel}"></span>
                                     <span class="tool-call-status" th:classappend="${group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
                                           th:text="${group.success} ? 'success' : 'failure'"></span>
+                                </summary>
+                                <summary th:if="${group.toolName == 'task'}" class="tool-call-summary tool-call-summary-task">
+                                    <div class="tool-call-summary-main">
+                                        <div class="tool-call-summary-head">
+                                            <span class="tool-call-name" th:text="${taskCall != null and taskCall.subagentAgentName != null ? taskCall.subagentAgentName : group.displayLabel}"></span>
+                                            <span class="tool-call-status"
+                                          th:classappend="${taskCall != null and taskCall.status != null ? (taskCall.status == 'running' ? '' : (group.success ? ' tool-call-status-success' : ' tool-call-status-failure')) : (group.success ? ' tool-call-status-success' : ' tool-call-status-failure')}"
+                                          th:text="${taskCall != null and taskCall.status != null ? taskCall.status : (group.success ? 'success' : 'failure')}"></span>
+                                        </div>
+                                        <div class="tool-call-summary-task-body" th:if="${taskCall != null and taskCall.taskBody != null}" th:text="${taskCall.taskBody}"></div>
+                                    </div>
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
+                                            th:if="${taskCall != null and taskCall.subagentSessionId != null}"
+                                            th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${taskCall.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                        Open subagent: <strong th:text="${taskCall.subagentAgentName}"></strong>
+                                    </button>
                                 </summary>
 
                                 <div class="tool-call-detail">
                                     <div class="tool-call-calls">
                                         <div th:each="call : ${group.calls}"
                                              class="tool-call-call"
-                                             th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
-                                            <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
+                                             th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}, data-tool-call-subagent-session-id=${call.subagentSessionId}, data-tool-call-subagent-agent-name=${call.subagentAgentName}, data-tool-call-task-body=${call.taskBody}">
+                                            <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null and group.toolName != 'task'}">
                                                 <button type="button"
                                                         class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
-                                                        th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                                        th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
                                                     Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
                                                 </button>
                                             </div>
@@ -63,22 +82,42 @@
                     </div>
                 </details>
 
-                <details th:if="${block.group != null}" class="tool-call" th:attr="data-tool-call-tool-name=${block.group.toolName}, data-tool-call-count=${block.group.count}, data-tool-call-state=${block.group.success} ? 'done' : 'error', data-tool-call-success=${block.group.success}" th:open="${block.group.toolName == 'display_image'}">
-                    <summary class="tool-call-summary">
+                <details th:if="${block.group != null}" class="tool-call" th:with="taskCall=${block.group.toolName == 'task' and !#lists.isEmpty(block.group.calls) ? block.group.calls[0] : null}"
+                         th:classappend="${block.group.toolName == 'task'} ? ' task-tool-call' : ''"
+                         th:attr="data-tool-call-tool-name=${block.group.toolName}, data-tool-call-count=${block.group.count}, data-tool-call-state=${block.group.success} ? 'done' : 'error', data-tool-call-success=${block.group.success}, data-tool-call-subagent-session-id=${taskCall != null and taskCall.subagentSessionId != null ? taskCall.subagentSessionId : null}, data-tool-call-subagent-agent-name=${taskCall != null and taskCall.subagentAgentName != null ? taskCall.subagentAgentName : null}, data-tool-call-task-body=${taskCall != null and taskCall.taskBody != null ? taskCall.taskBody : null}"
+                         th:open="${block.group.toolName == 'display_image'}">
+                    <summary th:if="${block.group.toolName != 'task'}" class="tool-call-summary">
                         <span class="tool-call-name" th:text="${block.group.displayLabel}"></span>
                         <span class="tool-call-status" th:classappend="${block.group.success} ? ' tool-call-status-success' : ' tool-call-status-failure'"
                               th:text="${block.group.success} ? 'success' : 'failure'"></span>
+                    </summary>
+                    <summary th:if="${block.group.toolName == 'task'}" class="tool-call-summary tool-call-summary-task">
+                        <div class="tool-call-summary-main">
+                            <div class="tool-call-summary-head">
+                                <span class="tool-call-name" th:text="${taskCall != null and taskCall.subagentAgentName != null ? taskCall.subagentAgentName : block.group.displayLabel}"></span>
+                                <span class="tool-call-status"
+                                      th:classappend="${taskCall != null and taskCall.status != null ? (taskCall.status == 'running' ? '' : (block.group.success ? ' tool-call-status-success' : ' tool-call-status-failure')) : (block.group.success ? ' tool-call-status-success' : ' tool-call-status-failure')}"
+                                      th:text="${taskCall != null and taskCall.status != null ? taskCall.status : (block.group.success ? 'success' : 'failure')}"></span>
+                            </div>
+                            <div class="tool-call-summary-task-body" th:if="${taskCall != null and taskCall.taskBody != null}" th:text="${taskCall.taskBody}"></div>
+                        </div>
+                        <button type="button"
+                                class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
+                                th:if="${taskCall != null and taskCall.subagentSessionId != null}"
+                                th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${taskCall.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                            Open subagent: <strong th:text="${taskCall.subagentAgentName}"></strong>
+                        </button>
                     </summary>
 
                     <div class="tool-call-detail">
                         <div class="tool-call-calls">
                             <div th:each="call : ${block.group.calls}"
                                  class="tool-call-call"
-                                 th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}">
-                                <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null}">
+                                 th:attr="data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.success} ? 'done' : 'error', data-tool-call-success=${call.success}, data-tool-call-subagent-session-id=${call.subagentSessionId}, data-tool-call-subagent-agent-name=${call.subagentAgentName}, data-tool-call-task-body=${call.taskBody}">
+                                <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null and block.group.toolName != 'task'}">
                                     <button type="button"
                                             class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
-                                            th:attr="hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
+                                            th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
                                         Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
                                     </button>
                                 </div>

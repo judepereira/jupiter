@@ -1061,7 +1061,7 @@ public class AppStateService {
                 continue;
             }
             ToolCallView syntheticToolCall = new ToolCallView(parentToolCallId, "task", true, "", "running", false, false,
-                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running");
+                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running", null);
             Long parentAssistantMessageId = childSession.parentAssistantMessageId();
             if (parentAssistantMessageId != null) {
                 Integer messageIndex = pendingAssistantIndexByMessageId.get(parentAssistantMessageId);
@@ -1146,8 +1146,17 @@ public class AppStateService {
         String outPreview = previewAndTruncate(output, 2000, outTr);
         SubagentLinkInfo subagent = subagentLinkInfo(trace.machineSummary());
         ImageLinkInfo image = imageLinkInfo(trace, trace.machineSummary(), sessionId);
+        String taskBody = taskBody(trace);
         return new ToolCallView(trace.toolCallId(), trace.toolName(), trace.success(), inPreview, outPreview, inTr[0], outTr[0], subagent.subagentSessionId(),
-                subagent.subagentAgentId(), subagent.subagentAgentName(), null, image.imageUrl(), image.imageAlt(), image.imagePath(), image.imageMediaType());
+                subagent.subagentAgentId(), subagent.subagentAgentName(), null, image.imageUrl(), image.imageAlt(), image.imagePath(), image.imageMediaType(), taskBody);
+    }
+
+    private String taskBody(ToolCallTraceInput trace) {
+        if (!"task".equals(trace.toolName())) {
+            return null;
+        }
+        Object value = trace.args() == null ? null : trace.args().get("task");
+        return value instanceof String task && !task.isBlank() ? task : null;
     }
 
     private ToolCallView traceToView(ToolCallTraceInput trace) {
