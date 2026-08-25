@@ -231,7 +231,7 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
-    public void cleanNonDefaultWorkspaceWithoutAnUpstreamClosesWithoutAConfirmationModal(@TempDir Path projectPath) throws Exception {
+    public void unpushedNonDefaultWorkspaceWithoutAnUpstreamReturnsTheConfirmationModal(@TempDir Path projectPath) throws Exception {
         initGitRepo(projectPath);
         UiController controller = newController();
 
@@ -246,11 +246,12 @@ public class UiControllerProjectsAndDirectoryTests {
         ConcurrentModel close = new ConcurrentModel();
         String view = controller.closeWorkspace(featureWorkspace.id(), close);
 
-        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
-        assertThat(workspaces(close)).extracting(UiController.Workspace::path)
-                .containsExactly(projectPath.toAbsolutePath().normalize().toString());
-        assertThat(activeWorkspace(close).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
-        assertThat(Files.exists(Path.of(featureWorkspace.path()))).isFalse();
+        assertThat(view).isEqualTo("fragments/projects :: workspaceCloseModal");
+        assertThat(close.getAttribute("workspaceCloseStatus")).isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
+        AppStateService.WorkspaceCloseInspection inspection = (AppStateService.WorkspaceCloseInspection) close.getAttribute("workspaceCloseStatus");
+        assertThat(inspection.uncommittedChanges()).isFalse();
+        assertThat(inspection.unpushedCommits()).isTrue();
+        assertThat(inspection.reasons()).contains("Local commits detected, that haven't been pushed");
     }
 
     @Test

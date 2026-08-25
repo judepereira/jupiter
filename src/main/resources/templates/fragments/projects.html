@@ -562,17 +562,9 @@
                 <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
             </div>
 
-            <div class="workspace-close-summary">
-                <div><strong>Name:</strong> <span th:text="${workspaceName}"></span></div>
-                <div><strong>Path:</strong> <span th:text="${workspacePath}"></span></div>
-            </div>
+            <div>Are you sure you want to delete the workspace <code th:text="${workspaceName}"></code>?</div>
 
             <div class="workspace-close-warning">
-                <div class="workspace-close-status">
-                    <span th:classappend="${status.uncommittedChanges} ? ' danger' : ''">Uncommitted changes: <strong th:text="${status.uncommittedChanges} ? 'yes' : 'no'"></strong></span>
-                    <span th:classappend="${status.unpushedCommits} ? ' danger' : ''">Unpushed commits: <strong th:text="${status.unpushedCommits} ? 'yes' : 'no'"></strong></span>
-                </div>
-
                 <ul class="workspace-close-reasons">
                     <li th:each="reason : ${workspaceCloseReasons}" th:text="${reason}"></li>
                 </ul>
@@ -581,7 +573,7 @@
             <div class="project-form-actions">
                 <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
                 <button type="button"
-                        class="btn btn-primary"
+                        class="btn btn-danger"
                         th:attr="hx-post=@{/ui/workspaces/{id}/close/confirm(id=${workspaceId})}, hx-target='#shell', hx-swap='none'">Close workspace</button>
             </div>
         </div>
