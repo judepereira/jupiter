@@ -12,7 +12,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +43,7 @@ public class CommandExecutionService {
         ToolExecutionResult result = runCommandTool.execute(toolArgs(command), context);
 
         String fullOutput = result.getText() == null ? "" : result.getText();
-        String finalText = summarizeOutput(fullOutput);
+        String finalText = CommandOutputFormatter.formatForAssistantMessage(fullOutput);
         ToolCallTrace trace = new ToolCallTrace(assistantPublicId, "run_command", toolArgs(command), result.isSuccess(), fullOutput, result.getMachine());
         ToolCallTraceInput traceInput = new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
         appStateService.appendToolCallTrace(sessionId, assistantPublicId, traceInput);
@@ -56,17 +55,6 @@ public class CommandExecutionService {
         return new ExecutionResult(result.isSuccess(), finalText, fullOutput, traceInput);
     }
 
-    private String summarizeOutput(String output) {
-        if (output == null || output.isBlank()) {
-            return "command completed with no output";
-        }
-        List<String> lines = output.lines().toList();
-        if (lines.isEmpty()) {
-            return "command completed with no output";
-        }
-        int from = Math.max(0, lines.size() - 10);
-        return String.join("\n", lines.subList(from, lines.size()));
-    }
 
     private Map<String, Object> toolArgs(CommandCatalogService.CommandDefinition command) {
         Map<String, Object> args = new java.util.LinkedHashMap<>();

@@ -102,13 +102,13 @@ public class CommandStreamService {
             cancellationToken.throwIfCancelled();
 
             String fullOutput = result.getText() == null ? "" : result.getText();
-            accumulated.append(summarizeOutput(fullOutput));
+            accumulated.append(CommandOutputFormatter.summarizeOutput(fullOutput));
             ToolCallTrace trace = new ToolCallTrace(assistantId, "run_command", toolArgs(command), result.isSuccess(), fullOutput, result.getMachine());
             ToolCallTraceInput traceInput = new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
             var storedCall = appStateService.appendToolCallTrace(pending.sessionId(), assistantId, traceInput);
             broadcastEvent(active, assistantId, "tool_call", storedCall);
 
-            String finalText = summarizeOutput(fullOutput);
+            String finalText = CommandOutputFormatter.formatForAssistantMessage(fullOutput);
             var completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, List.of(traceInput));
             broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls(), "assistantMessageId", assistantId));
             finish(active, assistantId, completed);
@@ -119,17 +119,6 @@ public class CommandStreamService {
         }
     }
 
-    private String summarizeOutput(String output) {
-        if (output == null || output.isBlank()) {
-            return "command completed with no output";
-        }
-        List<String> lines = output.lines().filter(line -> line != null && !line.isBlank()).toList();
-        if (lines.isEmpty()) {
-            return "command completed with no output";
-        }
-        int from = Math.max(0, lines.size() - 10);
-        return String.join("\n", lines.subList(from, lines.size()));
-    }
 
     private void fail(ActiveCommandStream active, String assistantId, Exception e) {
         if (e instanceof StreamCancelledException) {
