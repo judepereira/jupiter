@@ -1827,6 +1827,26 @@
             }
         }
 
+        function bindDynamicSubagentButton(button) {
+            try {
+                if (!button || button.dataset.dynamicSubagentButtonBound === 'true') return;
+                button.addEventListener('click', (e) => {
+                    try {
+                        e.stopPropagation();
+                        const url = button.getAttribute('hx-get');
+                        if (!url || !window.htmx || typeof window.htmx.ajax !== 'function') return;
+                        window.htmx.ajax('GET', url, {
+                            target: button.getAttribute('hx-target') || '#chat-container',
+                            swap: button.getAttribute('hx-swap') || 'outerHTML'
+                        });
+                    } catch (_) {
+                    }
+                });
+                button.dataset.dynamicSubagentButtonBound = 'true';
+            } catch (_) {
+            }
+        }
+
         function buildTaskToolCallGroupRefs(group) {
             try {
                 if (!group) return null;
@@ -1878,19 +1898,21 @@
                 }
 
                 let button = summary.querySelector('.tool-call-subagent-button');
+                const createdButton = !button;
                 if (!button) {
                     button = document.createElement('button');
                     button.type = 'button';
                     button.className = 'btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button';
+                    button.dataset.dynamicSubagentButton = 'true';
                     summary.appendChild(button);
                 }
-                if (!button.dataset.preventToggleBound) {
-                    button.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                    }, true);
-                    button.dataset.preventToggleBound = '1';
-                }
                 button.setAttribute('hx-trigger', 'click');
+                if (button.dataset.dynamicSubagentButton === 'true') {
+                    bindDynamicSubagentButton(button);
+                } else if (createdButton) {
+                    button.dataset.dynamicSubagentButton = 'true';
+                    bindDynamicSubagentButton(button);
+                }
 
                 let detail = getDirectToolCallChild(group, 'tool-call-detail');
                 if (!detail) {
@@ -2400,13 +2422,12 @@
                                 groupRefs.button.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(effectiveSubagentSessionId));
                                 groupRefs.button.setAttribute('hx-target', '#chat-container');
                                 groupRefs.button.setAttribute('hx-swap', 'outerHTML');
-                                groupRefs.button.onclick = (e) => e.stopPropagation();
                                 groupRefs.button.replaceChildren(document.createTextNode('Open subagent: '), (() => {
                                     const strong = document.createElement('strong');
                                     strong.textContent = effectiveSubagentAgentName;
                                     return strong;
                                 })());
-                                if (processHtmxElementFn) processHtmxElementFn(groupRefs.button);
+                                bindDynamicSubagentButton(groupRefs.button);
                             } else {
                                 groupRefs.button.hidden = true;
                             }
@@ -2417,6 +2438,9 @@
                             if (state === 'error' || (payload && payload.success === false)) groupRefs.statusSpan.classList.add('tool-call-status-failure');
                             groupRefs.statusSpan.textContent = statusText;
                         }
+                    }
+                    if (groupRefs) {
+                        refreshToolCallGroupSummary({group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, taskBody: groupRefs.taskBody, button: groupRefs.button, callsContainer: groupRefs.callsContainer});
                     }
                     if (group) {
                         refreshParentToolCallBundle(group);
@@ -2434,6 +2458,7 @@
                         entry.button = document.createElement('button');
                         entry.button.type = 'button';
                         entry.button.className = 'btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button';
+                        entry.button.dataset.dynamicSubagentButton = 'true';
                         entry.subagent.appendChild(entry.button);
                     }
                     entry.subagent.dataset.childSessionId = subagentSessionId;
@@ -2445,7 +2470,7 @@
                         strong.textContent = subagentAgentName || subagentSessionId;
                         return strong;
                     })());
-                    if (processHtmxElementFn) processHtmxElementFn(entry.button);
+                    bindDynamicSubagentButton(entry.button);
                 }
 
                 if (group) {
