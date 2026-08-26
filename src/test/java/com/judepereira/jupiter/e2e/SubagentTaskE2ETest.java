@@ -64,8 +64,12 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status")).hasText("success");
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body")).hasText("Inspect the task flow and report back.");
+            var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
+            assertThat(statusBadge).hasText("success");
+            assertThat(statusBadge).isVisible();
+            var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+            assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
+            assertThat(taskSummaryBody).isVisible();
             Path screenshotsDir = Path.of("target", "playwright-screenshots", "SubagentTaskE2ETest");
             Files.createDirectories(screenshotsDir);
             captureScreenshot(page, screenshotsDir, "task-summary.png");
@@ -186,8 +190,12 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
             taskToolCall.waitFor();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status")).hasText("running");
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body")).hasText("Inspect the task flow and report back.");
+            var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
+            assertThat(statusBadge).hasText("running");
+            assertThat(statusBadge).isVisible();
+            var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+            assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
+            assertThat(taskSummaryBody).isVisible();
             taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
@@ -243,7 +251,12 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status")).hasText("running");
+            var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
+            assertThat(statusBadge).hasText("running");
+            assertThat(statusBadge).isVisible();
+            var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+            assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
+            assertThat(taskSummaryBody).isVisible();
 
             taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
