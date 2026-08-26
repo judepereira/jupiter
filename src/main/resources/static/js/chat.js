@@ -62,6 +62,19 @@
             return document.getElementById('chat-input');
         }
 
+        function focusChatInput(preferredTextarea) {
+            try {
+                const textarea = preferredTextarea && preferredTextarea.isConnected ? preferredTextarea : getChatTextarea();
+                if (!textarea) return;
+                try {
+                    textarea.focus({preventScroll: true});
+                } catch (_) {
+                    textarea.focus();
+                }
+            } catch (_) {
+            }
+        }
+
         function getActiveChatSessionId() {
             try {
                 const form = getChatComposerForm();
@@ -347,19 +360,6 @@
                 return value.includes('/ui/sessions/add') || /\/ui\/sessions\/[^/?#]+\/activate(?:[/?#]|$)/.test(value);
             }
 
-            function focusChatInput() {
-                try {
-                    const textarea = document.getElementById('chat-input');
-                    if (!textarea) return;
-                    try {
-                        textarea.focus({preventScroll: true});
-                    } catch (_) {
-                        textarea.focus();
-                    }
-                } catch (_) {
-                }
-            }
-
             function syncChatAfterSessionChange() {
                 try {
                     const list = document.getElementById('chat-messages-list');
@@ -551,6 +551,8 @@
         }
 
         function closeCommandPicker() {
+            if (!commandPickerState.open) return;
+            const textarea = commandPickerState.textarea;
             const root = getCommandModalRoot();
             if (root) root.innerHTML = '';
             commandPickerState.open = false;
@@ -568,6 +570,7 @@
             commandPickerState.card = null;
             commandPickerState.input = null;
             commandPickerState.list = null;
+            focusChatInput(textarea);
         }
 
         function fetchCommandCatalog() {

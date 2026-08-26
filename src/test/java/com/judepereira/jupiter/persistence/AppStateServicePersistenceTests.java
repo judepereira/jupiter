@@ -595,6 +595,24 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void inspectingANonDefaultWorkspaceWithoutAnUpstreamMarksLocalCommitsAsUnpushed(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long projectId = service.loadViewData().activeProject().id();
+
+        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        WorkspaceView featureWorkspace = service.createWorkspace(projectId, branchName, true);
+
+        AppStateService.WorkspaceCloseInspection inspection = service.inspectWorkspaceClose(featureWorkspace.id());
+
+        assertThat(inspection.uncommittedChanges()).isFalse();
+        assertThat(inspection.unpushedCommits()).isTrue();
+        assertThat(inspection.reasons()).contains("Local commits detected, that haven't been pushed");
+    }
+
+    @Test
     public void closingTheDefaultWorkspaceIsRejected(@TempDir Path projectPath) {
         AppStateService service = TestAppStateSupport.appStateService();
 
