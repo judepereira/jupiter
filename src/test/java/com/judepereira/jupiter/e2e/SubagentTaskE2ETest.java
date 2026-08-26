@@ -223,6 +223,81 @@ class SubagentTaskE2ETest extends E2ETestSupport {
     }
 
     @Test
+    void backToPrimaryAfterSubagentToolCallKeepsTaskSummaryVisible(@TempDir Path tempDir) throws Exception {
+        TestAppConfig.reset();
+        TestAppConfig.blockSubagentTurn();
+        TestAppConfig.blockSubagentAfterToolCall();
+
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        String previousHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+
+        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = browser.newContext()) {
+
+            Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+
+            openProject(page, "Alpha", projectDir);
+            page.locator("#chat-input").fill("please use a task");
+            page.locator("#chat-send-btn").click();
+
+            TestAppConfig.awaitSubagentStarted();
+            var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            taskToolCall.waitFor();
+            assertThat(taskToolCall).isVisible();
+            var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+            assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
+            assertThat(taskSummaryBody).isVisible();
+
+            taskToolCall.locator(":scope > summary.tool-call-summary").click();
+            var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
+            taskSubagentButton.waitFor();
+            assertThat(taskSubagentButton).containsText("Open subagent: Explore");
+
+            taskSubagentButton.click();
+            page.locator(".subagent-bar").waitFor();
+            assertThat(page.locator(".subagent-bar")).isVisible();
+            assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
+
+            try {
+                TestAppConfig.releaseSubagentTurn();
+                TestAppConfig.awaitSubagentToolCall();
+
+                page.locator(".subagent-back-button").click();
+                if (TestAppConfig.hasSubagentToolCallControl()) {
+                    TestAppConfig.releaseSubagentToolCall();
+                }
+                page.locator("#chat-send-form").waitFor();
+                assertThat(page.locator("#chat-send-form")).isVisible();
+                taskToolCall.waitFor();
+                assertThat(taskToolCall).isVisible();
+                assertThat(taskSummaryBody).isVisible();
+                assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
+            } finally {
+                if (TestAppConfig.hasSubagentToolCallControl()) {
+                    TestAppConfig.releaseSubagentToolCall();
+                }
+            }
+
+            TestAppConfig.awaitSubagentCompleted();
+        } finally {
+            TestAppConfig.reset();
+            if (previousHome == null) {
+                System.clearProperty("user.home");
+            } else {
+                System.setProperty("user.home", previousHome);
+            }
+        }
+    }
+
+    @Test
     void backToPrimaryKeepsSubagentAffordanceAndToolButtonRemainsClickable(@TempDir Path tempDir) throws Exception {
         TestAppConfig.reset();
         TestAppConfig.blockSubagentTurn();
@@ -306,10 +381,12 @@ class SubagentTaskE2ETest extends E2ETestSupport {
 
         private static volatile TurnControl primaryTurnControl;
         private static volatile TurnControl subagentTurnControl;
+        private static volatile TurnControl subagentToolCallControl;
 
         static void reset() {
             primaryTurnControl = null;
             subagentTurnControl = null;
+            subagentToolCallControl = null;
         }
 
         static void blockPrimaryTurn() {
@@ -320,12 +397,24 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             subagentTurnControl = new TurnControl();
         }
 
+        static void blockSubagentAfterToolCall() {
+            subagentToolCallControl = new TurnControl();
+        }
+
         static void releasePrimaryTurn() {
             primaryTurnControl.release.countDown();
         }
 
         static void releaseSubagentTurn() {
             subagentTurnControl.release.countDown();
+        }
+
+        static boolean hasSubagentToolCallControl() {
+            return subagentToolCallControl != null;
+        }
+
+        static void releaseSubagentToolCall() {
+            subagentToolCallControl.release.countDown();
         }
 
         static void awaitPrimaryStarted() throws InterruptedException {
@@ -338,6 +427,10 @@ class SubagentTaskE2ETest extends E2ETestSupport {
 
         static void awaitSubagentStarted() throws InterruptedException {
             assertTrue(subagentTurnControl.started.await(5, TimeUnit.SECONDS), "subagent turn did not start");
+        }
+
+        static void awaitSubagentToolCall() throws InterruptedException {
+            assertTrue(subagentToolCallControl.started.await(5, TimeUnit.SECONDS), "subagent tool call did not emit");
         }
 
         static void awaitSubagentCompleted() throws InterruptedException {
@@ -387,10 +480,18 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                             "path", "child.txt"
                     ));
                     listener.onToolCallTrace(trace);
+                    TurnControl toolCallControl = subagentToolCallControl;
+                    if (toolCallControl != null) {
+                        toolCallControl.started.countDown();
+                        awaitRelease(toolCallControl.release);
+                    }
                     AgentTurnResult result = new AgentTurnResult("Explore subagent finished", List.of(trace));
                     listener.onComplete(result);
                     if (control != null) {
                         control.completed.countDown();
+                    }
+                    if (toolCallControl != null) {
+                        toolCallControl.completed.countDown();
                     }
                     return result;
                 }
