@@ -655,10 +655,42 @@ public class AppStateRepository {
         jdbc.update("DELETE FROM sessions WHERE id = :sessionId", new MapSqlParameterSource("sessionId", sessionId));
     }
 
-    long insertToolCallTrace(long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant now) {
+    long insertStartedToolCallTrace(long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, String argsJson, Instant now) {
         return insertAndReturnId("""
-                INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_call_id, tool_name, success, args_json, text_summary, machine_summary_json, created_at)
-                VALUES (:sessionId, :assistantMessageId, :sequence, :toolCallId, :toolName, :success, :argsJson, :textSummary, :machineSummaryJson, :createdAt)
+                INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_call_id, tool_name, success, args_json, text_summary, machine_summary_json, completed_at, created_at)
+                VALUES (:sessionId, :assistantMessageId, :sequence, :toolCallId, :toolName, NULL, :argsJson, NULL, NULL, NULL, :createdAt)
+                """, params -> params
+                .addValue("sessionId", sessionId)
+                .addValue("assistantMessageId", assistantMessageId)
+                .addValue("sequence", sequence)
+                .addValue("toolCallId", toolCallId)
+                .addValue("toolName", toolName)
+                .addValue("argsJson", argsJson)
+                .addValue("createdAt", Timestamp.from(now)));
+    }
+
+    void completeToolCallTrace(long toolCallTraceId, Boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant completedAt) {
+        jdbc.update("""
+                UPDATE tool_call_traces
+                SET success = :success,
+                    args_json = :argsJson,
+                    text_summary = :textSummary,
+                    machine_summary_json = :machineSummaryJson,
+                    completed_at = :completedAt
+                WHERE id = :toolCallTraceId
+                """, new MapSqlParameterSource()
+                .addValue("toolCallTraceId", toolCallTraceId)
+                .addValue("success", success)
+                .addValue("argsJson", argsJson)
+                .addValue("textSummary", textSummary)
+                .addValue("machineSummaryJson", machineSummaryJson)
+                .addValue("completedAt", Timestamp.from(completedAt)));
+    }
+
+    long insertToolCallTrace(long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, Boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant completedAt, Instant now) {
+        return insertAndReturnId("""
+                INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_call_id, tool_name, success, args_json, text_summary, machine_summary_json, completed_at, created_at)
+                VALUES (:sessionId, :assistantMessageId, :sequence, :toolCallId, :toolName, :success, :argsJson, :textSummary, :machineSummaryJson, :completedAt, :createdAt)
                 """, params -> params
                 .addValue("sessionId", sessionId)
                 .addValue("assistantMessageId", assistantMessageId)
@@ -669,6 +701,7 @@ public class AppStateRepository {
                 .addValue("argsJson", argsJson)
                 .addValue("textSummary", textSummary)
                 .addValue("machineSummaryJson", machineSummaryJson)
+                .addValue("completedAt", completedAt == null ? null : Timestamp.from(completedAt))
                 .addValue("createdAt", Timestamp.from(now)));
     }
 
@@ -682,14 +715,36 @@ public class AppStateRepository {
                 new MapSqlParameterSource("assistantMessageId", assistantMessageId), this::mapToolCallTrace);
     }
 
-    boolean existsToolCallTraceBySessionAndToolCallId(long sessionId, String toolCallId) {
+    List<ToolCallTraceRow> listIncompleteToolCallTracesByAssistantMessage(long assistantMessageId) {
+        return jdbc.query("SELECT * FROM tool_call_traces WHERE assistant_message_id = :assistantMessageId AND completed_at IS NULL ORDER BY sequence ASC",
+                new MapSqlParameterSource("assistantMessageId", assistantMessageId), this::mapToolCallTrace);
+    }
+
+    void failIncompleteToolCallTracesByAssistantMessage(long assistantMessageId, String textSummary, Instant completedAt) {
+        jdbc.update("""
+                UPDATE tool_call_traces
+                SET success = FALSE,
+                    text_summary = :textSummary,
+                    completed_at = :completedAt
+                WHERE assistant_message_id = :assistantMessageId AND completed_at IS NULL
+                """, new MapSqlParameterSource()
+                .addValue("assistantMessageId", assistantMessageId)
+                .addValue("textSummary", textSummary)
+                .addValue("completedAt", Timestamp.from(completedAt)));
+    }
+
+    Optional<ToolCallTraceRow> findToolCallTraceBySessionAndToolCallId(long sessionId, String toolCallId) {
         return queryOne("""
-                SELECT 1
+                SELECT *
                 FROM tool_call_traces
                 WHERE session_id = :sessionId AND tool_call_id = :toolCallId
+                ORDER BY sequence ASC
                 LIMIT 1
-                """, new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("toolCallId", toolCallId),
-                (rs, rowNum) -> 1).isPresent();
+                """, new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("toolCallId", toolCallId), this::mapToolCallTrace);
+    }
+
+    boolean existsToolCallTraceBySessionAndToolCallId(long sessionId, String toolCallId) {
+        return findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId).isPresent();
     }
 
     long nextChangedFilePosition(long sessionId) {
@@ -832,7 +887,8 @@ public class AppStateRepository {
 
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
         return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"), rs.getString("tool_call_id"),
-                rs.getString("tool_name"), rs.getBoolean("success"), rs.getString("args_json"), rs.getString("text_summary"), rs.getString("machine_summary_json"), timestampToInstant(rs.getTimestamp("created_at")));
+                rs.getString("tool_name"), nullableBoolean(rs, "success"), rs.getString("args_json"), rs.getString("text_summary"), rs.getString("machine_summary_json"),
+                timestampToInstant(rs.getTimestamp("completed_at")), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private ChangedFileRow mapChangedFile(ResultSet rs, int rowNum) throws SQLException {
@@ -848,6 +904,11 @@ public class AppStateRepository {
         return rs.wasNull() ? null : value;
     }
 
+    private static Boolean nullableBoolean(ResultSet rs, String columnLabel) throws SQLException {
+        boolean value = rs.getBoolean(columnLabel);
+        return rs.wasNull() ? null : value;
+    }
+
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
@@ -858,6 +919,6 @@ public class AppStateRepository {
                       Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt, boolean inProgress) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant completedAt, Instant createdAt) {}
-    record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant createdAt) {}
+    record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, Boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant completedAt, Instant createdAt) {}
     record ChangedFileRow(long id, long sessionId, String path, String diff, long position, Instant createdAt) {}
 }

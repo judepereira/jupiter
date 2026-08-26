@@ -173,6 +173,26 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
+    public void chatRowsFragmentRendersRunningToolCallsWithoutFailureStyling() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("messages", List.of(
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-running", null,
+                        List.of(new UiController.ToolCallView("tool-call-1", "read_file", false, "input", "output", false, false, null, null, null, "running")),
+                        null,
+                        null)
+        ));
+        context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
+        context.setVariable("subagentView", false);
+
+        String html = engine.process("fragments/chat-rows", context);
+
+        assertThat(html).contains("data-tool-call-state=\"running\"", ">running<");
+        assertThat(html).doesNotContain("tool-call-status-failure");
+    }
+
+    @Test
     public void chatResponseFragmentRendersOpenSubagentLinkForTaskToolTraces() {
         SpringTemplateEngine engine = engine();
         WebContext context = webContext();

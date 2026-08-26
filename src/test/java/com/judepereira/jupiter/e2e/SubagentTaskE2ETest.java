@@ -271,15 +271,44 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                 TestAppConfig.awaitSubagentToolCall();
 
                 page.locator(".subagent-back-button").click();
+                page.locator("#chat-send-form").waitFor();
+                assertThat(page.locator("#chat-send-form")).isVisible();
+
+                var taskToolCallAfterBack = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+                taskToolCallAfterBack.waitFor();
+                assertThat(taskToolCallAfterBack).isVisible();
+                var taskSummaryBodyAfterBack = taskToolCallAfterBack.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+                assertThat(taskSummaryBodyAfterBack).isVisible();
+                assertThat(taskSummaryBodyAfterBack).hasText("Inspect the task flow and report back.");
+
+                page.reload();
+                page.locator("#chat-send-form").waitFor();
+                assertThat(page.locator("#chat-send-form")).isVisible();
+
+                var taskToolCallAfterReload = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+                taskToolCallAfterReload.waitFor();
+                assertThat(taskToolCallAfterReload).isVisible();
+                var taskStatusAfterReload = taskToolCallAfterReload.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
+                assertThat(taskStatusAfterReload).hasText("running");
+                assertThat(taskStatusAfterReload).isVisible();
+                var taskSummaryBodyAfterReload = taskToolCallAfterReload.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+                assertThat(taskSummaryBodyAfterReload).isVisible();
+                assertThat(taskSummaryBodyAfterReload).hasText("Inspect the task flow and report back.");
+                var taskSubagentButtonAfterReload = taskToolCallAfterReload.locator(".tool-call-subagent-button");
+                if (taskSubagentButtonAfterReload.count() > 0) {
+                    assertThat(taskSubagentButtonAfterReload).isVisible();
+                }
+
                 if (TestAppConfig.hasSubagentToolCallControl()) {
                     TestAppConfig.releaseSubagentToolCall();
                 }
-                page.locator("#chat-send-form").waitFor();
-                assertThat(page.locator("#chat-send-form")).isVisible();
-                taskToolCall.waitFor();
-                assertThat(taskToolCall).isVisible();
-                assertThat(taskSummaryBody).isVisible();
-                assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
+                TestAppConfig.awaitSubagentCompleted();
+
+                var taskSummaryBodyAfterCompletion = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])")
+                        .first()
+                        .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+                assertThat(taskSummaryBodyAfterCompletion).isVisible();
+                assertThat(taskSummaryBodyAfterCompletion).hasText("Inspect the task flow and report back.");
             } finally {
                 if (TestAppConfig.hasSubagentToolCallControl()) {
                     TestAppConfig.releaseSubagentToolCall();

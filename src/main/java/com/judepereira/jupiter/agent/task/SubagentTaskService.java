@@ -107,6 +107,11 @@ public class SubagentTaskService {
                 }
 
                 @Override
+                public void onToolCallStarted(ToolCallTrace trace) {
+                    appStateService.startToolCallTrace(childSessionId, assistantPublicId, toTraceInput(trace));
+                }
+
+                @Override
                 public void onToolCallTrace(ToolCallTrace trace) {
                     traces.add(trace);
                     appStateService.appendToolCallTrace(childSessionId, assistantPublicId, toTraceInput(trace));

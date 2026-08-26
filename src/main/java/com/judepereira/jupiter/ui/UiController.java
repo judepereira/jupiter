@@ -350,7 +350,14 @@ public class UiController {
 
             @Override
             public void onToolCallStarted(ToolCallTrace trace) {
-                broadcastEvent(active, assistantId, "tool_call_started", trace);
+                try {
+                    if (trace != null) {
+                        appStateService.startToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace));
+                    }
+                    broadcastEvent(active, assistantId, "tool_call_started", trace);
+                } catch (Exception e) {
+                    onError(e);
+                }
             }
 
             @Override
@@ -1650,9 +1657,9 @@ public class UiController {
         }
     }
 
-    public record ToolCallGroupView(String toolName, String displayLabel, boolean success, int count, List<ToolCallView> calls) {}
+    public record ToolCallGroupView(String toolName, String displayLabel, String status, boolean success, int count, List<ToolCallView> calls) {}
 
-    public record ToolCallBundleView(String summaryLabel, boolean success, List<ToolCallGroupView> groups) {}
+    public record ToolCallBundleView(String summaryLabel, String status, boolean success, List<ToolCallGroupView> groups) {}
 
     public record ToolCallBlockView(ToolCallBundleView bundle, ToolCallGroupView group) {
         public static ToolCallBlockView bundle(ToolCallBundleView bundle) {
@@ -1725,7 +1732,10 @@ public class UiController {
         }
 
         private ToolCallBundleView toBundle(List<ToolCallGroupView> groups) {
-            return new ToolCallBundleView(toolUsageSummaryLabel(groups), groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
+            String status = groups.stream().anyMatch(group -> "running".equals(group.status()))
+                    ? "running"
+                    : groups.stream().allMatch(ToolCallGroupView::success) ? "success" : "failure";
+            return new ToolCallBundleView(toolUsageSummaryLabel(groups), status, groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
         }
 
         private String toolUsageSummaryLabel(List<ToolCallGroupView> groups) {
@@ -1758,7 +1768,10 @@ public class UiController {
 
         private ToolCallGroupView toGroup(List<ToolCallView> calls) {
             ToolCallView first = calls.get(0);
-            return new ToolCallGroupView(first.toolName(), displayLabel(calls), calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
+            String status = calls.stream().anyMatch(call -> "running".equals(call.status()))
+                    ? "running"
+                    : calls.stream().allMatch(ToolCallView::success) ? "success" : "failure";
+            return new ToolCallGroupView(first.toolName(), displayLabel(calls), status, calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
         }
 
         private String toolUsageLabel(List<ToolCallGroupView> groups) {

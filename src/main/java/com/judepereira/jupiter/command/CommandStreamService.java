@@ -96,7 +96,9 @@ public class CommandStreamService {
                             "eventName", eventName,
                             "payload", payload
                     )), cancellationToken);
-            broadcastEvent(active, assistantId, "tool_call_started", new ToolCallTrace(assistantId, "run_command", toolArgs(command), false, "", Map.of()));
+            ToolCallTrace startTrace = new ToolCallTrace(assistantId, "run_command", toolArgs(command), false, "", Map.of());
+            appStateService.startToolCallTrace(pending.sessionId(), assistantId, new ToolCallTraceInput(startTrace.getToolCallId(), startTrace.getToolName(), startTrace.getArgs(), startTrace.isSuccess(), startTrace.getTextSummary(), startTrace.getMachineSummary()));
+            broadcastEvent(active, assistantId, "tool_call_started", startTrace);
 
             ToolExecutionResult result = runCommandTool.execute(toolArgs(command), context);
             cancellationToken.throwIfCancelled();

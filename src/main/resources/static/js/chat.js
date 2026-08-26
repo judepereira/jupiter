@@ -1193,7 +1193,6 @@
         try {
             renderAllChatMarkdown();
             formatAllChatSubtitles();
-            restoreTaskToolCallBodies();
         } catch (_) {
         }
 
@@ -1220,7 +1219,6 @@
         }
 
         const activePendingStreams = new Map();
-        const taskToolCallBodies = new Map();
         let stopRequestInFlight = false;
 
         function activePrimaryPendingAssistantRow() {
@@ -1275,7 +1273,6 @@
                         bindPendingStreams();
                         renderAllChatMarkdown();
                         formatAllChatSubtitles();
-                        restoreTaskToolCallBodies(incoming);
                         updateChatSendButtonState();
                     });
                 }
@@ -1382,61 +1379,6 @@
             row.classList.remove('pending');
             row.removeAttribute('data-pending');
             row.dataset.streamBound = '0';
-        }
-
-        function taskToolCallBodyKeys(payload) {
-            try {
-                const sessionId = payload && payload.childSessionId != null ? String(payload.childSessionId).trim() : '';
-                const parentToolCallId = payload && payload.parentToolCallId != null ? String(payload.parentToolCallId).trim() : '';
-                const keys = [];
-                if (sessionId && parentToolCallId) keys.push(sessionId + '\u001f' + parentToolCallId);
-                if (parentToolCallId) keys.push(parentToolCallId);
-                return keys;
-            } catch (_) {
-                return [];
-            }
-        }
-
-        function rememberTaskToolCallBody(payload, body) {
-            try {
-                const text = String(body || '').trim();
-                if (!text) return;
-                taskToolCallBodyKeys(payload).forEach(key => taskToolCallBodies.set(key, text));
-            } catch (_) {
-            }
-        }
-
-        function resolveTaskToolCallBody(payload) {
-            try {
-                for (const key of taskToolCallBodyKeys(payload)) {
-                    const value = String(taskToolCallBodies.get(key) || '').trim();
-                    if (value) return value;
-                }
-                return '';
-            } catch (_) {
-                return '';
-            }
-        }
-
-        function restoreTaskToolCallBodies(root) {
-            try {
-                const scope = root && root.isConnected === false ? document : (root && root.querySelectorAll ? root : document);
-                const groups = scope && scope.querySelectorAll ? Array.from(scope.querySelectorAll('details.tool-call.task-tool-call')) : [];
-                groups.forEach(group => {
-                    const refs = buildTaskToolCallGroupRefs(group);
-                    if (!refs || !refs.taskBody) return;
-                    const text = group.dataset.toolCallTaskBody || resolveTaskToolCallBody({
-                        childSessionId: group.dataset.toolCallSubagentSessionId || '',
-                        parentToolCallId: (group.querySelector && group.querySelector('.tool-call-call')) ? (group.querySelector('.tool-call-call').dataset.toolCallId || '') : ''
-                    });
-                    if (text) {
-                        refs.taskBody.textContent = text;
-                        refs.taskBody.hidden = !String(text || '').trim();
-                        if (!group.dataset.toolCallTaskBody) group.dataset.toolCallTaskBody = text;
-                    }
-                });
-            } catch (_) {
-            }
         }
 
         function toolCallKey(payload) {
@@ -1664,6 +1606,7 @@
                 const counts = new Map();
                 const order = [];
                 let allSuccess = true;
+                let running = false;
 
                 for (const group of groups) {
                     const calls = getToolCallGroupCalls(group);
@@ -1672,10 +1615,14 @@
                         if (!toolName) continue;
                         if (!counts.has(toolName)) order.push(toolName);
                         counts.set(toolName, (counts.get(toolName) || 0) + 1);
+                        const callState = call.dataset ? String(call.dataset.toolCallState || '') : '';
+                        if (callState === 'running') running = true;
                         if (call.dataset.toolCallSuccess !== 'true') {
                             allSuccess = false;
                         }
                     }
+                    const groupState = group.dataset ? String(group.dataset.toolCallState || '') : '';
+                    if (groupState === 'running') running = true;
                     if (group.dataset.toolCallSuccess !== 'true') {
                         allSuccess = false;
                     }
@@ -1683,8 +1630,8 @@
 
                 const label = order.map(name => counts.get(name) > 1 ? name + ' (' + counts.get(name) + ')' : name).join(', ');
                 bundleRefs.bundle.dataset.toolCallKind = 'bundle';
-                bundleRefs.bundle.dataset.toolCallState = allSuccess ? 'done' : 'error';
-                bundleRefs.bundle.dataset.toolCallSuccess = allSuccess ? 'true' : 'false';
+                bundleRefs.bundle.dataset.toolCallState = running ? 'running' : (allSuccess ? 'done' : 'error');
+                bundleRefs.bundle.dataset.toolCallSuccess = running ? 'false' : (allSuccess ? 'true' : 'false');
                 bundleRefs.bundle.dataset.toolCallSummaryLabel = label ? 'Used: ' + label : 'Used';
                 if (bundleRefs.nameSpan) {
                     bundleRefs.nameSpan.textContent = bundleRefs.bundle.dataset.toolCallSummaryLabel;
@@ -2154,14 +2101,13 @@
                     }
                     if (taskBody) {
                         const existingText = String(taskBody.textContent || '');
-                        const text = group.dataset.toolCallTaskBody || existingText || (firstCall && firstCall.dataset ? firstCall.dataset.toolCallTaskBody || '' : '') || resolveTaskToolCallBody({childSessionId: subagentSessionId, parentToolCallId: firstCall && firstCall.dataset ? firstCall.dataset.toolCallId : ''}) || resolveTaskToolCallBody({parentToolCallId: firstCall && firstCall.dataset ? firstCall.dataset.toolCallId : ''});
+                        const text = group.dataset.toolCallTaskBody || existingText || (firstCall && firstCall.dataset ? firstCall.dataset.toolCallTaskBody || '' : '');
                         if (text) {
                             taskBody.textContent = text;
                             taskBody.hidden = !String(text || '').trim();
                             if (!group.dataset.toolCallTaskBody) {
                                 group.dataset.toolCallTaskBody = text;
                             }
-                            rememberTaskToolCallBody({childSessionId: subagentSessionId, parentToolCallId: firstCall && firstCall.dataset ? firstCall.dataset.toolCallId : ''}, text);
                         } else if (!existingText.trim()) {
                             taskBody.hidden = true;
                         }
@@ -2175,6 +2121,10 @@
                             else groupRefs.statusSpan.classList.add('tool-call-status-failure');
                             groupRefs.statusSpan.textContent = statusText;
                         }
+                    }
+                    if (groupRefs.group) {
+                        groupRefs.group.dataset.toolCallState = state;
+                        groupRefs.group.dataset.toolCallSuccess = state === 'running' ? 'false' : (success ? 'true' : 'false');
                     }
                     if (button) {
                         if (subagentSessionId) {
@@ -2461,8 +2411,7 @@
                 const payloadTaskBody = taskToolCallBody(payload);
                 const subagentSessionId = options && options.subagentSessionId != null ? String(options.subagentSessionId) : (payload && payload.subagentSessionId != null ? String(payload.subagentSessionId) : '');
                 const subagentAgentName = options && options.subagentAgentName != null ? String(options.subagentAgentName) : (payload && payload.subagentAgentName != null ? String(payload.subagentAgentName) : '');
-                const rememberedTaskBody = resolveTaskToolCallBody(payload);
-                const taskBody = payloadTaskBody || rememberedTaskBody || (options && options.taskBody != null ? String(options.taskBody) : '');
+                const taskBody = payloadTaskBody || (options && options.taskBody != null ? String(options.taskBody) : '');
 
                 if (toolName === 'task') {
                     details.classList.add('task-tool-call');
@@ -2470,7 +2419,6 @@
                     if (taskBody) {
                         details.dataset.toolCallTaskBody = taskBody;
                         if (group) group.dataset.toolCallTaskBody = taskBody;
-                        rememberTaskToolCallBody(payload, taskBody);
                     } else if (group && !group.dataset.toolCallTaskBody && details.dataset.toolCallTaskBody) {
                         group.dataset.toolCallTaskBody = details.dataset.toolCallTaskBody;
                     }
@@ -2589,9 +2537,6 @@
                 }
 
                 if (kind === 'started') {
-                    if (payload && payload.requestSummary != null && String(payload.requestSummary).trim()) {
-                        rememberTaskToolCallBody(payload, payload.requestSummary);
-                    }
                     if (payload && payload.task != null) {
                         renderChatMarkdown(textSpan, String(payload.task));
                     }
@@ -3259,14 +3204,12 @@
             Promise.resolve().then(() => {
                 bindPendingStreams();
                 syncFaviconWithRail();
-                restoreTaskToolCallBodies();
             });
         }, true);
         document.body.addEventListener('htmx:afterSettle', function (evt) {
             Promise.resolve().then(() => {
                 bindPendingStreams();
                 syncFaviconWithRail();
-                restoreTaskToolCallBodies();
             });
         }, true);
 
