@@ -8,8 +8,8 @@ WORKDIR /workspace
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml lombok.config ./
 
-RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
-    --mount=type=cache,id=root-cache,target=/root/.cache \
+RUN --mount=type=cache,id=s/94c09288-3228-4cb1-b165-aba516b8ebd2-/root/cache/m2,target=/root/.m2 \
+    --mount=type=cache,id=s/94c09288-3228-4cb1-b165-aba516b8ebd2-/root/cache/root,target=/root/.cache \
     ./mvnw -B -ntp exec:java -e \
       -Dexec.classpathScope=test \
       -Dexec.mainClass=com.microsoft.playwright.CLI \
@@ -17,8 +17,8 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
 
 COPY src/ src/
 
-RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
-    --mount=type=cache,id=root-cache,target=/root/.cache \
+RUN --mount=type=cache,id=s/94c09288-3228-4cb1-b165-aba516b8ebd2-/root/cache/m2,target=/root/.m2 \
+    --mount=type=cache,id=s/94c09288-3228-4cb1-b165-aba516b8ebd2-/root/cache/root,target=/root/.cache \
     ./mvnw -B -ntp package
 
 FROM eclipse-temurin:25-jre AS runtime
