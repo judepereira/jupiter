@@ -350,7 +350,14 @@ public class UiController {
 
             @Override
             public void onToolCallStarted(ToolCallTrace trace) {
-                broadcastEvent(active, assistantId, "tool_call_started", trace);
+                try {
+                    if (trace != null) {
+                        appStateService.startToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace));
+                    }
+                    broadcastEvent(active, assistantId, "tool_call_started", trace);
+                } catch (Exception e) {
+                    onError(e);
+                }
             }
 
             @Override
@@ -1507,7 +1514,7 @@ public class UiController {
 
     private ToolCallView toToolCallView(com.judepereira.jupiter.persistence.Persistence.ToolCallView view) {
         return new ToolCallView(view.toolCallId(), view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated(),
-                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status(), view.imageUrl(), view.imageAlt(), view.imagePath(), view.imageMediaType());
+                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status(), view.imageUrl(), view.imageAlt(), view.imagePath(), view.imageMediaType(), view.taskBody());
     }
 
     private ChangedFile toChangedFile(ChangedFileView view) {
@@ -1628,21 +1635,31 @@ public class UiController {
 
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                                 Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
-                                String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
+                                String imageUrl, String imageAlt, String imagePath, String imageMediaType, String taskBody) {
         public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                             Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null);
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, null);
         }
 
         public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                             Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null);
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null, null);
+        }
+
+        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status, String taskBody) {
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, taskBody);
+        }
+
+        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status, String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, imageUrl, imageAlt, imagePath, imageMediaType, null);
         }
     }
 
-    public record ToolCallGroupView(String toolName, String displayLabel, boolean success, int count, List<ToolCallView> calls) {}
+    public record ToolCallGroupView(String toolName, String displayLabel, String status, boolean success, int count, List<ToolCallView> calls) {}
 
-    public record ToolCallBundleView(String summaryLabel, boolean success, List<ToolCallGroupView> groups) {}
+    public record ToolCallBundleView(String summaryLabel, String status, boolean success, List<ToolCallGroupView> groups) {}
 
     public record ToolCallBlockView(ToolCallBundleView bundle, ToolCallGroupView group) {
         public static ToolCallBlockView bundle(ToolCallBundleView bundle) {
@@ -1715,7 +1732,10 @@ public class UiController {
         }
 
         private ToolCallBundleView toBundle(List<ToolCallGroupView> groups) {
-            return new ToolCallBundleView(toolUsageSummaryLabel(groups), groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
+            String status = groups.stream().anyMatch(group -> "running".equals(group.status()))
+                    ? "running"
+                    : groups.stream().allMatch(ToolCallGroupView::success) ? "success" : "failure";
+            return new ToolCallBundleView(toolUsageSummaryLabel(groups), status, groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
         }
 
         private String toolUsageSummaryLabel(List<ToolCallGroupView> groups) {
@@ -1742,9 +1762,16 @@ public class UiController {
             return SPECIAL_TOOL_NAMES.contains(toolName);
         }
 
+        private boolean isTask(String toolName) {
+            return "task".equals(toolName);
+        }
+
         private ToolCallGroupView toGroup(List<ToolCallView> calls) {
             ToolCallView first = calls.get(0);
-            return new ToolCallGroupView(first.toolName(), displayLabel(calls), calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
+            String status = calls.stream().anyMatch(call -> "running".equals(call.status()))
+                    ? "running"
+                    : calls.stream().allMatch(ToolCallView::success) ? "success" : "failure";
+            return new ToolCallGroupView(first.toolName(), displayLabel(calls), status, calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
         }
 
         private String toolUsageLabel(List<ToolCallGroupView> groups) {

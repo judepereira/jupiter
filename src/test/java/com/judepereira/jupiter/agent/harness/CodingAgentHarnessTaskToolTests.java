@@ -40,6 +40,7 @@ public class CodingAgentHarnessTaskToolTests {
         RecordingModel model = new RecordingModel(List.of(
                 new ModelResponse(null, new ToolCall("task", Map.of(
                         "agentId", "engineer",
+                        "requestSummary", "Do the thing",
                         "task", "do the thing",
                         "expectedOutput", "done"
                 ))),
@@ -75,6 +76,7 @@ public class CodingAgentHarnessTaskToolTests {
         RecordingModel model = new RecordingModel(List.of(
                 new ModelResponse(null, new ToolCall("task", Map.of(
                         "agentId", "explore",
+                        "requestSummary", "Recursively call task",
                         "task", "recursively call task",
                         "expectedOutput", "never"
                 ))),

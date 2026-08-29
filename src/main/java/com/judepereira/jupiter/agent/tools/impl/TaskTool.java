@@ -31,9 +31,10 @@ public class TaskTool implements AgentTool {
     public ToolDefinition definition() {
         return new ToolDefinition("task", buildDescription(), ToolSchema.object(
                 string("agentId", "subagent id to run"),
+                string("requestSummary", "concise summary of the request for UI display"),
                 string("task", "task instruction for the subagent"),
                 string("expectedOutput", "what the primary expects back")
-        ).required("agentId", "task", "expectedOutput"));
+        ).required("agentId", "requestSummary", "task", "expectedOutput"));
     }
 
     @Override
@@ -49,9 +50,10 @@ public class TaskTool implements AgentTool {
         }
 
         String agentId = stringArg(args, "agentId");
+        String requestSummary = stringArg(args, "requestSummary");
         String task = stringArg(args, "task");
         String expectedOutput = stringArg(args, "expectedOutput");
-        if (agentId == null || task == null || expectedOutput == null) {
+        if (agentId == null || requestSummary == null || task == null || expectedOutput == null) {
             return failure("missing required task tool arguments");
         }
 
@@ -61,6 +63,7 @@ public class TaskTool implements AgentTool {
                     context.getToolCallId(),
                     context.getWorkspaceRoot().toString(),
                     agentId,
+                    requestSummary,
                     task,
                     expectedOutput,
                     context.getCancellationToken()

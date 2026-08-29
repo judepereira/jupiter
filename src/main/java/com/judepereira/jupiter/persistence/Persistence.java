@@ -83,15 +83,25 @@ public final class Persistence {
 
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                                 Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
-                                String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
+                                String imageUrl, String imageAlt, String imagePath, String imageMediaType, String taskBody) {
         public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                             Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null);
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, null);
         }
 
         public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                             Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null);
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null, null);
+        }
+
+        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status, String taskBody) {
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, taskBody);
+        }
+
+        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
+                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status, String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
+            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, imageUrl, imageAlt, imagePath, imageMediaType, null);
         }
     }
 

@@ -321,7 +321,7 @@ public class AppStateService {
                 continue;
             }
             repository.insertToolCallTrace(forkedSessionId, remappedAssistantMessageId, trace.sequence(), trace.toolCallId(), trace.toolName(), trace.success(),
-                    trace.argsJson(), trace.textSummary(), strippedForkMachineSummaryJson(trace.machineSummaryJson()), trace.createdAt());
+                    trace.argsJson(), trace.textSummary(), strippedForkMachineSummaryJson(trace.machineSummaryJson()), trace.completedAt(), trace.createdAt());
         }
 
         repository.updateProjectLastOpened(workspace.projectId(), now);
@@ -477,6 +477,33 @@ public class AppStateService {
     }
 
     @Transactional
+    public void startToolCallTrace(long sessionId, String assistantPublicId, ToolCallTraceInput trace) {
+        if (trace == null) {
+            throw new IllegalStateException("Tool call trace is required");
+        }
+        if (trace.toolCallId() == null || trace.toolCallId().isBlank()) {
+            throw new IllegalStateException("Tool call id is required");
+        }
+
+        var assistantMessage = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
+        if (!assistantMessage.pending() || !"assistant".equals(assistantMessage.role())) {
+            throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
+        }
+
+        List<ToolCallPayload> payloads = toolCallPayloads(assistantMessage.toolCallsJson());
+        if (upsertToolCallPayload(payloads, new ToolCallPayload(trace.toolCallId(), trace.toolName(), trace.args()))) {
+            repository.updateMessageToolCalls(assistantMessage.id(), json(payloads));
+        }
+
+        if (repository.findToolCallTraceBySessionAndToolCallId(sessionId, trace.toolCallId()).isPresent()) {
+            return;
+        }
+
+        String argsJson = json(trace.args());
+        repository.insertStartedToolCallTrace(sessionId, assistantMessage.id(), repository.nextToolCallTraceSequence(sessionId), trace.toolCallId(), trace.toolName(), argsJson, Instant.now());
+    }
+
+    @Transactional
     public ToolCallView appendToolCallTrace(long sessionId, String assistantPublicId, ToolCallTraceInput trace) {
         Instant now = Instant.now();
         var assistantMessage = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
@@ -488,26 +515,30 @@ public class AppStateService {
         String toolCallId = trace.toolCallId() == null || trace.toolCallId().isBlank() ? String.valueOf(sequence) : trace.toolCallId();
         ToolCallTraceInput normalizedTrace = new ToolCallTraceInput(toolCallId, trace.toolName(), trace.args(), trace.success(), trace.textSummary(), trace.machineSummary());
         List<ToolCallPayload> payloads = toolCallPayloads(assistantMessage.toolCallsJson());
-        if (payloads.stream().anyMatch(payload -> toolCallId.equals(payload.toolCallId()))) {
-            return traceToView(normalizedTrace, sessionId);
+        if (upsertToolCallPayload(payloads, new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()))) {
+            repository.updateMessageToolCalls(assistantMessage.id(), json(payloads));
+        }
+
+        var existingTrace = repository.findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId);
+        if (existingTrace.isPresent()) {
+            AppStateRepository.ToolCallTraceRow traceRow = existingTrace.get();
+            if (traceRow.completedAt() == null) {
+                repository.completeToolCallTrace(traceRow.id(), normalizedTrace.success(), json(normalizedTrace.args()), normalizedTrace.textSummary(), json(normalizedTrace.machineSummary()), now);
+                insertToolCallContextMessages(sessionId, assistantMessage, normalizedTrace, now);
+                traceRow = repository.findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId)
+                        .orElseThrow(() -> new IllegalStateException("Missing completed tool call trace: " + toolCallId));
+            }
+            return toToolCallView(traceRow, toolCallId, sessionId);
         }
 
         String argsJson = json(normalizedTrace.args());
         String machineSummaryJson = json(normalizedTrace.machineSummary());
-        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolCallId(), normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(), machineSummaryJson, now);
-        payloads.add(new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()));
-        repository.updateMessageToolCalls(assistantMessage.id(), json(payloads));
+        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolCallId(), normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(), machineSummaryJson, now, now);
+        insertToolCallContextMessages(sessionId, assistantMessage, normalizedTrace, now);
+        AppStateRepository.ToolCallTraceRow traceRow = repository.findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId)
+                .orElseThrow(() -> new IllegalStateException("Missing inserted tool call trace: " + toolCallId));
 
-        long assistantToolCallSequence = repository.nextMessageSequence(sessionId);
-        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant", assistantMessage.turnId(), assistantToolCallSequence,
-                "", null, json(List.of(new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()))), false, true, false,
-                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), null, null, now);
-
-        long toolResultSequence = repository.nextMessageSequence(sessionId);
-        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,
-                normalizedTrace.textSummary() == null ? "" : normalizedTrace.textSummary(), toolCallId, null, false, true, false, now);
-
-        return traceToView(normalizedTrace, sessionId);
+        return toToolCallView(traceRow, toolCallId, sessionId);
     }
 
     @Transactional
@@ -515,12 +546,14 @@ public class AppStateService {
         if (finalText == null) {
             throw new IllegalStateException("Final assistant text is required");
         }
+        Instant now = Instant.now();
         var assistantMessage = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
         if (!assistantMessage.pending() || !"assistant".equals(assistantMessage.role())) {
             throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
         }
+        finalizeIncompleteToolCallTraces(assistantMessage.id(), now, "Tool call did not complete before assistant completion");
         repository.updateMessageToolCalls(assistantMessage.id(), null);
-        repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true, Instant.now());
+        repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true, now);
         markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
@@ -530,12 +563,14 @@ public class AppStateService {
         if (errorText == null) {
             throw new IllegalStateException("Assistant error text is required");
         }
+        Instant now = Instant.now();
         var assistantMessage = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
         if (!assistantMessage.pending() || !"assistant".equals(assistantMessage.role())) {
             throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
         }
+        finalizeIncompleteToolCallTraces(assistantMessage.id(), now, errorText);
         repository.updateMessageToolCalls(assistantMessage.id(), null);
-        repository.updateMessageContentAndPending(assistantMessage.id(), errorText, false, false, Instant.now());
+        repository.updateMessageContentAndPending(assistantMessage.id(), errorText, false, false, now);
         markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
@@ -546,10 +581,12 @@ public class AppStateService {
         if (!assistantMessage.pending() || !"assistant".equals(assistantMessage.role())) {
             return toChatMessageView(assistantMessage, sessionId);
         }
+        Instant now = Instant.now();
         String base = partialText == null ? "" : partialText.trim();
         String stoppedText = base.isEmpty() ? "Action Interrupted" : base + "\n\nAction Interrupted";
+        finalizeIncompleteToolCallTraces(assistantMessage.id(), now, "Action Interrupted");
         repository.updateMessageToolCalls(assistantMessage.id(), null);
-        repository.updateMessageContentAndPending(assistantMessage.id(), stoppedText, false, false, Instant.now());
+        repository.updateMessageContentAndPending(assistantMessage.id(), stoppedText, false, false, now);
         markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
@@ -1014,16 +1051,15 @@ public class AppStateService {
         Map<Long, Integer> pendingAssistantIndexByMessageId = new java.util.HashMap<>();
         int latestPendingAssistantIndex = -1;
         for (int i = 0; i < messages.size(); i++) {
+            AppStateRepository.ConversationMessageRow visibleMessage = visibleMessages.get(i);
             ChatMessageView message = messages.get(i);
             if (message.pending() && "assistant".equals(message.role())) {
-                pendingAssistantIndexByMessageId.put(visibleMessages.get(i).id(), i);
+                pendingAssistantIndexByMessageId.put(visibleMessage.id(), i);
                 latestPendingAssistantIndex = i;
             }
         }
-        if (latestPendingAssistantIndex < 0) {
-            return messages;
-        }
 
+        Map<Integer, Map<String, ToolCallView>> enrichedByMessageIndex = new java.util.HashMap<>();
         Map<Integer, List<ToolCallView>> syntheticByMessageIndex = new java.util.HashMap<>();
         List<ToolCallView> legacySyntheticToolCalls = new ArrayList<>();
         for (var childSession : repository.listChildSessionsByParentSession(parentSessionId)) {
@@ -1035,17 +1071,20 @@ public class AppStateService {
                 continue;
             }
             ToolCallView syntheticToolCall = new ToolCallView(parentToolCallId, "task", true, "", "running", false, false,
-                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running");
+                    childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running",
+                    taskBody(parentSessionId, parentToolCallId));
             Long parentAssistantMessageId = childSession.parentAssistantMessageId();
             if (parentAssistantMessageId != null) {
                 Integer messageIndex = pendingAssistantIndexByMessageId.get(parentAssistantMessageId);
                 if (messageIndex != null) {
                     ChatMessageView targetMessage = messages.get(messageIndex);
-                    boolean toolCallAlreadyPresent = targetMessage.toolCalls().stream()
-                            .anyMatch(toolCall -> parentToolCallId.equals(toolCall.toolCallId()));
-                    if (!toolCallAlreadyPresent) {
-                        syntheticByMessageIndex.computeIfAbsent(messageIndex, ignored -> new ArrayList<>()).add(syntheticToolCall);
-                    }
+                    targetMessage.toolCalls().stream()
+                            .filter(toolCall -> parentToolCallId.equals(toolCall.toolCallId()))
+                            .findFirst()
+                            .ifPresentOrElse(existingToolCall -> enrichedByMessageIndex
+                                    .computeIfAbsent(messageIndex, ignored -> new LinkedHashMap<>())
+                                    .put(parentToolCallId, enrichSubagentToolCallView(existingToolCall, childSession, parentSessionId)),
+                                    () -> syntheticByMessageIndex.computeIfAbsent(messageIndex, ignored -> new ArrayList<>()).add(syntheticToolCall));
                 }
                 continue;
             }
@@ -1054,11 +1093,19 @@ public class AppStateService {
             }
         }
 
-        if (syntheticByMessageIndex.isEmpty() && legacySyntheticToolCalls.isEmpty()) {
+        if (enrichedByMessageIndex.isEmpty() && syntheticByMessageIndex.isEmpty() && legacySyntheticToolCalls.isEmpty()) {
             return messages;
         }
 
         ArrayList<ChatMessageView> updated = new ArrayList<>(messages);
+        for (var entry : enrichedByMessageIndex.entrySet()) {
+            ChatMessageView message = updated.get(entry.getKey());
+            ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(message.toolCalls().size());
+            for (ToolCallView toolCall : message.toolCalls()) {
+                mergedToolCalls.add(entry.getValue().getOrDefault(toolCall.toolCallId(), toolCall));
+            }
+            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(), message.pending(), message.id(), message.completedTs(), mergedToolCalls, message.metadata()));
+        }
         for (var entry : syntheticByMessageIndex.entrySet()) {
             ChatMessageView message = updated.get(entry.getKey());
             ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(message.toolCalls());
@@ -1067,14 +1114,31 @@ public class AppStateService {
         }
 
         if (!legacySyntheticToolCalls.isEmpty()) {
-            ChatMessageView pendingAssistant = updated.get(latestPendingAssistantIndex);
+            ChatMessageView pendingAssistant = updated.get(messages.size() - 1);
+            if (latestPendingAssistantIndex >= 0) {
+                pendingAssistant = updated.get(latestPendingAssistantIndex);
+            }
             ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(pendingAssistant.toolCalls());
             mergedToolCalls.addAll(legacySyntheticToolCalls);
-            updated.set(latestPendingAssistantIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
+            int targetIndex = latestPendingAssistantIndex >= 0 ? latestPendingAssistantIndex : messages.size() - 1;
+            updated.set(targetIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
                     pendingAssistant.id(), pendingAssistant.completedTs(), mergedToolCalls, pendingAssistant.metadata()));
         }
 
         return updated;
+    }
+
+    private ToolCallView enrichSubagentToolCallView(ToolCallView existingToolCall, AppStateRepository.SessionRow childSession, long parentSessionId) {
+        String resolvedTaskBody = existingToolCall.taskBody();
+        if (resolvedTaskBody == null || resolvedTaskBody.isBlank()) {
+            resolvedTaskBody = this.taskBody(parentSessionId, existingToolCall.toolCallId());
+        }
+        Long subagentSessionId = existingToolCall.subagentSessionId() == null ? childSession.id() : existingToolCall.subagentSessionId();
+        String subagentAgentId = existingToolCall.subagentAgentId() == null || existingToolCall.subagentAgentId().isBlank() ? childSession.subagentAgentId() : existingToolCall.subagentAgentId();
+        String subagentAgentName = existingToolCall.subagentAgentName() == null || existingToolCall.subagentAgentName().isBlank() ? childSession.subagentAgentName() : existingToolCall.subagentAgentName();
+        return new ToolCallView(existingToolCall.toolCallId(), existingToolCall.toolName(), existingToolCall.success(), existingToolCall.inputPreview(), existingToolCall.outputPreview(),
+                existingToolCall.inputTruncated(), existingToolCall.outputTruncated(), subagentSessionId, subagentAgentId, subagentAgentName, "running",
+                existingToolCall.imageUrl(), existingToolCall.imageAlt(), existingToolCall.imagePath(), existingToolCall.imageMediaType(), resolvedTaskBody);
     }
 
     public SubagentSessionDetailView loadSubagentSessionDetail(long sessionId) {
@@ -1108,10 +1172,16 @@ public class AppStateService {
             machineSummary.putIfAbsent("sessionId", sessionId);
             machineSummary.putIfAbsent("toolCallId", toolCallId);
         }
-        return traceToView(new ToolCallTraceInput(toolCallId, trace.toolName(), readMap(trace.argsJson()), trace.success(), trace.textSummary(), machineSummary), sessionId);
+        boolean success = Boolean.TRUE.equals(trace.success());
+        String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
+        return traceToView(new ToolCallTraceInput(toolCallId, trace.toolName(), readMap(trace.argsJson()), success, trace.textSummary(), machineSummary), sessionId, status);
     }
 
     private ToolCallView traceToView(ToolCallTraceInput trace, long sessionId) {
+        return traceToView(trace, sessionId, trace.success() ? "success" : "failure");
+    }
+
+    private ToolCallView traceToView(ToolCallTraceInput trace, long sessionId, String status) {
         String input = jsonPretty(trace.args());
         String output = trace.textSummary() == null ? "" : trace.textSummary();
         boolean[] inTr = new boolean[1];
@@ -1120,12 +1190,64 @@ public class AppStateService {
         String outPreview = previewAndTruncate(output, 2000, outTr);
         SubagentLinkInfo subagent = subagentLinkInfo(trace.machineSummary());
         ImageLinkInfo image = imageLinkInfo(trace, trace.machineSummary(), sessionId);
+        String taskBody = taskBody(trace);
         return new ToolCallView(trace.toolCallId(), trace.toolName(), trace.success(), inPreview, outPreview, inTr[0], outTr[0], subagent.subagentSessionId(),
-                subagent.subagentAgentId(), subagent.subagentAgentName(), null, image.imageUrl(), image.imageAlt(), image.imagePath(), image.imageMediaType());
+                subagent.subagentAgentId(), subagent.subagentAgentName(), status, image.imageUrl(), image.imageAlt(), image.imagePath(), image.imageMediaType(), taskBody);
+    }
+
+    private String taskBody(ToolCallTraceInput trace) {
+        return trace == null ? null : taskBody(trace.toolName(), trace.args());
+    }
+
+    private void insertToolCallContextMessages(long sessionId, AppStateRepository.ConversationMessageRow assistantMessage, ToolCallTraceInput trace, Instant now) {
+        long assistantToolCallSequence = repository.nextMessageSequence(sessionId);
+        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant", assistantMessage.turnId(), assistantToolCallSequence,
+                "", null, json(List.of(new ToolCallPayload(trace.toolCallId(), trace.toolName(), trace.args()))), false, true, false,
+                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), null, null, now);
+
+        long toolResultSequence = repository.nextMessageSequence(sessionId);
+        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,
+                trace.textSummary() == null ? "" : trace.textSummary(), trace.toolCallId(), null, false, true, false, now);
+    }
+
+    private void finalizeIncompleteToolCallTraces(long assistantMessageId, Instant completedAt, String textSummary) {
+        repository.failIncompleteToolCallTracesByAssistantMessage(assistantMessageId, textSummary, completedAt);
+    }
+
+    private String taskBody(long sessionId, String toolCallId) {
+        if (toolCallId == null || toolCallId.isBlank()) {
+            return null;
+        }
+        return repository.findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId)
+                .map(trace -> taskBody(trace.toolName(), readMap(trace.argsJson())))
+                .orElse(null);
+    }
+
+    private String taskBody(AppStateRepository.ConversationMessageRow message, String toolCallId) {
+        if (message == null || toolCallId == null || toolCallId.isBlank()) {
+            return null;
+        }
+        return toolCallPayloads(message.toolCallsJson()).stream()
+                .filter(payload -> toolCallId.equals(payload.toolCallId()))
+                .findFirst()
+                .map(payload -> taskBody(payload.toolName(), payload.arguments()))
+                .orElse(null);
+    }
+
+    private String taskBody(String toolName, Map<String, Object> args) {
+        if (!"task".equals(toolName)) {
+            return null;
+        }
+        Object value = args == null ? null : args.get("requestSummary");
+        if (value instanceof String requestSummary && !requestSummary.isBlank()) {
+            return requestSummary;
+        }
+        value = args == null ? null : args.get("task");
+        return value instanceof String task && !task.isBlank() ? task : null;
     }
 
     private ToolCallView traceToView(ToolCallTraceInput trace) {
-        return traceToView(trace, -1L);
+        return traceToView(trace, -1L, trace.success() ? "success" : "failure");
     }
 
     private ImageLinkInfo imageLinkInfo(ToolCallTraceInput trace, Map<String, Object> machineSummary, long sessionId) {
@@ -1196,6 +1318,20 @@ public class AppStateService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to read tool call JSON", e);
         }
+    }
+
+    private boolean upsertToolCallPayload(List<ToolCallPayload> payloads, ToolCallPayload payload) {
+        for (int i = 0; i < payloads.size(); i++) {
+            if (payload.toolCallId().equals(payloads.get(i).toolCallId())) {
+                if (payload.equals(payloads.get(i))) {
+                    return false;
+                }
+                payloads.set(i, payload);
+                return true;
+            }
+        }
+        payloads.add(payload);
+        return true;
     }
 
     private String json(Object value) {

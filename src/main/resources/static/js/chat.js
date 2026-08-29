@@ -1410,6 +1410,36 @@
             }
         }
 
+        function taskToolCallBody(payload) {
+            try {
+                if (!payload) return '';
+                if (payload.requestSummary != null && String(payload.requestSummary).trim()) {
+                    return String(payload.requestSummary);
+                }
+                if (payload.args && typeof payload.args === 'object' && payload.args.requestSummary != null && String(payload.args.requestSummary).trim()) {
+                    return String(payload.args.requestSummary);
+                }
+                const args = payload.args;
+                if (args && typeof args === 'object') {
+                    if (args.taskBody != null && String(args.taskBody).trim()) {
+                        return String(args.taskBody);
+                    }
+                    if (args.task != null && String(args.task).trim()) {
+                        return String(args.task);
+                    }
+                }
+                if (payload.taskBody != null && String(payload.taskBody).trim()) {
+                    return String(payload.taskBody);
+                }
+                if (payload.task != null && String(payload.task).trim()) {
+                    return String(payload.task);
+                }
+                return '';
+            } catch (_) {
+                return '';
+            }
+        }
+
         function toolCallStatusText(state, success) {
             if (state === 'running') return 'running';
             if (state === 'done') return 'done';
@@ -1576,6 +1606,7 @@
                 const counts = new Map();
                 const order = [];
                 let allSuccess = true;
+                let running = false;
 
                 for (const group of groups) {
                     const calls = getToolCallGroupCalls(group);
@@ -1584,10 +1615,14 @@
                         if (!toolName) continue;
                         if (!counts.has(toolName)) order.push(toolName);
                         counts.set(toolName, (counts.get(toolName) || 0) + 1);
+                        const callState = call.dataset ? String(call.dataset.toolCallState || '') : '';
+                        if (callState === 'running') running = true;
                         if (call.dataset.toolCallSuccess !== 'true') {
                             allSuccess = false;
                         }
                     }
+                    const groupState = group.dataset ? String(group.dataset.toolCallState || '') : '';
+                    if (groupState === 'running') running = true;
                     if (group.dataset.toolCallSuccess !== 'true') {
                         allSuccess = false;
                     }
@@ -1595,8 +1630,8 @@
 
                 const label = order.map(name => counts.get(name) > 1 ? name + ' (' + counts.get(name) + ')' : name).join(', ');
                 bundleRefs.bundle.dataset.toolCallKind = 'bundle';
-                bundleRefs.bundle.dataset.toolCallState = allSuccess ? 'done' : 'error';
-                bundleRefs.bundle.dataset.toolCallSuccess = allSuccess ? 'true' : 'false';
+                bundleRefs.bundle.dataset.toolCallState = running ? 'running' : (allSuccess ? 'done' : 'error');
+                bundleRefs.bundle.dataset.toolCallSuccess = running ? 'false' : (allSuccess ? 'true' : 'false');
                 bundleRefs.bundle.dataset.toolCallSummaryLabel = label ? 'Used: ' + label : 'Used';
                 if (bundleRefs.nameSpan) {
                     bundleRefs.nameSpan.textContent = bundleRefs.bundle.dataset.toolCallSummaryLabel;
@@ -1800,9 +1835,124 @@
             }
         }
 
+        function bindDynamicSubagentButton(button) {
+            try {
+                if (!button || button.dataset.dynamicSubagentButtonBound === 'true') return;
+                button.addEventListener('click', (e) => {
+                    try {
+                        e.stopPropagation();
+                        const url = button.getAttribute('hx-get');
+                        if (!url || !window.htmx || typeof window.htmx.ajax !== 'function') return;
+                        window.htmx.ajax('GET', url, {
+                            target: button.getAttribute('hx-target') || '#chat-container',
+                            swap: button.getAttribute('hx-swap') || 'outerHTML'
+                        });
+                    } catch (_) {
+                    }
+                });
+                button.dataset.dynamicSubagentButtonBound = 'true';
+            } catch (_) {
+            }
+        }
+
+        function buildTaskToolCallGroupRefs(group) {
+            try {
+                if (!group) return null;
+
+                group.classList.add('task-tool-call');
+
+                let summary = getDirectToolCallChild(group, 'tool-call-summary');
+                if (!summary) {
+                    summary = document.createElement('summary');
+                    summary.className = 'tool-call-summary tool-call-summary-task';
+                    group.appendChild(summary);
+                } else {
+                    summary.classList.add('tool-call-summary-task');
+                }
+
+                let main = summary.querySelector('.tool-call-summary-main');
+                if (!main) {
+                    main = document.createElement('div');
+                    main.className = 'tool-call-summary-main';
+                    summary.appendChild(main);
+                }
+
+                let head = main.querySelector('.tool-call-summary-head');
+                if (!head) {
+                    head = document.createElement('div');
+                    head.className = 'tool-call-summary-head';
+                    main.appendChild(head);
+                }
+
+                let nameSpan = head.querySelector('.tool-call-name');
+                if (!nameSpan) {
+                    nameSpan = document.createElement('span');
+                    nameSpan.className = 'tool-call-name';
+                    head.appendChild(nameSpan);
+                }
+
+                let statusSpan = head.querySelector('.tool-call-status');
+                if (!statusSpan) {
+                    statusSpan = document.createElement('span');
+                    statusSpan.className = 'tool-call-status';
+                    head.appendChild(statusSpan);
+                }
+
+                let taskBody = main.querySelector('.tool-call-summary-task-body');
+                if (!taskBody) {
+                    taskBody = document.createElement('div');
+                    taskBody.className = 'tool-call-summary-task-body';
+                    main.appendChild(taskBody);
+                }
+                const existingTaskBody = String(taskBody.textContent || '').trim();
+                if (existingTaskBody && group.dataset && !String(group.dataset.toolCallTaskBody || '').trim()) {
+                    group.dataset.toolCallTaskBody = existingTaskBody;
+                }
+
+                let button = summary.querySelector('.tool-call-subagent-button');
+                const createdButton = !button;
+                if (!button) {
+                    button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button';
+                    button.dataset.dynamicSubagentButton = 'true';
+                    summary.appendChild(button);
+                }
+                button.setAttribute('hx-trigger', 'click');
+                if (button.dataset.dynamicSubagentButton === 'true') {
+                    bindDynamicSubagentButton(button);
+                } else if (createdButton) {
+                    button.dataset.dynamicSubagentButton = 'true';
+                    bindDynamicSubagentButton(button);
+                }
+
+                let detail = getDirectToolCallChild(group, 'tool-call-detail');
+                if (!detail) {
+                    detail = document.createElement('div');
+                    detail.className = 'tool-call-detail';
+                    group.appendChild(detail);
+                }
+
+                let callsContainer = getDirectToolCallChild(detail, 'tool-call-calls');
+                if (!callsContainer) {
+                    callsContainer = document.createElement('div');
+                    callsContainer.className = 'tool-call-calls';
+                    detail.appendChild(callsContainer);
+                }
+
+                return {group, summary, nameSpan, statusSpan, detail, callsContainer, taskBody, button};
+            } catch (_) {
+                return null;
+            }
+        }
+
         function buildToolCallGroupRefs(group) {
             try {
                 if (!group) return null;
+
+                if (normalizeToolCallName(group.dataset ? group.dataset.toolCallToolName : '') === 'task') {
+                    return buildTaskToolCallGroupRefs(group);
+                }
 
                 let summary = getDirectToolCallChild(group, 'tool-call-summary');
                 if (!summary) {
@@ -1850,6 +2000,12 @@
 
                 let subagent = getDirectToolCallChild(call, 'tool-call-subagent') || null;
                 let button = subagent ? subagent.querySelector('.tool-call-subagent-button') : null;
+
+                if (call.closest && call.closest('details.tool-call.task-tool-call')) {
+                    if (subagent) subagent.remove();
+                    subagent = null;
+                    button = null;
+                }
 
                 let inputSection = Array.from(call.children || []).find(child => child && child.classList && child.classList.contains('tool-call-section') && child.dataset.toolCallField === 'input') || null;
                 if (!inputSection) {
@@ -1925,12 +2081,69 @@
                 const success = count > 0 && calls.every(call => call.dataset.toolCallSuccess === 'true');
                 const state = running ? 'running' : (success ? 'done' : 'error');
                 const statusText = running ? 'running' : (success ? 'success' : 'failure');
-                const label = toolCallGroupSummaryText(calls) || (count > 1 ? toolName + ' (' + count + ')' : toolName);
 
                 group.dataset.toolCallToolName = toolName;
                 group.dataset.toolCallCount = String(count);
                 group.dataset.toolCallState = state;
                 group.dataset.toolCallSuccess = success ? 'true' : 'false';
+
+                if (toolName === 'task') {
+                    const taskBody = groupRefs.taskBody || (group.querySelector && group.querySelector('.tool-call-summary-task-body')) || null;
+                    const subagentName = String(group.dataset.toolCallSubagentAgentName || 'task');
+                    const subagentSessionId = String(group.dataset.toolCallSubagentSessionId || '').trim();
+                    const button = groupRefs.button || (group.querySelector && group.querySelector('.tool-call-subagent-button')) || null;
+                    const firstCall = (groupRefs.callsContainer && groupRefs.callsContainer.children)
+                        ? Array.from(groupRefs.callsContainer.children).find(child => child && child.classList && child.classList.contains('tool-call-call')) || null
+                        : ((group.querySelector && group.querySelector('.tool-call-call')) || null);
+
+                    if (groupRefs.nameSpan) {
+                        groupRefs.nameSpan.textContent = subagentName;
+                    }
+                    if (taskBody) {
+                        const existingText = String(taskBody.textContent || '');
+                        const text = group.dataset.toolCallTaskBody || existingText || (firstCall && firstCall.dataset ? firstCall.dataset.toolCallTaskBody || '' : '');
+                        if (text) {
+                            taskBody.textContent = text;
+                            taskBody.hidden = !String(text || '').trim();
+                            if (!group.dataset.toolCallTaskBody) {
+                                group.dataset.toolCallTaskBody = text;
+                            }
+                        } else if (!existingText.trim()) {
+                            taskBody.hidden = true;
+                        }
+                    }
+                    if (groupRefs.statusSpan) {
+                        groupRefs.statusSpan.className = 'tool-call-status';
+                        if (state === 'running') {
+                            groupRefs.statusSpan.textContent = statusText;
+                        } else {
+                            if (success) groupRefs.statusSpan.classList.add('tool-call-status-success');
+                            else groupRefs.statusSpan.classList.add('tool-call-status-failure');
+                            groupRefs.statusSpan.textContent = statusText;
+                        }
+                    }
+                    if (groupRefs.group) {
+                        groupRefs.group.dataset.toolCallState = state;
+                        groupRefs.group.dataset.toolCallSuccess = state === 'running' ? 'false' : (success ? 'true' : 'false');
+                    }
+                    if (button) {
+                        if (subagentSessionId) {
+                            button.hidden = false;
+                            button.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
+                            button.setAttribute('hx-target', '#chat-container');
+                            button.setAttribute('hx-swap', 'outerHTML');
+                            button.setAttribute('hx-trigger', 'click');
+                            const strong = document.createElement('strong');
+                            strong.textContent = subagentName;
+                            button.replaceChildren(document.createTextNode('Open subagent: '), strong);
+                        } else {
+                            button.hidden = true;
+                        }
+                    }
+                    return;
+                }
+
+                const label = toolCallGroupSummaryText(calls) || (count > 1 ? toolName + ' (' + count + ')' : toolName);
                 group.dataset.toolCallSummaryLabel = label;
 
                 if (groupRefs.nameSpan) {
@@ -2195,9 +2408,74 @@
                     entry.outputPre.textContent = (entry.outputPre.textContent || '') + String(options.appendOutputText);
                 }
 
+                const payloadTaskBody = taskToolCallBody(payload);
                 const subagentSessionId = options && options.subagentSessionId != null ? String(options.subagentSessionId) : (payload && payload.subagentSessionId != null ? String(payload.subagentSessionId) : '');
+                const subagentAgentName = options && options.subagentAgentName != null ? String(options.subagentAgentName) : (payload && payload.subagentAgentName != null ? String(payload.subagentAgentName) : '');
+                const taskBody = payloadTaskBody || (options && options.taskBody != null ? String(options.taskBody) : '');
+
+                if (toolName === 'task') {
+                    details.classList.add('task-tool-call');
+                    if (group) group.classList.add('task-tool-call');
+                    if (taskBody) {
+                        details.dataset.toolCallTaskBody = taskBody;
+                        if (group) group.dataset.toolCallTaskBody = taskBody;
+                    } else if (group && !group.dataset.toolCallTaskBody && details.dataset.toolCallTaskBody) {
+                        group.dataset.toolCallTaskBody = details.dataset.toolCallTaskBody;
+                    }
+                    if (subagentSessionId) {
+                        details.dataset.toolCallSubagentSessionId = subagentSessionId;
+                        details.dataset.toolCallSubagentAgentName = subagentAgentName || subagentSessionId;
+                        if (group) {
+                            group.dataset.toolCallSubagentSessionId = subagentSessionId;
+                            group.dataset.toolCallSubagentAgentName = subagentAgentName || subagentSessionId;
+                        }
+                    }
+                    const groupTaskBody = group && group.dataset ? String(group.dataset.toolCallTaskBody || '') : '';
+                    const groupSubagentSessionId = group && group.dataset ? String(group.dataset.toolCallSubagentSessionId || '').trim() : '';
+                    const groupSubagentAgentName = group && group.dataset ? String(group.dataset.toolCallSubagentAgentName || '') : '';
+                    const effectiveTaskBody = taskBody || groupTaskBody || String(details.dataset.toolCallTaskBody || '');
+                    const effectiveSubagentSessionId = subagentSessionId || groupSubagentSessionId || String(details.dataset.toolCallSubagentSessionId || '').trim();
+                    const effectiveSubagentAgentName = subagentAgentName || groupSubagentAgentName || String(details.dataset.toolCallSubagentAgentName || '') || effectiveSubagentSessionId || 'task';
+                    const groupRefs = buildToolCallGroupRefs(group);
+                    if (groupRefs) {
+                        if (groupRefs.nameSpan) groupRefs.nameSpan.textContent = effectiveSubagentAgentName;
+                        if (groupRefs.taskBody) {
+                            groupRefs.taskBody.textContent = effectiveTaskBody;
+                            groupRefs.taskBody.hidden = !String(effectiveTaskBody || '').trim();
+                        }
+                        if (groupRefs.button) {
+                            if (effectiveSubagentSessionId) {
+                                groupRefs.button.hidden = false;
+                                groupRefs.button.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(effectiveSubagentSessionId));
+                                groupRefs.button.setAttribute('hx-target', '#chat-container');
+                                groupRefs.button.setAttribute('hx-swap', 'outerHTML');
+                                groupRefs.button.replaceChildren(document.createTextNode('Open subagent: '), (() => {
+                                    const strong = document.createElement('strong');
+                                    strong.textContent = effectiveSubagentAgentName;
+                                    return strong;
+                                })());
+                                bindDynamicSubagentButton(groupRefs.button);
+                            } else {
+                                groupRefs.button.hidden = true;
+                            }
+                        }
+                        if (groupRefs.statusSpan) {
+                            groupRefs.statusSpan.className = 'tool-call-status';
+                            if (state === 'done' || success) groupRefs.statusSpan.classList.add('tool-call-status-success');
+                            if (state === 'error' || (payload && payload.success === false)) groupRefs.statusSpan.classList.add('tool-call-status-failure');
+                            groupRefs.statusSpan.textContent = statusText;
+                        }
+                    }
+                    if (groupRefs) {
+                        refreshToolCallGroupSummary({group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, taskBody: groupRefs.taskBody, button: groupRefs.button, callsContainer: groupRefs.callsContainer});
+                    }
+                    if (group) {
+                        refreshParentToolCallBundle(group);
+                    }
+                    return;
+                }
+
                 if (subagentSessionId) {
-                    const name = options && options.subagentAgentName != null ? String(options.subagentAgentName) : (payload && payload.subagentAgentName != null ? String(payload.subagentAgentName) : (payload && payload.name != null ? String(payload.name) : subagentSessionId));
                     if (!entry.subagent) {
                         entry.subagent = document.createElement('div');
                         entry.subagent.className = 'tool-call-subagent';
@@ -2207,6 +2485,7 @@
                         entry.button = document.createElement('button');
                         entry.button.type = 'button';
                         entry.button.className = 'btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button';
+                        entry.button.dataset.dynamicSubagentButton = 'true';
                         entry.subagent.appendChild(entry.button);
                     }
                     entry.subagent.dataset.childSessionId = subagentSessionId;
@@ -2215,10 +2494,10 @@
                     entry.button.setAttribute('hx-swap', 'outerHTML');
                     entry.button.replaceChildren(document.createTextNode('Open subagent: '), (() => {
                         const strong = document.createElement('strong');
-                        strong.textContent = name;
+                        strong.textContent = subagentAgentName || subagentSessionId;
                         return strong;
                     })());
-                    if (processHtmxElementFn) processHtmxElementFn(entry.button);
+                    bindDynamicSubagentButton(entry.button);
                 }
 
                 if (group) {
@@ -2474,7 +2753,8 @@
                                 statusText: 'running',
                                 success: false,
                                 inputText: toolCallInputText(payload),
-                                outputText: toolCallOutputText(payload)
+                                outputText: toolCallOutputText(payload),
+                                taskBody: taskToolCallBody(payload)
                             });
                         } catch (_) {
                         }
@@ -2493,14 +2773,16 @@
                                     toolName: event.toolName,
                                     inputPreview: toolCallInputText(payload) || payload.task || '',
                                     subagentSessionId: payload.childSessionId,
-                                    subagentAgentName: payload.subagentAgentName
+                                    subagentAgentName: payload.subagentAgentName,
+                                    taskBody: taskToolCallBody(payload)
                                 }, processHtmxElement, {
                                     state: 'running',
                                     statusText: 'running',
                                     success: false,
                                     outputText: payload.task != null ? String(payload.task) : '',
                                     subagentSessionId: payload.childSessionId,
-                                    subagentAgentName: payload.subagentAgentName
+                                    subagentAgentName: payload.subagentAgentName,
+                                    taskBody: taskToolCallBody(payload)
                                 });
                                 updateOpenSubagentTranscript(payload, 'started');
                                 return;
@@ -2510,8 +2792,9 @@
                                 const entry = appendToolCallToChatRow(liveRow, {
                                     toolCallId: event.toolCallId,
                                     toolName: event.toolName,
-                                    inputPreview: toolCallInputText(payload) || payload.task || ''
-                                }, processHtmxElement, {state: 'running', statusText: 'running', success: false});
+                                    inputPreview: toolCallInputText(payload) || payload.task || '',
+                                    taskBody: taskToolCallBody(payload)
+                                }, processHtmxElement, {state: 'running', statusText: 'running', success: false, taskBody: taskToolCallBody(payload)});
                                 if (entry && entry.outputPre && payload.delta != null) {
                                     entry.outputPre.textContent = (entry.outputPre.textContent || '') + String(payload.delta);
                                 }
@@ -2523,8 +2806,9 @@
                                 const parentEntry = appendToolCallToChatRow(liveRow, {
                                     toolCallId: event.toolCallId,
                                     toolName: event.toolName,
-                                    inputPreview: toolCallInputText(payload) || payload.task || ''
-                                }, processHtmxElement, {state: 'running', statusText: 'running', success: false});
+                                    inputPreview: toolCallInputText(payload) || payload.task || '',
+                                    taskBody: taskToolCallBody(payload)
+                                }, processHtmxElement, {state: 'running', statusText: 'running', success: false, taskBody: taskToolCallBody(payload)});
                                 if (parentEntry && parentEntry.nestedCalls) {
                                     appendToolCallToChatRow(parentEntry.nestedCalls, payload, processHtmxElement, {
                                         state: payload.success ? 'done' : 'error',
@@ -2542,14 +2826,16 @@
                                     toolName: event.toolName,
                                     inputPreview: toolCallInputText(payload) || payload.task || '',
                                     subagentSessionId: payload.childSessionId,
-                                    subagentAgentName: payload.subagentAgentName
+                                    subagentAgentName: payload.subagentAgentName,
+                                    taskBody: taskToolCallBody(payload)
                                 }, processHtmxElement, {
                                     state: 'done',
                                     statusText: 'done',
                                     success: true,
                                     outputText: payload.finalText != null ? String(payload.finalText) : '',
                                     subagentSessionId: payload.childSessionId,
-                                    subagentAgentName: payload.subagentAgentName
+                                    subagentAgentName: payload.subagentAgentName,
+                                    taskBody: taskToolCallBody(payload)
                                 });
                                 updateOpenSubagentTranscript(payload, 'done');
                                 return;
@@ -2561,14 +2847,16 @@
                                     toolName: event.toolName,
                                     inputPreview: toolCallInputText(payload) || payload.task || '',
                                     subagentSessionId: payload.childSessionId,
-                                    subagentAgentName: payload.subagentAgentName
+                                    subagentAgentName: payload.subagentAgentName,
+                                    taskBody: taskToolCallBody(payload)
                                 }, processHtmxElement, {
                                     state: 'error',
                                     statusText: 'error',
                                     success: false,
                                     outputText: payload.errorText != null ? String(payload.errorText) : '',
                                     subagentSessionId: payload.childSessionId,
-                                    subagentAgentName: payload.subagentAgentName
+                                    subagentAgentName: payload.subagentAgentName,
+                                    taskBody: taskToolCallBody(payload)
                                 });
                                 updateOpenSubagentTranscript(payload, 'error');
                             }

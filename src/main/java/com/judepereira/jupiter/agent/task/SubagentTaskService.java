@@ -59,6 +59,9 @@ public class SubagentTaskService {
         if (request.subagentAgentId() == null || request.subagentAgentId().isBlank()) {
             throw new IllegalStateException("Subagent id is required");
         }
+        if (request.requestSummary() == null || request.requestSummary().isBlank()) {
+            throw new IllegalStateException("Request summary is required");
+        }
         if (request.task() == null || request.task().isBlank()) {
             throw new IllegalStateException("Task instruction is required");
         }
@@ -73,7 +76,7 @@ public class SubagentTaskService {
 
         SubagentTaskStreamListener sink = listener == null ? SubagentTaskStreamListener.noop() : listener;
         long childSessionId = appStateService.createHiddenSubagentSession(request.parentSessionId(), request.parentToolCallId(), subagent);
-        sink.onStarted(new SubagentTaskStarted(childSessionId, request.parentSessionId(), request.parentToolCallId(), subagent.id(), subagent.name(), request.task()));
+        sink.onStarted(new SubagentTaskStarted(childSessionId, request.parentSessionId(), request.parentToolCallId(), subagent.id(), subagent.name(), request.requestSummary(), request.task()));
 
         String userPrompt = buildUserPrompt(request.task(), request.expectedOutput());
         ChatMessageMetadata assistantMetadata = new ChatMessageMetadata(subagent.id(), subagent.name(), subagent.defaultModel(), subagent.defaultThinkingLevel().name());
@@ -101,6 +104,11 @@ public class SubagentTaskService {
                     accumulated.append(delta);
                     appStateService.updateStreamingAssistantText(childSessionId, assistantPublicId, accumulated.toString());
                     sink.onTextDelta(new SubagentTaskTextDelta(childSessionId, request.parentToolCallId(), subagent.id(), subagent.name(), delta));
+                }
+
+                @Override
+                public void onToolCallStarted(ToolCallTrace trace) {
+                    appStateService.startToolCallTrace(childSessionId, assistantPublicId, toTraceInput(trace));
                 }
 
                 @Override
@@ -254,10 +262,10 @@ public class SubagentTaskService {
     }
 
     public record SubagentTaskRequest(Long parentSessionId, String parentToolCallId, String workspaceRoot, String subagentAgentId,
-                                      String task, String expectedOutput, CancellationToken cancellationToken) {
+                                      String requestSummary, String task, String expectedOutput, CancellationToken cancellationToken) {
         public SubagentTaskRequest(Long parentSessionId, String parentToolCallId, String workspaceRoot, String subagentAgentId,
-                                   String task, String expectedOutput) {
-            this(parentSessionId, parentToolCallId, workspaceRoot, subagentAgentId, task, expectedOutput, null);
+                                   String requestSummary, String task, String expectedOutput) {
+            this(parentSessionId, parentToolCallId, workspaceRoot, subagentAgentId, requestSummary, task, expectedOutput, null);
         }
     }
 
@@ -287,7 +295,7 @@ public class SubagentTaskService {
         }
     }
 
-    public record SubagentTaskStarted(long childSessionId, long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName, String task) {
+    public record SubagentTaskStarted(long childSessionId, long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName, String requestSummary, String task) {
     }
 
     public record SubagentTaskTextDelta(long childSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName, String delta) {

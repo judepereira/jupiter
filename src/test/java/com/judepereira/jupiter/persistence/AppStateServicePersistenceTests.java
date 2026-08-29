@@ -155,11 +155,14 @@ public class AppStateServicePersistenceTests {
     public void stopAssistantMessagePersistsStoppedTextAndClearsPendingFlag(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
         AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn queuedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "hello");
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Stop me"), false, null, Map.of());
+        service.startToolCallTrace(sessionId, queuedTurn.assistantMessage().id(), started);
 
         ChatMessageView stopped = service.stopAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "partial reply");
 
@@ -167,12 +170,160 @@ public class AppStateServicePersistenceTests {
         assertThat(stopped.completedTs()).isNotNull();
         assertThat(stopped.text()).isEqualTo("partial reply\n\nAction Interrupted");
 
+        var trace = repository.findToolCallTraceBySessionAndToolCallId(sessionId, "task-1").orElseThrow();
+        assertThat(trace.completedAt()).isNotNull();
+        assertThat(trace.success()).isFalse();
+        assertThat(trace.textSummary()).isEqualTo("Action Interrupted");
+
         ChatMessageView threaded = service.loadSessionDetail(sessionId).chatMessages().stream()
                 .filter(message -> message.id().equals(queuedTurn.assistantMessage().id()))
                 .findFirst()
                 .orElseThrow();
         assertThat(threaded.pending()).isFalse();
         assertThat(threaded.text()).isEqualTo("partial reply\n\nAction Interrupted");
+    }
+
+    @Test
+    public void failAssistantMessageFinalizesIncompleteToolCallTracesWithFailureSummary(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn queuedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "hello");
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Fail me"), false, null, Map.of());
+        service.startToolCallTrace(sessionId, queuedTurn.assistantMessage().id(), started);
+
+        ChatMessageView failed = service.failAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "Agent execution failed: boom");
+
+        assertThat(failed.pending()).isFalse();
+        assertThat(failed.completedTs()).isNotNull();
+        assertThat(failed.text()).isEqualTo("Agent execution failed: boom");
+
+        var trace = repository.findToolCallTraceBySessionAndToolCallId(sessionId, "task-1").orElseThrow();
+        assertThat(trace.completedAt()).isNotNull();
+        assertThat(trace.success()).isFalse();
+        assertThat(trace.textSummary()).isEqualTo("Agent execution failed: boom");
+        assertThat(trace.argsJson()).contains("requestSummary");
+
+        ChatMessageView threaded = service.loadSessionDetail(sessionId).chatMessages().stream()
+                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(threaded.pending()).isFalse();
+        assertThat(threaded.text()).isEqualTo("Agent execution failed: boom");
+    }
+
+    @Test
+    public void completeAssistantMessageFinalizesAnyIncompleteToolCallTracesAsFailures(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn queuedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "hello");
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Complete me"), false, null, Map.of());
+        service.startToolCallTrace(sessionId, queuedTurn.assistantMessage().id(), started);
+
+        ChatMessageView completed = service.completeAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "done", List.of());
+
+        assertThat(completed.pending()).isFalse();
+        assertThat(completed.completedTs()).isNotNull();
+        assertThat(completed.text()).isEqualTo("done");
+
+        var trace = repository.findToolCallTraceBySessionAndToolCallId(sessionId, "task-1").orElseThrow();
+        assertThat(trace.completedAt()).isNotNull();
+        assertThat(trace.success()).isFalse();
+        assertThat(trace.textSummary()).isEqualTo("Tool call did not complete before assistant completion");
+    }
+
+    @Test
+    public void startToolCallTracePersistsRunningTraceAndSessionDetailShowsRunningStatus(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of(
+                "agentId", "engineer",
+                "requestSummary", "Write the parser implementation"
+        ), false, null, Map.of());
+
+        service.startToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
+
+        var traceRow = repository.findToolCallTraceBySessionAndToolCallId(sessionId, "task-1").orElseThrow();
+        assertThat(traceRow.completedAt()).isNull();
+        assertThat(traceRow.success()).isNull();
+        assertThat(traceRow.argsJson()).isNotNull();
+
+        var assistantRow = repository.findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
+        assertThat(assistantRow.toolCallsJson()).isNotNull();
+
+        ChatMessageView assistant = service.loadSessionDetail(sessionId).chatMessages().stream()
+                .filter(message -> message.id().equals(turn.assistantMessage().id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> {
+            assertThat(call.status()).isEqualTo("running");
+            assertThat(call.success()).isFalse();
+            assertThat(call.inputPreview()).contains("requestSummary");
+            assertThat(call.outputPreview()).isEmpty();
+            assertThat(call.taskBody()).isEqualTo("Write the parser implementation");
+        });
+    }
+
+    @Test
+    public void appendToolCallTraceAfterStartCompletesSameRowWithoutDuplicatingContextMessages(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of(
+                "agentId", "engineer",
+                "requestSummary", "Write the parser implementation"
+        ), false, null, Map.of());
+        service.startToolCallTrace(sessionId, turn.assistantMessage().id(), started);
+
+        long beforeCompletionMessages = repository.listMessagesBySession(sessionId).size();
+
+        ToolCallTraceInput completed = new ToolCallTraceInput("task-1", "task", Map.of(
+                "agentId", "engineer",
+                "requestSummary", "Write the parser implementation"
+        ), true, "done", Map.of("summary", "finished"));
+
+        var firstView = service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), completed);
+
+        var traceRows = repository.listToolCallTracesBySession(sessionId);
+        assertThat(traceRows).hasSize(1);
+        assertThat(traceRows.getFirst().completedAt()).isNotNull();
+        assertThat(traceRows.getFirst().success()).isTrue();
+        assertThat(repository.listMessagesBySession(sessionId)).hasSize(Math.toIntExact(beforeCompletionMessages + 2));
+        assertThat(firstView.success()).isTrue();
+        assertThat(firstView.status()).isEqualTo("success");
+
+        long afterFirstCompletionMessages = repository.listMessagesBySession(sessionId).size();
+        var duplicateView = service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), completed);
+
+        assertThat(repository.listToolCallTracesBySession(sessionId)).hasSize(1);
+        assertThat(repository.listMessagesBySession(sessionId)).hasSize(Math.toIntExact(afterFirstCompletionMessages));
+        assertThat(duplicateView.success()).isTrue();
+        assertThat(duplicateView.status()).isEqualTo("success");
+        assertThat(service.loadSessionDetail(sessionId).chatMessages()).filteredOn(message -> "assistant".equals(message.role()) && !message.pending())
+                .singleElement()
+                .satisfies(message -> assertThat(message.toolCalls()).singleElement().satisfies(call -> {
+                    assertThat(call.status()).isEqualTo("success");
+                    assertThat(call.success()).isTrue();
+                }));
     }
 
     @Test
@@ -185,7 +336,7 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "running", Map.of());
 
         service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
@@ -203,6 +354,52 @@ public class AppStateServicePersistenceTests {
                 .orElseThrow();
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.toolCallId()).isEqualTo("task-1"));
     }
+
+    @Test
+    public void taskToolCallViewPrefersRequestSummaryAndFallsBackToLegacyTaskBody(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of(
+                "agentId", "engineer",
+                "requestSummary", "Implement the parser",
+                "task", "Write the parser implementation"
+        ), true, "running", Map.of());
+
+        service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
+        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
+
+        ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
+    }
+
+    @Test
+    public void taskToolCallViewDerivesTaskBodyFromLegacyTaskField(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Implement the parser", "task", "Write the parser implementation"), true, "running", Map.of());
+
+        service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
+        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
+
+        ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
+    }
     @Test
     public void forkPrimarySessionCopiesConversationAndToolCallStateWithoutDraftOrReviewState(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
@@ -214,7 +411,7 @@ public class AppStateServicePersistenceTests {
         service.addChangedFilesToSession(sourceSessionId, List.of(new ChangedFileDraft("src/Fork.java", "diff")));
         ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5", "HIGH");
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sourceSessionId, "user-1", "assistant-1", "use a task", metadata);
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "task output", Map.of("sessionId", sourceSessionId));
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "task output", Map.of("sessionId", sourceSessionId));
         service.appendToolCallTrace(sourceSessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sourceSessionId, turn.assistantMessage().id(), "final reply", List.of(trace));
         long forkedSessionId = service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.assistantMessage().id());
@@ -282,7 +479,7 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Use a task"), true, "running", Map.of());
         service.appendToolCallTrace(sessionId, firstTurn.assistantMessage().id(), trace);
 
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
@@ -337,6 +534,44 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void pendingParentAssistantWithHiddenChildSessionEnrichesExistingStartedTaskTrace(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of(
+                "agentId", "engineer",
+                "requestSummary", "Write the parser implementation"
+        ), false, null, Map.of());
+        service.startToolCallTrace(sessionId, turn.assistantMessage().id(), started);
+        context.activeStreamRegistryService().register(turn.assistantMessage().id(), sessionId, projectPath.toString());
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
+
+        ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role()) && message.pending())
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> {
+            assertThat(call.toolCallId()).isEqualTo("task-1");
+            assertThat(call.toolName()).isEqualTo("task");
+            assertThat(call.status()).isEqualTo("running");
+            assertThat(call.inputPreview()).contains("requestSummary");
+            assertThat(call.outputPreview()).isEmpty();
+            assertThat(call.taskBody()).isEqualTo("Write the parser implementation");
+            assertThat(call.subagentSessionId()).isEqualTo(hiddenSessionId);
+            assertThat(call.subagentAgentId()).isEqualTo("engineer");
+            assertThat(call.subagentAgentName()).isEqualTo("Engineer");
+        });
+        context.activeStreamRegistryService().unregister(turn.assistantMessage().id());
+    }
+
+    @Test
     public void laterPendingAssistantWithHiddenChildSessionStillShowsASyntheticRunningTaskCallWhenAnEarlierTurnUsedTheSameToolCallId(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
         AppStateService service = context.service();
@@ -345,7 +580,7 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Use a task again"), true, "running", Map.of());
         service.appendToolCallTrace(sessionId, firstTurn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, firstTurn.assistantMessage().id(), "done", List.of(trace));
 
