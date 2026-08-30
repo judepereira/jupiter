@@ -1551,26 +1551,90 @@ public class UiController {
         return fileName == null ? path.toString() : fileName.toString();
     }
 
+    private static final String CHATGPT_SESSION_EXPIRED_MESSAGE = "Your ChatGPT/OpenAI session has expired. Please sign in again.";
+
     private String normalizeProviderErrorMessage(Exception e) {
-        String message = e == null ? null : e.getMessage();
-        if (message == null || message.isBlank()) {
+        if (e == null) {
             return "error";
         }
 
-        String rawJson = extractJsonObject(message);
-        if (rawJson != null) {
+        String fallbackMessage = plainMessage(e.getMessage());
+        String providerMessage = null;
+
+        for (Throwable current = e; current != null; current = current.getCause()) {
+            if (isAuthenticationExceptionWithTokenExpired(current)) {
+                return CHATGPT_SESSION_EXPIRED_MESSAGE;
+            }
+
+            String message = current.getMessage();
+            if (message == null || message.isBlank()) {
+                continue;
+            }
+
+            String rawJson = extractJsonObject(message);
+            if (rawJson == null) {
+                continue;
+            }
+
             try {
                 ProviderErrorPayload payload = SseJson.readValue(rawJson, ProviderErrorPayload.class);
+                if (isTokenExpired(payload)) {
+                    return CHATGPT_SESSION_EXPIRED_MESSAGE;
+                }
+
                 String errorMessage = payload.error() == null ? null : payload.error().message();
                 if (errorMessage != null && !errorMessage.isBlank()) {
-                    log.warn("Provider error payload: {}", rawJson);
-                    return errorMessage;
+                    providerMessage = errorMessage;
                 }
             } catch (Exception ignored) {
             }
         }
 
-        return message;
+        if (providerMessage != null) {
+            return providerMessage;
+        }
+
+        return fallbackMessage == null || fallbackMessage.isBlank() ? "error" : fallbackMessage;
+    }
+
+    private boolean isAuthenticationExceptionWithTokenExpired(Throwable throwable) {
+        if (throwable == null) {
+            return false;
+        }
+        String simpleName = throwable.getClass().getSimpleName();
+        if (!"AuthenticationException".equals(simpleName)) {
+            return false;
+        }
+        return containsTokenExpired(throwable);
+    }
+
+    private boolean containsTokenExpired(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            String message = current.getMessage();
+            if (message != null && message.contains("token_expired")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isTokenExpired(ProviderErrorPayload payload) {
+        if (payload == null) {
+            return false;
+        }
+        return isTokenExpired(payload.error()) || isTokenExpired(payload.detail());
+    }
+
+    private boolean isTokenExpired(ProviderError error) {
+        return error != null && "token_expired".equals(error.code());
+    }
+
+    private boolean isTokenExpired(ProviderDetail detail) {
+        return detail != null && "token_expired".equals(detail.code());
+    }
+
+    private String plainMessage(String message) {
+        return message == null || message.isBlank() || extractJsonObject(message) != null ? null : message;
     }
 
     private String extractJsonObject(String message) {
@@ -1628,10 +1692,13 @@ public class UiController {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderErrorPayload(ProviderError error) {}
+    private record ProviderErrorPayload(ProviderError error, ProviderDetail detail) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderError(String message) {}
+    private record ProviderError(String message, String code) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ProviderDetail(String message, String code) {}
 
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                                 Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,

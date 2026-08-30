@@ -567,8 +567,8 @@ public class UiControllerAsyncStreamingTests {
         assertThat(assistantId).isNotNull();
         final String finalAssistantId = assistantId;
 
-        ctrl.streamChat(assistantId);
-        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
+        ctrl.streamChat(finalAssistantId);
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, finalAssistantId);
 
         Model afterModel = new ConcurrentModel();
         ctrl.index(afterModel);
@@ -601,6 +601,48 @@ public class UiControllerAsyncStreamingTests {
         assertThat(text).contains("You exceeded your current quota, please check your plan and billing details.");
         assertThat(text).doesNotContain("insufficient_quota");
         assertThat(text).doesNotContain("\"error\"");
+    }
+
+    @Test
+    public void streaming_error_normalizes_nested_openai_token_expired_json() throws Exception {
+        String nestedJson = "{\"error\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"},\"detail\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"}}";
+
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+            @Override
+            public AgentTurnResult runTurn(AgentTurnRequest request) {
+                return new AgentTurnResult("", List.of());
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+                RuntimeException nested = new RuntimeException("provider nested: " + nestedJson);
+                throw new RuntimeException("OpenAI streaming request failed", nested);
+            }
+        };
+
+        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        props.setWorkspaceRoot(".");
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
+
+        Model model = new ConcurrentModel();
+        ctrl.sendMessage("go", model, null);
+        String assistantId = assistantId((ConcurrentModel) model);
+
+        ctrl.streamChat(assistantId);
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
+
+        Model afterModel = new ConcurrentModel();
+        ctrl.index(afterModel);
+        List<?> after = (List<?>) ((ConcurrentModel) afterModel).getAttribute("chatMessages");
+        UiController.ChatMessage assistant = (UiController.ChatMessage) after.stream()
+                .filter(message -> assistantId.equals(((UiController.ChatMessage) message).id()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(assistant.text()).contains("Your ChatGPT/OpenAI session has expired. Please sign in again.");
+        assertThat(assistant.text()).doesNotContain("OpenAI streaming request failed");
+        assertThat(assistant.text()).doesNotContain("{\"error\"");
+        assertThat(assistant.text()).doesNotContain("token_expired");
     }
 
     @Test
