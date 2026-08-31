@@ -2,6 +2,7 @@ import {configureChatComposer, initChatComposer, resizeChatTextarea} from './cha
 import {configureCommandPicker} from './chat/commands.js';
 import {formatAllChatSubtitles, renderAllChatMarkdown} from './chat/markdown.js';
 import {initWorkspaceRailSync, syncFaviconWithRail} from './chat/rail-sync.js';
+import {bindAutoScrollListeners} from './chat/scroll.js';
 import {
     activePrimaryPendingAssistantRow,
     bindPendingStreams,
@@ -70,6 +71,7 @@ function bindChatHtmxLifecycleListeners() {
 configureCommandPicker({resizeChatTextarea, bindPendingStreams});
 configureChatComposer({activePrimaryPendingAssistantRow, requestStopActiveChat, updateChatSendButtonState});
 
+bindAutoScrollListeners();
 initChatComposer();
 try {
     renderAllChatMarkdown();
