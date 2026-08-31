@@ -132,6 +132,17 @@ public class ProjectsTemplateRenderTest {
 
         assertThat(html).contains("id=\"settings-modal\"", "Environment variables", "API_URL", "https://example.test", "FEATURE_FLAG", "true", "Add Variable");
         assertThat(html).contains("MCP servers", "Local MCP", "http://localhost:3000/mcp", "Header name", "Authorization", "Bearer token", "Exposed projects");
+        assertThat(html).contains(
+                "class=\"nav nav-pills flex-md-column settings-nav\"",
+                "id=\"settings-current-project\"",
+                "id=\"settings-mcp-servers\"",
+                "id=\"settings-model-providers\"",
+                "id=\"settings-help\"",
+                "<h5>Help</h5>");
+        assertThat(html.indexOf("Current Project")).isLessThan(html.indexOf("MCP Servers"));
+        assertThat(html.indexOf("MCP Servers")).isLessThan(html.indexOf("Model Providers"));
+        assertThat(html.indexOf("Model Providers")).isLessThan(html.indexOf("Help"));
+        assertThat(html).contains("data-bs-toggle=\"pill\"", "aria-selected=\"true\"");
         assertThat(html.split("data-settings-env-row", -1)).hasSize(4);
     }
 

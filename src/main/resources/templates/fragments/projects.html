@@ -201,19 +201,31 @@
                 <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
             </div>
 
-            <div class="settings-modal-grid">
-                <form class="settings-form" hx-post="/ui/settings/apply" hx-target="#modal-root" hx-swap="innerHTML">
-                    <section class="settings-section">
-                        <h5>Current Project</h5>
-                        <div class="settings-project-meta">
-                            <div><strong>Name:</strong> <span th:text="${activeProject == null ? '' : activeProject.name}"></span></div>
-                            <div><strong>Path:</strong> <span th:text="${activeProject == null ? '' : activeProject.path}"></span></div>
-                        </div>
+            <div class="settings-modal-grid row g-4">
+                <div class="col-12 col-md-3">
+                    <nav class="nav nav-pills flex-md-column settings-nav" aria-label="Settings tabs" role="tablist">
+                        <button class="nav-link active" id="settings-current-project-tab" data-bs-toggle="pill" data-bs-target="#settings-current-project" type="button" role="tab" aria-controls="settings-current-project" aria-selected="true">Current Project</button>
+                        <button class="nav-link" id="settings-mcp-servers-tab" data-bs-toggle="pill" data-bs-target="#settings-mcp-servers" type="button" role="tab" aria-controls="settings-mcp-servers" aria-selected="false">MCP Servers</button>
+                        <button class="nav-link" id="settings-model-providers-tab" data-bs-toggle="pill" data-bs-target="#settings-model-providers" type="button" role="tab" aria-controls="settings-model-providers" aria-selected="false">Model Providers</button>
+                        <button class="nav-link" id="settings-help-tab" data-bs-toggle="pill" data-bs-target="#settings-help" type="button" role="tab" aria-controls="settings-help" aria-selected="false">Help</button>
+                    </nav>
+                </div>
 
-                        <div class="project-form-field settings-env-field" data-settings-env-field>
-                            <span>Environment variables</span>
-                            <div class="settings-env-list" data-settings-env-vars>
-                                <div th:if="${#lists.isEmpty(environmentVariablesValue)}" class="settings-env-row" data-settings-env-row>
+                <div class="col-12 col-md-9">
+                    <div class="tab-content settings-tab-content">
+                        <div class="tab-pane fade show active" id="settings-current-project" role="tabpanel" aria-labelledby="settings-current-project-tab" tabindex="0">
+                            <form class="settings-form" hx-post="/ui/settings/apply" hx-target="#modal-root" hx-swap="innerHTML">
+                                <section class="settings-section">
+                                    <h5>Current Project</h5>
+                                    <div class="settings-project-meta">
+                                        <div><strong>Name:</strong> <span th:text="${activeProject == null ? '' : activeProject.name}"></span></div>
+                                        <div><strong>Path:</strong> <span th:text="${activeProject == null ? '' : activeProject.path}"></span></div>
+                                    </div>
+
+                                    <div class="project-form-field settings-env-field" data-settings-env-field>
+                                        <span>Environment variables</span>
+                                        <div class="settings-env-list" data-settings-env-vars>
+                                            <div th:if="${#lists.isEmpty(environmentVariablesValue)}" class="settings-env-row" data-settings-env-row>
                                     <input type="text"
                                            class="settings-env-name"
                                            name="environmentVariableNames"
@@ -273,10 +285,12 @@
                             <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
                             <button type="submit" class="btn btn-primary">Save</button>
                         </div>
-                    </section>
-                </form>
+                                    </section>
+                            </form>
+                        </div>
 
-                <form class="settings-form settings-mcp-form" hx-post="/ui/settings/mcp/apply" hx-target="#modal-root" hx-swap="innerHTML" data-settings-mcp-form>
+                        <div class="tab-pane fade" id="settings-mcp-servers" role="tabpanel" aria-labelledby="settings-mcp-servers-tab" tabindex="0">
+                            <form class="settings-form settings-mcp-form" hx-post="/ui/settings/mcp/apply" hx-target="#modal-root" hx-swap="innerHTML" data-settings-mcp-form>
                     <input type="hidden" name="mcpCatalogJson" value="">
                     <section class="settings-section settings-mcp-section" data-settings-mcp-field>
                         <div class="settings-section-header">
@@ -405,17 +419,28 @@
                     <div class="project-form-actions">
                         <button type="submit" class="btn btn-primary">Apply MCP Catalog</button>
                     </div>
-                </form>
+                            </form>
+                        </div>
 
-                <section class="settings-section settings-app-section">
-                    <h5>App</h5>
-                    <p>Made with &lt;3 in Amsterdam</p>
-                    <p>Version <strong th:text="${appVersion}"></strong></p>
-                    <div class="settings-openai-section">
-                        <h6>OpenAI subscription</h6>
-                        <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
+                        <div class="tab-pane fade" id="settings-model-providers" role="tabpanel" aria-labelledby="settings-model-providers-tab" tabindex="0">
+                            <section class="settings-section settings-app-section">
+                                <h5>Model Providers</h5>
+                                <div class="settings-openai-section">
+                                    <h6>OpenAI subscription</h6>
+                                    <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
+                                </div>
+                            </section>
+                        </div>
+
+                        <div class="tab-pane fade" id="settings-help" role="tabpanel" aria-labelledby="settings-help-tab" tabindex="0">
+                            <section class="settings-section settings-app-section">
+                                <h5>Help</h5>
+                                <p>Made with &lt;3 in Amsterdam</p>
+                                <p>Version <strong th:text="${appVersion}"></strong></p>
+                            </section>
+                        </div>
                     </div>
-                </section>
+                </div>
             </div>
         </div>
     </div>
