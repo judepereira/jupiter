@@ -1,5 +1,5 @@
-import {bindDynamicSubagentButton, getDirectToolCallChild, getToolCallGroupCalls} from './dom.js';
-import {normalizeToolCallName, toolCallGroupKind} from './identity.js';
+import {bindDynamicSubagentButton, getDirectToolCallChild, getToolCallGroups} from './dom.js';
+import {normalizeToolCallName} from './identity.js';
 
 export function buildToolCallBundleRefs(bundle) {
     try {
@@ -89,6 +89,31 @@ export function getOrCreateToolCallBundleCallsContainer(container) {
     }
 }
 
+export function refreshToolCallBundleLabel(bundleRefs) {
+    try {
+        if (!bundleRefs || !bundleRefs.bundle) return;
+
+        const groups = bundleRefs.callsContainer ? Array.from(bundleRefs.callsContainer.children).filter(child => child && child.classList && child.classList.contains('tool-call')) : [];
+        const counts = new Map();
+        const order = [];
+        for (const group of groups) {
+            const calls = getDirectToolCallChild(getDirectToolCallChild(group, 'tool-call-detail'), 'tool-call-calls');
+            for (const call of calls ? Array.from(calls.children) : []) {
+                const toolName = normalizeToolCallName(call.dataset ? call.dataset.toolCallToolName : '');
+                if (!toolName) continue;
+                if (!counts.has(toolName)) order.push(toolName);
+                counts.set(toolName, (counts.get(toolName) || 0) + 1);
+            }
+        }
+
+        const label = order.map(name => counts.get(name) > 1 ? name + ' (' + counts.get(name) + ')' : name).join(', ');
+        bundleRefs.bundle.dataset.toolCallKind = 'bundle';
+        bundleRefs.bundle.dataset.toolCallSummaryLabel = label ? 'Used: ' + label : 'Used';
+        if (bundleRefs.nameSpan) bundleRefs.nameSpan.textContent = bundleRefs.bundle.dataset.toolCallSummaryLabel;
+    } catch (_) {
+    }
+}
+
 export function createToolCallGroup(container, toolName) {
     try {
         if (!container) return null;
@@ -106,48 +131,6 @@ export function createToolCallGroup(container, toolName) {
         return refs;
     } catch (_) {
         return null;
-    }
-}
-
-export function refreshToolCallBundleSummary(bundleRefs) {
-    try {
-        if (!bundleRefs || !bundleRefs.bundle) return;
-
-        const groups = bundleRefs.callsContainer ? Array.from(bundleRefs.callsContainer.children).filter(child => child && child.classList && child.classList.contains('tool-call')) : [];
-        const counts = new Map();
-        const order = [];
-        let allSuccess = true;
-        let running = false;
-
-        for (const group of groups) {
-            const calls = getToolCallGroupCalls(group);
-            for (const call of calls) {
-                const toolName = normalizeToolCallName(call.dataset ? call.dataset.toolCallToolName : '');
-                if (!toolName) continue;
-                if (!counts.has(toolName)) order.push(toolName);
-                counts.set(toolName, (counts.get(toolName) || 0) + 1);
-                const callState = call.dataset ? String(call.dataset.toolCallState || '') : '';
-                if (callState === 'running') running = true;
-                if (call.dataset.toolCallSuccess !== 'true') {
-                    allSuccess = false;
-                }
-            }
-            const groupState = group.dataset ? String(group.dataset.toolCallState || '') : '';
-            if (groupState === 'running') running = true;
-            if (group.dataset.toolCallSuccess !== 'true') {
-                allSuccess = false;
-            }
-        }
-
-        const label = order.map(name => counts.get(name) > 1 ? name + ' (' + counts.get(name) + ')' : name).join(', ');
-        bundleRefs.bundle.dataset.toolCallKind = 'bundle';
-        bundleRefs.bundle.dataset.toolCallState = running ? 'running' : (allSuccess ? 'done' : 'error');
-        bundleRefs.bundle.dataset.toolCallSuccess = running ? 'false' : (allSuccess ? 'true' : 'false');
-        bundleRefs.bundle.dataset.toolCallSummaryLabel = label ? 'Used: ' + label : 'Used';
-        if (bundleRefs.nameSpan) {
-            bundleRefs.nameSpan.textContent = bundleRefs.bundle.dataset.toolCallSummaryLabel;
-        }
-    } catch (_) {
     }
 }
 

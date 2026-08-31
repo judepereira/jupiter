@@ -1,7 +1,7 @@
 import {clearToolCallImages, getToolCallContainer, getToolCallGroups, getDirectToolCallChild, bindDynamicSubagentButton} from './dom.js';
 import {canCoalesceToolCallGroup, findToolCallEntry, rememberToolCallIdentity, toolCallKey, toolCallRegistryScope, updateToolCallGroupKind, isSpecialStandaloneToolCall, toolCallGroupKind, registerToolCallEntry} from './identity.js';
 import {taskToolCallBody, toolCallInputText, toolCallOutputText, toolCallStatusText} from './payload.js';
-import {buildToolCallBundleRefs, buildToolCallGroupRefs, buildToolCallCallRefs, createToolCallGroup, getOrCreateToolCallBundleCallsContainer, getToolCallBundle, refreshToolCallBundleSummary, refreshToolCallGroupSummary, toolCallGroupSummaryText} from './groups.js';
+import {buildToolCallBundleRefs, buildToolCallGroupRefs, buildToolCallCallRefs, createToolCallGroup, getOrCreateToolCallBundleCallsContainer, getToolCallBundle, refreshToolCallBundleLabel, refreshToolCallGroupSummary, toolCallGroupSummaryText} from './groups.js';
 
 export function createToolCallCall(groupRefs, payload, processHtmxElementFn) {
     try {
@@ -27,30 +27,9 @@ export function createToolCallCall(groupRefs, payload, processHtmxElementFn) {
         refs.details.dataset.toolCallSuccess = 'false';
 
         refreshToolCallGroupSummary(groupRefs);
-        refreshParentToolCallBundle(groupRefs.group);
         return {group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, detail: refs.detail, details: refs.details, subagent: refs.subagent, button: refs.button, inputPre: refs.inputPre, outputSection: refs.outputSection, outputPre: refs.outputPre, imageFigure: refs.imageFigure, nestedCalls: refs.nestedCalls};
     } catch (_) {
         return null;
-    }
-}
-
-export function refreshAnyToolCallBundle(container) {
-    try {
-        if (!container) return;
-        const bundle = (container.closest && container.closest('details.tool-call-bundle')) || getToolCallBundle(container);
-        if (!bundle) return;
-        refreshToolCallBundleSummary(buildToolCallBundleRefs(bundle));
-    } catch (_) {
-    }
-}
-
-export function refreshParentToolCallBundle(group) {
-    try {
-        if (!group || !group.closest) return;
-        const bundle = group.closest('details.tool-call-bundle');
-        if (!bundle) return;
-        refreshToolCallBundleSummary(buildToolCallBundleRefs(bundle));
-    } catch (_) {
     }
 }
 
@@ -82,16 +61,19 @@ export function ensureToolCallEntry(target, payload, processHtmxElementFn) {
                 clearToolCallImages(existingEntry);
             }
             refreshToolCallGroupSummary({group: existing.group, summary: existing.summary, nameSpan: existing.nameSpan, statusSpan: existing.statusSpan, callsContainer: existing.group ? getDirectToolCallChild(getDirectToolCallChild(existing.group, 'tool-call-detail'), 'tool-call-calls') : null});
-            refreshParentToolCallBundle(existing.group || existingEntry);
             return existing;
         }
 
         const bundle = getToolCallBundle(container);
-        const bundleRefs = bundle ? buildToolCallBundleRefs(bundle) : null;
+        let bundleRefs = bundle ? buildToolCallBundleRefs(bundle) : null;
         const groupContainer = isSpecialStandaloneToolCall(toolName)
             ? container
             : (bundleRefs ? bundleRefs.callsContainer : getOrCreateToolCallBundleCallsContainer(container));
         if (!groupContainer) return null;
+        if (!bundleRefs && !isSpecialStandaloneToolCall(toolName)) {
+            const createdBundle = getToolCallBundle(container);
+            bundleRefs = createdBundle ? buildToolCallBundleRefs(createdBundle) : null;
+        }
 
         const groups = getToolCallGroups(groupContainer);
         let groupRefs = null;
@@ -108,7 +90,7 @@ export function ensureToolCallEntry(target, payload, processHtmxElementFn) {
 
         if (!groupRefs) return null;
         const entry = createToolCallCall(groupRefs, payload, processHtmxElementFn);
-        refreshAnyToolCallBundle(container);
+        if (bundleRefs) refreshToolCallBundleLabel(bundleRefs);
         return entry;
     } catch (_) {
         return null;
@@ -268,9 +250,6 @@ export function updateToolCallEntry(entry, payload, options, processHtmxElementF
             if (groupRefs) {
                 refreshToolCallGroupSummary({group: groupRefs.group, summary: groupRefs.summary, nameSpan: groupRefs.nameSpan, statusSpan: groupRefs.statusSpan, taskBody: groupRefs.taskBody, button: groupRefs.button, callsContainer: groupRefs.callsContainer});
             }
-            if (group) {
-                refreshParentToolCallBundle(group);
-            }
             return;
         }
 
@@ -297,7 +276,8 @@ export function updateToolCallEntry(entry, payload, options, processHtmxElementF
 
         if (group) {
             refreshToolCallGroupSummary({group: group, summary: entry.summary, nameSpan: entry.nameSpan, statusSpan: entry.statusSpan, callsContainer: getDirectToolCallChild(getDirectToolCallChild(group, 'tool-call-detail'), 'tool-call-calls')});
-            refreshParentToolCallBundle(group);
+            const bundle = group.closest && group.closest('details.tool-call-bundle');
+            if (bundle) refreshToolCallBundleLabel(buildToolCallBundleRefs(bundle));
         }
     } catch (_) {
     }
@@ -314,4 +294,4 @@ export function appendToolCallToChatRow(target, payload, processHtmxElementFn, o
     }
 }
 
-export {buildToolCallBundleRefs, buildToolCallGroupRefs, buildToolCallCallRefs, createToolCallGroup, getOrCreateToolCallBundleCallsContainer, getToolCallBundle, refreshToolCallBundleSummary, refreshToolCallGroupSummary};
+export {buildToolCallBundleRefs, buildToolCallGroupRefs, buildToolCallCallRefs, createToolCallGroup, getOrCreateToolCallBundleCallsContainer, getToolCallBundle, refreshToolCallBundleLabel, refreshToolCallGroupSummary, toolCallGroupSummaryText};

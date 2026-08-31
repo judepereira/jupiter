@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class UiControllerChatMessageGroupingTests {
 
     @Test
-    void exploratoryToolCallsGroupAcrossNamesAndAggregateSuccess() {
+    void exploratoryToolCallsGroupAcrossNamesAndPreserveGroupStatus() {
         UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
                 toolCall("read-1", "read_file", true),
                 toolCall("read-2", "read_file", false),
@@ -63,6 +63,7 @@ class UiControllerChatMessageGroupingTests {
 
         assertThat(blocks).hasSize(3);
         assertThat(blocks.get(0).bundle().summaryLabel()).isEqualTo("Used: read_file (2)");
+        assertThat(blocks.get(0).bundle().groups()).extracting(UiController.ToolCallGroupView::status).containsExactly("success");
         assertThat(blocks.get(1).group().toolName()).isEqualTo("task");
         assertThat(blocks.get(2).bundle().summaryLabel()).isEqualTo("Used: read_file");
     }
