@@ -38,7 +38,7 @@
                                             class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                             th:if="${taskCall != null and taskCall.subagentSessionId != null}"
                                             th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${taskCall.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                        Open subagent: <strong th:text="${taskCall.subagentAgentName}"></strong>
+                                        View Session
                                     </button>
                                 </summary>
 
@@ -51,7 +51,7 @@
                                                 <button type="button"
                                                         class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                                         th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                                    Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                                                    View Session
                                                 </button>
                                             </div>
 
@@ -108,7 +108,7 @@
                                 class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                 th:if="${taskCall != null and taskCall.subagentSessionId != null}"
                                 th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${taskCall.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                            Open subagent: <strong th:text="${taskCall.subagentAgentName}"></strong>
+                            View Session
                         </button>
                     </summary>
 
@@ -121,7 +121,7 @@
                                     <button type="button"
                                             class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                             th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                        Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                                        View Session
                                     </button>
                                 </div>
 
