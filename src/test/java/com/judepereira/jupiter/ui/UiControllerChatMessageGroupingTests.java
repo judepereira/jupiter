@@ -10,7 +10,7 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void exploratoryToolCallsGroupAcrossNamesAndAggregateSuccess() {
-        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
                 toolCall("read-1", "read_file", true),
                 toolCall("read-2", "read_file", false),
                 toolCall("list-1", "list_files", true),
@@ -18,7 +18,7 @@ class UiControllerChatMessageGroupingTests {
                 toolCall("list-2", "list_files", true)
         ), null);
 
-        List<UiController.ToolCallGroupView> groups = message.toolCallGroups();
+        List<ChatPresentationService.ToolCallGroupView> groups = message.toolCallGroups();
 
         assertThat(groups).hasSize(3);
 
@@ -37,12 +37,12 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void adjacentNonExploratorySameNameCallsStillGroupAsBefore() {
-        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
                 toolCall("write-1", "write_file", true),
                 toolCall("write-2", "write_file", true)
         ), null);
 
-        List<UiController.ToolCallGroupView> groups = message.toolCallGroups();
+        List<ChatPresentationService.ToolCallGroupView> groups = message.toolCallGroups();
 
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0).displayLabel()).isEqualTo("write_file (2)");
@@ -52,14 +52,14 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void toolCallBlocksPreserveChronologicalOrderAcrossStandaloneSpecialTools() {
-        UiController.ChatMessage message = new UiController.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
                 toolCall("read-1", "read_file", true),
                 toolCall("read-2", "read_file", true),
                 toolCall("task-1", "task", true),
                 toolCall("read-3", "read_file", true)
         ), null);
 
-        List<UiController.ToolCallBlockView> blocks = message.toolCallBlocks();
+        List<ChatPresentationService.ToolCallBlockView> blocks = message.toolCallBlocks();
 
         assertThat(blocks).hasSize(3);
         assertThat(blocks.get(0).bundle().summaryLabel()).isEqualTo("Used: read_file (2)");
@@ -67,7 +67,30 @@ class UiControllerChatMessageGroupingTests {
         assertThat(blocks.get(2).bundle().summaryLabel()).isEqualTo("Used: read_file");
     }
 
-    private static UiController.ToolCallView toolCall(String id, String toolName, boolean success) {
-        return new UiController.ToolCallView(id, toolName, success, "input", "output", false, false, null, null, null);
+    @Test
+    void presentationModelsOwnStableSafeDomIds() {
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "", 1L, false,
+                "assistant / ü", null, List.of(toolCall("call / ü", "read_file", true)), null);
+
+        assertThat(message.toolCallHostId()).isEqualTo("assistant-tool-calls-assistant-20-2f-20-c3-bc");
+        assertThat(message.toolCallBlocks().get(0).bundle().domId(message.id()))
+                .isEqualTo("assistant-tool-bundle-assistant-20-2f-20-c3-bc-call-20-2f-20-c3-bc");
+        assertThat(message.toolCallBlocks().get(0).bundle().groups().get(0).domId(message.id()))
+                .isEqualTo("assistant-tool-group-assistant-20-2f-20-c3-bc-call-20-2f-20-c3-bc");
+        assertThat(message.toolCallBlocks().get(0).bundle().groups().get(0).calls().get(0).domId(message.id()))
+                .isEqualTo("assistant-tool-call-assistant-20-2f-20-c3-bc-call-20-2f-20-c3-bc");
+    }
+
+    @Test
+    void emptyAssistantToolCallHostIsStableAndHasNoToolCallChildren() {
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "", 1L, false,
+                "assistant-1", null, List.of(), null);
+
+        assertThat(message.toolCallHostId()).isEqualTo("assistant-tool-calls-assistant-1");
+        assertThat(message.toolCallBlocks()).isEmpty();
+    }
+
+    private static ChatPresentationService.ToolCallView toolCall(String id, String toolName, boolean success) {
+        return new ChatPresentationService.ToolCallView(id, toolName, success, "input", "output", false, false, null, null, null);
     }
 }

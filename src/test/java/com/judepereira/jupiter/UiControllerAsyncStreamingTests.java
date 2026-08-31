@@ -14,6 +14,7 @@ import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.ui.UiController;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.terminal.TerminalManager;
@@ -634,8 +635,8 @@ public class UiControllerAsyncStreamingTests {
         Model afterModel = new ConcurrentModel();
         ctrl.index(afterModel);
         List<?> after = (List<?>) ((ConcurrentModel) afterModel).getAttribute("chatMessages");
-        UiController.ChatMessage assistant = (UiController.ChatMessage) after.stream()
-                .filter(message -> assistantId.equals(((UiController.ChatMessage) message).id()))
+        ChatPresentationService.ChatMessage assistant = (ChatPresentationService.ChatMessage) after.stream()
+                .filter(message -> assistantId.equals(((ChatPresentationService.ChatMessage) message).id()))
                 .findFirst()
                 .orElseThrow();
 
@@ -689,12 +690,12 @@ public class UiControllerAsyncStreamingTests {
         ctrl.index(after);
         List<?> chatMessages = (List<?>) after.getAttribute("chatMessages");
         Object assistant = chatMessages.stream()
-                .filter(message -> assistantId.equals(((UiController.ChatMessage) message).id()))
+                .filter(message -> assistantId.equals(((ChatPresentationService.ChatMessage) message).id()))
                 .findFirst()
                 .orElseThrow();
 
-        assertThat(((UiController.ChatMessage) assistant).pending()).isFalse();
-        assertThat(((UiController.ChatMessage) assistant).text()).isEqualTo("partial\n\nAction Interrupted");
+        assertThat(((ChatPresentationService.ChatMessage) assistant).pending()).isFalse();
+        assertThat(((ChatPresentationService.ChatMessage) assistant).text()).isEqualTo("partial\n\nAction Interrupted");
     }
     private static String assistantId(ConcurrentModel model) throws Exception {
         List<?> msgs = (List<?>) model.getAttribute("chatMessages");

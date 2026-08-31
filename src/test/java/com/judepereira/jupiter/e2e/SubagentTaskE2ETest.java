@@ -60,7 +60,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-input").fill("please use a task");
             page.locator("#chat-send-btn").click();
 
-            var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            var taskToolCall = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
@@ -187,7 +187,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-send-btn").click();
 
             TestAppConfig.awaitSubagentStarted();
-            var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            var taskToolCall = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
             taskToolCall.waitFor();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
             var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
@@ -249,7 +249,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-send-btn").click();
 
             TestAppConfig.awaitSubagentStarted();
-            var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            var taskToolCall = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
             var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
@@ -274,7 +274,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                 page.locator("#chat-send-form").waitFor();
                 assertThat(page.locator("#chat-send-form")).isVisible();
 
-                var taskToolCallAfterBack = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+                var taskToolCallAfterBack = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
                 taskToolCallAfterBack.waitFor();
                 assertThat(taskToolCallAfterBack).isVisible();
                 var taskSummaryBodyAfterBack = taskToolCallAfterBack.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
