@@ -16,7 +16,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build & test
-        run: docker build . --tag jupiter:$GITHUB_SHA
+        env:
+          BLUECAVE_TOKEN: ${{ secrets.BLUECAVE_TOKEN }}
+          BLUECAVE_EXTRA_OPTS: >-
+            -b ${{ github.head_ref || github.ref_name }}
+            -c ${{ github.event.pull_request.head.sha || github.sha }}
+            ${{ github.event_name == 'pull_request' && '--pr' || '' }}
+        run: |
+          args=(
+            --tag "jupiter:$GITHUB_SHA"
+            --build-arg "BLUECAVE_EXTRA_OPTS=$BLUECAVE_EXTRA_OPTS"
+          )
+
+          if [[ -n "$BLUECAVE_TOKEN" ]]; then
+            args+=(--secret id=bluecave_token,env=BLUECAVE_TOKEN)
+          fi
+
+          docker build "${args[@]}" .
 
       - name: Log in to Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
