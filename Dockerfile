@@ -1,7 +1,9 @@
 FROM eclipse-temurin:25-jdk AS build
 
+ARG BLUECAVE_EXTRA_OPTS
+
 RUN     apt update
-RUN     apt install -y git ripgrep
+RUN     apt install -y git ripgrep curl
 
 WORKDIR /workspace
 
@@ -19,7 +21,14 @@ COPY src/ src/
 
 RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
     --mount=type=cache,id=root-cache,target=/root/.cache \
-    ./mvnw -B -ntp package
+    --mount=type=secret,id=bluecave_token,required=false \
+    if [ -s /run/secrets/bluecave_token ]; then \
+      BLUECAVE_TOKEN="$(cat /run/secrets/bluecave_token)" \
+      BLUECAVE_EXTRA_OPTS="$BLUECAVE_EXTRA_OPTS" \
+      ./mvnw -B -ntp package bluecave:report; \
+    else \
+      ./mvnw -B -ntp package; \
+    fi
 
 FROM eclipse-temurin:25-jre AS runtime
 
