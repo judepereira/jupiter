@@ -456,9 +456,7 @@ export function refreshToolCallGroupSummary(groupRefs) {
                     button.setAttribute('hx-target', '#chat-container');
                     button.setAttribute('hx-swap', 'outerHTML');
                     button.setAttribute('hx-trigger', 'click');
-                    const strong = document.createElement('strong');
-                    strong.textContent = subagentName;
-                    button.replaceChildren(document.createTextNode('Open subagent: '), strong);
+                    button.textContent = 'View Session';
                 } else {
                     button.hidden = true;
                 }

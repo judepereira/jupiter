@@ -252,11 +252,7 @@ export function updateToolCallEntry(entry, payload, options, processHtmxElementF
                         groupRefs.button.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(effectiveSubagentSessionId));
                         groupRefs.button.setAttribute('hx-target', '#chat-container');
                         groupRefs.button.setAttribute('hx-swap', 'outerHTML');
-                        groupRefs.button.replaceChildren(document.createTextNode('Open subagent: '), (() => {
-                            const strong = document.createElement('strong');
-                            strong.textContent = effectiveSubagentAgentName;
-                            return strong;
-                        })());
+                        groupRefs.button.textContent = 'View Session';
                         bindDynamicSubagentButton(groupRefs.button);
                     } else {
                         groupRefs.button.hidden = true;
@@ -295,11 +291,7 @@ export function updateToolCallEntry(entry, payload, options, processHtmxElementF
             entry.button.setAttribute('hx-get', '/ui/chat/subagent/' + encodeURIComponent(subagentSessionId));
             entry.button.setAttribute('hx-target', '#chat-container');
             entry.button.setAttribute('hx-swap', 'outerHTML');
-            entry.button.replaceChildren(document.createTextNode('Open subagent: '), (() => {
-                const strong = document.createElement('strong');
-                strong.textContent = subagentAgentName || subagentSessionId;
-                return strong;
-            })());
+            entry.button.textContent = 'View Session';
             bindDynamicSubagentButton(entry.button);
         }
 
