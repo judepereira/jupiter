@@ -49,10 +49,12 @@ function bindPendingStreams() {
 
             es.addEventListener('tool_call_html', e => {
                 try {
+                    if (!isStreamSessionActive()) return;
                     const stick = buffer.shouldStick() || buffer.wasNearBottom();
                     applyToolCallHtmlPatches(e);
                     if (stick) {
                         requestAnimationFrame(() => {
+                            if (!isStreamSessionActive()) return;
                             const history = document.getElementById('chat-history');
                             if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
                             buffer.setShouldStickToBottom(true);

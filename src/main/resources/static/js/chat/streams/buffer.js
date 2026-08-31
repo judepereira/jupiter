@@ -97,6 +97,15 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
     }
 
     function flushBuffer() {
+        if (!canAccessActiveHistory()) {
+            buffer = '';
+            rafPending = false;
+            if (flushTimer) {
+                clearTimeout(flushTimer);
+                flushTimer = null;
+            }
+            return;
+        }
         const stickBeforeFlush = isInitialChatScrollActive() || shouldStickToBottom || wasNearBottom();
         flushInner();
         if (stickBeforeFlush) {

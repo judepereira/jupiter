@@ -156,10 +156,12 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             page.evaluate("""
                     () => {
                         const NativeEventSource = window.EventSource;
+                        window.__inactiveStreamDeltaListenerBound = false;
                         window.__inactiveStreamDeltaSettled = false;
                         window.EventSource = class extends NativeEventSource {
                             addEventListener(type, listener, options) {
                                 if (type === 'delta') {
+                                    window.__inactiveStreamDeltaListenerBound = true;
                                     return super.addEventListener(type, event => {
                                         listener(event);
                                         requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -174,6 +176,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
                     """);
             page.locator("#chat-input").fill("start the inactive stream");
             page.locator("#chat-send-btn").click();
+            page.waitForFunction("() => window.__inactiveStreamDeltaListenerBound === true");
             TestAppConfig.awaitPrimaryStarted();
             page.locator("#chat-messages-list > li.pending").waitFor();
 
