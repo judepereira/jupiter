@@ -1726,7 +1726,7 @@ public class UiController {
 
     public record ToolCallGroupView(String toolName, String displayLabel, String status, boolean success, int count, List<ToolCallView> calls) {}
 
-    public record ToolCallBundleView(String summaryLabel, String status, boolean success, List<ToolCallGroupView> groups) {}
+    public record ToolCallBundleView(String summaryLabel, List<ToolCallGroupView> groups) {}
 
     public record ToolCallBlockView(ToolCallBundleView bundle, ToolCallGroupView group) {
         public static ToolCallBlockView bundle(ToolCallBundleView bundle) {
@@ -1799,10 +1799,7 @@ public class UiController {
         }
 
         private ToolCallBundleView toBundle(List<ToolCallGroupView> groups) {
-            String status = groups.stream().anyMatch(group -> "running".equals(group.status()))
-                    ? "running"
-                    : groups.stream().allMatch(ToolCallGroupView::success) ? "success" : "failure";
-            return new ToolCallBundleView(toolUsageSummaryLabel(groups), status, groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
+            return new ToolCallBundleView(toolUsageSummaryLabel(groups), List.copyOf(groups));
         }
 
         private String toolUsageSummaryLabel(List<ToolCallGroupView> groups) {

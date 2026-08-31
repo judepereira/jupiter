@@ -173,13 +173,16 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
-    public void chatRowsFragmentRendersRunningToolCallsWithoutFailureStyling() {
+    public void chatRowsFragmentOmitsBundleAggregateStatusButRendersNestedGroupStatus() {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
         context.setVariable("messages", List.of(
-                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-running", null,
-                        List.of(new UiController.ToolCallView("tool-call-1", "read_file", false, "input", "output", false, false, null, null, null, "running")),
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-mixed", null,
+                        List.of(
+                                new UiController.ToolCallView("tool-call-success", "read_file", true, "input", "output", false, false, null, null, null),
+                                new UiController.ToolCallView("tool-call-failure", "read_file", false, "input", "output", false, false, null, null, null)
+                        ),
                         null,
                         null)
         ));
@@ -188,8 +191,28 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-rows", context);
 
-        assertThat(html).contains("data-tool-call-state=\"running\"", ">running<");
-        assertThat(html).doesNotContain("tool-call-status-failure");
+        int bundleMarker = html.indexOf("tool-call-bundle");
+        int bundleStart = html.lastIndexOf("<details", bundleMarker);
+        int summaryStart = html.indexOf("<summary", bundleMarker);
+        int summaryEnd = html.indexOf("</summary>", summaryStart);
+        assertThat(bundleMarker).isGreaterThanOrEqualTo(0);
+        assertThat(bundleStart).isGreaterThanOrEqualTo(0);
+        assertThat(summaryStart).isGreaterThan(bundleStart);
+        assertThat(summaryEnd).isGreaterThan(summaryStart);
+
+        String bundleOpeningAndSummary = html.substring(bundleStart, summaryEnd + "</summary>".length());
+        assertThat(bundleOpeningAndSummary).doesNotContain(
+                "tool-call-status", "running", "success", "failure",
+                "data-tool-call-state", "data-tool-call-success");
+
+        int nestedGroupMarker = html.indexOf("data-tool-call-tool-name=\"read_file\"", summaryEnd);
+        int nestedGroupStart = html.lastIndexOf("<details", nestedGroupMarker);
+        int nestedSummaryStart = html.indexOf("<summary", nestedGroupStart);
+        int nestedSummaryEnd = html.indexOf("</summary>", nestedSummaryStart);
+        assertThat(nestedGroupMarker).isGreaterThan(summaryEnd);
+        assertThat(nestedGroupStart).isGreaterThan(bundleStart);
+        assertThat(html.substring(nestedGroupStart, nestedSummaryEnd + "</summary>".length()))
+                .contains("tool-call-status-failure", ">failure<");
     }
 
     @Test
