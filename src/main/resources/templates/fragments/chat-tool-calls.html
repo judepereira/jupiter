@@ -14,7 +14,7 @@
 
 <th:block th:fragment="bundle(bundle, assistantId)" th:if="${bundle != null}">
     <details class="tool-call tool-call-bundle" th:id="${bundle.domId(assistantId)}"
-             th:attr="data-tool-call-kind='bundle', data-tool-call-target='bundle', data-tool-call-state=${bundle.status == 'running' ? 'running' : (bundle.success ? 'done' : 'error')}, data-tool-call-success=${bundle.success} ? 'true' : 'false'">
+             th:attr="data-tool-call-kind='bundle', data-tool-call-target='bundle'">
         <th:block th:replace="~{fragments/chat-tool-calls :: bundleSummary(bundle=${bundle}, assistantId=${assistantId})}"></th:block>
         <div class="tool-call-detail">
             <div class="tool-call-calls" th:id="${bundle.callsDomId(assistantId)}">
@@ -29,7 +29,6 @@
 <th:block th:fragment="bundleSummary(bundle, assistantId)" th:if="${bundle != null}">
     <summary class="tool-call-summary" th:id="${bundle.summaryDomId(assistantId)}">
         <span class="tool-call-name" th:text="${bundle.summaryLabel}"></span>
-        <span class="tool-call-status" th:classappend="${bundle.status == 'running' ? '' : (bundle.success ? ' tool-call-status-success' : ' tool-call-status-failure')}" th:text="${bundle.status == 'running' ? 'running' : (bundle.success ? 'success' : 'failure')}"></span>
     </summary>
 </th:block>
 

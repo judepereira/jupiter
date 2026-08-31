@@ -2,9 +2,7 @@ package com.judepereira.jupiter.e2e;
 
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.ViewportSize;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,9 +25,8 @@ class MobileSystemBalloonPositionE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile);
-             BrowserContext context = browser.newContext(new Browser.NewContextOptions()
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile);
+             BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
                      .setViewportSize(new ViewportSize(390, 844))
                      .setIsMobile(true)
                      .setHasTouch(true))) {

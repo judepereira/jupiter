@@ -6,9 +6,7 @@ import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
 import com.microsoft.playwright.options.ViewportSize;
 import org.junit.jupiter.api.Test;
@@ -37,9 +35,8 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext()) {
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
 
             page.navigate(app.baseUrl());
@@ -78,9 +75,8 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext()) {
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
 
             page.navigate(app.baseUrl());
@@ -112,9 +108,8 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext(new Browser.NewContextOptions()
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
                      .setViewportSize(new ViewportSize(390, 844))
                      .setIsMobile(true)
                      .setHasTouch(true))) {

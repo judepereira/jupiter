@@ -1,3 +1,4 @@
+import {getActiveChatSessionId} from '../shared.js';
 import {getRawChatMarkdown, renderChatMarkdown, updateChatRowCompletion} from '../markdown.js';
 import {applyToolCallHtmlPatches} from './tool-call-html.js';
 import {refreshWorkspaceRail} from '../rail-sync.js';
@@ -26,8 +27,10 @@ function bindPendingStreams() {
             }
             row.dataset.streamBound = '1';
 
-            const buffer = createStreamBuffer(assistantId, getLiveChatRow);
-            const currentRow = () => getLiveChatRow(assistantId);
+            const streamSessionId = getActiveChatSessionId();
+            const isStreamSessionActive = () => getActiveChatSessionId() === streamSessionId;
+            const buffer = createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive);
+            const currentRow = () => isStreamSessionActive() ? getLiveChatRow(assistantId) : null;
             const currentTextSpan = () => buffer.currentTextSpan();
 
             const es = new EventSource(url);
@@ -80,7 +83,7 @@ function bindPendingStreams() {
             es.addEventListener('context_compaction', e => {
                 try {
                     const payload = parseStreamPayload(e) || {};
-                    handleContextCompaction(list, payload, () => buffer.shouldStick(), () => buffer.wasNearBottom());
+                    handleContextCompaction(list, payload, () => buffer.shouldStick(), () => buffer.wasNearBottom(), isStreamSessionActive);
                 } catch (_) {
                 }
             });

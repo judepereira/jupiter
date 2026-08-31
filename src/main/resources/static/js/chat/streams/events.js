@@ -11,7 +11,8 @@ function parseStreamPayload(e) {
     return {text: raw};
 }
 
-function handleContextCompaction(list, payload, shouldStickToBottom, wasNearBottom) {
+function handleContextCompaction(list, payload, shouldStickToBottom, wasNearBottom, isStreamSessionActive = () => true) {
+    if (!isStreamSessionActive()) return;
     const id = payload && payload.id != null ? String(payload.id) : '';
     const text = payload && payload.text != null ? String(payload.text) : '';
     if (!id || !text) return;
@@ -45,6 +46,7 @@ function handleContextCompaction(list, payload, shouldStickToBottom, wasNearBott
 
     if (shouldStickToBottom() || wasNearBottom()) {
         requestAnimationFrame(() => {
+            if (!isStreamSessionActive()) return;
             const history = document.getElementById('chat-history');
             if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
         });

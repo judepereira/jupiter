@@ -114,10 +114,7 @@ public class ChatPresentationService {
     }
 
     private static ToolCallBundleView toBundle(List<ToolCallGroupView> groups) {
-        String status = groups.stream().anyMatch(group -> "running".equals(group.status()))
-                ? "running" : groups.stream().allMatch(ToolCallGroupView::success) ? "success" : "failure";
-        return new ToolCallBundleView("Used: " + toolUsageLabel(groups), status,
-                groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
+        return new ToolCallBundleView("Used: " + toolUsageLabel(groups), List.copyOf(groups));
     }
 
     private static ToolCallGroupView toGroup(List<ToolCallView> calls) {
@@ -230,7 +227,7 @@ public class ChatPresentationService {
         }
     }
 
-    public record ToolCallBundleView(String summaryLabel, String status, boolean success, List<ToolCallGroupView> groups) {
+    public record ToolCallBundleView(String summaryLabel, List<ToolCallGroupView> groups) {
         public String domId(String assistantId) {
             return "assistant-tool-bundle-" + domToken(assistantId) + "-" + domToken(groups.get(0).calls().get(0).toolCallId());
         }
