@@ -7,6 +7,7 @@ import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.ui.UiController;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -347,12 +348,12 @@ public class UiControllerProjectsAndDirectoryTests {
 
         ConcurrentModel firstHistory = new ConcurrentModel();
         controller.activateProject(firstProjectId, firstHistory);
-        assertThat(chatMessages(firstHistory)).extracting(UiController.ChatMessage::text)
+        assertThat(chatMessages(firstHistory)).extracting(ChatPresentationService.ChatMessage::text)
                 .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?", "alpha", "reply-1");
 
         ConcurrentModel secondHistory = new ConcurrentModel();
         controller.activateProject(secondProjectId, secondHistory);
-        assertThat(chatMessages(secondHistory)).extracting(UiController.ChatMessage::text)
+        assertThat(chatMessages(secondHistory)).extracting(ChatPresentationService.ChatMessage::text)
                 .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?", "beta", "reply-2");
     }
 
@@ -416,8 +417,8 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<UiController.ChatMessage> chatMessages(ConcurrentModel model) {
-        return (List<UiController.ChatMessage>) model.getAttribute("chatMessages");
+    private static List<ChatPresentationService.ChatMessage> chatMessages(ConcurrentModel model) {
+        return (List<ChatPresentationService.ChatMessage>) model.getAttribute("chatMessages");
     }
 
     private static UiController.Project activeProject(ConcurrentModel model) {
@@ -433,7 +434,7 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     private static String assistantId(ConcurrentModel model) {
-        List<UiController.ChatMessage> messages = chatMessages(model);
+        List<ChatPresentationService.ChatMessage> messages = chatMessages(model);
         return messages.get(messages.size() - 1).id();
     }
 

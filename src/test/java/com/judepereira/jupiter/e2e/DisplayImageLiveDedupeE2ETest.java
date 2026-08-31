@@ -45,7 +45,7 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
             page.locator("#chat-input").fill("show the image");
             page.locator("#chat-send-btn").click();
 
-            var call = page.locator("#chat-messages-list .tool-call-call[data-tool-call-id='display-image-1']");
+            var call = page.locator("#chat-messages-list [data-tool-call-target='call'][data-tool-call-id='display-image-1']");
             call.waitFor();
             assertThat(call.locator(".tool-call-image-preview")).hasCount(1);
             assertThat(call.locator(".tool-call-image-preview img")).hasCount(1);

@@ -16,6 +16,7 @@ import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.ui.UiController;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import org.junit.jupiter.api.Test;
@@ -65,7 +66,7 @@ public class UiControllerSubagentChatTests {
         assertThat(subagentModel.getAttribute("subagentAgentName")).isEqualTo("Engineer");
         assertThat(subagentModel.getAttribute("subagentAgentId")).isEqualTo("engineer");
         assertThat(subagentModel.getAttribute("subagentSessionId")).isEqualTo(childSessionId);
-        assertThat((List<UiController.ChatMessage>) subagentModel.getAttribute("chatMessages")).extracting(UiController.ChatMessage::text)
+        assertThat((List<ChatPresentationService.ChatMessage>) subagentModel.getAttribute("chatMessages")).extracting(ChatPresentationService.ChatMessage::text)
                 .contains("Primary task:\nwrite a file", "child final");
 
         Model backModel = new ConcurrentModel();
