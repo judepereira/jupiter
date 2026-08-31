@@ -4,11 +4,8 @@ import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -35,8 +32,7 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         RunningApp app = null;
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             BrowserContext context = browser.newContext()) {
+        try (BrowserContext context = newBrowserContext()) {
             context.addInitScript("(() => { const key = 'connection-loss-reload-count'; const current = Number(sessionStorage.getItem(key) || '0'); sessionStorage.setItem(key, String(current + 1)); })();");
 
             app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);

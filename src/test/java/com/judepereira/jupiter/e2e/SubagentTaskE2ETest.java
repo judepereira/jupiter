@@ -8,11 +8,8 @@ import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.impl.TaskTool;
-import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -43,9 +40,8 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext()) {
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -119,9 +115,8 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext()) {
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -174,9 +169,8 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext()) {
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -236,9 +230,8 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext()) {
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -339,9 +332,8 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext()) {
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());

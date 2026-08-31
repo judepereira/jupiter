@@ -9,12 +9,9 @@ import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.microsoft.playwright.ConsoleMessage;
-import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,9 +43,9 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
+        try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = browser.newContext()) {
+                 BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
@@ -112,9 +109,9 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
+        try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = browser.newContext()) {
+                 BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
                 List<String> consoleErrors = new java.util.concurrent.CopyOnWriteArrayList<>();
                 page.onConsoleMessage(message -> {
