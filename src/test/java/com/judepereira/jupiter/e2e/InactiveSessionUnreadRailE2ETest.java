@@ -112,6 +112,134 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
     }
 
     @Test
+    void inactiveSessionStreamDoesNotMoveScrolledActiveSession(@TempDir Path tempDir) throws Exception {
+        TestAppConfig.reset();
+        TestAppConfig.blockPrimaryTurnUntilDeltaRelease();
+
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        String previousHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+
+        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = browser.newContext()) {
+
+            Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+
+            openProject(page, "Alpha", projectDir);
+            long sessionOneId = app.context().getBean(AppStateService.class).loadViewData().activeSession().id();
+
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New session")).click();
+            assertThat(page.locator("#session-name-input")).isVisible();
+            page.locator("#session-name-input").fill("Session #2");
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
+                    () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
+
+            long sessionTwoId = app.context().getBean(AppStateService.class).loadViewData().activeSession().id();
+            JdbcTemplate jdbcTemplate = app.context().getBean(JdbcTemplate.class);
+            for (int i = 1; i <= 16; i++) {
+                insertAssistantMessage(jdbcTemplate, sessionTwoId, false,
+                        "Completed history entry " + i + " - " + "overflow content ".repeat(12));
+            }
+
+            page.reload();
+            assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
+            page.waitForFunction("() => { const history = document.getElementById('chat-history'); return history && history.scrollHeight > history.clientHeight + 100; }");
+
+            Locator sessionOneRow = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #1"));
+            Locator sessionTwoRow = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #2"));
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/" + sessionOneId + "/activate") && response.status() == 200,
+                    () -> sessionOneRow.locator(".session-item").click());
+            assertThat(page.locator(".session-item.active .session-label")).hasText("Session #1");
+
+            page.evaluate("""
+                    () => {
+                        const NativeEventSource = window.EventSource;
+                        window.__inactiveStreamDeltaSettled = false;
+                        window.EventSource = class extends NativeEventSource {
+                            addEventListener(type, listener, options) {
+                                if (type === 'delta') {
+                                    return super.addEventListener(type, event => {
+                                        listener(event);
+                                        requestAnimationFrame(() => requestAnimationFrame(() => {
+                                            window.__inactiveStreamDeltaSettled = true;
+                                        }));
+                                    }, options);
+                                }
+                                return super.addEventListener(type, listener, options);
+                            }
+                        };
+                    }
+                    """);
+            page.locator("#chat-input").fill("start the inactive stream");
+            page.locator("#chat-send-btn").click();
+            TestAppConfig.awaitPrimaryStarted();
+            page.locator("#chat-messages-list > li.pending").waitFor();
+
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/" + sessionTwoId + "/activate") && response.status() == 200,
+                    () -> sessionTwoRow.locator(".session-item").click());
+            assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
+            page.waitForFunction("() => { const history = document.getElementById('chat-history'); return history && history.scrollHeight - history.clientHeight > 200; }");
+            page.locator("#chat-history").evaluate("""
+                    async history => {
+                        const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+                        await nextFrame();
+                        await nextFrame();
+                        await nextFrame();
+
+                        const maxScrollTop = history.scrollHeight - history.clientHeight;
+                        if (maxScrollTop <= 200) throw new Error('chat history is not scrollable enough');
+                        const targetScrollTop = maxScrollTop / 2;
+                        history.scrollTop = targetScrollTop;
+                        const actualScrollTop = history.scrollTop;
+                        if (Math.abs(actualScrollTop - targetScrollTop) > 1) {
+                            throw new Error(`chat history did not accept manual scroll: ${actualScrollTop} != ${targetScrollTop}`);
+                        }
+                    }
+                    """);
+
+            double beforeScrollTop = scrollTop(page);
+            double beforeBottomOffset = bottomOffset(page);
+            assertTrue(beforeBottomOffset > 100, "Session #2 should be manually scrolled away from the bottom");
+
+            TestAppConfig.releasePrimaryTurn();
+            TestAppConfig.awaitPrimaryDelta();
+            page.waitForFunction("() => window.__inactiveStreamDeltaSettled === true");
+
+            double afterScrollTop = scrollTop(page);
+            double afterBottomOffset = bottomOffset(page);
+            assertTrue(Math.abs(afterScrollTop - beforeScrollTop) <= 2,
+                    "inactive stream moved Session #2 scrollTop from " + beforeScrollTop + " to " + afterScrollTop);
+            assertTrue(afterBottomOffset > 100, "Session #2 should remain materially below the bottom");
+        } finally {
+            TestAppConfig.releasePrimaryTurn();
+            TestAppConfig.reset();
+            if (previousHome == null) {
+                System.clearProperty("user.home");
+            } else {
+                System.setProperty("user.home", previousHome);
+            }
+        }
+    }
+
+    private static double scrollTop(Page page) {
+        return ((Number) page.locator("#chat-history").evaluate("history => history.scrollTop")).doubleValue();
+    }
+
+    private static double bottomOffset(Page page) {
+        return ((Number) page.locator("#chat-history").evaluate("history => history.scrollHeight - history.clientHeight - history.scrollTop")).doubleValue();
+    }
+
+    @Test
     void restartingWithPendingAssistantShowsFailedRailAndSyntheticFailureMessage(@TempDir Path tempDir) throws Exception {
         TestAppConfig.reset();
 
@@ -238,7 +366,11 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         }
 
         static void blockPrimaryTurn() {
-            primaryTurnControl = new TurnControl();
+            primaryTurnControl = new TurnControl(false);
+        }
+
+        static void blockPrimaryTurnUntilDeltaRelease() {
+            primaryTurnControl = new TurnControl(true);
         }
 
         static void releasePrimaryTurn() {
@@ -247,6 +379,10 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
         static void awaitPrimaryStarted() throws InterruptedException {
             assertTrue(primaryTurnControl.started.await(5, TimeUnit.SECONDS), "primary turn did not start");
+        }
+
+        static void awaitPrimaryDelta() throws InterruptedException {
+            assertTrue(primaryTurnControl.delta.await(5, TimeUnit.SECONDS), "primary delta was not emitted");
         }
 
         static void awaitPrimaryCompleted() throws InterruptedException {
@@ -260,9 +396,15 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         }
 
         private static final class TurnControl {
+            private final boolean awaitDeltaRelease;
             private final CountDownLatch started = new CountDownLatch(1);
+            private final CountDownLatch delta = new CountDownLatch(1);
             private final CountDownLatch release = new CountDownLatch(1);
             private final CountDownLatch completed = new CountDownLatch(1);
+
+            private TurnControl(boolean awaitDeltaRelease) {
+                this.awaitDeltaRelease = awaitDeltaRelease;
+            }
         }
 
         static class TestCodingAgentHarness extends CodingAgentHarness {
@@ -273,11 +415,18 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                listener.onTextDelta("Primary task running");
                 TurnControl control = primaryTurnControl;
-                if (control != null) {
+                if (control != null && control.awaitDeltaRelease) {
                     control.started.countDown();
                     awaitRelease(control.release);
+                    listener.onTextDelta("Primary task running");
+                    control.delta.countDown();
+                } else {
+                    listener.onTextDelta("Primary task running");
+                    if (control != null) {
+                        control.started.countDown();
+                        awaitRelease(control.release);
+                    }
                 }
 
                 AgentTurnResult result = new AgentTurnResult("Deterministic assistant reply", List.of());
