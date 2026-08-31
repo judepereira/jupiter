@@ -1,4 +1,4 @@
-import {processHtmxElement} from '../shared.js';
+import {getActiveChatSessionId, processHtmxElement} from '../shared.js';
 import {getRawChatMarkdown, renderChatMarkdown, updateChatRowCompletion} from '../markdown.js';
 import {appendToolCallToChatRow, toolCallOutputText} from '../tool-calls.js';
 import {refreshWorkspaceRail} from '../rail-sync.js';
@@ -27,8 +27,10 @@ function bindPendingStreams() {
             }
             row.dataset.streamBound = '1';
 
-            const buffer = createStreamBuffer(assistantId, getLiveChatRow);
-            const currentRow = () => getLiveChatRow(assistantId);
+            const streamSessionId = getActiveChatSessionId();
+            const isStreamSessionActive = () => getActiveChatSessionId() === streamSessionId;
+            const buffer = createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive);
+            const currentRow = () => isStreamSessionActive() ? getLiveChatRow(assistantId) : null;
             const currentTextSpan = () => buffer.currentTextSpan();
 
             const es = new EventSource(url);
@@ -79,7 +81,7 @@ function bindPendingStreams() {
             es.addEventListener('context_compaction', e => {
                 try {
                     const payload = parseStreamPayload(e) || {};
-                    handleContextCompaction(list, payload, () => buffer.shouldStick(), () => buffer.wasNearBottom());
+                    handleContextCompaction(list, payload, () => buffer.shouldStick(), () => buffer.wasNearBottom(), isStreamSessionActive);
                 } catch (_) {
                 }
             });
@@ -254,6 +256,7 @@ function bindPendingStreams() {
                     const stick = buffer.shouldStick() || buffer.wasNearBottom();
                     if (stick) {
                         requestAnimationFrame(() => {
+                            if (!isStreamSessionActive()) return;
                             try {
                                 const history = document.getElementById('chat-history');
                                 if (history) history.scrollTop = history.scrollHeight - history.clientHeight;

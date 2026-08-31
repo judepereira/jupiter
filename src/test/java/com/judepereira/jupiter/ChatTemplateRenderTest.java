@@ -233,7 +233,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("tool-call-summary-task", "Implement the parser", "Open subagent: <strong>Engineer</strong>", "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).contains("tool-call-summary-task", "Implement the parser", "View Session", "<span class=\"tool-call-name\">Engineer</span>", "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("tool-call-call\"\n                                            class=\"tool-call-subagent");
     }
 
@@ -289,7 +289,7 @@ public class ChatTemplateRenderTest {
         assertThat(firstBundle).isGreaterThanOrEqualTo(0);
         assertThat(taskIndex).isGreaterThan(firstBundle);
         assertThat(secondBundle).isGreaterThan(taskIndex);
-        assertThat(html).contains("tool-call-summary-task", "Open subagent: <strong>Engineer 1</strong>");
+        assertThat(html).contains("tool-call-summary-task", "View Session", "<span class=\"tool-call-name\">Engineer 1</span>");
         assertThat(html).contains("<span class=\"tool-call-name\">display_image</span>", "src=\"/ui/chat/image/1/display-1\"", "tool-call-image-caption");
         assertThat(html).contains("read-1 input", "read-2 input", "read-3 input");
 
@@ -335,7 +335,7 @@ public class ChatTemplateRenderTest {
         assertThat(secondTask).isGreaterThan(firstTask);
         assertThat(secondBundle).isGreaterThan(secondTask);
         assertThat(html).contains("tool-call-bundle");
-        assertThat(html).contains("Open subagent: <strong>Engineer 1</strong>", "Open subagent: <strong>Engineer 2</strong>");
+        assertThat(html).contains("View Session", "<span class=\"tool-call-name\">Engineer 1</span>", "<span class=\"tool-call-name\">Engineer 2</span>");
         assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");
     }
 
@@ -420,7 +420,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat", context);
 
-        assertThat(html).contains("tool-call-summary-task", "Open subagent:", "Engineer",
+        assertThat(html).contains("tool-call-summary-task", "View Session", "Engineer",
                 "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("subagent-activities");
     }
