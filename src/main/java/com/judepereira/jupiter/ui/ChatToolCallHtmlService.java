@@ -156,4 +156,3 @@ public class ChatToolCallHtmlService {
         return "assistant-tool-calls-" + ChatPresentationService.domToken(message.id());
     }
 }
-
