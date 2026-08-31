@@ -3,7 +3,7 @@ FROM eclipse-temurin:25-jdk AS build
 ARG BLUECAVE_EXTRA_OPTS
 
 RUN     apt update
-RUN     apt install -y git ripgrep
+RUN     apt install -y git ripgrep curl
 
 WORKDIR /workspace
 
