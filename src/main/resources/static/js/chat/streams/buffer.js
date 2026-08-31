@@ -1,4 +1,5 @@
 import {getRawChatMarkdown, renderChatMarkdown} from '../markdown.js';
+import {isInitialChatScrollActive} from '../scroll.js';
 
 function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) {
     const FLUSH_INTERVAL_MS = 40;
@@ -38,7 +39,7 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
         }
     }
 
-    shouldStickToBottom = wasNearBottom();
+    shouldStickToBottom = isInitialChatScrollActive() || wasNearBottom();
 
     function streamScrollListener() {
         shouldStickToBottom = wasNearBottom();
@@ -96,7 +97,7 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
     }
 
     function flushBuffer() {
-        const stickBeforeFlush = shouldStickToBottom || wasNearBottom();
+        const stickBeforeFlush = isInitialChatScrollActive() || shouldStickToBottom || wasNearBottom();
         flushInner();
         if (stickBeforeFlush) {
             requestAnimationFrame(() => {
