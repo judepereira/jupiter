@@ -21,11 +21,15 @@ import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import com.judepereira.jupiter.ui.UiController;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import org.flywaydb.core.Flyway;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.thymeleaf.spring6.SpringTemplateEngine;
+import org.thymeleaf.templatemode.TemplateMode;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.springframework.ui.ConcurrentModel;
 
 import java.nio.file.Files;
@@ -104,21 +108,30 @@ public final class TestAppStateSupport {
             }
         }, activeStreamRegistryService);
         AppStateService appStateService = context.service();
+        SpringTemplateEngine templateEngine = new SpringTemplateEngine();
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCacheable(false);
+        templateEngine.setTemplateResolver(resolver);
         return new UiController(harness, properties, appStateService,
                 new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
                 modelCatalogService,
                 new SystemBalloonService(new ObjectMapper()),
                 new WorkspaceRailRefreshService(),
+                activeStreamRegistryService,
                 terminalManager,
                 new TerminalStateService(),
                 new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
                 contextCompactionService(appStateService),
                 mock(CommandStreamService.class),
-                mock(McpProjectMcpServerRuntimeManager.class),
+                mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
+                new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
                 "0.0.1-SNAPSHOT");
     }
 
-    public static UiController.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {
+    public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {
         return awaitChatMessage(controller, assistantId, message -> !message.pending());
     }
 
@@ -143,11 +156,11 @@ public final class TestAppStateSupport {
         throw new IllegalStateException("Timed out waiting for changed files and selection" + (lastSeen == null ? "" : ": " + lastSeen));
     }
 
-    private static UiController.ChatMessage awaitChatMessage(UiController controller, String messageId, Predicate<UiController.ChatMessage> condition) {
+    private static ChatPresentationService.ChatMessage awaitChatMessage(UiController controller, String messageId, Predicate<ChatPresentationService.ChatMessage> condition) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        UiController.ChatMessage lastSeen = null;
+        ChatPresentationService.ChatMessage lastSeen = null;
         while (System.nanoTime() < deadline) {
-            UiController.ChatMessage message = currentChatMessage(controller, messageId);
+            ChatPresentationService.ChatMessage message = currentChatMessage(controller, messageId);
             if (message != null) {
                 lastSeen = message;
                 if (condition.test(message)) {
@@ -165,10 +178,10 @@ public final class TestAppStateSupport {
     }
 
     @SuppressWarnings("unchecked")
-    private static UiController.ChatMessage currentChatMessage(UiController controller, String messageId) {
+    private static ChatPresentationService.ChatMessage currentChatMessage(UiController controller, String messageId) {
         ConcurrentModel model = new ConcurrentModel();
         controller.index(model);
-        List<UiController.ChatMessage> messages = (List<UiController.ChatMessage>) model.getAttribute("chatMessages");
+        List<ChatPresentationService.ChatMessage> messages = (List<ChatPresentationService.ChatMessage>) model.getAttribute("chatMessages");
         if (messages == null) {
             return null;
         }

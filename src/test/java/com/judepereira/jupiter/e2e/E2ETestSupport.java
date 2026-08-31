@@ -3,11 +3,14 @@ package com.judepereira.jupiter.e2e;
 import com.judepereira.jupiter.Jupiter;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -24,12 +27,95 @@ import java.util.stream.Stream;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
+@ExtendWith(E2ETestSupport.SharedBrowserExtension.class)
 abstract class E2ETestSupport {
 
-    @BeforeAll
-    static void requirePlaywrightBrowserSupport() {
-        String skipReason = playwrightDependencySkipReason();
-        Assumptions.assumeTrue(skipReason == null, skipReason);
+    private static final ExtensionContext.Namespace PLAYWRIGHT_NAMESPACE =
+            ExtensionContext.Namespace.create(E2ETestSupport.class);
+    private static final String SHARED_BROWSER_RESOURCE = "shared-browser";
+    private static volatile SharedBrowser sharedBrowser;
+
+    protected static Browser sharedBrowser() {
+        SharedBrowser resource = sharedBrowser;
+        if (resource == null) {
+            throw new IllegalStateException("The shared Playwright browser has not been initialized");
+        }
+        return resource.browser;
+    }
+
+    protected static BrowserContext newBrowserContext() {
+        return sharedBrowser().newContext();
+    }
+
+    protected static BrowserContext newBrowserContext(Browser.NewContextOptions options) {
+        return sharedBrowser().newContext(options);
+    }
+
+    static final class SharedBrowserExtension implements BeforeAllCallback {
+        @Override
+        public void beforeAll(ExtensionContext context) {
+            SharedBrowser resource = context.getRoot().getStore(PLAYWRIGHT_NAMESPACE)
+                    .getOrComputeIfAbsent(SHARED_BROWSER_RESOURCE, key -> new SharedBrowser(), SharedBrowser.class);
+            sharedBrowser = resource;
+            Assumptions.assumeTrue(resource.skipReason == null, resource.skipReason);
+        }
+    }
+
+    private static final class SharedBrowser implements ExtensionContext.Store.CloseableResource {
+        private final Playwright playwright;
+        private final Browser browser;
+        private final String skipReason;
+
+        private SharedBrowser() {
+            Playwright createdPlaywright = null;
+            Browser launchedBrowser = null;
+            try {
+                createdPlaywright = Playwright.create();
+                launchedBrowser = createdPlaywright.chromium()
+                        .launch(new BrowserType.LaunchOptions().setHeadless(true));
+            } catch (Throwable throwable) {
+                if (launchedBrowser != null) {
+                    launchedBrowser.close();
+                }
+                if (createdPlaywright != null) {
+                    createdPlaywright.close();
+                }
+                String dependencySkipReason = playwrightDependencySkipReason(throwable);
+                if (dependencySkipReason != null) {
+                    playwright = null;
+                    browser = null;
+                    skipReason = dependencySkipReason;
+                    return;
+                }
+                throw unexpectedPlaywrightFailure(throwable);
+            }
+            playwright = createdPlaywright;
+            browser = launchedBrowser;
+            skipReason = null;
+        }
+
+        @Override
+        public void close() {
+            if (browser != null) {
+                try {
+                    browser.close();
+                } finally {
+                    playwright.close();
+                }
+            } else if (playwright != null) {
+                playwright.close();
+            }
+        }
+    }
+
+    private static RuntimeException unexpectedPlaywrightFailure(Throwable throwable) {
+        if (throwable instanceof RuntimeException runtimeException) {
+            return runtimeException;
+        }
+        if (throwable instanceof Error error) {
+            throw error;
+        }
+        return new RuntimeException(throwable);
     }
 
     static String playwrightDependencySkipReason() {

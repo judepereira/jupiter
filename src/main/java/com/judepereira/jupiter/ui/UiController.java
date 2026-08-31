@@ -55,6 +55,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
+import com.judepereira.jupiter.ui.ChatPresentationService.ToolCallView;
+
 @Log4j2
 @Controller
 public class UiController {
@@ -76,6 +79,8 @@ public class UiController {
     private final WorkspaceRailRefreshService workspaceRailRefreshService;
     private final ActiveStreamRegistryService activeStreamRegistryService;
     private final OpenAiOAuthService openAiOAuthService;
+    private final ChatPresentationService chatPresentationService;
+    private final ChatToolCallHtmlService chatToolCallHtmlService;
     private final String appVersion;
 
     private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
@@ -88,7 +93,8 @@ public class UiController {
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
                         ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                        McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
+                        ChatToolCallHtmlService chatToolCallHtmlService,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -104,6 +110,8 @@ public class UiController {
         this.terminalStateService = terminalStateService;
         this.workspaceRailRefreshService = workspaceRailRefreshService;
         this.openAiOAuthService = openAiOAuthService;
+        this.chatPresentationService = chatPresentationService;
+        this.chatToolCallHtmlService = chatToolCallHtmlService;
         this.appVersion = appVersion;
     }
 
@@ -114,22 +122,12 @@ public class UiController {
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
                         ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, appVersion);
+                openAiOAuthService, contextCompactionService, commandStreamService, null, chatPresentationService,
+                chatToolCallHtmlService, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -139,10 +137,46 @@ public class UiController {
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
                         ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                        ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager, appVersion);
+                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager,
+                chatPresentationService, chatToolCallHtmlService, appVersion);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, commandStreamService, null, new ChatPresentationService(), null, appVersion);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        TerminalManager terminalManager, TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, commandStreamService, null, new ChatPresentationService(), null, appVersion);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        TerminalManager terminalManager, TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        McpProjectMcpServerRuntimeManager mcpRuntimeManager, String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager, new ChatPresentationService(), null, appVersion);
     }
 
     @GetMapping("/")
@@ -304,6 +338,7 @@ public class UiController {
         }
 
         attachEmitter(active, emitter);
+        sendToolCallSnapshot(active, assistantId, emitter);
         if (active.started().compareAndSet(false, true)) {
             startActiveStream(assistantId, active, emitter);
         }
@@ -353,6 +388,9 @@ public class UiController {
                 try {
                     if (trace != null) {
                         appStateService.startToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace));
+                        if (chatToolCallHtmlService != null) {
+                            broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.toolStarted(pending.sessionId(), assistantId));
+                        }
                     }
                     broadcastEvent(active, assistantId, "tool_call_started", trace);
                 } catch (Exception e) {
@@ -368,12 +406,19 @@ public class UiController {
                         "eventName", eventName,
                         "payload", payload
                 ));
+                if ("subagent_started".equals(eventName) && chatToolCallHtmlService != null) {
+                    broadcastToolCallHtml(active, assistantId,
+                            chatToolCallHtmlService.subagentStarted(pending.sessionId(), assistantId, toolCallId));
+                }
             }
 
             @Override
             public void onToolCallTrace(ToolCallTrace trace) {
                 try {
-                    ToolCallView v = toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
+                    ToolCallView v = chatPresentationService.toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
+                    if (chatToolCallHtmlService != null) {
+                        broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.toolCompleted(pending.sessionId(), assistantId, trace.getToolCallId()));
+                    }
                     broadcastEvent(active, assistantId, "tool_call", v);
                 } catch (Exception e) {
                     onError(e);
@@ -456,6 +501,7 @@ public class UiController {
             String normalizedMessage = normalizeProviderErrorMessage(e);
             ChatMessageView failedMessage = appStateService.failAssistantMessage(active.pendingStream().sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
             log.error("Execution failure!", e);
+            broadcastToolCallHostSnapshot(active, assistantId);
             broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
         } catch (Exception ignored) {
         } finally {
@@ -477,6 +523,31 @@ public class UiController {
 
     private void detachEmitter(ActiveStream active, SseEmitter emitter) {
         active.emitters().remove(emitter);
+    }
+
+    private void sendToolCallSnapshot(ActiveStream active, String assistantId, SseEmitter emitter) {
+        if (chatToolCallHtmlService == null) {
+            return;
+        }
+        try {
+            sendEventToEmitter(active, assistantId, emitter, "tool_call_html",
+                    chatToolCallHtmlService.hostSnapshot(active.pendingStream().sessionId(), assistantId));
+        } catch (Exception e) {
+            log.error("Failed to send tool-call snapshot", e);
+        }
+    }
+
+    private void broadcastToolCallHtml(ActiveStream active, String assistantId, List<DomPatch> patches) {
+        if (chatToolCallHtmlService != null && !patches.isEmpty()) {
+            broadcastEvent(active, assistantId, "tool_call_html", patches);
+        }
+    }
+
+    private void broadcastToolCallHostSnapshot(ActiveStream active, String assistantId) {
+        if (chatToolCallHtmlService != null) {
+            broadcastToolCallHtml(active, assistantId,
+                    chatToolCallHtmlService.hostSnapshot(active.pendingStream().sessionId(), assistantId));
+        }
     }
 
     private void broadcastEvent(ActiveStream active, String assistantId, String name, Object payload) {
@@ -502,7 +573,8 @@ public class UiController {
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
-        broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls(), "completedTs", completedMessage.completedTs()));
+        broadcastToolCallHostSnapshot(active, assistantId);
+        broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "completedTs", completedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
     }
@@ -515,6 +587,7 @@ public class UiController {
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
+        broadcastToolCallHostSnapshot(active, assistantId);
         broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
@@ -528,6 +601,7 @@ public class UiController {
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
+        broadcastToolCallHostSnapshot(active, assistantId);
         broadcastEvent(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
@@ -547,6 +621,7 @@ public class UiController {
             active.finished().set(true);
             activeStreams.remove(assistantId, active);
             activeStreamRegistryService.unregister(assistantId);
+            broadcastToolCallHostSnapshot(active, assistantId);
             broadcastEvent(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
             completeEmitters(active);
             appStateService.publishWorkspaceRailRefresh();
@@ -1508,13 +1583,7 @@ public class UiController {
     }
 
     private ChatMessage toChatMessage(ChatMessageView view) {
-        String modelLabel = view.metadata() == null ? null : resolveModelLabel(view.metadata().modelId());
-        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.completedTs(), view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata(), modelLabel);
-    }
-
-    private ToolCallView toToolCallView(com.judepereira.jupiter.persistence.Persistence.ToolCallView view) {
-        return new ToolCallView(view.toolCallId(), view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated(),
-                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status(), view.imageUrl(), view.imageAlt(), view.imagePath(), view.imageMediaType(), view.taskBody());
+        return chatPresentationService.toChatMessage(view, this::resolveModelLabel);
     }
 
     private ChangedFile toChangedFile(ChangedFileView view) {
@@ -1699,199 +1768,6 @@ public class UiController {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ProviderDetail(String message, String code) {}
-
-    public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
-                                String imageUrl, String imageAlt, String imagePath, String imageMediaType, String taskBody) {
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, null);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null, null);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status, String taskBody) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, taskBody);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status, String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, imageUrl, imageAlt, imagePath, imageMediaType, null);
-        }
-    }
-
-    public record ToolCallGroupView(String toolName, String displayLabel, String status, boolean success, int count, List<ToolCallView> calls) {}
-
-    public record ToolCallBundleView(String summaryLabel, String status, boolean success, List<ToolCallGroupView> groups) {}
-
-    public record ToolCallBlockView(ToolCallBundleView bundle, ToolCallGroupView group) {
-        public static ToolCallBlockView bundle(ToolCallBundleView bundle) {
-            return new ToolCallBlockView(bundle, null);
-        }
-
-        public static ToolCallBlockView group(ToolCallGroupView group) {
-            return new ToolCallBlockView(null, group);
-        }
-    }
-
-    public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata, String modelLabel) {
-        public ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
-            this(role, text, ts, pending, id, completedTs, toolCalls, metadata, null);
-        }
-
-        private static final Set<String> EXPLORATORY_TOOL_NAMES = Set.of("list_files", "read_file", "search_code");
-        private static final Set<String> SPECIAL_TOOL_NAMES = Set.of("task", "display_image");
-
-        public List<ToolCallGroupView> toolCallGroups() {
-            if (toolCalls.isEmpty()) {
-                return List.of();
-            }
-
-            List<ToolCallGroupView> groups = new ArrayList<>();
-            List<ToolCallView> currentCalls = new ArrayList<>();
-            for (ToolCallView call : toolCalls) {
-                if (currentCalls.isEmpty() || startsNewGroup(currentCalls.get(currentCalls.size() - 1), call)) {
-                    if (!currentCalls.isEmpty()) {
-                        groups.add(toGroup(currentCalls));
-                    }
-                    currentCalls = new ArrayList<>();
-                }
-
-                currentCalls.add(call);
-            }
-
-            if (!currentCalls.isEmpty()) {
-                groups.add(toGroup(currentCalls));
-            }
-
-            return List.copyOf(groups);
-        }
-
-        public List<ToolCallBlockView> toolCallBlocks() {
-            if (toolCalls.isEmpty()) {
-                return List.of();
-            }
-
-            List<ToolCallBlockView> blocks = new ArrayList<>();
-            List<ToolCallGroupView> currentBundleGroups = new ArrayList<>();
-            for (ToolCallGroupView group : toolCallGroups()) {
-                if (isSpecialStandalone(group.toolName())) {
-                    if (!currentBundleGroups.isEmpty()) {
-                        blocks.add(ToolCallBlockView.bundle(toBundle(currentBundleGroups)));
-                        currentBundleGroups = new ArrayList<>();
-                    }
-                    blocks.add(ToolCallBlockView.group(group));
-                    continue;
-                }
-
-                currentBundleGroups.add(group);
-            }
-
-            if (!currentBundleGroups.isEmpty()) {
-                blocks.add(ToolCallBlockView.bundle(toBundle(currentBundleGroups)));
-            }
-
-            return List.copyOf(blocks);
-        }
-
-        private ToolCallBundleView toBundle(List<ToolCallGroupView> groups) {
-            String status = groups.stream().anyMatch(group -> "running".equals(group.status()))
-                    ? "running"
-                    : groups.stream().allMatch(ToolCallGroupView::success) ? "success" : "failure";
-            return new ToolCallBundleView(toolUsageSummaryLabel(groups), status, groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
-        }
-
-        private String toolUsageSummaryLabel(List<ToolCallGroupView> groups) {
-            return "Used: " + toolUsageLabel(groups);
-        }
-
-        private boolean startsNewGroup(ToolCallView previous, ToolCallView current) {
-            if (isSpecialStandalone(previous.toolName()) || isSpecialStandalone(current.toolName())) {
-                return true;
-            }
-
-            if (isExploratory(previous.toolName()) && isExploratory(current.toolName())) {
-                return false;
-            }
-
-            return !previous.toolName().equals(current.toolName());
-        }
-
-        private boolean isExploratory(String toolName) {
-            return EXPLORATORY_TOOL_NAMES.contains(toolName);
-        }
-
-        private boolean isSpecialStandalone(String toolName) {
-            return SPECIAL_TOOL_NAMES.contains(toolName);
-        }
-
-        private boolean isTask(String toolName) {
-            return "task".equals(toolName);
-        }
-
-        private ToolCallGroupView toGroup(List<ToolCallView> calls) {
-            ToolCallView first = calls.get(0);
-            String status = calls.stream().anyMatch(call -> "running".equals(call.status()))
-                    ? "running"
-                    : calls.stream().allMatch(ToolCallView::success) ? "success" : "failure";
-            return new ToolCallGroupView(first.toolName(), displayLabel(calls), status, calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
-        }
-
-        private String toolUsageLabel(List<ToolCallGroupView> groups) {
-            LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
-            for (ToolCallGroupView group : groups) {
-                for (ToolCallView call : group.calls()) {
-                    counts.merge(call.toolName(), 1, Integer::sum);
-                }
-            }
-            StringBuilder label = new StringBuilder();
-            for (var entry : counts.entrySet()) {
-                if (!label.isEmpty()) {
-                    label.append(", ");
-                }
-                label.append(entry.getKey());
-                if (entry.getValue() > 1) {
-                    label.append(" (").append(entry.getValue()).append(")");
-                }
-            }
-            return label.toString();
-        }
-
-        private String displayLabel(List<ToolCallView> calls) {
-            StringBuilder label = new StringBuilder();
-            String currentToolName = calls.get(0).toolName();
-            int currentCount = 1;
-
-            for (int i = 1; i < calls.size(); i++) {
-                String nextToolName = calls.get(i).toolName();
-                if (currentToolName.equals(nextToolName)) {
-                    currentCount++;
-                    continue;
-                }
-
-                appendDisplaySegment(label, currentToolName, currentCount);
-                currentToolName = nextToolName;
-                currentCount = 1;
-            }
-
-            appendDisplaySegment(label, currentToolName, currentCount);
-            return label.toString();
-        }
-
-        private void appendDisplaySegment(StringBuilder label, String toolName, int count) {
-            if (!label.isEmpty()) {
-                label.append(", ");
-            }
-            label.append(toolName);
-            if (count > 1) {
-                label.append(" (").append(count).append(")");
-            }
-        }
-    }
 
     public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
 

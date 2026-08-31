@@ -5,11 +5,8 @@ import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,9 +34,8 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = browser.newContext()) {
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -49,7 +45,7 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
             page.locator("#chat-input").fill("show the image");
             page.locator("#chat-send-btn").click();
 
-            var call = page.locator("#chat-messages-list .tool-call-call[data-tool-call-id='display-image-1']");
+            var call = page.locator("#chat-messages-list [data-tool-call-target='call'][data-tool-call-id='display-image-1']");
             call.waitFor();
             assertThat(call.locator(".tool-call-image-preview")).hasCount(1);
             assertThat(call.locator(".tool-call-image-preview img")).hasCount(1);

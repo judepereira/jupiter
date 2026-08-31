@@ -1,10 +1,10 @@
-import {processHtmxElement} from '../shared.js';
+import {getActiveChatSessionId} from '../shared.js';
 import {getRawChatMarkdown, renderChatMarkdown, updateChatRowCompletion} from '../markdown.js';
-import {appendToolCallToChatRow, toolCallOutputText} from '../tool-calls.js';
+import {applyToolCallHtmlPatches} from './tool-call-html.js';
 import {refreshWorkspaceRail} from '../rail-sync.js';
 import {getLiveChatRow, updateChatSendButtonState} from './control.js';
 import {createStreamBuffer} from './buffer.js';
-import {handleContextCompaction, handleToolCallProgress, handleToolCallStarted, parseStreamPayload} from './events.js';
+import {handleContextCompaction, parseStreamPayload} from './events.js';
 import {clearPendingStreamState, getPendingStreamSource, registerPendingStream, setStopRequestInFlight} from './state.js';
 
 function bindPendingStreams() {
@@ -27,8 +27,10 @@ function bindPendingStreams() {
             }
             row.dataset.streamBound = '1';
 
-            const buffer = createStreamBuffer(assistantId, getLiveChatRow);
-            const currentRow = () => getLiveChatRow(assistantId);
+            const streamSessionId = getActiveChatSessionId();
+            const isStreamSessionActive = () => getActiveChatSessionId() === streamSessionId;
+            const buffer = createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive);
+            const currentRow = () => isStreamSessionActive() ? getLiveChatRow(assistantId) : null;
             const currentTextSpan = () => buffer.currentTextSpan();
 
             const es = new EventSource(url);
@@ -45,26 +47,30 @@ function bindPendingStreams() {
                 }
             });
 
-            es.addEventListener('tool_call_started', e => {
+            es.addEventListener('tool_call_html', e => {
                 try {
-                    const payload = parseStreamPayload(e) || {};
+                    if (!isStreamSessionActive()) return;
+                    const stick = buffer.shouldStick() || buffer.wasNearBottom();
+                    applyToolCallHtmlPatches(e);
+                    if (stick) {
+                        requestAnimationFrame(() => {
+                            if (!isStreamSessionActive()) return;
+                            const history = document.getElementById('chat-history');
+                            if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
+                            buffer.setShouldStickToBottom(true);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Failed to apply tool-call HTML patch', error);
                     const liveRow = currentRow();
-                    if (!liveRow) return;
-                    handleToolCallStarted(liveRow, payload);
-                } catch (_) {
+                    if (liveRow) liveRow.title = error instanceof Error ? error.message : String(error);
+                    window.__connectionLossMonitor && window.__connectionLossMonitor.transportFailure();
                 }
             });
 
-            es.addEventListener('tool_call_progress', e => {
-                try {
-                    const event = parseStreamPayload(e) || {};
-                    const payload = event.payload || {};
-                    const liveRow = currentRow();
-                    if (!liveRow) return;
-                    handleToolCallProgress(liveRow, event, payload);
-                } catch (_) {
-                }
-            });
+            // Legacy tool-call events remain subscribed for protocol compatibility.
+            es.addEventListener('tool_call_started', () => {});
+            es.addEventListener('tool_call_progress', () => {});
 
             es.addEventListener('status', e => {
                 try {
@@ -79,7 +85,7 @@ function bindPendingStreams() {
             es.addEventListener('context_compaction', e => {
                 try {
                     const payload = parseStreamPayload(e) || {};
-                    handleContextCompaction(list, payload, () => buffer.shouldStick(), () => buffer.wasNearBottom());
+                    handleContextCompaction(list, payload, () => buffer.shouldStick(), () => buffer.wasNearBottom(), isStreamSessionActive);
                 } catch (_) {
                 }
             });
@@ -120,25 +126,6 @@ function bindPendingStreams() {
                             }
                         }
                         buffer.flushBuffer();
-                    }
-
-                    if (payload && Array.isArray(payload.toolCalls) && payload.toolCalls.length > 0) {
-                        const doneRow = currentRow();
-                        if (doneRow) {
-                            payload.toolCalls.forEach(toolCall => {
-                                const toolCallId = toolCall && toolCall.toolCallId != null ? String(toolCall.toolCallId).trim() : '';
-                                if (toolCallId) {
-                                    const existing = document.getElementById('chat-messages-list')?.querySelector('.tool-call-call[data-tool-call-id="' + toolCallId.replace(/"/g, '\\"') + '"]');
-                                    if (existing) return;
-                                }
-                                appendToolCallToChatRow(doneRow, toolCall, processHtmxElement, {
-                                    state: toolCall.success ? 'done' : 'error',
-                                    statusText: toolCall.success ? 'success' : 'failure',
-                                    success: Boolean(toolCall.success),
-                                    outputText: toolCallOutputText(toolCall)
-                                });
-                            });
-                        }
                     }
 
                     const liveRow = currentRow();
@@ -239,32 +226,8 @@ function bindPendingStreams() {
                 buffer.removeHistoryScrollListener();
             });
 
-            es.addEventListener('tool_call', e => {
-                try {
-                    const payload = parseStreamPayload(e) || {};
-                    const liveRow = currentRow();
-                    if (!liveRow) return;
-                    appendToolCallToChatRow(liveRow, payload, processHtmxElement, {
-                        state: payload.success ? 'done' : 'error',
-                        statusText: payload.success ? 'success' : 'failure',
-                        success: Boolean(payload.success),
-                        outputText: toolCallOutputText(payload)
-                    });
-
-                    const stick = buffer.shouldStick() || buffer.wasNearBottom();
-                    if (stick) {
-                        requestAnimationFrame(() => {
-                            try {
-                                const history = document.getElementById('chat-history');
-                                if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
-                                buffer.setShouldStickToBottom(true);
-                            } catch (_) {
-                            }
-                        });
-                    }
-                } catch (_) {
-                }
-            });
+            // Legacy event retained as an ignored compatibility event.
+            es.addEventListener('tool_call', () => {});
 
             es.addEventListener('close', () => {
                 try {
