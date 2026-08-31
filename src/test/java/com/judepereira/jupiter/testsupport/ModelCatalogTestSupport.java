@@ -59,6 +59,39 @@ public final class ModelCatalogTestSupport {
                     "context": 1050000,
                     "output": 128000
                   }
+                },
+                "openai/gpt-5.6-sol": {
+                  "id": "openai/gpt-5.6-sol",
+                  "name": "GPT-5.6 Sol",
+                  "reasoning": true,
+                  "tool_call": true,
+                  "release_date": "2026-05-10",
+                  "limit": {
+                    "context": 1050000,
+                    "output": 128000
+                  }
+                },
+                "openai/gpt-5.6-terra": {
+                  "id": "openai/gpt-5.6-terra",
+                  "name": "GPT-5.6 Terra",
+                  "reasoning": true,
+                  "tool_call": true,
+                  "release_date": "2026-05-10",
+                  "limit": {
+                    "context": 1050000,
+                    "output": 128000
+                  }
+                },
+                "openai/gpt-5.6-luna": {
+                  "id": "openai/gpt-5.6-luna",
+                  "name": "GPT-5.6 Luna",
+                  "reasoning": true,
+                  "tool_call": true,
+                  "release_date": "2026-05-10",
+                  "limit": {
+                    "context": 1050000,
+                    "output": 128000
+                  }
                 }
               }
             }

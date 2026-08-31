@@ -2,7 +2,6 @@ package com.judepereira.jupiter.agent.harness;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
-import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
@@ -16,10 +15,10 @@ import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -113,8 +112,8 @@ public class CodingAgentHarnessAgentSelectionTest {
                 "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
         assertThat(model.capturedConversations().get(0).get(0).getContent())
                 .satisfies(system -> assertSystemPrompt(system, agentDefinitions.getRequired("engineer").systemPrompt(), tmp));
-        assertThat(model.capturedOptions().get(0).modelId()).isEqualTo("openai/gpt-5.5");
-        assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.5");
+        assertThat(model.capturedOptions().get(0).modelId()).isEqualTo("openai/gpt-5.6-terra");
+        assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.6-terra");
         assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(runCommand.executions).isEqualTo(1);
         assertThat(runCommand.lastContext).isNotNull();
