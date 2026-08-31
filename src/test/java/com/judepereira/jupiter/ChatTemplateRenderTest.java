@@ -173,13 +173,16 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
-    public void chatRowsFragmentRendersRunningToolCallsWithoutFailureStyling() {
+    public void chatRowsFragmentOmitsBundleAggregateStatusButRendersNestedGroupStatus() {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
         context.setVariable("messages", List.of(
-                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-running", null,
-                        List.of(new UiController.ToolCallView("tool-call-1", "read_file", false, "input", "output", false, false, null, null, null, "running")),
+                new UiController.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-mixed", null,
+                        List.of(
+                                new UiController.ToolCallView("tool-call-success", "read_file", true, "input", "output", false, false, null, null, null),
+                                new UiController.ToolCallView("tool-call-failure", "read_file", false, "input", "output", false, false, null, null, null)
+                        ),
                         null,
                         null)
         ));
@@ -188,8 +191,28 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-rows", context);
 
-        assertThat(html).contains("data-tool-call-state=\"running\"", ">running<");
-        assertThat(html).doesNotContain("tool-call-status-failure");
+        int bundleMarker = html.indexOf("tool-call-bundle");
+        int bundleStart = html.lastIndexOf("<details", bundleMarker);
+        int summaryStart = html.indexOf("<summary", bundleMarker);
+        int summaryEnd = html.indexOf("</summary>", summaryStart);
+        assertThat(bundleMarker).isGreaterThanOrEqualTo(0);
+        assertThat(bundleStart).isGreaterThanOrEqualTo(0);
+        assertThat(summaryStart).isGreaterThan(bundleStart);
+        assertThat(summaryEnd).isGreaterThan(summaryStart);
+
+        String bundleOpeningAndSummary = html.substring(bundleStart, summaryEnd + "</summary>".length());
+        assertThat(bundleOpeningAndSummary).doesNotContain(
+                "tool-call-status", "running", "success", "failure",
+                "data-tool-call-state", "data-tool-call-success");
+
+        int nestedGroupMarker = html.indexOf("data-tool-call-tool-name=\"read_file\"", summaryEnd);
+        int nestedGroupStart = html.lastIndexOf("<details", nestedGroupMarker);
+        int nestedSummaryStart = html.indexOf("<summary", nestedGroupStart);
+        int nestedSummaryEnd = html.indexOf("</summary>", nestedSummaryStart);
+        assertThat(nestedGroupMarker).isGreaterThan(summaryEnd);
+        assertThat(nestedGroupStart).isGreaterThan(bundleStart);
+        assertThat(html.substring(nestedGroupStart, nestedSummaryEnd + "</summary>".length()))
+                .contains("tool-call-status-failure", ">failure<");
     }
 
     @Test
@@ -210,7 +233,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("tool-call-summary-task", "Implement the parser", "Open subagent: <strong>Engineer</strong>", "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).contains("tool-call-summary-task", "Implement the parser", "View Session", "<span class=\"tool-call-name\">Engineer</span>", "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("tool-call-call\"\n                                            class=\"tool-call-subagent");
     }
 
@@ -266,7 +289,7 @@ public class ChatTemplateRenderTest {
         assertThat(firstBundle).isGreaterThanOrEqualTo(0);
         assertThat(taskIndex).isGreaterThan(firstBundle);
         assertThat(secondBundle).isGreaterThan(taskIndex);
-        assertThat(html).contains("tool-call-summary-task", "Open subagent: <strong>Engineer 1</strong>");
+        assertThat(html).contains("tool-call-summary-task", "View Session", "<span class=\"tool-call-name\">Engineer 1</span>");
         assertThat(html).contains("<span class=\"tool-call-name\">display_image</span>", "src=\"/ui/chat/image/1/display-1\"", "tool-call-image-caption");
         assertThat(html).contains("read-1 input", "read-2 input", "read-3 input");
 
@@ -312,7 +335,7 @@ public class ChatTemplateRenderTest {
         assertThat(secondTask).isGreaterThan(firstTask);
         assertThat(secondBundle).isGreaterThan(secondTask);
         assertThat(html).contains("tool-call-bundle");
-        assertThat(html).contains("Open subagent: <strong>Engineer 1</strong>", "Open subagent: <strong>Engineer 2</strong>");
+        assertThat(html).contains("View Session", "<span class=\"tool-call-name\">Engineer 1</span>", "<span class=\"tool-call-name\">Engineer 2</span>");
         assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");
     }
 
@@ -397,7 +420,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat", context);
 
-        assertThat(html).contains("tool-call-summary-task", "Open subagent:", "Engineer",
+        assertThat(html).contains("tool-call-summary-task", "View Session", "Engineer",
                 "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("subagent-activities");
     }

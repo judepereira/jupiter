@@ -63,6 +63,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                     response -> response.url().contains("/ui/settings") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
             com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#settings-modal")).isVisible();
+            page.locator("#settings-model-providers-tab").click();
 
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/openai/start") && response.status() == 200,
@@ -93,6 +94,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
+            page.locator("#settings-model-providers-tab").click();
 
             com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
             com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))).isVisible();
@@ -139,6 +141,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                 page.waitForResponse(
                         response -> response.url().contains("/ui/settings") && response.status() == 200,
                         () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
+                page.locator("#settings-model-providers-tab").click();
                 page.waitForResponse(
                         response -> response.url().contains("/ui/settings/openai/start") && response.status() == 200,
                         () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")).click());
@@ -163,6 +166,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                 page.waitForResponse(
                         response -> response.url().contains("/ui/settings") && response.status() == 200,
                         () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
+                page.locator("#settings-model-providers-tab").click();
 
                 com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
                 com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))).isVisible();

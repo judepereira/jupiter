@@ -51,8 +51,15 @@
 }
 
 .settings-modal-grid {
-    display: grid;
-    gap: 16px;
+    --bs-gutter-y: 1rem;
+}
+
+.settings-nav {
+    gap: 4px;
+}
+
+.settings-tab-content {
+    min-width: 0;
 }
 
 .settings-section {
@@ -409,5 +416,36 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+@media (max-width: 767.98px) {
+    .settings-env-row,
+    .settings-mcp-header-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    }
+
+    .settings-env-row button,
+    .settings-mcp-header-row button {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .settings-mcp-card-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .settings-mcp-card-header button {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .settings-section-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .project-form-actions {
+        flex-wrap: wrap;
+    }
 }
 

@@ -6,12 +6,9 @@
         <div th:if="${!#lists.isEmpty(m.toolCallBlocks)}" class="tool-calls">
             <th:block th:each="block : ${m.toolCallBlocks}">
                 <details th:if="${block.bundle != null}" class="tool-call tool-call-bundle"
-                         th:attr="data-tool-call-kind='bundle', data-tool-call-state=${block.bundle.status == 'running' ? 'running' : (block.bundle.success ? 'done' : 'error')}, data-tool-call-success=${block.bundle.success} ? 'true' : 'false'">
+                         th:attr="data-tool-call-kind='bundle'">
                     <summary class="tool-call-summary">
                         <span class="tool-call-name" th:text="${block.bundle.summaryLabel}"></span>
-                        <span class="tool-call-status"
-                              th:classappend="${block.bundle.status == 'running' ? '' : (block.bundle.success ? ' tool-call-status-success' : ' tool-call-status-failure')}"
-                              th:text="${block.bundle.status == 'running' ? 'running' : (block.bundle.success ? 'success' : 'failure')}"></span>
                     </summary>
 
                     <div class="tool-call-detail">
@@ -38,7 +35,7 @@
                                             class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                             th:if="${taskCall != null and taskCall.subagentSessionId != null}"
                                             th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${taskCall.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                        Open subagent: <strong th:text="${taskCall.subagentAgentName}"></strong>
+                                        View Session
                                     </button>
                                 </summary>
 
@@ -51,7 +48,7 @@
                                                 <button type="button"
                                                         class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                                         th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                                    Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                                                    View Session
                                                 </button>
                                             </div>
 
@@ -108,7 +105,7 @@
                                 class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                 th:if="${taskCall != null and taskCall.subagentSessionId != null}"
                                 th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${taskCall.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                            Open subagent: <strong th:text="${taskCall.subagentAgentName}"></strong>
+                            View Session
                         </button>
                     </summary>
 
@@ -121,7 +118,7 @@
                                     <button type="button"
                                             class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button"
                                             th:attr="onclick='event.stopPropagation()', hx-get=@{/ui/chat/subagent/{id}(id=${call.subagentSessionId})}, hx-target='#chat-container', hx-swap='outerHTML'">
-                                        Open subagent: <strong th:text="${call.subagentAgentName}"></strong>
+                                        View Session
                                     </button>
                                 </div>
 

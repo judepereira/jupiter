@@ -73,7 +73,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
-            assertThat(taskSubagentButton).containsText("Open subagent");
+            assertThat(taskSubagentButton).hasText("View Session");
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).doesNotContain("Primary task:");
 
@@ -193,7 +193,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
-            assertThat(taskSubagentButton).containsText("Open subagent: Explore");
+            assertThat(taskSubagentButton).hasText("View Session");
 
             taskSubagentButton.click();
             page.locator(".subagent-bar").waitFor();
@@ -252,7 +252,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             taskToolCall.locator(":scope > summary.tool-call-summary").click();
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
-            assertThat(taskSubagentButton).containsText("Open subagent: Explore");
+            assertThat(taskSubagentButton).hasText("View Session");
 
             taskSubagentButton.click();
             page.locator(".subagent-bar").waitFor();
@@ -371,7 +371,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             org.assertj.core.api.Assertions.assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
                     .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
                     .isEqualTo(1);
-            assertThat(taskToolCall.locator(".tool-call-subagent-button")).containsText("Open subagent");
+            assertThat(taskToolCall.locator(".tool-call-subagent-button")).hasText("View Session");
 
             TestAppConfig.releaseSubagentTurn();
             TestAppConfig.awaitSubagentCompleted();
