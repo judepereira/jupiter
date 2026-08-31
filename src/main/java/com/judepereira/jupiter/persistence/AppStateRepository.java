@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -31,6 +32,132 @@ public class AppStateRepository {
                 nullableLong(rs, "active_workspace_id"),
                 nullableLong(rs, "active_session_id")
         ));
+    }
+
+    void insertTokenUsageFact(Persistence.TokenUsageFact fact, String providerMetadataJson) {
+        jdbc.update("""
+                INSERT INTO token_usage_facts (session_usage_key, session_id_snapshot, workspace_id_snapshot, project_id_snapshot,
+                    session_name_snapshot, workspace_name_snapshot, project_name_snapshot, workspace_path_snapshot, project_path_snapshot,
+                    occurred_at, hour_start_utc, model_key, operation, input_token_count, output_token_count, total_token_count,
+                    cached_input_token_count, cache_write_token_count, reasoning_token_count, response_id, response_model_id, finish_reason,
+                    provider_metadata_json)
+                VALUES (:sessionUsageKey, :sessionId, :workspaceId, :projectId, :sessionName, :workspaceName, :projectName,
+                    :workspacePath, :projectPath, :occurredAt, :hourStart, :modelKey, :operation, :inputTokens, :outputTokens, :totalTokens,
+                    :cachedTokens, :cacheWriteTokens, :reasoningTokens, :responseId, :responseModelId, :finishReason, :providerMetadataJson)
+                """, usageParams(fact, providerMetadataJson));
+    }
+
+    void upsertTokenUsageHourly(Persistence.TokenUsageFact fact) {
+        jdbc.update("""
+                INSERT INTO token_usage_hourly (session_usage_key, session_id_snapshot, workspace_id_snapshot, project_id_snapshot,
+                    session_name_snapshot, workspace_name_snapshot, project_name_snapshot, workspace_path_snapshot, project_path_snapshot,
+                    hour_start_utc, model_key, request_count, input_token_count, output_token_count, total_token_count,
+                    cached_input_token_count, cache_write_token_count, reasoning_token_count, last_occurred_at)
+                VALUES (:sessionUsageKey, :sessionId, :workspaceId, :projectId, :sessionName, :workspaceName, :projectName,
+                    :workspacePath, :projectPath, :hourStart, :modelKey, 1, :inputTokens, :outputTokens, :totalTokens,
+                    :cachedTokens, :cacheWriteTokens, :reasoningTokens, :occurredAt)
+                ON CONFLICT (session_usage_key, hour_start_utc, model_key) DO UPDATE SET
+                    request_count = request_count + 1,
+                    input_token_count = CASE WHEN excluded.input_token_count IS NULL THEN input_token_count ELSE COALESCE(input_token_count, 0) + excluded.input_token_count END,
+                    output_token_count = CASE WHEN excluded.output_token_count IS NULL THEN output_token_count ELSE COALESCE(output_token_count, 0) + excluded.output_token_count END,
+                    total_token_count = CASE WHEN excluded.total_token_count IS NULL THEN total_token_count ELSE COALESCE(total_token_count, 0) + excluded.total_token_count END,
+                    cached_input_token_count = CASE WHEN excluded.cached_input_token_count IS NULL THEN cached_input_token_count ELSE COALESCE(cached_input_token_count, 0) + excluded.cached_input_token_count END,
+                    cache_write_token_count = CASE WHEN excluded.cache_write_token_count IS NULL THEN cache_write_token_count ELSE COALESCE(cache_write_token_count, 0) + excluded.cache_write_token_count END,
+                    reasoning_token_count = CASE WHEN excluded.reasoning_token_count IS NULL THEN reasoning_token_count ELSE COALESCE(reasoning_token_count, 0) + excluded.reasoning_token_count END,
+                    last_occurred_at = MAX(last_occurred_at, excluded.last_occurred_at)
+                """, usageParams(fact, null));
+    }
+
+    int deleteTokenUsageFactsBefore(Instant cutoff) {
+        return jdbc.update("DELETE FROM token_usage_facts WHERE occurred_at < :cutoff",
+                new MapSqlParameterSource("cutoff", Timestamp.from(cutoff)));
+    }
+
+    int deleteTokenUsageHourlyBefore(Instant cutoff) {
+        return jdbc.update("DELETE FROM token_usage_hourly WHERE hour_start_utc < :cutoff",
+                new MapSqlParameterSource("cutoff", Timestamp.from(cutoff)));
+    }
+
+    void rebuildTokenUsageHourlyAt(Instant cutoff, Instant hourStart) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("cutoff", Timestamp.from(cutoff))
+                .addValue("hourStart", Timestamp.from(hourStart));
+        jdbc.update("DELETE FROM token_usage_hourly WHERE hour_start_utc = :hourStart", params);
+        jdbc.update("""
+                INSERT INTO token_usage_hourly (session_usage_key, session_id_snapshot, workspace_id_snapshot, project_id_snapshot,
+                    session_name_snapshot, workspace_name_snapshot, project_name_snapshot, workspace_path_snapshot, project_path_snapshot,
+                    hour_start_utc, model_key, request_count, input_token_count, output_token_count, total_token_count,
+                    cached_input_token_count, cache_write_token_count, reasoning_token_count, last_occurred_at)
+                SELECT session_usage_key, MIN(session_id_snapshot), MIN(workspace_id_snapshot), MIN(project_id_snapshot),
+                       MIN(session_name_snapshot), MIN(workspace_name_snapshot), MIN(project_name_snapshot), MIN(workspace_path_snapshot), MIN(project_path_snapshot),
+                       hour_start_utc, model_key, COUNT(*), SUM(input_token_count), SUM(output_token_count), SUM(total_token_count),
+                       SUM(cached_input_token_count), SUM(cache_write_token_count), SUM(reasoning_token_count), MAX(occurred_at)
+                FROM token_usage_facts
+                WHERE hour_start_utc = :hourStart AND occurred_at >= :cutoff
+                GROUP BY session_usage_key, hour_start_utc, model_key
+                """, params);
+    }
+    List<Persistence.TokenUsageHourly> findHourlyTokenUsage(String sessionUsageKey, Instant fromInclusive, Instant toExclusive) {
+        return jdbc.query("""
+                SELECT session_usage_key, hour_start_utc, model_key, request_count,
+                       input_token_count, output_token_count, total_token_count, cached_input_token_count,
+                       cache_write_token_count, reasoning_token_count, last_occurred_at
+                FROM token_usage_hourly
+                WHERE session_usage_key = :sessionUsageKey
+                  AND hour_start_utc >= :fromInclusive
+                  AND hour_start_utc < :toExclusive
+                ORDER BY hour_start_utc ASC, model_key ASC
+                """, new MapSqlParameterSource()
+                        .addValue("sessionUsageKey", sessionUsageKey)
+                        .addValue("fromInclusive", Timestamp.from(fromInclusive))
+                        .addValue("toExclusive", Timestamp.from(toExclusive)), (rs, rowNum) ->
+                new Persistence.TokenUsageHourly(
+                        rs.getString("session_usage_key"), timestampToInstant(rs.getTimestamp("hour_start_utc")),
+                        rs.getString("model_key"), rs.getLong("request_count"),
+                        nullableLong(rs, "input_token_count"), nullableLong(rs, "output_token_count"), nullableLong(rs, "total_token_count"),
+                        nullableLong(rs, "cached_input_token_count"), nullableLong(rs, "cache_write_token_count"),
+                        nullableLong(rs, "reasoning_token_count"), timestampToInstant(rs.getTimestamp("last_occurred_at"))));
+    }
+
+    List<Persistence.TokenUsageFact> findTokenUsageFacts(String sessionUsageKey) {
+        return jdbc.query("""
+                SELECT session_usage_key, session_id_snapshot, workspace_id_snapshot, project_id_snapshot,
+                       session_name_snapshot, workspace_name_snapshot, project_name_snapshot,
+                       workspace_path_snapshot, project_path_snapshot, occurred_at, hour_start_utc,
+                       model_key, operation, input_token_count, output_token_count, total_token_count,
+                       cached_input_token_count, cache_write_token_count, reasoning_token_count,
+                       response_id, response_model_id, finish_reason
+                FROM token_usage_facts
+                WHERE session_usage_key = :sessionUsageKey
+                ORDER BY occurred_at ASC, id ASC
+                """, new MapSqlParameterSource("sessionUsageKey", sessionUsageKey), (rs, rowNum) ->
+                new Persistence.TokenUsageFact(
+                        rs.getString("session_usage_key"), rs.getLong("session_id_snapshot"),
+                        rs.getLong("workspace_id_snapshot"), rs.getLong("project_id_snapshot"),
+                        rs.getString("session_name_snapshot"), rs.getString("workspace_name_snapshot"),
+                        rs.getString("project_name_snapshot"), rs.getString("workspace_path_snapshot"),
+                        rs.getString("project_path_snapshot"), timestampToInstant(rs.getTimestamp("occurred_at")),
+                        timestampToInstant(rs.getTimestamp("hour_start_utc")), rs.getString("model_key"),
+                        rs.getString("operation"), nullableInteger(rs, "input_token_count"),
+                        nullableInteger(rs, "output_token_count"), nullableInteger(rs, "total_token_count"),
+                        nullableInteger(rs, "cached_input_token_count"), nullableInteger(rs, "cache_write_token_count"),
+                        nullableInteger(rs, "reasoning_token_count"), rs.getString("response_id"),
+                        rs.getString("response_model_id"), rs.getString("finish_reason"), Map.of()));
+    }
+
+    private MapSqlParameterSource usageParams(Persistence.TokenUsageFact fact, String providerMetadataJson) {
+        return new MapSqlParameterSource()
+                .addValue("sessionUsageKey", fact.sessionUsageKey()).addValue("sessionId", fact.sessionIdSnapshot())
+                .addValue("workspaceId", fact.workspaceIdSnapshot()).addValue("projectId", fact.projectIdSnapshot())
+                .addValue("sessionName", fact.sessionNameSnapshot()).addValue("workspaceName", fact.workspaceNameSnapshot())
+                .addValue("projectName", fact.projectNameSnapshot()).addValue("workspacePath", fact.workspacePathSnapshot())
+                .addValue("projectPath", fact.projectPathSnapshot()).addValue("occurredAt", Timestamp.from(fact.occurredAt()))
+                .addValue("hourStart", Timestamp.from(fact.hourStartUtc())).addValue("modelKey", fact.modelKey())
+                .addValue("operation", fact.operation()).addValue("inputTokens", fact.inputTokenCount())
+                .addValue("outputTokens", fact.outputTokenCount()).addValue("totalTokens", fact.totalTokenCount())
+                .addValue("cachedTokens", fact.cachedInputTokenCount()).addValue("cacheWriteTokens", fact.cacheWriteTokenCount())
+                .addValue("reasoningTokens", fact.reasoningTokenCount()).addValue("responseId", fact.responseId())
+                .addValue("responseModelId", fact.responseModelId()).addValue("finishReason", fact.finishReason()).addValue("providerMetadataJson", providerMetadataJson == null ? "{}" : providerMetadataJson);
     }
 
     public Optional<OpenAiOAuthStateRow> loadOpenAiOAuthState() {
@@ -318,6 +445,21 @@ public class AppStateRepository {
                 new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("lastOpenedAt", Timestamp.from(now)));
     }
 
+    Optional<SessionUsageContext> findSessionUsageContext(long sessionId) {
+        return queryOne("""
+                SELECT s.session_usage_key, s.id AS session_id, s.name AS session_name,
+                       w.id AS workspace_id, w.name AS workspace_name, w.normalized_path AS workspace_path,
+                       p.id AS project_id, p.name AS project_name, p.normalized_path AS project_path
+                FROM sessions s
+                JOIN workspaces w ON w.id = s.workspace_id
+                JOIN projects p ON p.id = w.project_id
+                WHERE s.id = :id
+                """, new MapSqlParameterSource("id", sessionId), (rs, rowNum) -> new SessionUsageContext(
+                rs.getString("session_usage_key"), rs.getLong("session_id"), rs.getLong("workspace_id"), rs.getLong("project_id"),
+                rs.getString("session_name"), rs.getString("workspace_name"), rs.getString("project_name"),
+                rs.getString("workspace_path"), rs.getString("project_path")));
+    }
+
     SessionRow findSession(long sessionId) {
         return queryRequired("""
                 SELECT s.*,
@@ -480,8 +622,8 @@ public class AppStateRepository {
                        Long selectedChangedFileId, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
                        Long parentAssistantMessageId) {
         return insertAndReturnId("""
-                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, chat_draft, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, created_at, last_opened_at)
-                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, '', :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :createdAt, :lastOpenedAt)
+                INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, chat_draft, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, session_usage_key, created_at, last_opened_at)
+                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, '', :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :sessionUsageKey, :createdAt, :lastOpenedAt)
                 """, params -> params
                 .addValue("workspaceId", workspaceId)
                 .addValue("name", name)
@@ -495,6 +637,7 @@ public class AppStateRepository {
                 .addValue("subagentAgentId", subagentAgentId)
                 .addValue("subagentAgentName", subagentAgentName)
                 .addValue("parentAssistantMessageId", parentAssistantMessageId)
+                .addValue("sessionUsageKey", UUID.randomUUID().toString())
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("lastOpenedAt", Timestamp.from(now)));
     }
@@ -899,6 +1042,11 @@ public class AppStateRepository {
         return timestamp == null ? null : timestamp.toInstant();
     }
 
+    private static Integer nullableInteger(ResultSet rs, String columnLabel) throws SQLException {
+        int value = rs.getInt(columnLabel);
+        return rs.wasNull() ? null : value;
+    }
+
     private static Long nullableLong(ResultSet rs, String columnLabel) throws SQLException {
         long value = rs.getLong(columnLabel);
         return rs.wasNull() ? null : value;
@@ -914,6 +1062,8 @@ public class AppStateRepository {
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
     record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt, List<Long> exposedProjectIds) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt, boolean unread, boolean inProgress) {}
+    record SessionUsageContext(String sessionUsageKey, long sessionId, long workspaceId, long projectId, String sessionName,
+                               String workspaceName, String projectName, String workspacePath, String projectPath) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
                       String chatDraft, boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
                       Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt, boolean inProgress) {}

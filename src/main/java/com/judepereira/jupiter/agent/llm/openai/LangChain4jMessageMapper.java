@@ -2,6 +2,7 @@ package com.judepereira.jupiter.agent.llm.openai;
 
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -9,6 +10,11 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.response.ChatResponseMetadata;
+import dev.langchain4j.model.openai.OpenAiChatResponseMetadata;
+import dev.langchain4j.model.openai.OpenAiResponsesChatResponseMetadata;
+import dev.langchain4j.model.openai.OpenAiTokenUsage;
+import dev.langchain4j.model.output.TokenUsage;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -76,10 +82,58 @@ public final class LangChain4jMessageMapper {
         }
 
         AiMessage aiMessage = response.aiMessage();
+        ModelResponseMetadata metadata = toModelResponseMetadata(response);
         if (aiMessage.hasToolExecutionRequests() && !aiMessage.toolExecutionRequests().isEmpty()) {
-            return new ModelResponse(aiMessage.text(), toToolCall(aiMessage.toolExecutionRequests().get(0)));
+            return new ModelResponse(aiMessage.text(), toToolCall(aiMessage.toolExecutionRequests().get(0)), metadata);
         }
-        return new ModelResponse(aiMessage.text(), null);
+        return new ModelResponse(aiMessage.text(), null, metadata);
+    }
+
+    private ModelResponseMetadata toModelResponseMetadata(ChatResponse response) {
+        TokenUsage usage = response.tokenUsage();
+        Integer cachedInputTokenCount = null;
+        Integer reasoningTokenCount = null;
+        if (usage instanceof OpenAiTokenUsage openAiUsage) {
+            if (openAiUsage.inputTokensDetails() != null) {
+                cachedInputTokenCount = openAiUsage.inputTokensDetails().cachedTokens();
+            }
+            if (openAiUsage.outputTokensDetails() != null) {
+                reasoningTokenCount = openAiUsage.outputTokensDetails().reasoningTokens();
+            }
+        }
+
+        return new ModelResponseMetadata(
+                usage == null ? null : usage.inputTokenCount(),
+                usage == null ? null : usage.outputTokenCount(),
+                usage == null ? null : usage.totalTokenCount(),
+                cachedInputTokenCount,
+                null,
+                reasoningTokenCount,
+                response.id(),
+                response.modelName(),
+                response.finishReason() == null ? null : response.finishReason().name(),
+                providerMetadata(response.metadata())
+        );
+    }
+
+    private Map<String, Object> providerMetadata(ChatResponseMetadata metadata) {
+        Map<String, Object> providerMetadata = new LinkedHashMap<>();
+        if (metadata instanceof OpenAiResponsesChatResponseMetadata responsesMetadata) {
+            putIfNonNull(providerMetadata, "createdAt", responsesMetadata.createdAt());
+            putIfNonNull(providerMetadata, "completedAt", responsesMetadata.completedAt());
+            putIfNonNull(providerMetadata, "serviceTier", responsesMetadata.serviceTier());
+        } else if (metadata instanceof OpenAiChatResponseMetadata chatMetadata) {
+            putIfNonNull(providerMetadata, "created", chatMetadata.created());
+            putIfNonNull(providerMetadata, "serviceTier", chatMetadata.serviceTier());
+            putIfNonNull(providerMetadata, "systemFingerprint", chatMetadata.systemFingerprint());
+        }
+        return providerMetadata;
+    }
+
+    private static void putIfNonNull(Map<String, Object> metadata, String name, Object value) {
+        if (value != null) {
+            metadata.put(name, value);
+        }
     }
 
     public ToolCall toToolCall(dev.langchain4j.agent.tool.ToolExecutionRequest request) {

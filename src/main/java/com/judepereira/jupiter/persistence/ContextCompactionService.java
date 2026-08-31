@@ -33,17 +33,24 @@ public class ContextCompactionService {
 
     private final AppStateService appStateService;
     private final AgentModelClientFactory modelClientFactory;
+    private final TokenUsageService tokenUsageService;
     private final SystemPromptComposer systemPromptComposer;
 
     public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory) {
-        this(appStateService, modelClientFactory, new SystemPromptComposer());
+        this(appStateService, modelClientFactory, null, new SystemPromptComposer());
+    }
+
+    public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory,
+                                    SystemPromptComposer systemPromptComposer) {
+        this(appStateService, modelClientFactory, null, systemPromptComposer);
     }
 
     @Autowired
     public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory,
-                                    SystemPromptComposer systemPromptComposer) {
+                                    TokenUsageService tokenUsageService, SystemPromptComposer systemPromptComposer) {
         this.appStateService = appStateService;
         this.modelClientFactory = modelClientFactory;
+        this.tokenUsageService = tokenUsageService;
         this.systemPromptComposer = systemPromptComposer;
     }
 
@@ -85,6 +92,9 @@ public class ContextCompactionService {
                 streamedSummary.append(delta);
             }
         });
+        if (tokenUsageService != null) {
+            tokenUsageService.recordModelResponse(sessionId, model.id(), "compaction", summaryResult);
+        }
 
         String summary = summaryResult.getAssistantText();
         if (summary == null || summary.isBlank()) {

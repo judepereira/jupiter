@@ -24,6 +24,7 @@ import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.TokenUsageService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -44,34 +45,36 @@ public class CodingAgentHarness {
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
     private final AppStateService appStateService;
+    private final TokenUsageService tokenUsageService;
     private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
     private final SystemPromptComposer systemPromptComposer;
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props) {
-        this(modelFactory, registry, props, null, null, null, null, new SystemPromptComposer());
+        this(modelFactory, registry, props, null, null, null, null, null, new SystemPromptComposer());
     }
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, null, null, new SystemPromptComposer());
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, null, null, null, new SystemPromptComposer());
     }
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                               AppStateService appStateService) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, null, new SystemPromptComposer());
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, null, null, new SystemPromptComposer());
     }
 
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                               AppStateService appStateService, McpProjectMcpServerRuntimeManager mcpRuntimeManager) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, mcpRuntimeManager, new SystemPromptComposer());
+        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, null, mcpRuntimeManager, new SystemPromptComposer());
     }
 
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                              AppStateService appStateService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                              AppStateService appStateService, TokenUsageService tokenUsageService,
+                              McpProjectMcpServerRuntimeManager mcpRuntimeManager,
                               SystemPromptComposer systemPromptComposer) {
         this.modelFactory = modelFactory;
         this.registry = registry;
@@ -79,6 +82,7 @@ public class CodingAgentHarness {
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
         this.appStateService = appStateService;
+        this.tokenUsageService = tokenUsageService;
         this.mcpRuntimeManager = mcpRuntimeManager;
         this.systemPromptComposer = systemPromptComposer;
     }
@@ -143,6 +147,13 @@ public class CodingAgentHarness {
                         listener.onTextDelta(delta);
                     }
                 });
+                if (tokenUsageService != null && appStateService != null && request.getSessionId() != null) {
+                    String usageModelKey = modelOptions == null ? request.getModelId() : modelOptions.modelId();
+                    if (usageModelKey == null || usageModelKey.isBlank()) {
+                        usageModelKey = props.getModel();
+                    }
+                    tokenUsageService.recordModelResponse(request.getSessionId(), usageModelKey, "harness", resp);
+                }
 
                 ToolCall call = resp.getToolCall();
                 String assistantText = resp.getAssistantText();

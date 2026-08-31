@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.persistence;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -133,4 +134,16 @@ public final class Persistence {
 
     public record ToolCallTraceInput(String toolCallId, String toolName, Map<String, Object> args, boolean success, String textSummary, Map<String, Object> machineSummary) {
     }
+
+    public record TokenUsageFact(String sessionUsageKey, long sessionIdSnapshot, long workspaceIdSnapshot, long projectIdSnapshot,
+                                 String sessionNameSnapshot, String workspaceNameSnapshot, String projectNameSnapshot,
+                                 String workspacePathSnapshot, String projectPathSnapshot, Instant occurredAt, Instant hourStartUtc,
+                                 String modelKey, String operation, Integer inputTokenCount, Integer outputTokenCount, Integer totalTokenCount,
+                                 Integer cachedInputTokenCount, Integer cacheWriteTokenCount, Integer reasoningTokenCount, String responseId,
+                                 String responseModelId, String finishReason, Map<String, Object> providerMetadata) {}
+
+    public record TokenUsageHourly(String sessionUsageKey, Instant hourStartUtc, String modelKey,
+                                   long requestCount, Long inputTokenCount, Long outputTokenCount, Long totalTokenCount,
+                                   Long cachedInputTokenCount, Long cacheWriteTokenCount, Long reasoningTokenCount,
+                                   Instant lastOccurredAt) {}
 }
