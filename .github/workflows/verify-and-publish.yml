@@ -21,7 +21,7 @@ jobs:
           BLUECAVE_EXTRA_OPTS: >-
             -b ${{ github.head_ref || github.ref_name }}
             -c ${{ github.event.pull_request.head.sha || github.sha }}
-            ${{ github.event_name == 'pull_request' && '--pr' || '' }}
+            ${{ github.event_name == 'pull_request' && format('--pull-request true --pr-id {0}', github.event.pull_request.number) || '' }}
         run: |
           args=(
             --tag "jupiter:$GITHUB_SHA"
