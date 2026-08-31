@@ -1,7 +1,7 @@
 import {getRawChatMarkdown, renderChatMarkdown} from '../markdown.js';
 import {isInitialChatScrollActive} from '../scroll.js';
 
-function createStreamBuffer(assistantId, getLiveChatRow) {
+function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) {
     const FLUSH_INTERVAL_MS = 40;
 
     let buffer = '';
@@ -12,8 +12,12 @@ function createStreamBuffer(assistantId, getLiveChatRow) {
     let streamHistoryEl = null;
     let shouldStickToBottom = false;
 
+    function canAccessActiveHistory() {
+        return isStreamSessionActive();
+    }
+
     function currentRow() {
-        return getLiveChatRow(assistantId);
+        return canAccessActiveHistory() ? getLiveChatRow(assistantId) : null;
     }
 
     function currentTextSpan() {
@@ -22,6 +26,7 @@ function createStreamBuffer(assistantId, getLiveChatRow) {
     }
 
     function wasNearBottom() {
+        if (!canAccessActiveHistory()) return false;
         try {
             const history = document.getElementById('chat-history');
             if (!history) return false;
@@ -41,6 +46,7 @@ function createStreamBuffer(assistantId, getLiveChatRow) {
     }
 
     function bindHistoryScrollListener() {
+        if (!canAccessActiveHistory()) return;
         try {
             streamHistoryEl = document.getElementById('chat-history');
             if (streamHistoryEl && streamHistoryEl.addEventListener) {
@@ -95,6 +101,7 @@ function createStreamBuffer(assistantId, getLiveChatRow) {
         flushInner();
         if (stickBeforeFlush) {
             requestAnimationFrame(() => {
+                if (!canAccessActiveHistory()) return;
                 try {
                     const history = document.getElementById('chat-history');
                     if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
