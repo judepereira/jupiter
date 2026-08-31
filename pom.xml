@@ -208,7 +208,7 @@
                 <configuration>
                     <forkCount>1C</forkCount>
                     <reuseForks>true</reuseForks>
-                    <argLine>--enable-native-access=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -Xshare:off</argLine>
+                    <argLine>@{argLine} --enable-native-access=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -Xshare:off</argLine>
                     <systemPropertyVariables>
                         <spring.datasource.url>jdbc:sqlite:file:target/jupiter-test-${surefire.forkNumber}.sqlite?journal_mode=WAL&amp;foreign_keys=on</spring.datasource.url>
                     </systemPropertyVariables>
@@ -257,7 +257,7 @@
             <plugin>
                 <groupId>io.bluecave</groupId>
                 <artifactId>bluecave-maven-plugin</artifactId>
-                <version>0.1.2</version>
+                <version>0.1.3</version>
             </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
