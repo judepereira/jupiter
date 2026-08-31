@@ -46,17 +46,15 @@ export {
     buildToolCallCallRefs,
     buildTaskToolCallGroupRefs,
     createToolCallBundle,
+    refreshToolCallBundleLabel,
     createToolCallGroup,
     getToolCallBundle,
     getOrCreateToolCallBundleCallsContainer,
-    refreshToolCallBundleSummary,
     refreshToolCallGroupSummary,
     toolCallGroupSummaryText
 } from './tool-calls/groups.js';
 
 export {
-    refreshAnyToolCallBundle,
-    refreshParentToolCallBundle,
     createToolCallCall,
     buildToolCallEntry,
     ensureToolCallEntry,
