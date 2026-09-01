@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 
@@ -853,9 +854,68 @@ public class AppStateRepository {
                 new MapSqlParameterSource("sessionId", sessionId), this::mapToolCallTrace);
     }
 
+    List<ToolCallTraceRow> listToolCallTraceProjectionsBySession(long sessionId) {
+        return jdbc.query("SELECT id, session_id, assistant_message_id, sequence, tool_call_id, tool_name, success, NULL AS args_json, NULL AS text_summary, NULL AS machine_summary_json, completed_at, created_at FROM tool_call_traces WHERE session_id = :sessionId ORDER BY sequence ASC",
+                new MapSqlParameterSource("sessionId", sessionId), this::mapToolCallTrace);
+    }
+
+    List<ToolCallTraceRow> listToolCallTracesBySessionAndToolNames(long sessionId, Collection<String> toolNames) {
+        if (toolNames.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT * FROM tool_call_traces WHERE session_id = :sessionId AND tool_name IN (:toolNames) ORDER BY sequence ASC",
+                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("toolNames", toolNames), this::mapToolCallTrace);
+    }
+
+    List<TaskCallProjectionRow> listTaskCallProjectionsBySession(long sessionId) {
+        return jdbc.query("""
+                SELECT t.id, t.session_id, t.assistant_message_id, t.sequence, t.tool_call_id, t.success, t.completed_at,
+                       CASE WHEN json_valid(t.args_json) THEN
+                           substr(COALESCE(NULLIF(json_extract(t.args_json, '$.requestSummary'), ''), json_extract(t.args_json, '$.task')), 1, 500)
+                       END AS request_summary,
+                       child.id AS subagent_session_id, child.subagent_agent_id, child.subagent_agent_name,
+                       EXISTS(
+                           SELECT 1
+                           FROM conversation_messages child_message
+                           WHERE child_message.session_id = child.id AND child_message.role = 'assistant'
+                             AND child_message.show_in_chat = TRUE
+                             AND child_message.sequence = (SELECT MAX(latest.sequence) FROM conversation_messages latest WHERE latest.session_id = child.id AND latest.role = 'assistant' AND latest.show_in_chat = TRUE)
+                             AND child_message.pending = TRUE
+                       ) AS subagent_in_progress
+                FROM tool_call_traces t
+                LEFT JOIN sessions child ON child.parent_session_id = t.session_id
+                    AND child.parent_tool_call_id = t.tool_call_id AND child.hidden = TRUE
+                WHERE t.session_id = :sessionId AND t.tool_name = 'task'
+                ORDER BY t.sequence ASC
+                """, new MapSqlParameterSource("sessionId", sessionId), (rs, rowNum) -> new TaskCallProjectionRow(
+                rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"),
+                rs.getString("tool_call_id"), nullableBoolean(rs, "success"), timestampToInstant(rs.getTimestamp("completed_at")),
+                rs.getString("request_summary"), nullableLong(rs, "subagent_session_id"), rs.getString("subagent_agent_id"),
+                rs.getString("subagent_agent_name"), rs.getBoolean("subagent_in_progress")));
+    }
+
+    Optional<TaskCallProjectionRow> findTaskCallProjection(long sessionId, String toolCallId) {
+        return listTaskCallProjectionsBySession(sessionId).stream()
+                .filter(row -> toolCallId.equals(row.toolCallId()))
+                .findFirst();
+    }
+
+    Optional<ConversationMessageRow> findMessageBySessionAndPublicIdOptional(long sessionId, String publicId) {
+        return queryOne("SELECT * FROM conversation_messages WHERE session_id = :sessionId AND public_id = :publicId",
+                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("publicId", publicId), this::mapConversationMessage);
+    }
+
     List<ToolCallTraceRow> listToolCallTracesByAssistantMessage(long assistantMessageId) {
         return jdbc.query("SELECT * FROM tool_call_traces WHERE assistant_message_id = :assistantMessageId ORDER BY sequence ASC",
                 new MapSqlParameterSource("assistantMessageId", assistantMessageId), this::mapToolCallTrace);
+    }
+
+    List<ToolCallTraceRow> listToolCallTracesByAssistantMessageAndToolCallIds(long assistantMessageId, Collection<String> toolCallIds) {
+        if (toolCallIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT * FROM tool_call_traces WHERE assistant_message_id = :assistantMessageId AND tool_call_id IN (:toolCallIds) ORDER BY sequence ASC",
+                new MapSqlParameterSource().addValue("assistantMessageId", assistantMessageId).addValue("toolCallIds", toolCallIds), this::mapToolCallTrace);
     }
 
     List<ToolCallTraceRow> listIncompleteToolCallTracesByAssistantMessage(long assistantMessageId) {
@@ -1070,5 +1130,8 @@ public class AppStateRepository {
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant completedAt, Instant createdAt) {}
     record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, Boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant completedAt, Instant createdAt) {}
+    record TaskCallProjectionRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, Boolean success,
+                                 Instant completedAt, String requestSummary, Long subagentSessionId, String subagentAgentId,
+                                 String subagentAgentName, boolean subagentInProgress) {}
     record ChangedFileRow(long id, long sessionId, String path, String diff, long position, Instant createdAt) {}
 }

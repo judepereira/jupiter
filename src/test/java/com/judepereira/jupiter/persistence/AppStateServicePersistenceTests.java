@@ -273,8 +273,8 @@ public class AppStateServicePersistenceTests {
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> {
             assertThat(call.status()).isEqualTo("running");
             assertThat(call.success()).isFalse();
-            assertThat(call.inputPreview()).contains("requestSummary");
-            assertThat(call.outputPreview()).isEmpty();
+            assertThat(call.inputPreview()).isNull();
+            assertThat(call.outputPreview()).isNull();
             assertThat(call.taskBody()).isEqualTo("Write the parser implementation");
         });
     }
@@ -561,8 +561,8 @@ public class AppStateServicePersistenceTests {
             assertThat(call.toolCallId()).isEqualTo("task-1");
             assertThat(call.toolName()).isEqualTo("task");
             assertThat(call.status()).isEqualTo("running");
-            assertThat(call.inputPreview()).contains("requestSummary");
-            assertThat(call.outputPreview()).isEmpty();
+            assertThat(call.inputPreview()).isNull();
+            assertThat(call.outputPreview()).isNull();
             assertThat(call.taskBody()).isEqualTo("Write the parser implementation");
             assertThat(call.subagentSessionId()).isEqualTo(hiddenSessionId);
             assertThat(call.subagentAgentId()).isEqualTo("engineer");

@@ -40,6 +40,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
@@ -690,6 +691,12 @@ public class UiController {
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         return "fragments/chat :: chat";
+    }
+
+    @GetMapping("/ui/chat/tool-call/{assistantPublicId}/{toolCallId}")
+    @ResponseBody
+    public String loadToolCallGroup(@PathVariable String assistantPublicId, @PathVariable String toolCallId) {
+        return chatToolCallHtmlService.lazyGroup(assistantPublicId, toolCallId);
     }
 
     @GetMapping("/ui/chat/image/{sessionId}/{toolCallId}")
