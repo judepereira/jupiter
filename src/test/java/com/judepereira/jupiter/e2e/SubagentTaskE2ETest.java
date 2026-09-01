@@ -59,6 +59,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             var taskToolCall = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
+            assertThat(taskToolCall.locator(":scope > .tool-call-detail")).not().isVisible();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
             var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
             assertThat(statusBadge).hasText("success");
