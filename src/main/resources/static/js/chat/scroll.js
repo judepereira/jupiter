@@ -6,6 +6,7 @@ import {
 
 const INITIAL_SCROLL_MAX_MS = 5000;
 const INITIAL_SCROLL_STABLE_FRAMES = 3;
+const TRANSITION_SCROLL_STABLE_FRAMES = 3;
 
 let lastMessageCount = -1;
 let chatAutoScrollBound = false;
@@ -14,6 +15,8 @@ let primaryChatScrollState = null;
 let primaryChatScrollRestorePending = false;
 let subagentScrollRestoreBound = false;
 let sessionChangeScrollRestoreBound = false;
+let lastSettledChatContainer = null;
+let transitionChatScroll = null;
 let initialChatScroll = null;
 let initialChatScrollListenersBound = false;
 
@@ -271,9 +274,24 @@ function restorePrimaryChatScrollState() {
     }
 }
 
-function isSessionActivationOrAddPath(path) {
+function isChatContextTransitionPath(path) {
     const value = String(path || '');
-    return value.includes('/ui/sessions/add') || /\/ui\/sessions\/[^/?#]+\/activate(?:[/?#]|$)/.test(value);
+    return value.includes('/ui/sessions/add')
+        || /\/ui\/(?:projects|workspaces|sessions)\/[^/?#]+\/(?:activate|collapse|close)(?:[/?#]|$)/.test(value)
+        || value.includes('/ui/workspaces/add');
+}
+
+function finishTransitionChatScroll(state) {
+    if (!state || state.finished) return;
+    state.finished = true;
+    if (state.rafId != null) cancelAnimationFrame(state.rafId);
+    state.history.removeEventListener('scroll', state.scrollListener);
+    state.interactionCleanup();
+    if (transitionChatScroll === state) transitionChatScroll = null;
+}
+
+function cancelTransitionChatScroll() {
+    if (transitionChatScroll) finishTransitionChatScroll(transitionChatScroll);
 }
 
 function syncChatAfterSessionChange() {
@@ -281,9 +299,74 @@ function syncChatAfterSessionChange() {
         const list = document.getElementById('chat-messages-list');
         const history = document.getElementById('chat-history');
         if (!list || !history) return;
-        scrollChatToBottom(() => focusChatInput());
+        cancelTransitionChatScroll();
         lastMessageCount = list.children ? list.children.length : 0;
         wasNearBottomBeforeSwap = false;
+        const state = {
+            finished: false,
+            history,
+            interactionCleanup: () => {},
+            lastMax: null,
+            lastAutoScrollTop: null,
+            list,
+            rafId: null,
+            scrollListener: null
+        };
+        transitionChatScroll = state;
+        const cancelForUserInteraction = event => {
+            const target = event && event.target;
+            if (target && target.closest && target.closest('#chat-history') === history) {
+                finishTransitionChatScroll(state);
+            }
+        };
+        document.addEventListener('pointerdown', cancelForUserInteraction, true);
+        document.addEventListener('wheel', cancelForUserInteraction, {capture: true, passive: true});
+        document.addEventListener('touchstart', cancelForUserInteraction, {capture: true, passive: true});
+        document.addEventListener('keydown', cancelForUserInteraction, true);
+        state.interactionCleanup = () => {
+            document.removeEventListener('pointerdown', cancelForUserInteraction, true);
+            document.removeEventListener('wheel', cancelForUserInteraction, true);
+            document.removeEventListener('touchstart', cancelForUserInteraction, true);
+            document.removeEventListener('keydown', cancelForUserInteraction, true);
+        };
+        state.scrollListener = () => {
+            if (state.lastAutoScrollTop != null && Math.abs(history.scrollTop - state.lastAutoScrollTop) > 1) {
+                finishTransitionChatScroll(state);
+            }
+        };
+        history.addEventListener('scroll', state.scrollListener, {passive: true});
+
+        const deadline = Date.now() + INITIAL_SCROLL_MAX_MS;
+        const settle = () => {
+            if (state.finished || transitionChatScroll !== state) return;
+            state.rafId = null;
+            if (!history.isConnected || !list.isConnected) {
+                finishTransitionChatScroll(state);
+                return;
+            }
+            const max = Math.max(0, history.scrollHeight - history.clientHeight);
+            if (state.lastAutoScrollTop != null) {
+                const maxChanged = state.lastMax != null && Math.abs(max - state.lastMax) > 1;
+                const scrollChanged = Math.abs(history.scrollTop - state.lastAutoScrollTop) > 1;
+                if (scrollChanged && !maxChanged) {
+                    finishTransitionChatScroll(state);
+                    return;
+                }
+            }
+            state.lastMax = max;
+            state.lastAutoScrollTop = max;
+            setHistoryScrollTop(history, max);
+            const signature = [history.scrollHeight, history.clientHeight, list.getBoundingClientRect().height].join(':');
+            state.stableFrames = signature === state.previousSignature ? (state.stableFrames || 0) + 1 : 0;
+            state.previousSignature = signature;
+            if (state.stableFrames >= TRANSITION_SCROLL_STABLE_FRAMES || Date.now() >= deadline) {
+                finishTransitionChatScroll(state);
+                focusChatInput();
+                return;
+            }
+            state.rafId = requestAnimationFrame(settle);
+        };
+        state.rafId = requestAnimationFrame(settle);
     } catch (_) {
     }
 }
@@ -326,14 +409,19 @@ function bindSessionChangeScrollListeners() {
     if (sessionChangeScrollRestoreBound) return;
     sessionChangeScrollRestoreBound = true;
 
-    document.body.addEventListener('htmx:afterSettle', function (evt) {
+    const syncAfterContextTransition = evt => {
         try {
             const path = getHtmxRequestPath(evt);
-            if (!isSessionActivationOrAddPath(path)) return;
+            if (!isChatContextTransitionPath(path)) return;
+            const container = document.getElementById('chat-container');
+            if (container === lastSettledChatContainer) return;
+            lastSettledChatContainer = container;
             Promise.resolve().then(syncChatAfterSessionChange);
         } catch (_) {
         }
-    }, true);
+    };
+    document.body.addEventListener('htmx:afterSwap', syncAfterContextTransition, true);
+    document.body.addEventListener('htmx:afterSettle', syncAfterContextTransition, true);
 }
 
 function htmxBeforeSwapListener(evt) {
