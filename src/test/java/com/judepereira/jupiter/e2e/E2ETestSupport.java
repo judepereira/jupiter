@@ -215,6 +215,45 @@ abstract class E2ETestSupport {
                 .setFullPage(true));
     }
 
+    protected static void addTestBalloon(Page page, String id, String title, String body) {
+        page.evaluate("""
+                ({id, title, body}) => {
+                    const root = document.getElementById('system-balloon-root');
+                    if (!root) {
+                        throw new Error('Missing system balloon root');
+                    }
+
+                    const node = document.createElement('div');
+                    node.className = 'system-balloon success is-visible';
+                    node.dataset.balloonId = id;
+                    node.dataset.type = 'success';
+
+                    const content = document.createElement('div');
+                    content.className = 'system-balloon__content';
+
+                    const titleElement = document.createElement('p');
+                    titleElement.className = 'system-balloon__title';
+                    titleElement.textContent = title;
+                    content.appendChild(titleElement);
+
+                    const bodyElement = document.createElement('p');
+                    bodyElement.className = 'system-balloon__body';
+                    bodyElement.textContent = body;
+                    content.appendChild(bodyElement);
+
+                    const close = document.createElement('button');
+                    close.type = 'button';
+                    close.className = 'system-balloon__close';
+                    close.setAttribute('aria-label', 'Close notification');
+                    close.textContent = '×';
+
+                    node.appendChild(content);
+                    node.appendChild(close);
+                    root.insertBefore(node, root.firstChild);
+                }
+                """, Map.of("id", id, "title", title, "body", body));
+    }
+
     protected static void initGitRepoWithInitialCommit(Path repoDir) throws Exception {
         Files.createDirectories(repoDir);
         runGit(repoDir, "git", "init");
