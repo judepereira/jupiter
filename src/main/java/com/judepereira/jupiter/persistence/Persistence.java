@@ -126,6 +126,14 @@ public final class Persistence {
     public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail) {
     }
 
+    public record LifecycleHookSettings(String assistantCompletedScript, String assistantErroredScript,
+                                        String subagentCompletedScript, int timeoutSeconds) {
+    }
+
+    public record LifecycleHookContext(long sessionId, String projectName, String workspaceName, String sessionName,
+                                       Map<String, String> projectEnvironmentVariables) {
+    }
+
     public record QueuedChatTurn(ChatMessageView userMessage, ChatMessageView assistantMessage) {
     }
 

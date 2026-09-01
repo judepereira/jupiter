@@ -23,6 +23,9 @@ import java.util.*;
 @RequiredArgsConstructor
 public class AppStateService {
 
+    private static final int DEFAULT_LIFECYCLE_HOOK_TIMEOUT_SECONDS = 30;
+    private static final int MIN_LIFECYCLE_HOOK_TIMEOUT_SECONDS = 1;
+    private static final int MAX_LIFECYCLE_HOOK_TIMEOUT_SECONDS = 3600;
     private static final TypeReference<List<ToolCallPayload>> TOOL_CALLS_TYPE = new TypeReference<>() {
     };
 
@@ -332,6 +335,25 @@ public class AppStateService {
         return forkedSessionId;
     }
 
+    public Persistence.LifecycleHookSettings loadLifecycleHookSettings() {
+        var settings = repository.loadLifecycleHookSettings();
+        return new Persistence.LifecycleHookSettings(normalizeOptionalScript(settings.assistantCompletedScript()),
+                normalizeOptionalScript(settings.assistantErroredScript()), normalizeOptionalScript(settings.subagentCompletedScript()),
+                settings.timeoutSeconds() == null ? DEFAULT_LIFECYCLE_HOOK_TIMEOUT_SECONDS : settings.timeoutSeconds());
+    }
+
+    @Transactional
+    public void updateLifecycleHookSettings(Persistence.LifecycleHookSettings settings) {
+        Objects.requireNonNull(settings, "settings");
+        if (settings.timeoutSeconds() < MIN_LIFECYCLE_HOOK_TIMEOUT_SECONDS
+                || settings.timeoutSeconds() > MAX_LIFECYCLE_HOOK_TIMEOUT_SECONDS) {
+            throw new IllegalArgumentException("Lifecycle hook timeout must be between 1 and 3600 seconds");
+        }
+        repository.updateLifecycleHookSettings(normalizeOptionalScript(settings.assistantCompletedScript()),
+                normalizeOptionalScript(settings.assistantErroredScript()), normalizeOptionalScript(settings.subagentCompletedScript()),
+                settings.timeoutSeconds());
+    }
+
     public AppStateView loadViewData() {
         var appState = repository.loadAppState();
         Set<Long> activeSessionIds = activeStreamRegistryService.activeSessionIdsSnapshot();
@@ -346,6 +368,10 @@ public class AppStateService {
         SessionView activeSession = activeSessionRow == null ? null : toSessionView(activeSessionRow, activeSessionIds);
         SessionDetailView sessionDetail = activeSession == null ? null : loadSessionDetail(activeSession.id());
         return new AppStateView(projects, activeProject, workspaces, activeWorkspace, sessions, activeSession, sessionDetail);
+    }
+
+    private String normalizeOptionalScript(String script) {
+        return script == null || script.isBlank() ? null : script.trim();
     }
 
     @Transactional
@@ -393,6 +419,14 @@ public class AppStateService {
     @Transactional(readOnly = true)
     public List<McpServerView> loadEnabledMcpServersForProject(long projectId) {
         return repository.listEnabledMcpServersByProject(projectId).stream().map(this::toMcpServerView).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Persistence.LifecycleHookContext loadLifecycleHookContext(long sessionId) {
+        var context = repository.findLifecycleHookContext(sessionId)
+                .orElseThrow(() -> new IllegalStateException("Missing session " + sessionId));
+        return new Persistence.LifecycleHookContext(context.sessionId(), context.projectName(), context.workspaceName(),
+                context.sessionName(), toEnvironmentVariables(projectEnvironmentVariables(context.environmentVariables())));
     }
 
     @Transactional(readOnly = true)

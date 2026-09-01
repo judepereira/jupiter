@@ -35,6 +35,33 @@ public class AppStateRepository {
         ));
     }
 
+    AppStateLifecycleHookSettingsRow loadLifecycleHookSettings() {
+        return jdbc.queryForObject("""
+                SELECT assistant_completed_hook_script, assistant_errored_hook_script,
+                       subagent_completed_hook_script, lifecycle_hook_timeout_seconds
+                FROM app_state WHERE id = 1
+                """, new MapSqlParameterSource(), (rs, rowNum) -> new AppStateLifecycleHookSettingsRow(
+                rs.getString("assistant_completed_hook_script"),
+                rs.getString("assistant_errored_hook_script"),
+                rs.getString("subagent_completed_hook_script"),
+                nullableInteger(rs, "lifecycle_hook_timeout_seconds")));
+    }
+
+    void updateLifecycleHookSettings(String assistantCompletedScript, String assistantErroredScript,
+                                     String subagentCompletedScript, int timeoutSeconds) {
+        jdbc.update("""
+                UPDATE app_state SET assistant_completed_hook_script = :assistantCompletedScript,
+                    assistant_errored_hook_script = :assistantErroredScript,
+                    subagent_completed_hook_script = :subagentCompletedScript,
+                    lifecycle_hook_timeout_seconds = :timeoutSeconds
+                WHERE id = 1
+                """, new MapSqlParameterSource()
+                .addValue("assistantCompletedScript", assistantCompletedScript)
+                .addValue("assistantErroredScript", assistantErroredScript)
+                .addValue("subagentCompletedScript", subagentCompletedScript)
+                .addValue("timeoutSeconds", timeoutSeconds));
+    }
+
     void insertTokenUsageFact(Persistence.TokenUsageFact fact, String providerMetadataJson) {
         jdbc.update("""
                 INSERT INTO token_usage_facts (session_usage_key, session_id_snapshot, workspace_id_snapshot, project_id_snapshot,
@@ -459,6 +486,19 @@ public class AppStateRepository {
                 rs.getString("session_usage_key"), rs.getLong("session_id"), rs.getLong("workspace_id"), rs.getLong("project_id"),
                 rs.getString("session_name"), rs.getString("workspace_name"), rs.getString("project_name"),
                 rs.getString("workspace_path"), rs.getString("project_path")));
+    }
+
+    Optional<LifecycleHookContextRow> findLifecycleHookContext(long sessionId) {
+        return queryOne("""
+                SELECT s.id AS session_id, s.name AS session_name, w.name AS workspace_name,
+                       p.name AS project_name, p.environment_variables
+                FROM sessions s
+                JOIN workspaces w ON w.id = s.workspace_id
+                JOIN projects p ON p.id = w.project_id
+                WHERE s.id = :id
+                """, new MapSqlParameterSource("id", sessionId), (rs, rowNum) -> new LifecycleHookContextRow(
+                rs.getLong("session_id"), rs.getString("project_name"), rs.getString("workspace_name"),
+                rs.getString("session_name"), rs.getString("environment_variables")));
     }
 
     SessionRow findSession(long sessionId) {
@@ -1118,12 +1158,16 @@ public class AppStateRepository {
     }
 
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}
+    record AppStateLifecycleHookSettingsRow(String assistantCompletedScript, String assistantErroredScript,
+                                             String subagentCompletedScript, Integer timeoutSeconds) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
     record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt, List<Long> exposedProjectIds) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt, boolean unread, boolean inProgress) {}
     record SessionUsageContext(String sessionUsageKey, long sessionId, long workspaceId, long projectId, String sessionName,
                                String workspaceName, String projectName, String workspacePath, String projectPath) {}
+    record LifecycleHookContextRow(long sessionId, String projectName, String workspaceName, String sessionName,
+                                   String environmentVariables) {}
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId,
                       String chatDraft, boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
                       Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt, boolean inProgress) {}
