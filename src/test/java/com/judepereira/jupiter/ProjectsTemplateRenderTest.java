@@ -1,7 +1,9 @@
 package com.judepereira.jupiter;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.ui.UiController.Project;
 import com.judepereira.jupiter.ui.UiController.Session;
+import com.judepereira.jupiter.ui.UiController.UsagePoint;
 import com.judepereira.jupiter.ui.UiController.Workspace;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
@@ -15,6 +17,7 @@ import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.web.servlet.JakartaServletWebApplication;
+import org.springframework.web.util.HtmlUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -137,13 +140,39 @@ public class ProjectsTemplateRenderTest {
                 "id=\"settings-current-project\"",
                 "id=\"settings-mcp-servers\"",
                 "id=\"settings-model-providers\"",
+                "id=\"settings-usage\"",
                 "id=\"settings-help\"",
                 "<h5>Help</h5>");
-        assertThat(html.indexOf("Current Project")).isLessThan(html.indexOf("MCP Servers"));
-        assertThat(html.indexOf("MCP Servers")).isLessThan(html.indexOf("Model Providers"));
-        assertThat(html.indexOf("Model Providers")).isLessThan(html.indexOf("Help"));
+        assertThat(html.indexOf("id=\"settings-current-project-tab\""))
+                .isLessThan(html.indexOf("id=\"settings-mcp-servers-tab\""));
+        assertThat(html.indexOf("id=\"settings-mcp-servers-tab\""))
+                .isLessThan(html.indexOf("id=\"settings-model-providers-tab\""));
+        assertThat(html.indexOf("id=\"settings-model-providers-tab\""))
+                .isLessThan(html.indexOf("id=\"settings-usage-tab\""));
+        assertThat(html.indexOf("id=\"settings-usage-tab\""))
+                .isLessThan(html.indexOf("id=\"settings-help-tab\""));
         assertThat(html).contains("data-bs-toggle=\"pill\"", "aria-selected=\"true\"");
         assertThat(html.split("data-settings-env-row", -1)).hasSize(4);
+    }
+
+    @Test
+    public void settingsUsageDataUsesEscapedAttributeTransport() throws Exception {
+        SpringTemplateEngine engine = engine();
+        String usageJson = new ObjectMapper().writeValueAsString(List.of(
+                new UsagePoint("2026-08-31T12:00:00Z", "<historical model>", "model\"key", 1, 2L, null, 2L)));
+
+        WebContext context = webContext();
+        context.setVariable("usageRange", "24h");
+        context.setVariable("usageJson", usageJson);
+
+        String html = engine.process(new TemplateSpec("fragments/projects", Set.of("settingsUsage"), TemplateMode.HTML, null), context);
+
+        String attribute = html.substring(html.indexOf("data-usage-data=\"") + "data-usage-data=\"".length());
+        attribute = attribute.substring(0, attribute.indexOf('"'));
+        assertThat(html).doesNotContain("<script", "<historical model>");
+        assertThat(attribute).contains("&quot;", "&lt;");
+        assertThat(new ObjectMapper().readTree(HtmlUtils.htmlUnescape(attribute)).get(0).get("modelKey").asText())
+                .isEqualTo("model\"key");
     }
 
     @Test

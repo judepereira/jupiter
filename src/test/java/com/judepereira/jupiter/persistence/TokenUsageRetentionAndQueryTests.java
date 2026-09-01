@@ -78,6 +78,29 @@ class TokenUsageRetentionAndQueryTests {
     }
 
     @Test
+    void projectHourlyQueryAggregatesAllSessionRowsAndUsesHalfOpenWindow() {
+        AppStateRepository repository = TestAppStateSupport.appStateContext(event -> {}).repository();
+        Instant hour = Instant.parse("2026-08-30T10:00:00Z");
+        insertProjectRow(repository, "session-a", 1, hour, "model-a", 4, 2, 6);
+        insertProjectRow(repository, "session-b", 1, hour, "model-a", 3, 1, 4);
+        insertProjectRow(repository, "session-c", 1, hour, "model-b", 8, 4, 12);
+        insertProjectRow(repository, "other-project", 2, hour, "model-a", 99, 99, 198);
+        insertProjectRow(repository, "session-d", 1, hour.plus(1, ChronoUnit.HOURS), "model-a", 99, 99, 198);
+
+        List<Persistence.ProjectTokenUsageHourly> rows = repository.findProjectHourlyTokenUsage(
+                1, hour, hour.plus(1, ChronoUnit.HOURS));
+
+        assertThat(rows).extracting(Persistence.ProjectTokenUsageHourly::modelKey,
+                        Persistence.ProjectTokenUsageHourly::requestCount,
+                        Persistence.ProjectTokenUsageHourly::inputTokenCount,
+                        Persistence.ProjectTokenUsageHourly::outputTokenCount,
+                        Persistence.ProjectTokenUsageHourly::totalTokenCount)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("model-a", 2L, 7L, 3L, 10L),
+                        org.assertj.core.groups.Tuple.tuple("model-b", 1L, 8L, 4L, 12L));
+    }
+
+    @Test
     void hourlyQueryReturnsStoredModelAndOperationAggregatesInWindow() {
         AppStateRepository repository = TestAppStateSupport.appStateContext(event -> {}).repository();
         Instant hour = Instant.parse("2026-08-30T10:00:00Z");
@@ -95,6 +118,14 @@ class TokenUsageRetentionAndQueryTests {
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("model-a", 2L, 15L),
                         org.assertj.core.groups.Tuple.tuple("model-b", 1L, 7L));
+    }
+
+    private static void insertProjectRow(AppStateRepository repository, String sessionKey, long projectId, Instant hour, String model,
+                                          int input, int output, int total) {
+        insertFact(repository, new Persistence.TokenUsageFact(
+                sessionKey, 1, 1, projectId, "session", "workspace", "project", "/workspace", "/project",
+                hour.plusSeconds(10), hour, model, "chat", input, output, total, null, null, null,
+                null, null, null, Map.of()));
     }
 
     private static void insert(AppStateRepository repository, String sessionKey, Instant occurredAt,

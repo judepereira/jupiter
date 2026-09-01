@@ -146,4 +146,7 @@ public final class Persistence {
                                    long requestCount, Long inputTokenCount, Long outputTokenCount, Long totalTokenCount,
                                    Long cachedInputTokenCount, Long cacheWriteTokenCount, Long reasoningTokenCount,
                                    Instant lastOccurredAt) {}
+
+    public record ProjectTokenUsageHourly(Instant hourStartUtc, String modelKey, long requestCount,
+                                          Long inputTokenCount, Long outputTokenCount, Long totalTokenCount) {}
 }

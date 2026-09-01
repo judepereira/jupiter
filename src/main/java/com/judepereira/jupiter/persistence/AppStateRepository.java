@@ -97,6 +97,27 @@ public class AppStateRepository {
                 GROUP BY session_usage_key, hour_start_utc, model_key
                 """, params);
     }
+    List<Persistence.ProjectTokenUsageHourly> findProjectHourlyTokenUsage(long projectId, Instant fromInclusive, Instant toExclusive) {
+        return jdbc.query("""
+                SELECT hour_start_utc, model_key, SUM(request_count) AS request_count,
+                       SUM(input_token_count) AS input_token_count, SUM(output_token_count) AS output_token_count,
+                       SUM(total_token_count) AS total_token_count
+                FROM token_usage_hourly
+                WHERE project_id_snapshot = :projectId
+                  AND hour_start_utc >= :fromInclusive
+                  AND hour_start_utc < :toExclusive
+                GROUP BY hour_start_utc, model_key
+                ORDER BY hour_start_utc ASC, model_key ASC
+                """, new MapSqlParameterSource()
+                        .addValue("projectId", projectId)
+                        .addValue("fromInclusive", Timestamp.from(fromInclusive))
+                        .addValue("toExclusive", Timestamp.from(toExclusive)), (rs, rowNum) ->
+                new Persistence.ProjectTokenUsageHourly(
+                        timestampToInstant(rs.getTimestamp("hour_start_utc")), rs.getString("model_key"),
+                        rs.getLong("request_count"), nullableLong(rs, "input_token_count"),
+                        nullableLong(rs, "output_token_count"), nullableLong(rs, "total_token_count")));
+    }
+
     List<Persistence.TokenUsageHourly> findHourlyTokenUsage(String sessionUsageKey, Instant fromInclusive, Instant toExclusive) {
         return jdbc.query("""
                 SELECT session_usage_key, hour_start_utc, model_key, request_count,

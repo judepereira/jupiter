@@ -6,10 +6,13 @@ import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.McpServerHeader;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
+import com.judepereira.jupiter.persistence.TokenUsageService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
@@ -21,7 +24,10 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
 
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -111,6 +117,53 @@ public class UiControllerSettingsTests {
     }
 
     @Test
+    public void usageEndpointReturnsActiveProjectHourlyUsageAndModelFallback(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+        Instant hour = Instant.now().truncatedTo(ChronoUnit.HOURS);
+        context.tokenUsageService().recordModelResponse(sessionId, "openai/gpt-5.5", "chat",
+                new ModelResponse("ok", null, new ModelResponseMetadata(10, 5, 15, null, null, null, null, null, null, Map.of())));
+        context.tokenUsageService().recordModelResponse(sessionId, "stale-model", "chat",
+                new ModelResponse("ok", null, new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of())));
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().settingsUsage("7d", model)).isEqualTo("fragments/projects :: settingsUsage");
+        assertThat((String) model.getAttribute("usageRange")).isEqualTo("7d");
+        String json = (String) model.getAttribute("usageJson");
+        assertThat(json).contains("GPT-5.5").contains("stale-model").contains("\"input\":10").contains("\"input\":null");
+    }
+
+    @Test
+    public void usageEndpointNormalizesInvalidRange(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+
+        ConcurrentModel model = new ConcurrentModel();
+        context.controller().settingsUsage("invalid", model);
+
+        assertThat(model.getAttribute("usageRange")).isEqualTo("24h");
+    }
+
+    @Test
+    public void usageEndpointReturnsEmptyDataForActiveProjectWithoutUsage(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().settingsUsage("24h", model)).isEqualTo("fragments/projects :: settingsUsage");
+        assertThat(model.getAttribute("usageJson")).isEqualTo("[]");
+    }
+
+    @Test
+    public void usageEndpointReturnsEmptyFragmentWithoutActiveProject(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        ConcurrentModel model = new ConcurrentModel();
+
+        assertThat(context.controller().settingsUsage("24h", model)).isEqualTo("fragments/projects :: usageEmpty");
+    }
+
+    @Test
     public void applyMcpSettingsPersistsCatalogAndReloadsAffectedProjects(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
@@ -142,14 +195,18 @@ public class UiControllerSettingsTests {
     }
 
     private static TestContext newContext(Path workspaceRoot) {
-        AppStateService appStateService = TestAppStateSupport.appStateService();
         AgentProperties properties = new AgentProperties();
         properties.setWorkspaceRoot(workspaceRoot.toAbsolutePath().normalize().toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
         OpenAiOAuthService openAiOAuthService = mock(OpenAiOAuthService.class);
         McpProjectMcpServerRuntimeManager mcpRuntimeManager = mock(McpProjectMcpServerRuntimeManager.class);
 
+        TestAppStateSupport.AppStateTestContext appStateContext = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService appStateService = appStateContext.service();
+        TokenUsageService tokenUsageService = new TokenUsageService(appStateContext.repository(), new ObjectMapper());
+
         return new TestContext(appStateService,
+                tokenUsageService,
                 openAiOAuthService,
                 mcpRuntimeManager,
                 new UiController(mock(CodingAgentHarness.class), properties, appStateService,
@@ -161,11 +218,12 @@ public class UiControllerSettingsTests {
                         new TerminalStateService(),
                         openAiOAuthService,
                         TestAppStateSupport.contextCompactionService(appStateService),
+                        tokenUsageService,
                         mock(CommandStreamService.class),
                         mcpRuntimeManager,
                         "test"));
     }
 
-    private record TestContext(AppStateService appStateService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, UiController controller) {
+    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, UiController controller) {
     }
 }

@@ -72,6 +72,37 @@
     margin: 0;
 }
 
+.settings-usage-note {
+    color: var(--muted);
+    margin: 4px 0 0;
+    font-size: .85rem;
+}
+
+.settings-usage-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    color: var(--muted);
+}
+
+.settings-usage-summary strong {
+    color: var(--text);
+}
+
+.settings-usage-canvas-wrap {
+    height: min(42vh, 320px);
+    min-height: 220px;
+    position: relative;
+}
+
+.settings-usage-empty {
+    padding: 34px 12px;
+    text-align: center;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+}
+
 .settings-section-header {
     display: flex;
     align-items: center;

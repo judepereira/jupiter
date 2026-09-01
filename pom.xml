@@ -92,6 +92,11 @@
         </dependency>
         <dependency>
             <groupId>org.webjars.npm</groupId>
+            <artifactId>chart.js</artifactId>
+            <version>4.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.webjars.npm</groupId>
             <artifactId>htmx.org</artifactId>
             <version>1.9.4</version>
         </dependency>

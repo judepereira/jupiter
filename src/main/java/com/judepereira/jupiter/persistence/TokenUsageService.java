@@ -54,6 +54,10 @@ public class TokenUsageService {
         return repository.findHourlyTokenUsage(sessionUsageKey, fromInclusive, toExclusive);
     }
 
+    public List<Persistence.ProjectTokenUsageHourly> findProjectHourlyUsage(long projectId, Instant fromInclusive, Instant toExclusive) {
+        return repository.findProjectHourlyTokenUsage(projectId, fromInclusive, toExclusive);
+    }
+
     List<Persistence.TokenUsageFact> findFacts(String sessionUsageKey) {
         return repository.findTokenUsageFacts(sessionUsageKey);
     }
