@@ -16,6 +16,7 @@ import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
+import com.judepereira.jupiter.persistence.Persistence.LifecycleHookSettings;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
@@ -42,6 +43,33 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 public class AppStateServicePersistenceTests {
+
+    @Test
+    public void lifecycleHookSettingsDefaultAndRoundTrip() {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateService service = context.service();
+
+        assertThat(service.loadLifecycleHookSettings()).isEqualTo(new LifecycleHookSettings(null, null, null, 30));
+
+        service.updateLifecycleHookSettings(new LifecycleHookSettings("  echo done  ", "echo failed", "echo subagent", 45));
+
+        assertThat(service.loadLifecycleHookSettings()).isEqualTo(new LifecycleHookSettings("echo done", "echo failed", "echo subagent", 45));
+    }
+
+    @Test
+    public void lifecycleHookScriptsCanBeClearedAndTimeoutIsBounded() {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.updateLifecycleHookSettings(new LifecycleHookSettings("done", "failed", "subagent", 45));
+
+        service.updateLifecycleHookSettings(new LifecycleHookSettings(" \n ", null, "", 1));
+
+        assertThat(service.loadLifecycleHookSettings()).isEqualTo(new LifecycleHookSettings(null, null, null, 1));
+        assertThatThrownBy(() -> service.updateLifecycleHookSettings(new LifecycleHookSettings(null, null, null, 0)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.updateLifecycleHookSettings(new LifecycleHookSettings(null, null, null, 3601)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 
     @Test
     public void creatingAProjectStillCreatesOneWorkspaceAndSessionOne(@TempDir Path projectPath) {

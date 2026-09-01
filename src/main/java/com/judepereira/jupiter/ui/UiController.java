@@ -16,6 +16,7 @@ import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
@@ -81,6 +82,7 @@ public class UiController {
     private final OpenAiOAuthService openAiOAuthService;
     private final ChatPresentationService chatPresentationService;
     private final ChatToolCallHtmlService chatToolCallHtmlService;
+    private final LifecycleHookService lifecycleHookService;
     private final String appVersion;
 
     private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
@@ -94,7 +96,7 @@ public class UiController {
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
                         ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
-                        ChatToolCallHtmlService chatToolCallHtmlService,
+                        ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -112,6 +114,7 @@ public class UiController {
         this.openAiOAuthService = openAiOAuthService;
         this.chatPresentationService = chatPresentationService;
         this.chatToolCallHtmlService = chatToolCallHtmlService;
+        this.lifecycleHookService = lifecycleHookService;
         this.appVersion = appVersion;
     }
 
@@ -127,7 +130,22 @@ public class UiController {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
                 openAiOAuthService, contextCompactionService, commandStreamService, null, chatPresentationService,
-                chatToolCallHtmlService, appVersion);
+                chatToolCallHtmlService, null, appVersion);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        ActiveStreamRegistryService activeStreamRegistryService,
+                        TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
+                        LifecycleHookService lifecycleHookService, String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, commandStreamService, null, chatPresentationService,
+                chatToolCallHtmlService, lifecycleHookService, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -142,7 +160,7 @@ public class UiController {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
                 openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager,
-                chatPresentationService, chatToolCallHtmlService, appVersion);
+                chatPresentationService, chatToolCallHtmlService, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -154,7 +172,7 @@ public class UiController {
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, new ChatPresentationService(), null, appVersion);
+                openAiOAuthService, contextCompactionService, commandStreamService, null, new ChatPresentationService(), null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -165,7 +183,7 @@ public class UiController {
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, new ChatPresentationService(), null, appVersion);
+                openAiOAuthService, contextCompactionService, commandStreamService, null, new ChatPresentationService(), null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -176,7 +194,7 @@ public class UiController {
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager, new ChatPresentationService(), null, appVersion);
+                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager, new ChatPresentationService(), null, null, appVersion);
     }
 
     @GetMapping("/")
@@ -455,6 +473,7 @@ public class UiController {
                     String finalText = result.getFinalText() == null ? "" : result.getFinalText();
                     List<ToolCallTraceInput> traces = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
                     ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
+                    dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, pending.sessionId());
                     processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
                     finalizeStreamSuccess(active, assistantId, completedMessage, completed);
                 } catch (Exception e) {
@@ -477,6 +496,7 @@ public class UiController {
                     }
                     String normalizedMessage = normalizeProviderErrorMessage(e);
                     ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+                    dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, pending.sessionId());
                     log.error("Execution failure!", e);
                     finalizeStreamError(active, assistantId, normalizedMessage, failedMessage, e, completed);
                 } catch (Exception ignored) {
@@ -500,6 +520,7 @@ public class UiController {
         try {
             String normalizedMessage = normalizeProviderErrorMessage(e);
             ChatMessageView failedMessage = appStateService.failAssistantMessage(active.pendingStream().sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+            dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, active.pendingStream().sessionId());
             log.error("Execution failure!", e);
             broadcastToolCallHostSnapshot(active, assistantId);
             broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
@@ -540,6 +561,17 @@ public class UiController {
     private void broadcastToolCallHtml(ActiveStream active, String assistantId, List<DomPatch> patches) {
         if (chatToolCallHtmlService != null && !patches.isEmpty()) {
             broadcastEvent(active, assistantId, "tool_call_html", patches);
+        }
+    }
+
+    private void dispatchLifecycleHook(LifecycleHookService.LifecycleEvent event, long sessionId) {
+        if (lifecycleHookService == null) {
+            return;
+        }
+        try {
+            lifecycleHookService.dispatch(event, sessionId);
+        } catch (Throwable e) {
+            log.warn("Failed to dispatch lifecycle hook: event={}, sessionId={}", event, sessionId, e);
         }
     }
 
@@ -932,13 +964,22 @@ public class UiController {
     @GetMapping("/ui/settings")
     public String settingsModal(Model model) {
         AppStateView view = appStateService.loadViewData();
-        if (view.activeProject() == null) {
-            return "fragments/projects :: modalClose";
-        }
-
         populateProjectModel(model, view);
+        model.addAttribute("lifecycleHookSettings", appStateService.loadLifecycleHookSettings());
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
         return "fragments/projects :: settingsModal";
+    }
+
+    @PostMapping("/ui/settings/hooks/apply")
+    public String applyLifecycleHookSettings(
+            @RequestParam(name = "assistantCompletedScript", required = false) String assistantCompletedScript,
+            @RequestParam(name = "assistantErroredScript", required = false) String assistantErroredScript,
+            @RequestParam(name = "subagentCompletedScript", required = false) String subagentCompletedScript,
+            @RequestParam("timeoutSeconds") int timeoutSeconds,
+            Model model) {
+        appStateService.updateLifecycleHookSettings(new LifecycleHookSettings(assistantCompletedScript,
+                assistantErroredScript, subagentCompletedScript, timeoutSeconds));
+        return "fragments/projects :: modalClose";
     }
 
     @PostMapping("/ui/settings/apply")

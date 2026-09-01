@@ -11,12 +11,13 @@ import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
+import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -30,7 +31,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
-@RequiredArgsConstructor
 public class SubagentTaskService {
 
     private static final int DIFF_PREVIEW_LIMIT = 20_000;
@@ -38,6 +38,21 @@ public class SubagentTaskService {
     private final AppStateService appStateService;
     private final AgentDefinitionService agentDefinitionService;
     private final ObjectProvider<CodingAgentHarness> harnessProvider;
+    private final LifecycleHookService lifecycleHookService;
+
+    @Autowired
+    public SubagentTaskService(AppStateService appStateService, AgentDefinitionService agentDefinitionService,
+                               ObjectProvider<CodingAgentHarness> harnessProvider, LifecycleHookService lifecycleHookService) {
+        this.appStateService = appStateService;
+        this.agentDefinitionService = agentDefinitionService;
+        this.harnessProvider = harnessProvider;
+        this.lifecycleHookService = lifecycleHookService;
+    }
+
+    public SubagentTaskService(AppStateService appStateService, AgentDefinitionService agentDefinitionService,
+                               ObjectProvider<CodingAgentHarness> harnessProvider) {
+        this(appStateService, agentDefinitionService, harnessProvider, null);
+    }
 
     public SubagentTaskResult runTask(SubagentTaskRequest request) {
         return runTask(request, SubagentTaskStreamListener.noop());
@@ -86,6 +101,8 @@ public class SubagentTaskService {
         List<ToolCallTrace> traces = new ArrayList<>();
         Set<String> changedPaths = new LinkedHashSet<>();
         AtomicBoolean closed = new AtomicBoolean(false);
+        AtomicBoolean hookRequired = new AtomicBoolean(false);
+        AtomicBoolean hookDispatched = new AtomicBoolean(false);
 
         try {
             CodingAgentHarness harness = harnessProvider.getObject();
@@ -127,9 +144,11 @@ public class SubagentTaskService {
 
                 @Override
                 public void onComplete(AgentTurnResult result) {
+                    throwIfCancelled(request.cancellationToken());
                     String finalText = result.getFinalText() == null ? "" : result.getFinalText();
                     appStateService.completeAssistantMessage(childSessionId, assistantPublicId, finalText,
                             result.getTraces() == null ? List.of() : result.getTraces().stream().map(SubagentTaskService.this::toTraceInput).toList());
+                    hookRequired.set(true);
                     sink.onComplete(new SubagentTaskCompleted(childSessionId, request.parentToolCallId(), subagent.id(), subagent.name(), finalText));
                     closed.set(true);
                 }
@@ -143,7 +162,9 @@ public class SubagentTaskService {
                         return;
                     }
                     String message = e == null ? "Unknown subagent error" : e.getMessage();
-                    appStateService.failAssistantMessage(childSessionId, assistantPublicId, message == null ? "Unknown subagent error" : message);
+                    String errorText = message == null ? "Unknown subagent error" : message;
+                    appStateService.failAssistantMessage(childSessionId, assistantPublicId, errorText);
+                    hookRequired.set(true);
                     sink.onError(new SubagentTaskError(childSessionId, request.parentToolCallId(), subagent.id(), subagent.name(), message));
                     closed.set(true);
                 }
@@ -151,6 +172,9 @@ public class SubagentTaskService {
 
             List<ChangedFileDraft> drafts = buildChangedFileDrafts(request.workspaceRoot(), changedPaths);
             persistChangedFiles(childSessionId, request.parentSessionId(), drafts);
+            if (hookRequired.get() && hookDispatched.compareAndSet(false, true)) {
+                dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED, request.parentSessionId());
+            }
             return new SubagentTaskResult(true, childSessionId, subagent.id(), subagent.name(), result.getFinalText(), drafts, traces, null);
         } catch (Exception e) {
             String message = e instanceof StreamCancelledException ? "Action Interrupted" : (e.getMessage() == null ? e.toString() : e.getMessage());
@@ -160,6 +184,7 @@ public class SubagentTaskService {
                         appStateService.stopAssistantMessage(childSessionId, assistantPublicId, "");
                     } else {
                         appStateService.failAssistantMessage(childSessionId, assistantPublicId, message);
+                        hookRequired.set(true);
                     }
                 } catch (Exception ignored) {
                 }
@@ -167,7 +192,20 @@ public class SubagentTaskService {
             }
             List<ChangedFileDraft> drafts = buildChangedFileDrafts(request.workspaceRoot(), changedPaths);
             persistChangedFiles(childSessionId, request.parentSessionId(), drafts);
+            if (!(e instanceof StreamCancelledException) && hookRequired.get() && hookDispatched.compareAndSet(false, true)) {
+                dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED, request.parentSessionId());
+            }
             return new SubagentTaskResult(false, childSessionId, subagent.id(), subagent.name(), message, drafts, traces, message);
+        }
+    }
+
+    private void dispatchLifecycleHook(LifecycleHookService.LifecycleEvent event, long sessionId) {
+        if (lifecycleHookService == null) {
+            return;
+        }
+        try {
+            lifecycleHookService.dispatch(event, sessionId);
+        } catch (Throwable ignored) {
         }
     }
 
