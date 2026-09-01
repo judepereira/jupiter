@@ -391,7 +391,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
 
         private ModelResponse finish() {
             if (response.get() != null) {
-                return toolCall.get() == null ? response.get() : new ModelResponse(response.get().getAssistantText(), toolCall.get());
+                return toolCall.get() == null ? response.get() : new ModelResponse(
+                        response.get().getAssistantText(), toolCall.get(), response.get().getMetadata());
             }
             return new ModelResponse(null, toolCall.get());
         }
