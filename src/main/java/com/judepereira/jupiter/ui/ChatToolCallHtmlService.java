@@ -23,6 +23,19 @@ public class ChatToolCallHtmlService {
         this.appStateService = appStateService;
     }
 
+    public String lazyGroup(String assistantId, String anchorToolCallId) {
+        ChatPresentationService.ChatMessage model = presentation.toChatMessage(
+                appStateService.loadLazyAssistantMessage(assistantId, anchorToolCallId), ignored -> null);
+        ChatPresentationService.ToolCallGroupView group = model.toolCallGroups().stream()
+                .filter(candidate -> candidate.calls().stream().anyMatch(call -> anchorToolCallId.equals(call.toolCallId())))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Tool call group not found: " + anchorToolCallId));
+        if (group.toolName().equals("task") || group.toolName().equals("display_image")) {
+            throw new IllegalStateException("Tool call is not an ordinary lazy group: " + anchorToolCallId);
+        }
+        return renderGroup(group, assistantId);
+    }
+
     public List<DomPatch> hostSnapshot(long sessionId, String assistantId) {
         ChatMessageView message = assistant(sessionId, assistantId);
         return List.of(render("toolCalls", message, assistantId, messageHost(message), "outerHTML"));
@@ -115,18 +128,30 @@ public class ChatToolCallHtmlService {
     }
 
     private ChatMessageView assistant(long sessionId, String assistantId) {
-        SessionDetailView detail = appStateService.loadSessionDetail(sessionId);
-        return detail.chatMessages().stream().filter(message -> assistantId.equals(message.id()) && "assistant".equals(message.role()))
+        return appStateService.loadFullSessionDetail(sessionId).chatMessages().stream()
+                .filter(candidate -> assistantId.equals(candidate.id()) && "assistant".equals(candidate.role()))
                 .findFirst().orElseThrow(() -> new IllegalStateException("Assistant message not found: " + assistantId));
+    }
+
+    private String renderGroup(ChatPresentationService.ToolCallGroupView group, String assistantId) {
+        Context context = new Context();
+        context.setVariable("group", group);
+        context.setVariable("assistantId", assistantId);
+        context.setVariable("fullMode", true);
+        context.setVariable("openGroup", true);
+        context.setVariable("lazyGroup", false);
+        return templateEngine.process("fragments/chat-tool-calls", Set.of("group"), context);
     }
 
     private DomPatch render(String fragment, Object value, String assistantId, String targetId, String swapMode) {
         Context context = new Context();
         if ("toolCalls".equals(fragment)) {
             context.setVariable("message", presentation.toChatMessage((ChatMessageView) value, ignored -> null));
+            context.setVariable("fullMode", true);
         } else if ("block".equals(fragment)) {
             context.setVariable("block", value);
             context.setVariable("assistantId", assistantId);
+            context.setVariable("fullMode", true);
         } else if ("call".equals(fragment)) {
             context.setVariable("call", value);
             context.setVariable("parentToolName", "");
@@ -134,6 +159,7 @@ public class ChatToolCallHtmlService {
         } else if ("group".equals(fragment) || "groupSummary".equals(fragment) || "taskSummary".equals(fragment)) {
             context.setVariable("group", value);
             context.setVariable("assistantId", assistantId);
+            context.setVariable("fullMode", true);
         } else {
             context.setVariable("bundle", value);
             context.setVariable("assistantId", assistantId);
@@ -145,6 +171,7 @@ public class ChatToolCallHtmlService {
     private DomPatch renderCall(ChatPresentationService.ToolCallView call, String parentToolName, String assistantId,
                                 String targetId, String swapMode) {
         Context context = new Context();
+        context.setVariable("fullMode", true);
         context.setVariable("call", call);
         context.setVariable("parentToolName", parentToolName);
         context.setVariable("assistantId", assistantId);

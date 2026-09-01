@@ -18,11 +18,28 @@ import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ChatToolCallHtmlServiceTest {
+
+    @Test
+    void lazyGroupRejectsAnAssistantAndToolCallMismatch(@TempDir Path projectPath) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        QueuedChatTurn turn = appStateService.appendUserMessageAndPendingAssistant(sessionId, "use a file");
+        appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(
+                new ToolCallTraceInput("read-1", "read_file", Map.of("path", "a.txt"), true, "contents", Map.of())));
+
+        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new ChatPresentationService(), appStateService);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> htmlService.lazyGroup(turn.assistantMessage().id(), "other-call"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Tool call does not belong to assistant message");
+    }
 
     @Test
     void subagentStartedReplacesGenericTaskGroupAndCompletionRefreshesItsSummary(@TempDir Path projectPath) {

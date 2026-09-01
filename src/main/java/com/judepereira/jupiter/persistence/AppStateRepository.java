@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 
@@ -853,9 +854,35 @@ public class AppStateRepository {
                 new MapSqlParameterSource("sessionId", sessionId), this::mapToolCallTrace);
     }
 
+    List<ToolCallTraceRow> listToolCallTraceProjectionsBySession(long sessionId) {
+        return jdbc.query("SELECT id, session_id, assistant_message_id, sequence, tool_call_id, tool_name, success, NULL AS args_json, NULL AS text_summary, NULL AS machine_summary_json, completed_at, created_at FROM tool_call_traces WHERE session_id = :sessionId ORDER BY sequence ASC",
+                new MapSqlParameterSource("sessionId", sessionId), this::mapToolCallTrace);
+    }
+
+    List<ToolCallTraceRow> listToolCallTracesBySessionAndToolNames(long sessionId, Collection<String> toolNames) {
+        if (toolNames.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT * FROM tool_call_traces WHERE session_id = :sessionId AND tool_name IN (:toolNames) ORDER BY sequence ASC",
+                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("toolNames", toolNames), this::mapToolCallTrace);
+    }
+
+    Optional<ConversationMessageRow> findMessageBySessionAndPublicIdOptional(long sessionId, String publicId) {
+        return queryOne("SELECT * FROM conversation_messages WHERE session_id = :sessionId AND public_id = :publicId",
+                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("publicId", publicId), this::mapConversationMessage);
+    }
+
     List<ToolCallTraceRow> listToolCallTracesByAssistantMessage(long assistantMessageId) {
         return jdbc.query("SELECT * FROM tool_call_traces WHERE assistant_message_id = :assistantMessageId ORDER BY sequence ASC",
                 new MapSqlParameterSource("assistantMessageId", assistantMessageId), this::mapToolCallTrace);
+    }
+
+    List<ToolCallTraceRow> listToolCallTracesByAssistantMessageAndToolCallIds(long assistantMessageId, Collection<String> toolCallIds) {
+        if (toolCallIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT * FROM tool_call_traces WHERE assistant_message_id = :assistantMessageId AND tool_call_id IN (:toolCallIds) ORDER BY sequence ASC",
+                new MapSqlParameterSource().addValue("assistantMessageId", assistantMessageId).addValue("toolCallIds", toolCallIds), this::mapToolCallTrace);
     }
 
     List<ToolCallTraceRow> listIncompleteToolCallTracesByAssistantMessage(long assistantMessageId) {

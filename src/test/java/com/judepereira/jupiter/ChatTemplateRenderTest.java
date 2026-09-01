@@ -174,6 +174,31 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
+    public void chatRowsFragmentLazilyLoadsOrdinaryPersistedToolGroupsButKeepsDisplayImagesOpen() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("messages", List.of(
+                new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-lazy", 2L,
+                        List.of(
+                                new ChatPresentationService.ToolCallView("read-1", "read_file", true, null, null, false, false, null, null, null),
+                                new ChatPresentationService.ToolCallView("image-1", "display_image", true, "input", "output", false, false, null, null, null, null,
+                                        "/ui/chat/image/1/image-1", "Cat", "images/cat.png", "image/png")
+                        ), null, null)
+        ));
+        context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
+        context.setVariable("subagentView", false);
+        context.setVariable("fullMode", false);
+
+        String html = engine.process("fragments/chat-rows", context);
+
+        assertThat(html).contains("data-tool-call-tool-name=\"read_file\"", "hx-get=\"/ui/chat/tool-call/assistant-lazy/read-1\"",
+                "hx-trigger=\"toggle once\"", "hx-target=\"this\"", "hx-swap=\"outerHTML\"");
+        assertThat(html).contains("data-tool-call-tool-name=\"display_image\"", "open", "src=\"/ui/chat/image/1/image-1\"");
+        assertThat(html).doesNotContain("read-1 input", "read-1 output");
+    }
+
+    @Test
     public void chatRowsFragmentRendersRunningToolCallsWithoutFailureStyling() {
         SpringTemplateEngine engine = engine();
 

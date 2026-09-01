@@ -1,10 +1,10 @@
 <!doctype html>
-<th:block th:fragment="rows(messages, pendingStreamUrlPrefix, subagentView)">
+<th:block th:fragment="rows(messages, pendingStreamUrlPrefix, subagentView, fullMode)" th:with="fullMode=${fullMode ?: false}">
     <li th:each="m : ${messages}"
         th:attr="data-id=${m.id}, data-role=${m.role}, data-start-ts=${m.ts}, data-completed-ts=${m.completedTs}, data-agent-label=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentName + ' (' + m.metadata.agentId + ')'} : null, data-agent-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.agentId} : null, data-model-id=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.modelId} : null, data-model-label=${m.role == 'assistant' and m.modelLabel != null} ? ${m.modelLabel} : null, data-thinking-level=${m.role == 'assistant' and m.metadata != null} ? ${m.metadata.thinkingLevel} : null, data-pending=${m.pending} ? 'true' : null, data-stream-url=${m.pending and !(subagentView ?: false)} ? ${pendingStreamUrlPrefix + '/' + m.id} : null"
         th:classappend="${m.pending} ? 'pending' : ''">
         <th:block th:if="${m.role == 'assistant'}">
-            <th:block th:replace="~{fragments/chat-tool-calls :: toolCalls(message=${m})}"></th:block>
+            <th:block th:replace="~{fragments/chat-tool-calls :: toolCalls(message=${m}, fullMode=${fullMode})}"></th:block>
         </th:block>
 
         <span class="chat-message-text" th:text="${m.text}"></span>
