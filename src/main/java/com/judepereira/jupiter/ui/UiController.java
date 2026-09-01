@@ -740,8 +740,24 @@ public class UiController {
         }
 
         populateChatControlsModel(model, defaultChatSelection());
+        model.addAttribute("activeSession", toSession(view.activeSession()));
         populateChatModel(model, subagent.sessionDetail().chatMessages(), true, subagent.subagentAgentName(), subagent.subagentAgentId(), sessionId);
         return "fragments/chat :: chat";
+    }
+
+    @GetMapping("/ui/chat/restore/{primarySessionId}")
+    public String restoreChat(@PathVariable long primarySessionId,
+                              @RequestParam(value = "childSessionId", required = false) Long childSessionId,
+                              Model model) {
+        SubagentSessionDetailView child = appStateService.restoreChatContext(primarySessionId, childSessionId);
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        if (child != null) {
+            populateChatModel(model, child.sessionDetail().chatMessages(), true, child.subagentAgentName(), child.subagentAgentId(), childSessionId);
+        }
+        populateShellUpdates(model, view);
+        return "fragments/projects :: shellUpdates";
     }
 
     @PostMapping("/ui/chat/fork/{assistantPublicId}")

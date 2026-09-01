@@ -3,6 +3,7 @@ import {configureCommandPicker} from './chat/commands.js';
 import {formatAllChatSubtitles, renderAllChatMarkdown} from './chat/markdown.js';
 import {initWorkspaceRailSync, syncFaviconWithRail} from './chat/rail-sync.js';
 import {bindAutoScrollListeners} from './chat/scroll.js';
+import {initChatHistoryNavigation} from './chat/history.js';
 import {
     activePrimaryPendingAssistantRow,
     bindPendingStreams,
@@ -79,6 +80,7 @@ try {
 } catch (_) {
 }
 initWorkspaceRailSync();
+initChatHistoryNavigation();
 bindPendingStreams();
 syncFaviconWithRail();
 bindChatHtmxLifecycleListeners();
