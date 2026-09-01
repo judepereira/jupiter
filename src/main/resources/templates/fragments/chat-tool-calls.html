@@ -1,5 +1,5 @@
 <!doctype html>
-<th:block th:fragment="toolCalls(message)" th:if="${message != null}">
+<th:block th:fragment="toolCalls(message, fullMode)" th:if="${message != null}" th:with="fullMode=${fullMode ?: false}">
     <div class="tool-calls" th:id="${message.toolCallHostId()}" data-tool-call-target="host" th:attr="data-assistant-id=${message.id}">
         <th:block th:each="block : ${message.toolCallBlocks()}">
             <th:block th:replace="~{fragments/chat-tool-calls :: block(block=${block}, assistantId=${message.id})}"></th:block>
@@ -32,12 +32,12 @@
     </summary>
 </th:block>
 
-<th:block th:fragment="group(group, assistantId)" th:if="${group != null}" th:with="taskCall=${group.toolName == 'task' and !#lists.isEmpty(group.calls) ? group.calls[0] : null}">
+<th:block th:fragment="group(group, assistantId)" th:if="${group != null}" th:with="taskCall=${group.toolName == 'task' and !#lists.isEmpty(group.calls) ? group.calls[0] : null}, fullMode=${fullMode ?: false}, lazyGroup=${!(fullMode ?: false) and group.toolName != 'display_image'}">
     <details th:class="${group.toolName == 'task'} ? 'tool-call task-tool-call' : 'tool-call'" th:id="${group.domId(assistantId)}"
-             th:attr="data-tool-call-target='group', data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.status == 'running' ? 'running' : (group.success ? 'done' : 'error')}, data-tool-call-success=${group.success}, data-tool-call-subagent-session-id=${taskCall != null and taskCall.subagentSessionId != null ? taskCall.subagentSessionId : null}, data-tool-call-subagent-agent-name=${taskCall != null and taskCall.subagentAgentName != null ? taskCall.subagentAgentName : null}, data-tool-call-task-body=${taskCall != null and taskCall.taskBody != null ? taskCall.taskBody : null}" th:open="${group.toolName == 'display_image'}">
+             th:attr="data-tool-call-target='group', data-tool-call-tool-name=${group.toolName}, data-tool-call-count=${group.count}, data-tool-call-state=${group.status == 'running' ? 'running' : (group.success ? 'done' : 'error')}, data-tool-call-success=${group.success}, data-tool-call-subagent-session-id=${taskCall != null and taskCall.subagentSessionId != null ? taskCall.subagentSessionId : null}, data-tool-call-subagent-agent-name=${taskCall != null and taskCall.subagentAgentName != null ? taskCall.subagentAgentName : null}, hx-get=${lazyGroup ? '/ui/chat/tool-call/' + assistantId + '/' + group.calls[0].toolCallId : null}, hx-trigger=${lazyGroup ? 'toggle once' : null}, hx-target=${lazyGroup ? 'this' : null}, hx-swap=${lazyGroup ? 'outerHTML' : null}" th:open="${group.toolName == 'display_image' or (openGroup ?: false)}">
         <th:block th:if="${group.toolName == 'task'}" th:replace="~{fragments/chat-tool-calls :: taskSummary(group=${group}, assistantId=${assistantId})}"></th:block>
         <th:block th:unless="${group.toolName == 'task'}" th:replace="~{fragments/chat-tool-calls :: groupSummary(group=${group}, assistantId=${assistantId})}"></th:block>
-        <div class="tool-call-detail">
+        <div class="tool-call-detail" th:if="${fullMode or not lazyGroup}">
             <div class="tool-call-calls" th:id="${group.callsDomId(assistantId)}">
                 <th:block th:each="call : ${group.calls}">
                     <th:block th:replace="~{fragments/chat-tool-calls :: call(call=${call}, parentToolName=${group.toolName}, assistantId=${assistantId})}"></th:block>
@@ -69,7 +69,7 @@
 
 <th:block th:fragment="call(call, parentToolName, assistantId)">
     <div class="tool-call-call" th:id="${call.domId(assistantId)}"
-         th:attr="data-tool-call-target='call', data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.status == 'running' ? 'running' : (call.success ? 'done' : 'error')}, data-tool-call-success=${call.success}, data-tool-call-subagent-session-id=${call.subagentSessionId}, data-tool-call-subagent-agent-name=${call.subagentAgentName}, data-tool-call-task-body=${call.taskBody}">
+         th:attr="data-tool-call-target='call', data-tool-call-id=${call.toolCallId}, data-tool-call-tool-name=${call.toolName}, data-tool-call-state=${call.status == 'running' ? 'running' : (call.success ? 'done' : 'error')}, data-tool-call-success=${call.success}, data-tool-call-subagent-session-id=${call.subagentSessionId}, data-tool-call-subagent-agent-name=${call.subagentAgentName}">
         <div class="tool-call-subagent" th:if="${call.toolName == 'task' and call.subagentSessionId != null and parentToolName != 'task'}"><button type="button" class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 tool-call-subagent-button" th:attr="onclick='event.stopPropagation()', hx-get='/ui/chat/subagent/' + ${call.subagentSessionId}, hx-target='#chat-container', hx-swap='outerHTML'">View Session</button></div>
         <section class="tool-call-section" data-tool-call-field="input"><div class="tool-call-label">Input <small class="tool-call-truncated" th:if="${call.inputTruncated}">(truncated)</small></div><pre class="tool-call-pre" th:text="${call.inputPreview}"></pre></section>
         <section class="tool-call-section" data-tool-call-field="output"><div class="tool-call-label">Output <small class="tool-call-truncated" th:if="${call.outputTruncated}">(truncated)</small></div><th:block th:if="${call.imageUrl != null}"><figure class="tool-call-image-preview"><img th:src="${call.imageUrl}" th:alt="${call.imageAlt}"/><figcaption><span class="tool-call-image-caption" th:text="${call.imageAlt}"></span><small th:if="${call.imagePath != null}" th:text="${call.imagePath}"></small></figcaption></figure></th:block><pre th:unless="${call.imageUrl != null}" class="tool-call-pre" th:text="${call.outputPreview}"></pre></section>
