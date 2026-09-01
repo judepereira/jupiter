@@ -950,15 +950,17 @@ public class AppStateService {
                 ? repository.listToolCallTracesBySession(sessionId)
                 : repository.listToolCallTraceProjectionsBySession(sessionId)).stream()
                 .collect(java.util.stream.Collectors.groupingBy(AppStateRepository.ToolCallTraceRow::assistantMessageId));
+        Map<Long, AppStateRepository.TaskCallProjectionRow> taskProjectionsById = fullTrace ? Map.of() : repository.listTaskCallProjectionsBySession(sessionId).stream()
+                .collect(java.util.stream.Collectors.toMap(AppStateRepository.TaskCallProjectionRow::id, projection -> projection));
         if (!fullTrace) {
-            for (var trace : repository.listToolCallTracesBySessionAndToolNames(sessionId, Set.of("task", "display_image"))) {
+            for (var trace : repository.listToolCallTracesBySessionAndToolNames(sessionId, Set.of("display_image"))) {
                 tracesByAssistant.computeIfAbsent(trace.assistantMessageId(), ignored -> new ArrayList<>()).removeIf(existing -> existing.id() == trace.id());
                 tracesByAssistant.computeIfAbsent(trace.assistantMessageId(), ignored -> new ArrayList<>()).add(trace);
                 tracesByAssistant.get(trace.assistantMessageId()).sort(java.util.Comparator.comparingLong(AppStateRepository.ToolCallTraceRow::sequence));
             }
         }
         List<ChatMessageView> messages = visibleMessages.stream().map(message -> toChatMessageView(message, sessionId,
-                tracesByAssistant.getOrDefault(message.id(), List.of()), fullTrace)).toList();
+                tracesByAssistant.getOrDefault(message.id(), List.of()), fullTrace, taskProjectionsById)).toList();
         messages = applySyntheticSubagentToolCalls(sessionId, visibleMessages, messages);
         messages = injectSyntheticFailedAssistantMessage(sessionId, visibleMessages, messages);
         messages = clearStalePendingAssistantBindings(messages);
@@ -1127,9 +1129,9 @@ public class AppStateService {
             if (parentToolCallId == null || parentToolCallId.isBlank()) {
                 continue;
             }
-            ToolCallView syntheticToolCall = new ToolCallView(parentToolCallId, "task", true, "", "running", false, false,
+            ToolCallView syntheticToolCall = new ToolCallView(parentToolCallId, "task", true, null, null, false, false,
                     childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running",
-                    taskBody(parentSessionId, parentToolCallId));
+                    taskRequestSummary(parentSessionId, parentToolCallId));
             Long parentAssistantMessageId = childSession.parentAssistantMessageId();
             if (parentAssistantMessageId != null) {
                 Integer messageIndex = pendingAssistantIndexByMessageId.get(parentAssistantMessageId);
@@ -1188,7 +1190,7 @@ public class AppStateService {
     private ToolCallView enrichSubagentToolCallView(ToolCallView existingToolCall, AppStateRepository.SessionRow childSession, long parentSessionId) {
         String resolvedTaskBody = existingToolCall.taskBody();
         if (resolvedTaskBody == null || resolvedTaskBody.isBlank()) {
-            resolvedTaskBody = this.taskBody(parentSessionId, existingToolCall.toolCallId());
+            resolvedTaskBody = taskRequestSummary(parentSessionId, existingToolCall.toolCallId());
         }
         Long subagentSessionId = existingToolCall.subagentSessionId() == null ? childSession.id() : existingToolCall.subagentSessionId();
         String subagentAgentId = existingToolCall.subagentAgentId() == null || existingToolCall.subagentAgentId().isBlank() ? childSession.subagentAgentId() : existingToolCall.subagentAgentId();
@@ -1208,18 +1210,25 @@ public class AppStateService {
     }
 
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId) {
-        return toChatMessageView(message, sessionId, repository.listToolCallTracesByAssistantMessage(message.id()), true);
+        return toChatMessageView(message, sessionId, repository.listToolCallTracesByAssistantMessage(message.id()), true, Map.of());
     }
 
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId,
                                                List<AppStateRepository.ToolCallTraceRow> traces, boolean fullDetails) {
+        return toChatMessageView(message, sessionId, traces, fullDetails, Map.of());
+    }
+
+    private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId,
+                                               List<AppStateRepository.ToolCallTraceRow> traces, boolean fullDetails,
+                                               Map<Long, AppStateRepository.TaskCallProjectionRow> taskProjectionsById) {
         List<ToolCallPayload> payloads = fullDetails ? toolCallPayloads(message.toolCallsJson()) : List.of();
         List<ToolCallView> toolCalls = new ArrayList<>(traces.size());
         for (int i = 0; i < traces.size(); i++) {
             AppStateRepository.ToolCallTraceRow trace = traces.get(i);
             String toolCallId = trace.toolCallId() != null ? trace.toolCallId() : i < payloads.size() ? payloads.get(i).toolCallId() : String.valueOf(trace.sequence());
-            toolCalls.add(fullDetails || isEagerTool(trace.toolName())
-                    ? toToolCallView(trace, toolCallId, sessionId)
+            toolCalls.add(fullDetails ? toToolCallView(trace, toolCallId, sessionId)
+                    : "task".equals(trace.toolName()) ? toTaskCallProjection(taskProjectionsById.get(trace.id()), trace, toolCallId)
+                    : isEagerTool(trace.toolName()) ? toToolCallView(trace, toolCallId, sessionId)
                     : toToolCallProjection(trace, toolCallId));
         }
         return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(),
@@ -1229,7 +1238,7 @@ public class AppStateService {
     }
 
     private static boolean isEagerTool(String toolName) {
-        return "task".equals(toolName) || "display_image".equals(toolName);
+        return "display_image".equals(toolName);
     }
 
     private ToolCallView toToolCallProjection(AppStateRepository.ToolCallTraceRow trace, String toolCallId) {
@@ -1237,6 +1246,18 @@ public class AppStateService {
         String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
         return new ToolCallView(toolCallId, trace.toolName(), success, null, null, false, false,
                 null, null, null, status);
+    }
+
+    private ToolCallView toTaskCallProjection(AppStateRepository.TaskCallProjectionRow projection,
+                                               AppStateRepository.ToolCallTraceRow trace, String toolCallId) {
+        boolean success = Boolean.TRUE.equals(trace.success());
+        String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
+        if (projection == null) {
+            return new ToolCallView(toolCallId, "task", success, null, null, false, false, null, null, null, status);
+        }
+        return new ToolCallView(toolCallId, "task", success, null, null, false, false,
+                projection.subagentSessionId(), projection.subagentAgentId(), projection.subagentAgentName(), status,
+                projection.requestSummary());
     }
 
     private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace, String toolCallId, long sessionId) {
@@ -1288,12 +1309,12 @@ public class AppStateService {
         repository.failIncompleteToolCallTracesByAssistantMessage(assistantMessageId, textSummary, completedAt);
     }
 
-    private String taskBody(long sessionId, String toolCallId) {
+    private String taskRequestSummary(long sessionId, String toolCallId) {
         if (toolCallId == null || toolCallId.isBlank()) {
             return null;
         }
-        return repository.findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId)
-                .map(trace -> taskBody(trace.toolName(), readMap(trace.argsJson())))
+        return repository.findTaskCallProjection(sessionId, toolCallId)
+                .map(AppStateRepository.TaskCallProjectionRow::requestSummary)
                 .orElse(null);
     }
 

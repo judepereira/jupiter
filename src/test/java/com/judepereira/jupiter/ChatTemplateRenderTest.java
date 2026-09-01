@@ -199,6 +199,27 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
+    public void chatRowsFragmentLazilyLoadsPersistedTaskDetailsWithSummaryAndSessionLink() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("messages", List.of(
+                new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-task", 2L,
+                        List.of(new ChatPresentationService.ToolCallView("task-1", "task", true, "full task input", "full task output", false, false,
+                                42L, "engineer", "Engineer", "success", "<summary>")), null)
+        ));
+        context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
+        context.setVariable("subagentView", false);
+        context.setVariable("fullMode", false);
+
+        String html = engine.process("fragments/chat-rows", context);
+
+        assertThat(html).contains("<summary", "&lt;summary&gt;", "View Session", "hx-get=\"/ui/chat/subagent/42\"",
+                "hx-get=\"/ui/chat/tool-call/assistant-task/task-1\"", "hx-trigger=\"toggle once\"", "hx-target=\"this\"", "hx-swap=\"outerHTML\"");
+        assertThat(html).doesNotContain("full task input", "full task output", "data-tool-call-task-body", "open");
+    }
+
+    @Test
     public void chatRowsFragmentRendersRunningToolCallsWithoutFailureStyling() {
         SpringTemplateEngine engine = engine();
 

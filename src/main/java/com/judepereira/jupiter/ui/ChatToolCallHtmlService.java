@@ -30,8 +30,8 @@ public class ChatToolCallHtmlService {
                 .filter(candidate -> candidate.calls().stream().anyMatch(call -> anchorToolCallId.equals(call.toolCallId())))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Tool call group not found: " + anchorToolCallId));
-        if (group.toolName().equals("task") || group.toolName().equals("display_image")) {
-            throw new IllegalStateException("Tool call is not an ordinary lazy group: " + anchorToolCallId);
+        if (group.toolName().equals("display_image")) {
+            throw new IllegalStateException("Display image tool calls are eager: " + anchorToolCallId);
         }
         return renderGroup(group, assistantId);
     }

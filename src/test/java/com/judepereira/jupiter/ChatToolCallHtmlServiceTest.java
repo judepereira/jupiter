@@ -42,6 +42,24 @@ class ChatToolCallHtmlServiceTest {
     }
 
     @Test
+    void lazyGroupRendersFullOpenTaskDetailsWithoutLazyAttributes(@TempDir Path projectPath) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        QueuedChatTurn turn = appStateService.appendUserMessageAndPendingAssistant(sessionId, "use a task");
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("requestSummary", "Show me", "task", "full request"), true,
+                "full <output>", Map.of("subagentSessionId", 42L, "subagentAgentName", "Engineer"));
+        appStateService.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
+        appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
+
+        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new ChatPresentationService(), appStateService);
+        String html = htmlService.lazyGroup(turn.assistantMessage().id(), "task-1");
+
+        assertThat(html).contains("<details", "open", "full request", "full &lt;output&gt;", "View Session", "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).doesNotContain("hx-get=\"/ui/chat/tool-call/", "hx-trigger", "hx-target=\"this\"");
+    }
+
+    @Test
     void subagentStartedReplacesGenericTaskGroupAndCompletionRefreshesItsSummary(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
         AppStateService appStateService = context.service();
