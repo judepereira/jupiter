@@ -6,6 +6,7 @@ import com.judepereira.jupiter.ui.UiController.Session;
 import com.judepereira.jupiter.ui.UiController.UsagePoint;
 import com.judepereira.jupiter.ui.UiController.Workspace;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.Persistence.LifecycleHookSettings;
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -110,6 +111,7 @@ public class ProjectsTemplateRenderTest {
                 new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
         ))));
         context.setVariable("visibleProjects", List.of(new Project(1L, "Alpha", "/repo", ""), new Project(2L, "Beta", "/repo-b", "")));
+        context.setVariable("lifecycleHookSettings", new LifecycleHookSettings("echo <done>\nline 2", "echo error", "echo subagent", 45));
         context.setVariable("mcpServers", List.of(new com.judepereira.jupiter.persistence.Persistence.McpServerView(9L, "Local MCP", "http://localhost:3000/mcp", true,
                 List.of(new com.judepereira.jupiter.persistence.Persistence.McpServerHeader("Authorization", "Bearer token")), List.of(1L))));
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", "", List.of(
@@ -135,6 +137,8 @@ public class ProjectsTemplateRenderTest {
 
         assertThat(html).contains("id=\"settings-modal\"", "Environment variables", "API_URL", "https://example.test", "FEATURE_FLAG", "true", "Add Variable");
         assertThat(html).contains("MCP servers", "Local MCP", "http://localhost:3000/mcp", "Header name", "Authorization", "Bearer token", "Exposed projects");
+        assertThat(html).contains("Hooks", "Assistant completion script", "Assistant error script", "Subagent completion script", "name=\"timeoutSeconds\"", "min=\"1\"", "max=\"3600\"", "Scripts execute with Bash");
+        assertThat(html).contains("echo &lt;done&gt;\nline 2").doesNotContain("echo <done>");
         assertThat(html).contains(
                 "class=\"nav nav-pills flex-md-column settings-nav\"",
                 "id=\"settings-current-project\"",
@@ -173,6 +177,21 @@ public class ProjectsTemplateRenderTest {
         assertThat(attribute).contains("&quot;", "&lt;");
         assertThat(new ObjectMapper().readTree(HtmlUtils.htmlUnescape(attribute)).get(0).get("modelKey").asText())
                 .isEqualTo("model\"key");
+    }
+
+    @Test
+    public void settingsModalRendersHooksWithoutAnActiveProject() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("activeProject", null);
+        context.setVariable("lifecycleHookSettings", new LifecycleHookSettings(null, "echo error", null, 30));
+        context.setVariable("projects", List.of());
+        context.setVariable("mcpServers", List.of());
+
+        String html = engine.process(new TemplateSpec("fragments/projects", Set.of("settingsModal"), TemplateMode.HTML, null), context);
+
+        assertThat(html).contains("id=\"settings-modal\"", "id=\"settings-hooks\"", "Hooks", "echo error", "value=\"30\"");
+        assertThat(html).doesNotContain("id=\"settings-current-project-tab\"").contains("aria-selected=\"true\"");
     }
 
     @Test

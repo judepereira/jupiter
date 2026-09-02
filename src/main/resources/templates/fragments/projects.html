@@ -208,7 +208,7 @@
     </section>
 </th:block>
 
-<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}">
+<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
     <div id="settings-modal" class="project-modal settings-modal">
         <div class="project-modal-backdrop"
              hx-get="/ui/projects/modal/close"
@@ -224,8 +224,9 @@
             <div class="settings-modal-grid row g-4">
                 <div class="col-12 col-md-3">
                     <nav class="nav nav-pills flex-md-column settings-nav" aria-label="Settings tabs" role="tablist">
-                        <button class="nav-link active" id="settings-current-project-tab" data-bs-toggle="pill" data-bs-target="#settings-current-project" type="button" role="tab" aria-controls="settings-current-project" aria-selected="true">Current Project</button>
+                        <button th:if="${activeProject != null}" class="nav-link active" id="settings-current-project-tab" data-bs-toggle="pill" data-bs-target="#settings-current-project" type="button" role="tab" aria-controls="settings-current-project" aria-selected="true">Current Project</button>
                         <button class="nav-link" id="settings-mcp-servers-tab" data-bs-toggle="pill" data-bs-target="#settings-mcp-servers" type="button" role="tab" aria-controls="settings-mcp-servers" aria-selected="false">MCP Servers</button>
+                        <button class="nav-link" id="settings-hooks-tab" data-bs-toggle="pill" data-bs-target="#settings-hooks" type="button" role="tab" aria-controls="settings-hooks" th:attr="aria-selected=${activeProject == null ? 'true' : 'false'}" th:classappend="${activeProject == null ? ' active' : ''}">Hooks</button>
                         <button class="nav-link" id="settings-model-providers-tab" data-bs-toggle="pill" data-bs-target="#settings-model-providers" type="button" role="tab" aria-controls="settings-model-providers" aria-selected="false">Model Providers</button>
                         <button class="nav-link" id="settings-usage-tab" data-bs-toggle="pill" data-bs-target="#settings-usage" type="button" role="tab" aria-controls="settings-usage" aria-selected="false" data-settings-usage-tab>Usage</button>
                         <button class="nav-link" id="settings-help-tab" data-bs-toggle="pill" data-bs-target="#settings-help" type="button" role="tab" aria-controls="settings-help" aria-selected="false">Help</button>
@@ -234,7 +235,7 @@
 
                 <div class="col-12 col-md-9">
                     <div class="tab-content settings-tab-content">
-                        <div class="tab-pane fade show active" id="settings-current-project" role="tabpanel" aria-labelledby="settings-current-project-tab" tabindex="0">
+                        <div th:if="${activeProject != null}" class="tab-pane fade show active" id="settings-current-project" role="tabpanel" aria-labelledby="settings-current-project-tab" tabindex="0">
                             <form class="settings-form" hx-post="/ui/settings/apply" hx-target="#modal-root" hx-swap="innerHTML">
                                 <section class="settings-section">
                                     <h5>Current Project</h5>
@@ -446,6 +447,35 @@
                     <div class="project-form-actions">
                         <button type="submit" class="btn btn-primary">Apply MCP Catalog</button>
                     </div>
+                            </form>
+                        </div>
+
+                        <div class="tab-pane fade" th:classappend="${activeProject == null ? ' show active' : ''}" id="settings-hooks" role="tabpanel" aria-labelledby="settings-hooks-tab" tabindex="0">
+                            <form class="settings-form" hx-post="/ui/settings/hooks/apply" hx-target="#modal-root" hx-swap="innerHTML">
+                                <section class="settings-section settings-app-section">
+                                    <h5>Lifecycle hooks</h5>
+                                    <p class="settings-help-text">Scripts execute with Bash. Each hook receives project, workspace, and session name environment variables.</p>
+                                    <label class="project-form-field">
+                                        <span>Assistant completion script</span>
+                                        <textarea name="assistantCompletedScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantCompletedScript}"></textarea>
+                                    </label>
+                                    <label class="project-form-field">
+                                        <span>Assistant error script</span>
+                                        <textarea name="assistantErroredScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantErroredScript}"></textarea>
+                                    </label>
+                                    <label class="project-form-field">
+                                        <span>Subagent completion script</span>
+                                        <textarea name="subagentCompletedScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.subagentCompletedScript}"></textarea>
+                                    </label>
+                                    <label class="project-form-field">
+                                        <span>Timeout (seconds)</span>
+                                        <input type="number" name="timeoutSeconds" min="1" max="3600" required th:value="${lifecycleHookSettingsValue == null ? 30 : lifecycleHookSettingsValue.timeoutSeconds}">
+                                    </label>
+                                    <div class="project-form-actions">
+                                        <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                                        <button type="submit" class="btn btn-primary">Save Hooks</button>
+                                    </div>
+                                </section>
                             </form>
                         </div>
 

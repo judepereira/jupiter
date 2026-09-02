@@ -9,6 +9,7 @@ import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.Persistence.LifecycleHookSettings;
 import com.judepereira.jupiter.persistence.Persistence.McpServerHeader;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
@@ -78,6 +79,39 @@ public class UiControllerSettingsTests {
         verify(context.openAiOAuthService()).currentView();
         verify(context.openAiOAuthService(), never()).resetConnectionState();
         assertThat(model.getAttribute("openAiOAuthView")).isEqualTo(disconnected);
+    }
+
+    @Test
+    public void settingsModalIncludesHooksWithoutAnActiveProject(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        when(context.openAiOAuthService().currentView()).thenReturn(null);
+
+        ConcurrentModel model = new ConcurrentModel();
+        String view = context.controller().settingsModal(model);
+
+        assertThat(view).isEqualTo("fragments/projects :: settingsModal");
+        assertThat(model.getAttribute("activeProject")).isNull();
+        assertThat(model.getAttribute("lifecycleHookSettings")).isEqualTo(new LifecycleHookSettings(null, null, null, 30));
+    }
+
+    @Test
+    public void applyLifecycleHookSettingsPersistsWithoutAnActiveProject(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+
+        String view = context.controller().applyLifecycleHookSettings("echo done", "echo error", "echo subagent", 45, new ConcurrentModel());
+
+        assertThat(view).isEqualTo("fragments/projects :: modalClose");
+        assertThat(context.appStateService().loadLifecycleHookSettings())
+                .isEqualTo(new LifecycleHookSettings("echo done", "echo error", "echo subagent", 45));
+    }
+
+    @Test
+    public void lifecycleHookValidationIsPropagated(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> context.controller().applyLifecycleHookSettings("", "", "", 3601, new ConcurrentModel()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("between 1 and 3600");
     }
 
     @Test
