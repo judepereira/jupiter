@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.persistence;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -125,6 +126,14 @@ public final class Persistence {
     public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail) {
     }
 
+    public record LifecycleHookSettings(String assistantCompletedScript, String assistantErroredScript,
+                                        String subagentCompletedScript, int timeoutSeconds) {
+    }
+
+    public record LifecycleHookContext(long sessionId, String projectName, String workspaceName, String sessionName,
+                                       Map<String, String> projectEnvironmentVariables) {
+    }
+
     public record QueuedChatTurn(ChatMessageView userMessage, ChatMessageView assistantMessage) {
     }
 
@@ -133,4 +142,16 @@ public final class Persistence {
 
     public record ToolCallTraceInput(String toolCallId, String toolName, Map<String, Object> args, boolean success, String textSummary, Map<String, Object> machineSummary) {
     }
+
+    public record TokenUsageFact(String sessionUsageKey, long sessionIdSnapshot, long workspaceIdSnapshot, long projectIdSnapshot,
+                                 String sessionNameSnapshot, String workspaceNameSnapshot, String projectNameSnapshot,
+                                 String workspacePathSnapshot, String projectPathSnapshot, Instant occurredAt, Instant hourStartUtc,
+                                 String modelKey, String operation, Integer inputTokenCount, Integer outputTokenCount, Integer totalTokenCount,
+                                 Integer cachedInputTokenCount, Integer cacheWriteTokenCount, Integer reasoningTokenCount, String responseId,
+                                 String responseModelId, String finishReason, Map<String, Object> providerMetadata) {}
+
+    public record TokenUsageHourly(String sessionUsageKey, Instant hourStartUtc, String modelKey,
+                                   long requestCount, Long inputTokenCount, Long outputTokenCount, Long totalTokenCount,
+                                   Long cachedInputTokenCount, Long cacheWriteTokenCount, Long reasoningTokenCount,
+                                   Instant lastOccurredAt) {}
 }

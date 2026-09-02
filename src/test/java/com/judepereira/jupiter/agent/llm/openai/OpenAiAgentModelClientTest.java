@@ -19,6 +19,8 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiTokenUsage;
+import dev.langchain4j.model.output.FinishReason;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -84,6 +86,10 @@ public class OpenAiAgentModelClientTest {
                             .name("read_file")
                             .arguments("{\"path\":\"notes.txt\"}")
                             .build())))
+                    .id("response-1")
+                    .modelName("per-turn-model")
+                    .tokenUsage(OpenAiTokenUsage.builder().inputTokenCount(12).outputTokenCount(8).totalTokenCount(20).build())
+                    .finishReason(FinishReason.TOOL_EXECUTION)
                     .build();
         });
 
@@ -101,6 +107,12 @@ public class OpenAiAgentModelClientTest {
         assertEquals(1, capturedRequest.get().toolSpecifications().size());
         assertEquals("read_file", capturedRequest.get().toolSpecifications().get(0).name());
         assertEquals("assistant", response.getAssistantText());
+        assertEquals(12, response.getMetadata().inputTokenCount());
+        assertEquals(8, response.getMetadata().outputTokenCount());
+        assertEquals(20, response.getMetadata().totalTokenCount());
+        assertEquals("response-1", response.getMetadata().responseId());
+        assertEquals("per-turn-model", response.getMetadata().modelId());
+        assertEquals("TOOL_EXECUTION", response.getMetadata().finishReason());
         assertNotNull(response.getToolCall());
         assertEquals("call-1", response.getToolCall().getToolCallId());
         assertEquals("read_file", response.getToolCall().getToolName());
@@ -225,7 +237,13 @@ public class OpenAiAgentModelClientTest {
                     .name("write_file")
                     .arguments("{\"path\":\"out.txt\"}")
                     .build()));
-            handler.onCompleteResponse(ChatResponse.builder().aiMessage(AiMessage.from("done")).build());
+            handler.onCompleteResponse(ChatResponse.builder()
+                    .aiMessage(AiMessage.from("done"))
+                    .id("stream-response-1")
+                    .modelName("stream-model")
+                    .tokenUsage(OpenAiTokenUsage.builder().inputTokenCount(30).outputTokenCount(15).totalTokenCount(45).build())
+                    .finishReason(FinishReason.TOOL_EXECUTION)
+                    .build());
             return null;
         }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
 
@@ -244,6 +262,12 @@ public class OpenAiAgentModelClientTest {
         assertEquals("medium", ((OpenAiResponsesChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
         assertEquals(List.of("hel", "lo"), deltas);
         assertEquals("done", response.getAssistantText());
+        assertEquals(30, response.getMetadata().inputTokenCount());
+        assertEquals(15, response.getMetadata().outputTokenCount());
+        assertEquals(45, response.getMetadata().totalTokenCount());
+        assertEquals("stream-response-1", response.getMetadata().responseId());
+        assertEquals("stream-model", response.getMetadata().modelId());
+        assertEquals("TOOL_EXECUTION", response.getMetadata().finishReason());
         assertNotNull(response.getToolCall());
         assertEquals("stream-call", response.getToolCall().getToolCallId());
         assertEquals("write_file", response.getToolCall().getToolName());

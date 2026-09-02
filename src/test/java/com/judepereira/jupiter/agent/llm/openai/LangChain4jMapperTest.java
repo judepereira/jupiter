@@ -19,6 +19,9 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiResponsesChatResponseMetadata;
+import dev.langchain4j.model.openai.OpenAiTokenUsage;
+import dev.langchain4j.model.output.FinishReason;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -110,6 +113,38 @@ public class LangChain4jMapperTest {
         assertNull(requestParametersMapper.toRequestParameters(
                 new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, false, null)
         ));
+    }
+
+    @Test
+    public void maps_openai_usage_and_response_metadata() {
+        ModelResponse response = messageMapper.toModelResponse(ChatResponse.builder()
+                .aiMessage(AiMessage.from("assistant"))
+                .metadata(OpenAiResponsesChatResponseMetadata.builder()
+                        .id("response-1")
+                        .modelName("gpt-5.4")
+                        .tokenUsage(OpenAiTokenUsage.builder()
+                                .inputTokenCount(100)
+                                .outputTokenCount(40)
+                                .totalTokenCount(140)
+                                .inputTokensDetails(OpenAiTokenUsage.InputTokensDetails.builder().cachedTokens(25).build())
+                                .outputTokensDetails(OpenAiTokenUsage.OutputTokensDetails.builder().reasoningTokens(10).build())
+                                .build())
+                        .finishReason(FinishReason.STOP)
+                        .createdAt(123L)
+                        .completedAt(456L)
+                        .serviceTier("default")
+                        .build())
+                .build());
+
+        assertEquals(100, response.getMetadata().inputTokenCount());
+        assertEquals(40, response.getMetadata().outputTokenCount());
+        assertEquals(140, response.getMetadata().totalTokenCount());
+        assertEquals(25, response.getMetadata().cachedInputTokenCount());
+        assertEquals(10, response.getMetadata().reasoningTokenCount());
+        assertEquals("response-1", response.getMetadata().responseId());
+        assertEquals("gpt-5.4", response.getMetadata().modelId());
+        assertEquals("STOP", response.getMetadata().finishReason());
+        assertEquals(Map.of("createdAt", 123L, "completedAt", 456L, "serviceTier", "default"), response.getMetadata().providerMetadata());
     }
 
     @Test
