@@ -131,6 +131,7 @@ public final class TestAppStateSupport {
                 new TerminalStateService(),
                 new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
                 contextCompactionService(appStateService),
+                new TokenUsageService(context.repository(), new ObjectMapper()),
                 mock(CommandStreamService.class),
                 mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
                 new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),

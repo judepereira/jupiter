@@ -20,6 +20,7 @@ import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
+import com.judepereira.jupiter.persistence.TokenUsageService;
 import com.judepereira.jupiter.persistence.GitWorktreeException;
 import com.judepereira.jupiter.persistence.InvalidGitBranchNameException;
 import com.judepereira.jupiter.persistence.Persistence.*;
@@ -50,6 +51,8 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -73,6 +76,7 @@ public class UiController {
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
     private final ContextCompactionService contextCompactionService;
+    private final TokenUsageService tokenUsageService;
     private final CommandStreamService commandStreamService;
     private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
     private final TerminalManager terminalManager;
@@ -95,7 +99,8 @@ public class UiController {
                         ActiveStreamRegistryService activeStreamRegistryService,
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
+                        ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
+                        CommandStreamService commandStreamService,
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
                         ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
@@ -105,6 +110,7 @@ public class UiController {
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
         this.contextCompactionService = contextCompactionService;
+        this.tokenUsageService = tokenUsageService;
         this.commandStreamService = commandStreamService;
         this.mcpRuntimeManager = mcpRuntimeManager;
         this.systemBalloonService = systemBalloonService;
@@ -130,7 +136,7 @@ public class UiController {
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, chatPresentationService,
+                openAiOAuthService, contextCompactionService, null, commandStreamService, null, chatPresentationService,
                 chatToolCallHtmlService, null, appVersion);
     }
 
@@ -145,7 +151,7 @@ public class UiController {
                         LifecycleHookService lifecycleHookService, String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, chatPresentationService,
+                openAiOAuthService, contextCompactionService, null, commandStreamService, null, chatPresentationService,
                 chatToolCallHtmlService, lifecycleHookService, appVersion);
     }
 
@@ -160,7 +166,7 @@ public class UiController {
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager,
+                openAiOAuthService, contextCompactionService, null, commandStreamService, mcpRuntimeManager,
                 chatPresentationService, chatToolCallHtmlService, null, appVersion);
     }
 
@@ -173,7 +179,7 @@ public class UiController {
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, new ChatPresentationService(), null, null, appVersion);
+                openAiOAuthService, contextCompactionService, null, commandStreamService, null, new ChatPresentationService(), null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -184,7 +190,20 @@ public class UiController {
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, new ChatPresentationService(), null, null, appVersion);
+                openAiOAuthService, contextCompactionService, null, commandStreamService, null, new ChatPresentationService(), null, null, appVersion);
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        TerminalManager terminalManager, TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
+                        CommandStreamService commandStreamService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                        String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, tokenUsageService, commandStreamService, mcpRuntimeManager,
+                new ChatPresentationService(), null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -195,7 +214,7 @@ public class UiController {
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager, new ChatPresentationService(), null, null, appVersion);
+                openAiOAuthService, contextCompactionService, null, commandStreamService, mcpRuntimeManager, new ChatPresentationService(), null, null, appVersion);
     }
 
     @GetMapping("/")
@@ -977,6 +996,33 @@ public class UiController {
         return "fragments/projects :: settingsModal";
     }
 
+    @GetMapping("/ui/settings/usage")
+    public String settingsUsage(@RequestParam(name = "range", defaultValue = "24h") String range, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeProject() == null) {
+            return "fragments/projects :: usageEmpty";
+        }
+        long hours = switch (range) {
+            case "7d" -> 24L * 7;
+            case "30d" -> 24L * 30;
+            case "60d" -> 24L * 60;
+            default -> 24;
+        };
+        Instant to = Instant.now().truncatedTo(ChronoUnit.HOURS).plus(1, ChronoUnit.HOURS);
+        Instant from = to.minus(hours, ChronoUnit.HOURS);
+        List<UsagePoint> points = tokenUsageService.findProjectHourlyUsage(view.activeProject().id(), from, to).stream()
+                .map(row -> new UsagePoint(row.hourStartUtc().toString(), resolveModelLabel(row.modelKey()), row.modelKey(),
+                        row.requestCount(), row.inputTokenCount(), row.outputTokenCount(), row.totalTokenCount()))
+                .toList();
+        model.addAttribute("usageRange", range.equals("7d") || range.equals("30d") || range.equals("60d") ? range : "24h");
+        try {
+            model.addAttribute("usageJson", SseJson.writeValueAsString(points));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize usage data", e);
+        }
+        return "fragments/projects :: settingsUsage";
+    }
+
     @PostMapping("/ui/settings/hooks/apply")
     public String applyLifecycleHookSettings(
             @RequestParam(name = "assistantCompletedScript", required = false) String assistantCompletedScript,
@@ -1633,6 +1679,8 @@ public class UiController {
     private ChatMessage toChatMessage(ChatMessageView view) {
         return chatPresentationService.toChatMessage(view, this::resolveModelLabel);
     }
+
+    public record UsagePoint(String hour, String modelLabel, String modelKey, long requests, Long input, Long output, Long total) {}
 
     private ChangedFile toChangedFile(ChangedFileView view) {
         return view == null ? null : new ChangedFile(view.key(), view.source(), view.id(), view.path(), view.diff());
