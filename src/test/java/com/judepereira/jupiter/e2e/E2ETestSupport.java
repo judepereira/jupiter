@@ -2,9 +2,11 @@ package com.judepereira.jupiter.e2e;
 
 import com.judepereira.jupiter.Jupiter;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
+import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import org.junit.jupiter.api.Assumptions;
@@ -23,6 +25,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
@@ -215,43 +218,24 @@ abstract class E2ETestSupport {
                 .setFullPage(true));
     }
 
-    protected static void addTestBalloon(Page page, String id, String title, String body) {
-        page.evaluate("""
-                ({id, title, body}) => {
-                    const root = document.getElementById('system-balloon-root');
-                    if (!root) {
-                        throw new Error('Missing system balloon root');
-                    }
+    protected static Locator addTestBalloon(Page page, RunningApp app, String title, String body) {
+        page.waitForFunction("() => window.__systemBalloonSource");
+        page.waitForFunction("() => window.__systemBalloonSource.readyState === EventSource.OPEN");
 
-                    const node = document.createElement('div');
-                    node.className = 'system-balloon success is-visible';
-                    node.dataset.balloonId = id;
-                    node.dataset.type = 'success';
-
-                    const content = document.createElement('div');
-                    content.className = 'system-balloon__content';
-
-                    const titleElement = document.createElement('p');
-                    titleElement.className = 'system-balloon__title';
-                    titleElement.textContent = title;
-                    content.appendChild(titleElement);
-
-                    const bodyElement = document.createElement('p');
-                    bodyElement.className = 'system-balloon__body';
-                    bodyElement.textContent = body;
-                    content.appendChild(bodyElement);
-
-                    const close = document.createElement('button');
-                    close.type = 'button';
-                    close.className = 'system-balloon__close';
-                    close.setAttribute('aria-label', 'Close notification');
-                    close.textContent = '×';
-
-                    node.appendChild(content);
-                    node.appendChild(close);
-                    root.insertBefore(node, root.firstChild);
+        String uniqueBody = body + " [" + UUID.randomUUID() + "]";
+        app.context().getBean(SystemBalloonService.class).publishSuccess(title, uniqueBody);
+        Locator balloon = page.locator("#system-balloon-root .system-balloon")
+                .filter(new Locator.FilterOptions().setHasText(uniqueBody));
+        balloon.waitFor();
+        assertThat(balloon).hasCount(1);
+        page.waitForFunction("""
+                body => {
+                    const balloon = Array.from(document.querySelectorAll('#system-balloon-root .system-balloon'))
+                            .find(node => node.querySelector('.system-balloon__body')?.textContent === body);
+                    return balloon && balloon.classList.contains('is-visible') && getComputedStyle(balloon).opacity === '1';
                 }
-                """, Map.of("id", id, "title", title, "body", body));
+                """, uniqueBody);
+        return balloon;
     }
 
     protected static void initGitRepoWithInitialCommit(Path repoDir) throws Exception {

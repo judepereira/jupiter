@@ -34,18 +34,13 @@ class DesktopSystemBalloonPositionE2ETest extends E2ETestSupport {
             page.waitForLoadState();
             page.locator("#system-balloon-root").waitFor(new com.microsoft.playwright.Locator.WaitForOptions()
                     .setState(WaitForSelectorState.ATTACHED));
-            addTestBalloon(page, "desktop-system-balloon", "Desktop system balloon",
+            var balloon = addTestBalloon(page, app, "Desktop system balloon",
                     "Verify the shared desktop top and bottom reservations.");
 
-            var balloon = page.locator("#system-balloon-root .system-balloon");
-            balloon.waitFor();
-            page.waitForFunction("() => { const balloon = document.querySelector('#system-balloon-root .system-balloon'); return balloon && getComputedStyle(balloon).opacity === '1'; }");
-
             @SuppressWarnings("unchecked")
-            Map<String, Object> geometry = (Map<String, Object>) page.evaluate("""
-                    () => {
+            Map<String, Object> geometry = (Map<String, Object>) balloon.evaluate("""
+                    balloon => {
                         const root = document.getElementById('system-balloon-root');
-                        const balloon = document.querySelector('#system-balloon-root .system-balloon');
                         const rootRect = root.getBoundingClientRect();
                         const balloonRect = balloon.getBoundingClientRect();
                         return {
