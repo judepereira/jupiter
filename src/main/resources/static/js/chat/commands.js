@@ -14,6 +14,7 @@ const commandPickerState = {
     input: null,
     list: null,
     repositionHandler: null,
+    visualViewport: null,
     positionFrame: null,
     fetchPromise: null
 };
@@ -49,6 +50,11 @@ export function closeCommandPicker() {
     if (commandPickerState.repositionHandler) {
         window.removeEventListener('resize', commandPickerState.repositionHandler);
         window.removeEventListener('scroll', commandPickerState.repositionHandler, true);
+        if (commandPickerState.visualViewport) {
+            commandPickerState.visualViewport.removeEventListener('resize', commandPickerState.repositionHandler);
+            commandPickerState.visualViewport.removeEventListener('scroll', commandPickerState.repositionHandler);
+            commandPickerState.visualViewport = null;
+        }
         commandPickerState.repositionHandler = null;
     }
     if (commandPickerState.positionFrame != null) {
@@ -278,6 +284,11 @@ export function openCommandPicker(textarea, query) {
     root.addEventListener('click', closeHandler, {once: true});
     window.addEventListener('resize', reposition);
     window.addEventListener('scroll', reposition, true);
+    commandPickerState.visualViewport = window.visualViewport;
+    if (commandPickerState.visualViewport) {
+        commandPickerState.visualViewport.addEventListener('resize', reposition);
+        commandPickerState.visualViewport.addEventListener('scroll', reposition);
+    }
     commandPickerState.repositionHandler = reposition;
     commandPickerState.input.addEventListener('input', renderCommandPickerList);
     commandPickerState.input.addEventListener('keydown', event => {
