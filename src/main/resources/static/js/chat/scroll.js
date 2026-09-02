@@ -223,7 +223,7 @@ export function checkAndMaybeScroll() {
     }
 }
 
-function isHistoryNearBottom() {
+export function isHistoryNearBottom() {
     try {
         const history = document.getElementById('chat-history');
         if (!history) return false;

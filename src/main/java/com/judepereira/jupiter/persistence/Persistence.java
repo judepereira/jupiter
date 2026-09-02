@@ -112,6 +112,9 @@ public final class Persistence {
     public record ChatMessageView(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
     }
 
+    public record InfoMessageAppendedEvent(long sessionId, ChatMessageView message) {
+    }
+
     public record ChangedFileView(String key, ReviewSource source, Integer id, String path, String diff) {
     }
 
@@ -123,7 +126,18 @@ public final class Persistence {
                                             String subagentAgentId, String subagentAgentName) {
     }
 
-    public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail) {
+    public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail,
+                               boolean autoGitUpdateEnabled) {
+        public AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace,
+                            List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail) {
+            this(projects, activeProject, workspaces, activeWorkspace, sessions, activeSession, activeSessionDetail, true);
+        }
+    }
+
+    public record AutoGitUpdateFailureState(boolean failureEpisodeActive, Instant failureStartedAt, Instant lastSuccessAt) {
+    }
+
+    public record AutoGitUpdateFailureNotification(boolean firstFailure) {
     }
 
     public record LifecycleHookSettings(String assistantCompletedScript, String assistantErroredScript,

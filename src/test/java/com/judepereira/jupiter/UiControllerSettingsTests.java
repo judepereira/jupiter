@@ -3,6 +3,7 @@ package com.judepereira.jupiter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
@@ -92,6 +93,40 @@ public class UiControllerSettingsTests {
         assertThat(view).isEqualTo("fragments/projects :: settingsModal");
         assertThat(model.getAttribute("activeProject")).isNull();
         assertThat(model.getAttribute("lifecycleHookSettings")).isEqualTo(new LifecycleHookSettings(null, null, null, 30));
+    }
+
+    @Test
+    public void settingsModalIncludesAutoGitUpdatePreference(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        ConcurrentModel model = new ConcurrentModel();
+
+        context.controller().settingsModal(model);
+
+        assertThat(model.getAttribute("autoGitUpdateEnabled")).isEqualTo(true);
+    }
+
+    @Test
+    public void applyAutoGitUpdateSettingsPersistsPreference(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+
+        assertThat(context.controller().applyAutoGitUpdateSettings(false)).isEqualTo("fragments/projects :: modalClose");
+        assertThat(context.appStateService().loadAutoGitUpdateEnabled()).isFalse();
+
+        context.controller().applyAutoGitUpdateSettings(true);
+        assertThat(context.appStateService().loadAutoGitUpdateEnabled()).isTrue();
+    }
+
+    @Test
+    public void manualPullUsesActiveWorkspaceAndReportsResult(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long workspaceId = context.appStateService().loadViewData().activeWorkspace().id();
+        when(context.gitAutoUpdateService().updateWorkspaceManually(workspaceId)).thenReturn(
+                new GitAutoUpdateService.UpdateResult(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE, "abc", "abc", null, false));
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().pullActiveWorkspace(model)).isEqualTo("fragments/projects :: shellUpdates");
+        verify(context.gitAutoUpdateService()).updateWorkspaceManually(workspaceId);
     }
 
     @Test
@@ -234,6 +269,7 @@ public class UiControllerSettingsTests {
         TerminalManager terminalManager = mock(TerminalManager.class);
         OpenAiOAuthService openAiOAuthService = mock(OpenAiOAuthService.class);
         McpProjectMcpServerRuntimeManager mcpRuntimeManager = mock(McpProjectMcpServerRuntimeManager.class);
+        GitAutoUpdateService gitAutoUpdateService = mock(GitAutoUpdateService.class);
 
         TestAppStateSupport.AppStateTestContext appStateContext = TestAppStateSupport.appStateContext(event -> {});
         AppStateService appStateService = appStateContext.service();
@@ -243,6 +279,7 @@ public class UiControllerSettingsTests {
                 tokenUsageService,
                 openAiOAuthService,
                 mcpRuntimeManager,
+                gitAutoUpdateService,
                 new UiController(mock(CodingAgentHarness.class), properties, appStateService,
                         new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
                         ModelCatalogTestSupport.modelCatalogService(),
@@ -255,9 +292,9 @@ public class UiControllerSettingsTests {
                         tokenUsageService,
                         mock(CommandStreamService.class),
                         mcpRuntimeManager,
-                        "test"));
+                        gitAutoUpdateService, "test"));
     }
 
-    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, UiController controller) {
+    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, UiController controller) {
     }
 }

@@ -53,7 +53,7 @@ class ProjectCreationE2ETest extends E2ETestSupport {
                 page.locator("#chat-input").fill(userMessage);
                 page.locator("#chat-send-btn").click();
 
-                assertThat(page.locator("#chat-messages-list li")).hasCount(3);
+                assertThat(page.locator("#chat-messages-list li:not([data-role='info'])")).hasCount(3);
                 assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText(userMessage);
                 assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
                 captureScreenshot(page, screenshotsDir, "05-chat-response.png");
@@ -66,7 +66,7 @@ class ProjectCreationE2ETest extends E2ETestSupport {
                 page.navigate(second.baseUrl());
 
                 assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText("Alpha");
-                assertThat(page.locator("#chat-messages-list li")).hasCount(3);
+                assertThat(page.locator("#chat-messages-list li:not([data-role='info'])")).hasCount(3);
                 assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText("hello there");
                 assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
                 captureScreenshot(page, screenshotsDir, "06-after-restart.png");
