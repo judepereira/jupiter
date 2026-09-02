@@ -13,6 +13,7 @@ import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.terminal.TerminalHandle;
 import com.judepereira.jupiter.terminal.TerminalManager;
@@ -87,10 +88,15 @@ public final class TestAppStateSupport {
     public record AppStateTestContext(AppStateService service, AppStateRepository repository, ActiveStreamRegistryService activeStreamRegistryService) {}
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
-        return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService());
+        return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService(), null);
     }
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService) {
+        return controller(harness, properties, modelCatalogService, null);
+    }
+
+    public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService,
+                                          LifecycleHookService lifecycleHookService) {
         TerminalManager terminalManager = mock(TerminalManager.class);
         AtomicInteger sequence = new AtomicInteger();
         when(terminalManager.createTerminal(anyString(), anyMap())).thenAnswer(invocation -> {
@@ -128,7 +134,7 @@ public final class TestAppStateSupport {
                 mock(CommandStreamService.class),
                 mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
                 new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
-                "0.0.1-SNAPSHOT");
+                lifecycleHookService, "0.0.1-SNAPSHOT");
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {
