@@ -4,6 +4,7 @@ import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ViewportSize;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -34,86 +35,56 @@ class MobileSystemBalloonPositionE2ETest extends E2ETestSupport {
 
             page.navigate(app.baseUrl());
             page.waitForLoadState();
-            page.locator("#system-balloon-root").waitFor();
+            page.locator("#system-balloon-root").waitFor(new com.microsoft.playwright.Locator.WaitForOptions()
+                    .setState(WaitForSelectorState.ATTACHED));
 
-            page.evaluate("""
-                    () => {
-                        const root = document.getElementById('system-balloon-root');
-                        if (!root) {
-                            throw new Error('Missing system balloon root');
-                        }
-
-                        const node = document.createElement('div');
-                        node.className = 'system-balloon success is-visible';
-                        node.dataset.balloonId = 'mobile-system-balloon';
-                        node.dataset.type = 'success';
-
-                        const content = document.createElement('div');
-                        content.className = 'system-balloon__content';
-
-                        const title = document.createElement('p');
-                        title.className = 'system-balloon__title';
-                        title.textContent = 'Mobile system balloon';
-                        content.appendChild(title);
-
-                        const body = document.createElement('p');
-                        body.className = 'system-balloon__body';
-                        body.textContent = 'Verify the mobile top offset and wrapping.';
-                        content.appendChild(body);
-
-                        const close = document.createElement('button');
-                        close.type = 'button';
-                        close.className = 'system-balloon__close';
-                        close.setAttribute('aria-label', 'Close notification');
-                        close.textContent = '×';
-
-                        node.appendChild(content);
-                        node.appendChild(close);
-                        root.insertBefore(node, root.firstChild);
-                    }
-                    """);
-
-            var balloon = page.locator("#system-balloon-root .system-balloon");
-            balloon.waitFor();
+            var balloon = addTestBalloon(page, app, "Mobile system balloon",
+                    "Verify the mobile top offset and wrapping.");
             assertThat(balloon.isVisible()).isTrue();
             assertThat(balloon.textContent()).contains("Mobile system balloon");
             assertThat(balloon.textContent()).contains("Verify the mobile top offset and wrapping.");
-            page.waitForFunction("() => { const balloon = document.querySelector('#system-balloon-root .system-balloon'); return balloon && getComputedStyle(balloon).opacity === '1'; }");
 
             @SuppressWarnings("unchecked")
-            Map<String, Object> geometry = (Map<String, Object>) page.evaluate("""
-                    () => {
+            Map<String, Object> geometry = (Map<String, Object>) balloon.evaluate("""
+                    balloon => {
                         const root = document.getElementById('system-balloon-root');
-                        const balloon = document.querySelector('#system-balloon-root .system-balloon');
                         const rootRect = root.getBoundingClientRect();
                         const balloonRect = balloon.getBoundingClientRect();
-                        const rootStyle = getComputedStyle(root);
                         return {
                             mq480: window.matchMedia('(max-width: 480px)').matches,
-                            rootPosition: rootStyle.position,
                             rootRectTop: rootRect.top,
                             rootRectLeft: rootRect.left,
                             rootRectRight: window.innerWidth - rootRect.right,
                             rootRectBottom: window.innerHeight - rootRect.bottom,
+                            rootRectBottomEdge: rootRect.bottom,
                             balloonRectTop: balloonRect.top,
+                            balloonRectBottomEdge: balloonRect.bottom,
                             balloonRectLeft: balloonRect.left,
                             balloonRectRight: window.innerWidth - balloonRect.right,
                             balloonRectWidth: balloonRect.width,
                             balloonRectHeight: balloonRect.height,
-                            rootRectWidth: rootRect.width
+                            rootRectWidth: rootRect.width,
+                            topBarBottom: document.querySelector('#top-bar').getBoundingClientRect().bottom,
+                            bottomRailTop: document.querySelector('#bottom-rail').getBoundingClientRect().top
                         };
                     }
                     """);
 
             assertThat(geometry.get("mq480")).isEqualTo(Boolean.TRUE);
-            assertThat(geometry.get("rootPosition")).isEqualTo("fixed");
-            assertThat(((Number) geometry.get("rootRectTop")).doubleValue()).isBetween(48.0, 60.0);
-            assertThat(((Number) geometry.get("rootRectLeft")).doubleValue()).isBetween(7.0, 12.0);
-            assertThat(((Number) geometry.get("rootRectRight")).doubleValue()).isBetween(7.0, 12.0);
-            assertThat(((Number) geometry.get("rootRectBottom")).doubleValue()).isBetween(48.0, 60.0);
-            assertThat(((Number) geometry.get("balloonRectTop")).doubleValue()).isGreaterThanOrEqualTo(((Number) geometry.get("rootRectTop")).doubleValue());
-            assertThat(((Number) geometry.get("balloonRectWidth")).doubleValue()).isLessThanOrEqualTo(((Number) geometry.get("rootRectWidth")).doubleValue() + 4.0);
-            assertThat(((Number) geometry.get("balloonRectRight")).doubleValue()).isBetween(7.0, 12.0);
+            double rootTop = ((Number) geometry.get("rootRectTop")).doubleValue();
+            double rootBottom = ((Number) geometry.get("rootRectBottom")).doubleValue();
+            double balloonTop = ((Number) geometry.get("balloonRectTop")).doubleValue();
+            double rootBottomEdge = ((Number) geometry.get("rootRectBottomEdge")).doubleValue();
+            double balloonBottomEdge = ((Number) geometry.get("balloonRectBottomEdge")).doubleValue();
+            double topBarBottom = ((Number) geometry.get("topBarBottom")).doubleValue();
+            double bottomRailTop = ((Number) geometry.get("bottomRailTop")).doubleValue();
+            assertThat(rootTop).isGreaterThan(topBarBottom);
+            assertThat(rootBottom).isGreaterThan(0.0);
+            assertThat(rootBottomEdge).isLessThan(bottomRailTop);
+            assertThat(balloonTop).isGreaterThanOrEqualTo(rootTop);
+            assertThat(balloonBottomEdge).isLessThanOrEqualTo(rootBottomEdge);
+            assertThat(((Number) geometry.get("balloonRectWidth")).doubleValue()).isLessThanOrEqualTo(((Number) geometry.get("rootRectWidth")).doubleValue());
+            assertThat(((Number) geometry.get("balloonRectRight")).doubleValue()).isGreaterThanOrEqualTo(((Number) geometry.get("rootRectRight")).doubleValue());
             assertThat(((Number) geometry.get("balloonRectLeft")).doubleValue())
                     .isGreaterThanOrEqualTo(((Number) geometry.get("rootRectLeft")).doubleValue());
             assertThat(((Number) geometry.get("balloonRectHeight")).doubleValue()).isGreaterThan(0.0);

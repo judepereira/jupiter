@@ -2,9 +2,11 @@ package com.judepereira.jupiter.e2e;
 
 import com.judepereira.jupiter.Jupiter;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
+import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import org.junit.jupiter.api.Assumptions;
@@ -23,6 +25,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
@@ -213,6 +216,26 @@ abstract class E2ETestSupport {
         page.screenshot(new Page.ScreenshotOptions()
                 .setPath(screenshotsDir.resolve(fileName))
                 .setFullPage(true));
+    }
+
+    protected static Locator addTestBalloon(Page page, RunningApp app, String title, String body) {
+        page.waitForFunction("() => window.__systemBalloonSource");
+        page.waitForFunction("() => window.__systemBalloonSource.readyState === EventSource.OPEN");
+
+        String uniqueBody = body + " [" + UUID.randomUUID() + "]";
+        app.context().getBean(SystemBalloonService.class).publishSuccess(title, uniqueBody);
+        Locator balloon = page.locator("#system-balloon-root .system-balloon")
+                .filter(new Locator.FilterOptions().setHasText(uniqueBody));
+        balloon.waitFor();
+        assertThat(balloon).hasCount(1);
+        page.waitForFunction("""
+                body => {
+                    const balloon = Array.from(document.querySelectorAll('#system-balloon-root .system-balloon'))
+                            .find(node => node.querySelector('.system-balloon__body')?.textContent === body);
+                    return balloon && balloon.classList.contains('is-visible') && getComputedStyle(balloon).opacity === '1';
+                }
+                """, uniqueBody);
+        return balloon;
     }
 
     protected static void initGitRepoWithInitialCommit(Path repoDir) throws Exception {

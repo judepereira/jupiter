@@ -2,8 +2,8 @@ package com.judepereira.jupiter.ui.balloon;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -17,22 +17,33 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 @Log4j2
 @Service
-@RequiredArgsConstructor
 public class SystemBalloonService {
 
     private static final int MAX_PUBLISHED_BALLOONS = 100;
 
     private final ObjectMapper objectMapper;
+    private final Supplier<SseEmitter> emitterFactory;
     private final Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
     private final Set<String> initializedShellIds = ConcurrentHashMap.newKeySet();
     private final List<SystemBalloon> publishedBalloons = new CopyOnWriteArrayList<>();
     private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
+    @Autowired
+    public SystemBalloonService(ObjectMapper objectMapper) {
+        this(objectMapper, () -> new SseEmitter(0L));
+    }
+
+    SystemBalloonService(ObjectMapper objectMapper, Supplier<SseEmitter> emitterFactory) {
+        this.objectMapper = objectMapper;
+        this.emitterFactory = emitterFactory;
+    }
+
     public SseEmitter connect() {
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = emitterFactory.get();
         if (shutdownStarted.get()) {
             emitter.complete();
             return emitter;
@@ -46,8 +57,10 @@ public class SystemBalloonService {
         if (shutdownStarted.get()) {
             disconnect(emitter);
             emitter.complete();
+            return emitter;
         }
 
+        sendHandshake(emitter);
         return emitter;
     }
 
@@ -128,8 +141,16 @@ public class SystemBalloonService {
     }
 
     private void sendToEmitter(SseEmitter emitter, String payload) {
+        sendToEmitter(emitter, SseEmitter.event().name("balloon").data(payload));
+    }
+
+    private void sendHandshake(SseEmitter emitter) {
+        sendToEmitter(emitter, SseEmitter.event().comment("connected"));
+    }
+
+    private void sendToEmitter(SseEmitter emitter, SseEmitter.SseEventBuilder event) {
         try {
-            emitter.send(SseEmitter.event().name("balloon").data(payload));
+            emitter.send(event);
         } catch (Exception e) {
             if (!(e instanceof AsyncRequestNotUsableException)) {
                 log.error("Failed to send system balloon to SSE client", e);
