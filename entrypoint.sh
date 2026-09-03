@@ -24,4 +24,5 @@ fi
 
 echo "Starting Jupiter as $USERNAME on port $PORT"
 
-su - $USERNAME -c "/opt/java/openjdk/bin/java -jar -Dserver.port=$PORT /opt/jupiter.jar"
+su -w JUPITER_HTTP_AUTH_PASSWORD,JUPITER_HTTP_AUTH_USERNAME - $USERNAME -c \
+  "/opt/java/openjdk/bin/java -jar -Dserver.port=$PORT /opt/jupiter.jar"

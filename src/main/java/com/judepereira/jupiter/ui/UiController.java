@@ -16,6 +16,8 @@ import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.config.HttpAuthProperties;
+import com.judepereira.jupiter.config.PublicRequestScheme;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
@@ -88,6 +90,7 @@ public class UiController {
     private final ChatPresentationService chatPresentationService;
     private final ChatToolCallHtmlService chatToolCallHtmlService;
     private final LifecycleHookService lifecycleHookService;
+    private final HttpAuthProperties httpAuthProperties;
     private final String appVersion;
 
     private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
@@ -103,6 +106,7 @@ public class UiController {
                         CommandStreamService commandStreamService,
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
                         ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
+                        HttpAuthProperties httpAuthProperties,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -122,7 +126,23 @@ public class UiController {
         this.chatPresentationService = chatPresentationService;
         this.chatToolCallHtmlService = chatToolCallHtmlService;
         this.lifecycleHookService = lifecycleHookService;
+        this.httpAuthProperties = httpAuthProperties == null ? new HttpAuthProperties() : httpAuthProperties;
         this.appVersion = appVersion;
+    }
+
+    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+                        ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
+                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+                        ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
+                        CommandStreamService commandStreamService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                        ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
+                        LifecycleHookService lifecycleHookService, String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
+                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, tokenUsageService, commandStreamService, mcpRuntimeManager,
+                chatPresentationService, chatToolCallHtmlService, lifecycleHookService, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -137,7 +157,7 @@ public class UiController {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
                 openAiOAuthService, contextCompactionService, null, commandStreamService, null, chatPresentationService,
-                chatToolCallHtmlService, null, appVersion);
+                chatToolCallHtmlService, null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -152,7 +172,7 @@ public class UiController {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
                 openAiOAuthService, contextCompactionService, null, commandStreamService, null, chatPresentationService,
-                chatToolCallHtmlService, lifecycleHookService, appVersion);
+                chatToolCallHtmlService, lifecycleHookService, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -167,7 +187,7 @@ public class UiController {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
                 openAiOAuthService, contextCompactionService, null, commandStreamService, mcpRuntimeManager,
-                chatPresentationService, chatToolCallHtmlService, null, appVersion);
+                chatPresentationService, chatToolCallHtmlService, null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -179,7 +199,7 @@ public class UiController {
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, null, new ChatPresentationService(), null, null, appVersion);
+                openAiOAuthService, contextCompactionService, null, commandStreamService, null, new ChatPresentationService(), null, null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -190,7 +210,7 @@ public class UiController {
                         String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, null, new ChatPresentationService(), null, null, appVersion);
+                openAiOAuthService, contextCompactionService, null, commandStreamService, null, new ChatPresentationService(), null, null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -203,7 +223,7 @@ public class UiController {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
                 openAiOAuthService, contextCompactionService, tokenUsageService, commandStreamService, mcpRuntimeManager,
-                new ChatPresentationService(), null, null, appVersion);
+                new ChatPresentationService(), null, null, null, appVersion);
     }
 
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -214,7 +234,7 @@ public class UiController {
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, String appVersion) {
         this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
                 workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, mcpRuntimeManager, new ChatPresentationService(), null, null, appVersion);
+                openAiOAuthService, contextCompactionService, null, commandStreamService, mcpRuntimeManager, new ChatPresentationService(), null, null, null, appVersion);
     }
 
     @GetMapping("/")
@@ -816,11 +836,20 @@ public class UiController {
         return "fragments/projects :: shellUpdates";
     }
 
-    @GetMapping("/ui/system-balloons/stream")
     public SseEmitter systemBalloonStream(@RequestParam(value = "shellId", required = false) String shellId) {
+        return systemBalloonStream(shellId, null);
+    }
+
+    @GetMapping("/ui/system-balloons/stream")
+    public SseEmitter systemBalloonStream(@RequestParam(value = "shellId", required = false) String shellId,
+                                           HttpServletRequest request) {
         SseEmitter emitter = systemBalloonService.connect();
         if (systemBalloonService.markShellInitialized(shellId)) {
             sendInitialMcpFailureBalloons(emitter);
+            if (httpAuthProperties.enabled() && request != null && !PublicRequestScheme.isHttps(request)) {
+                systemBalloonService.publishWarning(emitter, "Use HTTPS",
+                        "Jupiter HTTP Basic authentication is enabled, but this connection is not using HTTPS. Configure HTTPS at the public proxy.");
+            }
         }
         return emitter;
     }
