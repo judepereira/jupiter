@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
@@ -30,6 +31,10 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayDeque;
+import java.util.Queue;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -125,8 +130,20 @@ public class UiControllerSettingsTests {
                 new GitAutoUpdateService.UpdateResult(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE, "abc", "abc", null, false));
 
         ConcurrentModel model = new ConcurrentModel();
-        assertThat(context.controller().pullActiveWorkspace(model)).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(context.controller().pullActiveWorkspace(model)).isEqualTo("fragments/projects :: gitPullControl");
+        assertThat(model.getAttribute("gitPullBusy")).isEqualTo(true);
+        assertThat(model.getAttribute("workspaceId")).isEqualTo(workspaceId);
+        assertThat(context.executor().size()).isEqualTo(1);
+
+        ConcurrentModel duplicateModel = new ConcurrentModel();
+        context.controller().pullActiveWorkspace(duplicateModel);
+        assertThat(context.executor().size()).isEqualTo(1);
+        context.executor().runNext();
         verify(context.gitAutoUpdateService()).updateWorkspaceManually(workspaceId);
+
+        ConcurrentModel status = new ConcurrentModel();
+        assertThat(context.controller().gitPullStatus(workspaceId, status)).isEqualTo("fragments/projects :: gitPullControl");
+        assertThat(status.getAttribute("gitPullBusy")).isEqualTo(false);
     }
 
     @Test
@@ -274,12 +291,16 @@ public class UiControllerSettingsTests {
         TestAppStateSupport.AppStateTestContext appStateContext = TestAppStateSupport.appStateContext(event -> {});
         AppStateService appStateService = appStateContext.service();
         TokenUsageService tokenUsageService = new TokenUsageService(appStateContext.repository(), new ObjectMapper());
+        QueuedExecutor executor = new QueuedExecutor();
+        ManualGitPullCoordinator coordinator = new ManualGitPullCoordinator(appStateService, gitAutoUpdateService,
+                new SystemBalloonService(new ObjectMapper()), executor);
 
         return new TestContext(appStateService,
                 tokenUsageService,
                 openAiOAuthService,
                 mcpRuntimeManager,
                 gitAutoUpdateService,
+                executor,
                 new UiController(mock(CodingAgentHarness.class), properties, appStateService,
                         new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
                         ModelCatalogTestSupport.modelCatalogService(),
@@ -292,9 +313,23 @@ public class UiControllerSettingsTests {
                         tokenUsageService,
                         mock(CommandStreamService.class),
                         mcpRuntimeManager,
-                        gitAutoUpdateService, "test"));
+                        gitAutoUpdateService, coordinator, "test"));
     }
 
-    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, UiController controller) {
+    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor, UiController controller) {
+    }
+
+    private static final class QueuedExecutor extends AbstractExecutorService {
+        private final Queue<Runnable> tasks = new ArrayDeque<>();
+        private boolean shutdown;
+
+        @Override public void execute(Runnable command) { if (shutdown) throw new IllegalStateException("shutdown"); tasks.add(command); }
+        @Override public void shutdown() { shutdown = true; }
+        @Override public List<Runnable> shutdownNow() { shutdown = true; List<Runnable> result = List.copyOf(tasks); tasks.clear(); return result; }
+        @Override public boolean isShutdown() { return shutdown; }
+        @Override public boolean isTerminated() { return shutdown && tasks.isEmpty(); }
+        @Override public boolean awaitTermination(long timeout, TimeUnit unit) { return isTerminated(); }
+        int size() { return tasks.size(); }
+        void runNext() { tasks.remove().run(); }
     }
 }

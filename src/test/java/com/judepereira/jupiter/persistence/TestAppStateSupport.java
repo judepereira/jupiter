@@ -14,6 +14,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.terminal.TerminalHandle;
@@ -139,7 +140,7 @@ public final class TestAppStateSupport {
                 mock(CommandStreamService.class),
                 mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
                 new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
-                lifecycleHookService, mock(GitAutoUpdateService.class), "0.0.1-SNAPSHOT");
+                lifecycleHookService, mock(GitAutoUpdateService.class), ManualGitPullCoordinator.noOp(), "0.0.1-SNAPSHOT");
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {
