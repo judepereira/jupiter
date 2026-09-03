@@ -7,6 +7,7 @@
             <th:block th:replace="~{fragments/chat-tool-calls :: toolCalls(message=${m}, fullMode=${fullMode})}"></th:block>
         </th:block>
 
+        <span class="chat-message-info-label" th:if="${m.role == 'info'}"><i class="bi bi-info-circle" aria-hidden="true"></i><span>Background update</span></span>
         <span class="chat-message-text" th:text="${m.text}"></span>
 
         <div class="chat-message-subtitle" th:if="${m.role == 'assistant' and (m.metadata != null or m.completedTs != null)}"

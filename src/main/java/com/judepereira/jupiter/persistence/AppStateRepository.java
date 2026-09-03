@@ -35,6 +35,68 @@ public class AppStateRepository {
         ));
     }
 
+    boolean loadAutoGitUpdateEnabled() {
+        Boolean enabled = jdbc.queryForObject("SELECT auto_git_update FROM app_state WHERE id = 1", new MapSqlParameterSource(), Boolean.class);
+        return Boolean.TRUE.equals(enabled);
+    }
+
+    void updateAutoGitUpdateEnabled(boolean enabled) {
+        jdbc.update("UPDATE app_state SET auto_git_update = :enabled WHERE id = 1",
+                new MapSqlParameterSource("enabled", enabled));
+    }
+
+    Optional<WorkspaceAutoGitUpdateStateRow> findWorkspaceAutoGitUpdateState(long workspaceId) {
+        return queryOne("SELECT workspace_id, failure_episode_active, failure_started_at, last_success_at "
+                        + "FROM workspace_auto_git_update_state WHERE workspace_id = :workspaceId",
+                new MapSqlParameterSource("workspaceId", workspaceId), (rs, rowNum) -> new WorkspaceAutoGitUpdateStateRow(
+                        rs.getLong("workspace_id"), rs.getBoolean("failure_episode_active"),
+                        timestampToInstant(rs.getTimestamp("failure_started_at")), timestampToInstant(rs.getTimestamp("last_success_at"))));
+    }
+
+    boolean markWorkspaceAutoGitUpdateFailure(long workspaceId, Instant failedAt) {
+        int updated = jdbc.update("""
+                INSERT INTO workspace_auto_git_update_state (workspace_id, failure_episode_active, failure_started_at, last_success_at)
+                VALUES (:workspaceId, TRUE, :failedAt, NULL)
+                ON CONFLICT (workspace_id) DO UPDATE SET
+                    failure_episode_active = TRUE,
+                    failure_started_at = :failedAt
+                WHERE failure_episode_active = FALSE
+                """, new MapSqlParameterSource()
+                .addValue("workspaceId", workspaceId).addValue("failedAt", Timestamp.from(failedAt)));
+        return updated == 1;
+    }
+
+    boolean claimWorkspaceAutoGitUpdateFailureNotification(long workspaceId, long sessionId, Instant failedAt) {
+        int inserted = jdbc.update("""
+                INSERT INTO workspace_auto_git_update_failure_notifications (workspace_id, session_id, delivered_at)
+                SELECT :workspaceId, :sessionId, :deliveredAt
+                WHERE EXISTS (
+                    SELECT 1 FROM sessions
+                    WHERE id = :sessionId AND workspace_id = :workspaceId AND hidden = FALSE AND parent_session_id IS NULL
+                )
+                ON CONFLICT (workspace_id, session_id) DO NOTHING
+                """, new MapSqlParameterSource()
+                .addValue("workspaceId", workspaceId)
+                .addValue("sessionId", sessionId)
+                .addValue("deliveredAt", Timestamp.from(failedAt)));
+        return inserted == 1;
+    }
+
+    void resetWorkspaceAutoGitUpdateFailure(long workspaceId, Instant succeededAt) {
+        jdbc.update("DELETE FROM workspace_auto_git_update_failure_notifications WHERE workspace_id = :workspaceId",
+                new MapSqlParameterSource("workspaceId", workspaceId));
+        jdbc.update("""
+                INSERT INTO workspace_auto_git_update_state (workspace_id, failure_episode_active, failure_started_at, last_success_at)
+                VALUES (:workspaceId, FALSE, NULL, :succeededAt)
+                ON CONFLICT (workspace_id) DO UPDATE SET
+                    failure_episode_active = FALSE,
+                    failure_started_at = NULL,
+                    last_success_at = :succeededAt
+                """, new MapSqlParameterSource()
+                .addValue("workspaceId", workspaceId).addValue("succeededAt", Timestamp.from(succeededAt)));
+    }
+
+
     AppStateLifecycleHookSettingsRow loadLifecycleHookSettings() {
         return jdbc.queryForObject("""
                 SELECT assistant_completed_hook_script, assistant_errored_hook_script,
@@ -406,7 +468,7 @@ public class AppStateRepository {
 
     WorkspaceRow findWorkspace(long workspaceId) {
         return queryRequired("""
-                SELECT w.*, 
+                SELECT w.*,
                        EXISTS(
                            SELECT 1
                            FROM sessions s
@@ -421,6 +483,27 @@ public class AppStateRepository {
                 FROM workspaces w
                 WHERE w.id = :id
                 """, new MapSqlParameterSource("id", workspaceId), this::mapWorkspace, "workspace " + workspaceId);
+    }
+
+    List<WorkspaceRow> listAutoGitUpdateWorkspaces() {
+        return jdbc.query("""
+                SELECT w.*,
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND s.unread = TRUE
+                       ) AS unread,
+                       EXISTS(
+                           SELECT 1
+                           FROM sessions s
+                           JOIN conversation_messages m ON m.session_id = s.id
+                           WHERE s.workspace_id = w.id AND s.hidden = FALSE AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
+                       ) AS in_progress
+                FROM workspaces w
+                JOIN projects p ON p.id = w.project_id
+                WHERE p.closed_at IS NULL
+                ORDER BY p.display_order ASC, w.position ASC
+                """, new MapSqlParameterSource(), this::mapWorkspace);
     }
 
     List<WorkspaceRow> listWorkspacesByProject(long projectId) {
@@ -471,7 +554,7 @@ public class AppStateRepository {
     }
 
     long insertWorkspace(long projectId, String name, String normalizedPath, long position, Instant now) {
-        return insertAndReturnId("""
+        long workspaceId = insertAndReturnId("""
                 INSERT INTO workspaces (project_id, name, normalized_path, position, created_at, last_opened_at)
                 VALUES (:projectId, :name, :normalizedPath, :position, :createdAt, :lastOpenedAt)
                 """, params -> params
@@ -481,6 +564,9 @@ public class AppStateRepository {
                 .addValue("position", position)
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("lastOpenedAt", Timestamp.from(now)));
+        jdbc.update("INSERT INTO workspace_auto_git_update_state (workspace_id) VALUES (:workspaceId)",
+                new MapSqlParameterSource("workspaceId", workspaceId));
+        return workspaceId;
     }
 
     long nextSessionPosition(long workspaceId) {
@@ -658,6 +744,25 @@ public class AppStateRepository {
                 ORDER BY s.position DESC
                 LIMIT 1
                 """, new MapSqlParameterSource().addValue("workspaceId", workspaceId).addValue("position", position), this::mapSession).orElse(null);
+    }
+
+    Optional<SessionRow> findMostRecentlyOpenedVisiblePrimarySession(long workspaceId) {
+        return queryOne("""
+                SELECT s.*,
+                       EXISTS(
+                           SELECT 1
+                           FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE
+                             AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2
+                                               WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE)
+                             AND m.pending = TRUE
+                       ) AS in_progress
+                FROM sessions s
+                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND s.parent_session_id IS NULL
+                ORDER BY CASE WHEN s.last_opened_at IS NULL THEN 1 ELSE 0 END,
+                         s.last_opened_at DESC, s.position ASC
+                LIMIT 1
+                """, new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
     }
 
     SessionRow findSessionToActivate(long workspaceId) {
@@ -1181,6 +1286,8 @@ public class AppStateRepository {
     record AppStateRow(Long activeProjectId, Long activeWorkspaceId, Long activeSessionId) {}
     record AppStateLifecycleHookSettingsRow(String assistantCompletedScript, String assistantErroredScript,
                                              String subagentCompletedScript, Integer timeoutSeconds) {}
+    record WorkspaceAutoGitUpdateStateRow(long workspaceId, boolean failureEpisodeActive, Instant failureStartedAt,
+                                          Instant lastSuccessAt) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
     record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt, List<Long> exposedProjectIds) {}

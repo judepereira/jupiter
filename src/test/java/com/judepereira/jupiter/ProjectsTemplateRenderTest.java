@@ -112,6 +112,8 @@ public class ProjectsTemplateRenderTest {
         ))));
         context.setVariable("visibleProjects", List.of(new Project(1L, "Alpha", "/repo", ""), new Project(2L, "Beta", "/repo-b", "")));
         context.setVariable("lifecycleHookSettings", new LifecycleHookSettings("echo <done>\nline 2", "echo error", "echo subagent", 45));
+        context.setVariable("autoGitUpdateEnabled", true);
+        context.setVariable("reviewPanelOpen", false);
         context.setVariable("mcpServers", List.of(new com.judepereira.jupiter.persistence.Persistence.McpServerView(9L, "Local MCP", "http://localhost:3000/mcp", true,
                 List.of(new com.judepereira.jupiter.persistence.Persistence.McpServerHeader("Authorization", "Bearer token")), List.of(1L))));
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", "", List.of(
@@ -142,6 +144,7 @@ public class ProjectsTemplateRenderTest {
         assertThat(html).contains(
                 "class=\"nav nav-pills flex-md-column settings-nav\"",
                 "id=\"settings-current-project\"",
+                "id=\"settings-application\"",
                 "id=\"settings-mcp-servers\"",
                 "id=\"settings-model-providers\"",
                 "id=\"settings-usage\"",
