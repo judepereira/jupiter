@@ -155,6 +155,23 @@ public class ChatTemplateRenderTest {
     }
 
     @Test
+    public void chatRowsFragmentRendersInfoMessagesAsBackgroundUpdates() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext context = webContext();
+        context.setVariable("messages", List.of(
+                new ChatPresentationService.ChatMessage("info", "Git updated workspace", 1L, false, "info-1", 1L, List.of(), null)
+        ));
+        context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
+        context.setVariable("subagentView", false);
+
+        String html = engine.process("fragments/chat-rows", context);
+
+        assertThat(html).contains("data-role=\"info\"", "Background update", "Git updated workspace", "bi-info-circle");
+        assertThat(html).doesNotContain("data-stream-url", "chat-message-subtitle");
+    }
+
+    @Test
     public void chatRowsFragmentRendersToolCallsAboveAssistantTextAndSubtitleBelow() {
         SpringTemplateEngine engine = engine();
 

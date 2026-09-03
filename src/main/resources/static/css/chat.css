@@ -27,6 +27,35 @@
     align-self: end;
 }
 
+#chat-messages-list > li[data-role="info"] {
+    align-self: center;
+    width: min(100%, 720px);
+    padding: 9px 14px;
+    border: 1px solid #c8d9f3;
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    background: linear-gradient(90deg, #f1f6ff, #f8fbff);
+    color: #334a70;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 8px rgba(33, 76, 140, 0.06);
+}
+
+.chat-message-info-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 3px;
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+#chat-messages-list > li[data-role="info"] .chat-message-text {
+    display: block;
+}
+
 #chat-messages-list p:last-child {
     margin-bottom: 0;
 }

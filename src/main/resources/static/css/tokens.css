@@ -2,6 +2,10 @@
     --rail-width: 290px;
     --topbar-height: 42px;
     --bottom-nav-height: 42px;
+    --system-balloon-gap: 12px;
+    --system-balloon-entry-offset: 8px;
+    --system-balloon-top-reservation: calc(var(--topbar-height) + env(safe-area-inset-top, 0px) + var(--system-balloon-gap) + var(--system-balloon-entry-offset));
+    --system-balloon-bottom-reservation: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + var(--system-balloon-gap));
     /* width of the review panel (can be overridden by JS during drag) */
     --review-width: 40%;
     --terminal-panel-height: 320px;

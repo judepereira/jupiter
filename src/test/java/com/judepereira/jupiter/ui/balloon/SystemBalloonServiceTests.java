@@ -4,15 +4,42 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.lang.reflect.Field;
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 class SystemBalloonServiceTests {
+
+    @Test
+    void connectSendsCommentHandshakeWithoutPublishingBalloon() {
+        TestEmitter emitter = new TestEmitter();
+        SystemBalloonService service = new SystemBalloonService(new ObjectMapper(), () -> emitter);
+
+        service.connect();
+
+        assertThat(emitter.sentEvent).isNotNull();
+        assertThat(emitter.sentEvent.build()).singleElement()
+                .satisfies(data -> assertThat(data.getData()).isEqualTo(":connected\n\n"));
+        assertThat(service.publishedBalloons()).isEmpty();
+        assertThat(service.activeEmitterCount()).isEqualTo(1);
+    }
+
+    @Test
+    void failedConnectHandshakeDisconnectsAndCompletesWithError() {
+        IOException failure = new IOException("client disconnected");
+        AtomicReference<Throwable> completionError = new AtomicReference<>();
+        TestEmitter emitter = new TestEmitter(failure, completionError);
+        SystemBalloonService service = new SystemBalloonService(new ObjectMapper(), () -> emitter);
+
+        service.connect();
+
+        assertThat(service.activeEmitterCount()).isZero();
+        assertThat(completionError).hasValue(failure);
+    }
 
     @Test
     void publishRecordsBalloonWithoutConnectedClients() {
@@ -34,33 +61,63 @@ class SystemBalloonServiceTests {
 
     @Test
     void closeContextCompletesAndRemovesActiveEmitters() {
-        SystemBalloonService service = new SystemBalloonService(new ObjectMapper());
-        SseEmitter emitter = service.connect();
+        TestEmitter emitter = new TestEmitter();
+        SystemBalloonService service = new SystemBalloonService(new ObjectMapper(), () -> emitter);
+        service.connect();
 
         service.onContextClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
 
         assertThat(service.activeEmitterCount()).isZero();
-        assertThat(isCompleted(emitter)).isTrue();
+        assertThat(emitter.completed).isTrue();
     }
 
     @Test
     void connectAfterShutdownReturnsCompletedUntrackedEmitter() {
-        SystemBalloonService service = new SystemBalloonService(new ObjectMapper());
+        TestEmitter emitter = new TestEmitter();
+        SystemBalloonService service = new SystemBalloonService(new ObjectMapper(), () -> emitter);
 
         service.onContextClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
-        SseEmitter emitter = service.connect();
+        SseEmitter connected = service.connect();
 
+        assertThat(connected).isSameAs(emitter);
         assertThat(service.activeEmitterCount()).isZero();
-        assertThat(isCompleted(emitter)).isTrue();
+        assertThat(emitter.completed).isTrue();
     }
 
-    private static boolean isCompleted(ResponseBodyEmitter emitter) {
-        try {
-            Field completeField = ResponseBodyEmitter.class.getDeclaredField("complete");
-            completeField.setAccessible(true);
-            return completeField.getBoolean(emitter);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(e);
+    private static final class TestEmitter extends SseEmitter {
+        private final IOException sendFailure;
+        private final AtomicReference<Throwable> completionError;
+        private volatile SseEventBuilder sentEvent;
+        private volatile boolean completed;
+
+        private TestEmitter() {
+            this(null, new AtomicReference<>());
+        }
+
+        private TestEmitter(IOException sendFailure, AtomicReference<Throwable> completionError) {
+            this.sendFailure = sendFailure;
+            this.completionError = completionError;
+        }
+
+        @Override
+        public void send(SseEmitter.SseEventBuilder builder) throws IOException {
+            if (sendFailure != null) {
+                throw sendFailure;
+            }
+            sentEvent = builder;
+        }
+
+        @Override
+        public void complete() {
+            completed = true;
+            super.complete();
+        }
+
+        @Override
+        public void completeWithError(Throwable ex) {
+            completed = true;
+            completionError.set(ex);
+            super.completeWithError(ex);
         }
     }
 }

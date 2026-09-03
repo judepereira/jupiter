@@ -13,6 +13,7 @@ import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.terminal.TerminalHandle;
@@ -26,6 +27,7 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import org.flywaydb.core.Flyway;
+
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.thymeleaf.spring6.SpringTemplateEngine;
@@ -82,10 +84,12 @@ public final class TestAppStateSupport {
 
         AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource));
         AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher, activeStreamRegistryService);
-        return new AppStateTestContext(service, repository, activeStreamRegistryService);
+        return new AppStateTestContext(service, repository, activeStreamRegistryService, dataSource);
     }
 
-    public record AppStateTestContext(AppStateService service, AppStateRepository repository, ActiveStreamRegistryService activeStreamRegistryService) {}
+    public record AppStateTestContext(AppStateService service, AppStateRepository repository,
+                                      ActiveStreamRegistryService activeStreamRegistryService,
+                                      javax.sql.DataSource dataSource) {}
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
         return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService(), null);
@@ -131,10 +135,11 @@ public final class TestAppStateSupport {
                 new TerminalStateService(),
                 new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
                 contextCompactionService(appStateService),
+                new TokenUsageService(context.repository(), new ObjectMapper()),
                 mock(CommandStreamService.class),
                 mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
                 new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
-                lifecycleHookService, "0.0.1-SNAPSHOT");
+                lifecycleHookService, mock(GitAutoUpdateService.class), "0.0.1-SNAPSHOT");
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {

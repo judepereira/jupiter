@@ -1,5 +1,5 @@
 <!doctype html>
-<th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, reviewPanelOpen=${reviewPanelOpen ?: false}">
+<th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, reviewPanelOpen=${reviewPanelOpen ?: false}">
     <header id="top-bar" class="top-bar" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
         <button type="button"
                 class="app-switcher"
@@ -40,6 +40,16 @@
         </nav>
 
         <div class="top-bar-actions">
+            <button type="button"
+                    class="rail-btn topbar-rail-btn topbar-git-pull-btn"
+                    aria-label="Pull latest changes"
+                    title="Pull latest changes"
+                    th:disabled="${activeWorkspaceView == null}"
+                    hx-post="/ui/workspaces/active/git/pull"
+                    hx-target="#shell"
+                    hx-swap="none">
+                <i class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
+            </button>
             <button type="button"
                     class="rail-btn topbar-rail-btn"
                     aria-label="Settings"
@@ -188,6 +198,26 @@
     <div id="modal-root" hx-swap-oob="innerHTML"></div>
 </th:block>
 
+<th:block th:fragment="usageEmpty">
+    <section class="settings-section"><h5>Usage</h5><p class="text-muted">No active project is selected.</p></section>
+</th:block>
+
+<th:block th:fragment="settingsUsage">
+    <section class="settings-section settings-usage" data-settings-usage-chart th:attr="data-range=${usageRange}">
+        <div class="settings-section-header"><div><h5>Usage</h5><p class="settings-usage-note">Reported token metrics, hourly, UTC</p></div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Usage range">
+                <button th:each="option : ${ {'24h','7d','30d','60d'} }" type="button" class="btn btn-outline-primary" th:classappend="${usageRange == option ? ' active' : ''}" th:text="${option}" th:attr="data-usage-range=${option}"></button>
+            </div>
+        </div>
+        <div class="settings-usage-summary" aria-live="polite">
+            <span><strong data-usage-requests aria-label="Reported requests">0</strong> requests</span><span><strong data-usage-total aria-label="Unavailable">&mdash;</strong> reported total tokens</span><span><strong data-usage-input aria-label="Unavailable">&mdash;</strong> reported input tokens</span><span><strong data-usage-output aria-label="Unavailable">&mdash;</strong> reported output tokens</span>
+        </div>
+        <div class="settings-usage-empty" data-usage-empty hidden>No token usage in this range.</div>
+        <div class="settings-usage-canvas-wrap"><canvas data-usage-canvas aria-label="Token usage by hour and model"></canvas></div>
+        <div data-usage-data hidden th:attr="data-usage-data=${usageJson}"></div>
+    </section>
+</th:block>
+
 <th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
     <div id="settings-modal" class="project-modal settings-modal">
         <div class="project-modal-backdrop"
@@ -205,9 +235,11 @@
                 <div class="col-12 col-md-3">
                     <nav class="nav nav-pills flex-md-column settings-nav" aria-label="Settings tabs" role="tablist">
                         <button th:if="${activeProject != null}" class="nav-link active" id="settings-current-project-tab" data-bs-toggle="pill" data-bs-target="#settings-current-project" type="button" role="tab" aria-controls="settings-current-project" aria-selected="true">Current Project</button>
+                        <button class="nav-link" id="settings-application-tab" data-bs-toggle="pill" data-bs-target="#settings-application" type="button" role="tab" aria-controls="settings-application" aria-selected="false">Application</button>
                         <button class="nav-link" id="settings-mcp-servers-tab" data-bs-toggle="pill" data-bs-target="#settings-mcp-servers" type="button" role="tab" aria-controls="settings-mcp-servers" aria-selected="false">MCP Servers</button>
                         <button class="nav-link" id="settings-hooks-tab" data-bs-toggle="pill" data-bs-target="#settings-hooks" type="button" role="tab" aria-controls="settings-hooks" th:attr="aria-selected=${activeProject == null ? 'true' : 'false'}" th:classappend="${activeProject == null ? ' active' : ''}">Hooks</button>
                         <button class="nav-link" id="settings-model-providers-tab" data-bs-toggle="pill" data-bs-target="#settings-model-providers" type="button" role="tab" aria-controls="settings-model-providers" aria-selected="false">Model Providers</button>
+                        <button class="nav-link" id="settings-usage-tab" data-bs-toggle="pill" data-bs-target="#settings-usage" type="button" role="tab" aria-controls="settings-usage" aria-selected="false" data-settings-usage-tab>Usage</button>
                         <button class="nav-link" id="settings-help-tab" data-bs-toggle="pill" data-bs-target="#settings-help" type="button" role="tab" aria-controls="settings-help" aria-selected="false">Help</button>
                     </nav>
                 </div>
@@ -288,6 +320,29 @@
                         </div>
                                     </section>
                             </form>
+                        </div>
+
+                        <div class="tab-pane fade" id="settings-application" role="tabpanel" aria-labelledby="settings-application-tab" tabindex="0">
+                            <form class="settings-form" hx-post="/ui/settings/auto-git-update/apply" hx-target="#modal-root" hx-swap="innerHTML">
+                                <section class="settings-section settings-app-section">
+                                    <h5>Git updates</h5>
+                                    <label class="settings-toggle">
+                                        <input type="checkbox" name="enabled" value="true" th:checked="${autoGitUpdateEnabled}">
+                                        <span>Automatically pull Git updates</span>
+                                    </label>
+                                    <p class="settings-help-text">When enabled, Jupiter checks Git workspaces periodically. Manual pulls remain available from the top navigation.</p>
+                                    <div class="project-form-actions">
+                                        <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                                        <button type="submit" class="btn btn-primary">Save Git settings</button>
+                                    </div>
+                                </section>
+                            </form>
+                        </div>
+
+                        <div class="tab-pane fade" id="settings-usage" role="tabpanel" aria-labelledby="settings-usage-tab" tabindex="0">
+                            <div data-settings-usage-container hx-get="/ui/settings/usage?range=24h" hx-trigger="settings-usage-load" hx-target="this" hx-swap="innerHTML">
+                                <section class="settings-section"><h5>Usage</h5><p class="text-muted">Select Usage to load token activity for this project.</p></section>
+                            </div>
                         </div>
 
                         <div class="tab-pane fade" id="settings-mcp-servers" role="tabpanel" aria-labelledby="settings-mcp-servers-tab" tabindex="0">

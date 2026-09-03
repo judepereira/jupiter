@@ -33,16 +33,114 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 public class AppStateServicePersistenceTests {
+
+    @Test
+    public void autoGitUpdateDefaultsOnAndCanBeUpdated() {
+        AppStateService service = TestAppStateSupport.appStateService();
+
+        assertThat(service.loadAutoGitUpdateEnabled()).isTrue();
+        assertThat(service.loadViewData().autoGitUpdateEnabled()).isTrue();
+
+        service.updateAutoGitUpdateEnabled(false);
+
+        assertThat(service.loadAutoGitUpdateEnabled()).isFalse();
+        assertThat(service.loadViewData().autoGitUpdateEnabled()).isFalse();
+    }
+
+    @Test
+    public void workspaceAutoGitUpdateFailureNotificationIsOncePerSessionAndResetOnSuccess(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long workspaceId = service.loadViewData().activeWorkspace().id();
+
+        long firstSessionId = service.loadViewData().activeSession().id();
+        long secondSessionId = service.createSession(workspaceId, "Other").id();
+
+        assertThat(service.loadWorkspaceAutoGitUpdateFailureState(workspaceId).failureEpisodeActive()).isFalse();
+        assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isTrue();
+        assertThat(service.loadSessionDetail(secondSessionId).chatMessages()).extracting(ChatMessageView::text).contains("failure");
+        assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isFalse();
+        service.activateSession(firstSessionId);
+        assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isTrue();
+        assertThat(service.loadSessionDetail(firstSessionId).chatMessages()).extracting(ChatMessageView::text).contains("failure");
+        assertThat(service.loadWorkspaceAutoGitUpdateFailureState(workspaceId).failureEpisodeActive()).isTrue();
+
+        service.resetWorkspaceAutoGitUpdateFailure(workspaceId);
+        assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isTrue();
+    }
+
+    @Test
+    public void failureNotificationAppendRollsBackFailureClaimAndMessage(@TempDir Path projectPath) {
+        AtomicBoolean failEventPublication = new AtomicBoolean(true);
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+            if (failEventPublication.get()) {
+                throw new IllegalStateException("event publication failed");
+            }
+        });
+        AppStateService service = context.service();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long workspaceId = service.loadViewData().activeWorkspace().id();
+        long sessionId = service.loadViewData().activeSession().id();
+        TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(context.dataSource()));
+
+        assertThatThrownBy(() -> transaction.execute(status -> {
+            service.appendAutoGitUpdateFailureMessage(workspaceId, "failure");
+            return null;
+        })).isInstanceOf(IllegalStateException.class).hasMessage("event publication failed");
+        assertThat(service.loadWorkspaceAutoGitUpdateFailureState(workspaceId).failureEpisodeActive()).isFalse();
+        assertThat(service.loadSessionDetail(sessionId).chatMessages()).extracting(ChatMessageView::text).doesNotContain("failure");
+
+        failEventPublication.set(false);
+        assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isTrue();
+        assertThat(service.loadSessionDetail(sessionId).chatMessages()).extracting(ChatMessageView::text).contains("failure");
+    }
+
+    @Test
+    public void infoMessagesAreVisibleButExcludedFromModelHistory(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+
+        ChatMessageView message = service.appendInfoMessage(sessionId, "Updated in background");
+
+        assertThat(message.role()).isEqualTo("info");
+        assertThat(service.loadSessionDetail(sessionId).chatMessages()).extracting(ChatMessageView::text)
+                .contains("Updated in background");
+        assertThat(service.buildConversationHistory(sessionId)).extracting(Message::getContent)
+                .doesNotContain("Updated in background");
+        assertThat(service.listConversationMessages(sessionId)).anyMatch(row -> row.publicId().equals(message.id())
+                && row.showInChat() && !row.includeInModel());
+    }
+
+    @Test
+    public void selectsMostRecentlyOpenedVisiblePrimarySessionWithoutActivating(@TempDir Path projectPath) {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long workspaceId = service.loadViewData().activeWorkspace().id();
+        long activeSessionId = service.loadViewData().activeSession().id();
+        long otherSessionId = service.createSession(workspaceId, "Other").id();
+        service.activateSession(activeSessionId);
+
+        assertThat(service.findMostRecentlyOpenedVisiblePrimarySession(workspaceId)).get()
+                .extracting(SessionView::id).isEqualTo(activeSessionId);
+        assertThat(service.loadViewData().activeSession().id()).isEqualTo(activeSessionId);
+        assertThat(otherSessionId).isNotEqualTo(activeSessionId);
+    }
 
     @Test
     public void lifecycleHookSettingsDefaultAndRoundTrip() {
