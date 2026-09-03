@@ -112,9 +112,6 @@ public final class Persistence {
     public record ChatMessageView(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
     }
 
-    public record InfoMessageAppendedEvent(long sessionId, ChatMessageView message) {
-    }
-
     public record ChangedFileView(String key, ReviewSource source, Integer id, String path, String diff) {
     }
 

@@ -769,7 +769,7 @@ public class AppStateService {
         repository.insertConversationMessage(sessionId, id, "info", turnId, sequence, content, null, null, true, false, false,
                 null, null, null, null, null, now, now);
         ChatMessageView message = toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
-        applicationEventPublisher.publishEvent(new Persistence.InfoMessageAppendedEvent(sessionId, message));
+        applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
         markUnreadIfInactive(sessionId);
         return message;
     }
