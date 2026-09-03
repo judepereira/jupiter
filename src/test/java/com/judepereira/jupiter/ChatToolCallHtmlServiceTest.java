@@ -34,7 +34,7 @@ class ChatToolCallHtmlServiceTest {
         appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(
                 new ToolCallTraceInput("read-1", "read_file", Map.of("path", "a.txt"), true, "contents", Map.of())));
 
-        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new ChatPresentationService(), appStateService);
+        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> htmlService.lazyGroup(turn.assistantMessage().id(), "other-call"))
                 .isInstanceOf(IllegalStateException.class)
@@ -52,7 +52,7 @@ class ChatToolCallHtmlServiceTest {
         appStateService.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
         appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
 
-        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new ChatPresentationService(), appStateService);
+        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService);
         String html = htmlService.lazyGroup(turn.assistantMessage().id(), "task-1");
 
         assertThat(html).contains("<details", "open", "full request", "full &lt;output&gt;", "View Session", "hx-get=\"/ui/chat/subagent/42\"");
@@ -78,7 +78,7 @@ class ChatToolCallHtmlServiceTest {
                 "openai/gpt-5.5", ThinkingLevel.LOW, null, true, true, java.util.List.of());
         appStateService.createHiddenSubagentSession(sessionId, "task-1", subagent);
 
-        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new ChatPresentationService(), appStateService);
+        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService);
         DomPatch started = htmlService.subagentStarted(sessionId, turn.assistantMessage().id(), "task-1").getFirst();
 
         assertThat(started.swapMode()).isEqualTo("outerHTML");

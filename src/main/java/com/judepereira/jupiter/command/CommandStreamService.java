@@ -50,8 +50,16 @@ public class CommandStreamService {
     }
 
     public void queue(long sessionId, String assistantId, String commandId, String workspaceRoot, Map<String, String> environmentVariables) {
-        activeStreams.put(assistantId, new ActiveCommandStream(new PendingCommand(sessionId, assistantId, commandId, workspaceRoot,
-                environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables))));
+        activeStreams.put(assistantId, new ActiveCommandStream(
+                new PendingCommand(sessionId, assistantId, commandId, workspaceRoot,
+                        environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables)),
+                new CopyOnWriteArrayList<>(),
+                new AtomicBoolean(false),
+                new AtomicBoolean(false),
+                new AtomicBoolean(false),
+                new AtomicReference<>(),
+                new CancellationToken(),
+                new AtomicReference<>(new StringBuilder())));
         activeStreamRegistryService.register(assistantId, sessionId, workspaceRoot);
         appStateService.publishWorkspaceRailRefresh();
     }

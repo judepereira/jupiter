@@ -944,7 +944,7 @@ public class AppStateService {
             stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr);
+                throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr, null);
             }
         } catch (Exception e) {
             if (e instanceof GitWorktreeException gitWorktreeException) {
@@ -1242,7 +1242,7 @@ public class AppStateService {
             }
             ToolCallView syntheticToolCall = new ToolCallView(parentToolCallId, "task", true, null, null, false, false,
                     childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running",
-                    taskRequestSummary(parentSessionId, parentToolCallId));
+                    null, null, null, null, taskRequestSummary(parentSessionId, parentToolCallId));
             Long parentAssistantMessageId = childSession.parentAssistantMessageId();
             if (parentAssistantMessageId != null) {
                 Integer messageIndex = pendingAssistantIndexByMessageId.get(parentAssistantMessageId);
@@ -1356,7 +1356,7 @@ public class AppStateService {
         boolean success = Boolean.TRUE.equals(trace.success());
         String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
         return new ToolCallView(toolCallId, trace.toolName(), success, null, null, false, false,
-                null, null, null, status);
+                null, null, null, status, null, null, null, null, null);
     }
 
     private ToolCallView toTaskCallProjection(AppStateRepository.TaskCallProjectionRow projection,
@@ -1364,11 +1364,11 @@ public class AppStateService {
         boolean success = Boolean.TRUE.equals(trace.success());
         String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
         if (projection == null) {
-            return new ToolCallView(toolCallId, "task", success, null, null, false, false, null, null, null, status);
+            return new ToolCallView(toolCallId, "task", success, null, null, false, false, null, null, null, status, null, null, null, null, null);
         }
         return new ToolCallView(toolCallId, "task", success, null, null, false, false,
                 projection.subagentSessionId(), projection.subagentAgentId(), projection.subagentAgentName(), status,
-                projection.requestSummary());
+                null, null, null, null, projection.requestSummary());
     }
 
     private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace, String toolCallId, long sessionId) {
@@ -1501,12 +1501,12 @@ public class AppStateService {
 
     private Message toModelMessage(AppStateRepository.ConversationMessageRow row) {
         return switch (row.role()) {
-            case "assistant" -> new Message(Message.Role.ASSISTANT, row.content(), toolCalls(row.toolCallsJson()));
-            case "tool" -> new Message(Message.Role.TOOL, row.content(), row.toolCallId());
+            case "assistant" -> new Message(Message.Role.ASSISTANT, row.content(), null, toolCalls(row.toolCallsJson()));
+            case "tool" -> new Message(Message.Role.TOOL, row.content(), row.toolCallId(), null);
             case "system" -> row.compactedThroughTurnId() != null
-                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content())
-                    : new Message(Message.Role.SYSTEM, row.content());
-            case "user" -> new Message(Message.Role.USER, row.content());
+                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content(), null, null)
+                    : new Message(Message.Role.SYSTEM, row.content(), null, null);
+            case "user" -> new Message(Message.Role.USER, row.content(), null, null);
             default -> throw new IllegalStateException("Unsupported role: " + row.role());
         };
     }

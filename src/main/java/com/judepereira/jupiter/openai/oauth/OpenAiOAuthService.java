@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.persistence.AppStateRepository;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -34,12 +33,8 @@ public class OpenAiOAuthService {
 
     private State state = State.empty();
 
-    public OpenAiOAuthService(OpenAiOAuthProperties properties, ObjectMapper objectMapper, HttpClient httpClient) {
-        this(properties, objectMapper, httpClient, null);
-    }
-
-    @Autowired
-    public OpenAiOAuthService(OpenAiOAuthProperties properties, ObjectMapper objectMapper, HttpClient httpClient, AppStateRepository appStateRepository) {
+    public OpenAiOAuthService(OpenAiOAuthProperties properties, ObjectMapper objectMapper, HttpClient httpClient,
+                              AppStateRepository appStateRepository) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;

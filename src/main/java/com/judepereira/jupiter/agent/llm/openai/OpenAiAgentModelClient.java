@@ -60,17 +60,13 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     private final Map<String, ChatModel> chatModels = new ConcurrentHashMap<>();
     private final Map<String, StreamingChatModel> streamingChatModels = new ConcurrentHashMap<>();
 
-    public OpenAiAgentModelClient(OpenAiProperties openAiProperties, AgentProperties agentProperties) {
-        this(openAiProperties, agentProperties, null);
-    }
-
     @Autowired
     public OpenAiAgentModelClient(OpenAiProperties openAiProperties, AgentProperties agentProperties, OpenAiOAuthService openAiOAuthService) {
         this.openAiProperties = openAiProperties;
         this.agentProperties = agentProperties;
         this.openAiOAuthService = openAiOAuthService;
-        this.chatRequestFactory = new LangChain4jChatRequestFactory();
-        this.messageMapper = new LangChain4jMessageMapper();
+        this.messageMapper = new LangChain4jMessageMapper(new ToolArgumentsCodec());
+        this.chatRequestFactory = new LangChain4jChatRequestFactory(messageMapper, new LangChain4jToolSpecificationMapper(), new OpenAiRequestParametersMapper());
     }
 
     @Override
@@ -394,7 +390,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 return toolCall.get() == null ? response.get() : new ModelResponse(
                         response.get().getAssistantText(), toolCall.get(), response.get().getMetadata());
             }
-            return new ModelResponse(null, toolCall.get());
+            return new ModelResponse(null, toolCall.get(), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
         }
 
         private IllegalStateException streamingFailure(Throwable throwable, boolean includePrefix) {
