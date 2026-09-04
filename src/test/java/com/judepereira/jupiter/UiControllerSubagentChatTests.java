@@ -144,7 +144,7 @@ public class UiControllerSubagentChatTests {
         props.setWorkspaceRoot(workspaceRoot.toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
         TerminalStateService terminalStateService = new TerminalStateService();
-        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home")), new com.judepereira.jupiter.agent.skill.SkillInvocationResolver(), new com.judepereira.jupiter.agent.skill.SkillContextInjector(new com.judepereira.jupiter.agent.skill.SkillParser()));
         AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper());
         var modelCatalog = ModelCatalogTestSupport.modelCatalogService();
         var balloonService = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));

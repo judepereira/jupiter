@@ -28,7 +28,7 @@ public class UiControllerReviewFileTests {
         Files.writeString(workspaceRoot.resolve("alpha.txt"), "alpha\n");
 
         AgentProperties props = new AgentProperties();
-        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()), props);
+        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home")), new com.judepereira.jupiter.agent.skill.SkillInvocationResolver(), new com.judepereira.jupiter.agent.skill.SkillContextInjector(new com.judepereira.jupiter.agent.skill.SkillParser())), props);
         AppStateService appStateService = appStateService(controller);
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
@@ -65,7 +65,7 @@ public class UiControllerReviewFileTests {
         Files.writeString(workspaceRoot.resolve("alpha.txt"), "alpha\n");
 
         AgentProperties props = new AgentProperties();
-        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()), props);
+        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home")), new com.judepereira.jupiter.agent.skill.SkillInvocationResolver(), new com.judepereira.jupiter.agent.skill.SkillContextInjector(new com.judepereira.jupiter.agent.skill.SkillParser())), props);
         AppStateService appStateService = appStateService(controller);
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());

@@ -267,7 +267,7 @@ class LifecycleHookIntegrationTests {
     }
 
     private static CodingAgentHarness harness(HarnessBehavior behavior) {
-        return new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+        return new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home")), new com.judepereira.jupiter.agent.skill.SkillInvocationResolver(), new com.judepereira.jupiter.agent.skill.SkillContextInjector(new com.judepereira.jupiter.agent.skill.SkillParser())) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 return behavior.run(request, listener);

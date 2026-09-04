@@ -1316,7 +1316,7 @@ public class AppStateServicePersistenceTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return client;
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home"))) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                          ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
@@ -1378,7 +1378,7 @@ public class AppStateServicePersistenceTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return new RecordingSummaryClient();
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home"))) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                        ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
@@ -1436,7 +1436,7 @@ public class AppStateServicePersistenceTests {
                     public AgentModelClient getClient() {
                         return new RecordingSummaryClient();
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home"))) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                        ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {

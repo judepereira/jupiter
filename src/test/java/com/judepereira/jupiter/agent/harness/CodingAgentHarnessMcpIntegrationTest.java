@@ -51,7 +51,7 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                new AgentDefinitionService(new ObjectMapper()), null, appStateService, null, mcpManager, new SystemPromptComposer());
+                new AgentDefinitionService(new ObjectMapper()), null, appStateService, null, mcpManager, new SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home")), new com.judepereira.jupiter.agent.skill.SkillInvocationResolver(), new com.judepereira.jupiter.agent.skill.SkillContextInjector(new com.judepereira.jupiter.agent.skill.SkillParser()));
 
         AgentTurnResult result = harness.runTurnStreaming(new AgentTurnRequest(
                 "sys",
@@ -98,7 +98,7 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                new AgentDefinitionService(new ObjectMapper()), null, appStateService, null, mcpManager, new SystemPromptComposer());
+                new AgentDefinitionService(new ObjectMapper()), null, appStateService, null, mcpManager, new SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home")), new com.judepereira.jupiter.agent.skill.SkillInvocationResolver(), new com.judepereira.jupiter.agent.skill.SkillContextInjector(new com.judepereira.jupiter.agent.skill.SkillParser()));
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "sys",
@@ -136,7 +136,7 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                agentService(agent), null, appStateService, null, mcpManager, new SystemPromptComposer());
+                agentService(agent), null, appStateService, null, mcpManager, new SystemPromptComposer(new com.judepereira.jupiter.agent.skill.SkillCatalogRenderer()), new com.judepereira.jupiter.agent.skill.SkillDiscoveryService(new com.judepereira.jupiter.agent.skill.SkillParser(), System.getProperty("user.home")), new com.judepereira.jupiter.agent.skill.SkillInvocationResolver(), new com.judepereira.jupiter.agent.skill.SkillContextInjector(new com.judepereira.jupiter.agent.skill.SkillParser()));
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "sys",
