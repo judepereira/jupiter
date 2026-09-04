@@ -89,12 +89,17 @@ public class GitAutoUpdateService {
             }
 
             GitCommandRunner.GitCommandResult upstream = run(path, "git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
+            String remote = null;
             if (!upstream.succeeded() || upstream.stdout().trim().isBlank()) {
                 if (upstreamIndicatesNoUpstream(upstream)) {
-                    appStateService.resetWorkspaceAutoGitUpdateFailure(workspace.id());
-                    return UpdateResult.skipped("Git workspace has no upstream branch");
+                    RemoteSelection selection = selectFallbackRemote(workspace, path, branch.stdout().trim());
+                    if (selection.result() != null) {
+                        return selection.result();
+                    }
+                    remote = selection.remote();
+                } else {
+                    return fail(workspace, "Could not determine the Git upstream branch", upstream);
                 }
-                return fail(workspace, "Could not determine the Git upstream branch", upstream);
             }
 
             GitCommandRunner.GitCommandResult before = run(path, "git", "rev-parse", "--verify", "HEAD");
@@ -102,7 +107,9 @@ public class GitAutoUpdateService {
                 return fail(workspace, "Could not determine the current Git revision", before);
             }
 
-            GitCommandRunner.GitCommandResult pull = run(path, "git", "pull", "--ff-only");
+            GitCommandRunner.GitCommandResult pull = remote == null
+                    ? run(path, "git", "pull", "--ff-only")
+                    : run(path, "git", "pull", "--ff-only", remote, branch.stdout().trim());
             if (!pull.succeeded()) {
                 return fail(workspace, "Git pull failed", pull);
             }
@@ -125,6 +132,43 @@ public class GitAutoUpdateService {
         } catch (RuntimeException e) {
             return fail(workspace, "Git update failed", e);
         }
+    }
+
+    private RemoteSelection selectFallbackRemote(Persistence.WorkspaceView workspace, Path path, String branch) {
+        GitCommandRunner.GitCommandResult remotes = run(path, "git", "remote");
+        if (!remotes.succeeded()) {
+            return new RemoteSelection(null, fail(workspace, "Could not determine configured Git remotes", remotes));
+        }
+        List<String> configured = remotes.stdout().lines().map(String::trim).filter(name -> !name.isBlank()).toList();
+        String remote;
+        if (configured.contains("origin")) {
+            remote = "origin";
+        } else if (configured.size() == 1) {
+            remote = configured.getFirst();
+        } else if (configured.isEmpty()) {
+            return new RemoteSelection(null, skip(workspace, "Git workspace has no configured remote"));
+        } else {
+            return new RemoteSelection(null, skip(workspace,
+                    "Git workspace has no upstream branch and multiple remotes are configured; configure an upstream branch or keep an origin remote"));
+        }
+
+        GitCommandRunner.GitCommandResult remoteBranch = run(path, "git", "ls-remote", "--exit-code", "--heads", remote, "refs/heads/" + branch);
+        if (!remoteBranch.succeeded()) {
+            if (remoteBranch.exitCode() == 2 && remoteBranch.stdout().isBlank() && remoteBranch.stderr().isBlank()) {
+                return new RemoteSelection(null, skip(workspace,
+                        "Git workspace has no upstream branch and remote " + remote + " has no branch named " + branch));
+            }
+            return new RemoteSelection(null, fail(workspace, "Could not determine whether remote branch exists", remoteBranch));
+        }
+        return new RemoteSelection(remote, null);
+    }
+
+    private UpdateResult skip(Persistence.WorkspaceView workspace, String message) {
+        appStateService.resetWorkspaceAutoGitUpdateFailure(workspace.id());
+        return UpdateResult.skipped(message);
+    }
+
+    private record RemoteSelection(String remote, UpdateResult result) {
     }
 
     private UpdateResult fail(Persistence.WorkspaceView workspace, String summary, GitCommandRunner.GitCommandResult result) {
