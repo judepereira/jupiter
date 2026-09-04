@@ -40,16 +40,7 @@
         </nav>
 
         <div class="top-bar-actions">
-            <button type="button"
-                    class="rail-btn topbar-rail-btn topbar-git-pull-btn"
-                    aria-label="Pull latest changes"
-                    title="Pull latest changes"
-                    th:disabled="${activeWorkspaceView == null}"
-                    hx-post="/ui/workspaces/active/git/pull"
-                    hx-target="#shell"
-                    hx-swap="none">
-                <i class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
-            </button>
+            <th:block th:replace="~{fragments/projects :: gitPullControl(${activeWorkspaceView == null ? null : activeWorkspaceView.id}, ${gitPullBusy ?: false}, ${activeWorkspaceView != null})}"></th:block>
             <button type="button"
                     class="rail-btn topbar-rail-btn"
                     aria-label="Settings"
@@ -71,6 +62,18 @@
                 </button>
         </div>
     </header>
+</th:block>
+
+<th:block th:fragment="gitPullControl(workspaceId, busy, hasWorkspace)"
+          th:with="normalizedWorkspaceId=${workspaceId ?: null}, normalizedBusy=${busy ?: false}, normalizedHasWorkspace=${hasWorkspace != null ? hasWorkspace : normalizedWorkspaceId != null}">
+    <button id="git-pull-control" type="button"
+            class="rail-btn topbar-rail-btn topbar-git-pull-btn"
+            th:disabled="${!normalizedHasWorkspace or normalizedBusy}"
+            th:attr="aria-label=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, title=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, aria-busy=${normalizedBusy}, hx-post=${!normalizedBusy and normalizedHasWorkspace ? '/ui/workspaces/active/git/pull' : null}, hx-get=${normalizedBusy and normalizedWorkspaceId != null ? '/ui/workspaces/' + normalizedWorkspaceId + '/git/pull/status' : null}, hx-trigger=${normalizedBusy and normalizedWorkspaceId != null ? 'every 1s' : null}, hx-target='#git-pull-control', hx-swap='outerHTML'">
+        <span th:if="${normalizedBusy}" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        <span th:if="${normalizedBusy}" class="visually-hidden">Git pull in progress</span>
+        <i th:unless="${normalizedBusy}" class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
+    </button>
 </th:block>
 
 <th:block th:fragment="workspaceRail" th:with="shellRefreshFlag=${shellRefresh ?: false}, workspaceList=${workspaces ?: T(java.util.List).of()}, sessionList=${sessions ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, activeSessionView=${activeSession}">

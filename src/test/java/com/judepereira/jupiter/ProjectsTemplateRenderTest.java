@@ -65,6 +65,36 @@ public class ProjectsTemplateRenderTest {
     }
 
     @Test
+    public void gitPullControlRendersIdleButton() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("workspaceId", 7L);
+        context.setVariable("busy", false);
+        context.setVariable("hasWorkspace", true);
+
+        String html = engine.process(new TemplateSpec("fragments/projects", Set.of("gitPullControl"), TemplateMode.HTML, null), context);
+
+        assertThat(html).contains("bi-cloud-arrow-down", "hx-post=\"/ui/workspaces/active/git/pull\"",
+                "hx-target=\"#git-pull-control\"", "hx-swap=\"outerHTML\"");
+        assertThat(html).doesNotContain("spinner-border", "hx-get=");
+    }
+
+    @Test
+    public void gitPullControlRendersBusyPollingButton() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("workspaceId", 7L);
+        context.setVariable("busy", true);
+        context.setVariable("hasWorkspace", true);
+
+        String html = engine.process(new TemplateSpec("fragments/projects", Set.of("gitPullControl"), TemplateMode.HTML, null), context);
+
+        assertThat(html).contains("disabled", "spinner-border spinner-border-sm", "Git pull in progress",
+                "aria-busy=\"true\"", "hx-get=\"/ui/workspaces/7/git/pull/status\"", "hx-trigger=\"every 1s\"");
+        assertThat(html).doesNotContain("hx-post=");
+    }
+
+    @Test
     public void indexPageIncludesPersistentSystemBalloonRootContainer() {
         SpringTemplateEngine engine = engine();
 
