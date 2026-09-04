@@ -43,24 +43,25 @@ class CodingAgentHarnessMcpIntegrationTest {
     @Test
     void primaryWildcardReceivesMcpToolsAndExecutesPinnedSnapshot(@TempDir Path tmp) {
         RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new ToolCall("mcp__project__alpha", Map.of())),
-                new ModelResponse("done", null)
+                new ModelResponse(null, new ToolCall(null, "mcp__project__alpha", Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
         ));
         ToolRegistry registry = registry(recordingTool("list_files"), recordingTool("task"));
         FakeMcpManager mcpManager = new FakeMcpManager("mcp__project__alpha", "v1", "v2");
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                new AgentDefinitionService(new ObjectMapper()), null, appStateService, mcpManager);
+                new AgentDefinitionService(new ObjectMapper()), null, appStateService, null, mcpManager, new SystemPromptComposer());
 
         AgentTurnResult result = harness.runTurnStreaming(new AgentTurnRequest(
                 "sys",
-                List.of(new Message(Message.Role.USER, "use mcp")),
+                List.of(new Message(Message.Role.USER, "use mcp", null, null)),
                 tmp.toString(),
                 "engineer",
                 null,
                 null,
-                42L
+                42L,
+                null
         ), new com.judepereira.jupiter.agent.llm.AgentStreamListener() {
             private boolean switched;
 
@@ -89,24 +90,25 @@ class CodingAgentHarnessMcpIntegrationTest {
     @Test
     void subagentWildcardReceivesMcpToolsButNotTask(@TempDir Path tmp) {
         RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new ToolCall("mcp__project__alpha", Map.of())),
-                new ModelResponse("done", null)
+                new ModelResponse(null, new ToolCall(null, "mcp__project__alpha", Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
         ));
         ToolRegistry registry = registry(recordingTool("list_files"), recordingTool("task"));
         FakeMcpManager mcpManager = new FakeMcpManager("mcp__project__alpha", "v1", "v2");
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                new AgentDefinitionService(new ObjectMapper()), null, appStateService, mcpManager);
+                new AgentDefinitionService(new ObjectMapper()), null, appStateService, null, mcpManager, new SystemPromptComposer());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "sys",
-                List.of(new Message(Message.Role.USER, "use mcp")),
+                List.of(new Message(Message.Role.USER, "use mcp", null, null)),
                 tmp.toString(),
                 "apprentice",
                 null,
                 null,
-                42L
+                42L,
+                null
         ));
 
         assertThat(result.getFinalText()).isEqualTo("done");
@@ -126,24 +128,25 @@ class CodingAgentHarnessMcpIntegrationTest {
         AgentDefinition agent = new AgentDefinition("custom", "Custom", "", "Custom system prompt", AgentMode.AGENT,
                 "openai/gpt-5.5", ThinkingLevel.HIGH, null, false, false, List.of("list_files"));
         RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new ToolCall("mcp__project__alpha", Map.of())),
-                new ModelResponse("done", null)
+                new ModelResponse(null, new ToolCall(null, "mcp__project__alpha", Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
         ));
         ToolRegistry registry = registry(recordingTool("list_files"), recordingTool("task"));
         FakeMcpManager mcpManager = new FakeMcpManager("mcp__project__alpha", "v1", "v2");
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                agentService(agent), null, appStateService, mcpManager);
+                agentService(agent), null, appStateService, null, mcpManager, new SystemPromptComposer());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "sys",
-                List.of(new Message(Message.Role.USER, "use mcp")),
+                List.of(new Message(Message.Role.USER, "use mcp", null, null)),
                 tmp.toString(),
                 "custom",
                 null,
                 null,
-                42L
+                42L,
+                null
         ));
 
         assertThat(result.getFinalText()).isEqualTo("done");
@@ -245,7 +248,7 @@ class CodingAgentHarnessMcpIntegrationTest {
             capturedConversations.add(List.copyOf(conversation));
             capturedToolDefinitions.add(List.copyOf(tools));
             if (index >= responses.size()) {
-                return new ModelResponse("", null);
+                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
             }
             return responses.get(index++);
         }

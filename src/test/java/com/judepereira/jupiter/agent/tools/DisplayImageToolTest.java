@@ -21,7 +21,7 @@ class DisplayImageToolTest {
         Files.write(image, new byte[] {(byte) 0x89, 'P', 'N', 'G'});
 
         DisplayImageTool tool = new DisplayImageTool();
-        ToolExecutionResult result = tool.execute(Map.of("path", "images/cat.png", "alt", "Cat"), new ToolExecutionContext(tmp, true, true, 5));
+        ToolExecutionResult result = tool.execute(Map.of("path", "images/cat.png", "alt", "Cat"), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getMachine().get("displayType")).isEqualTo("image");
@@ -33,7 +33,7 @@ class DisplayImageToolTest {
     @Test
     void failsWhenFileMissing(@TempDir Path tmp) throws Exception {
         DisplayImageTool tool = new DisplayImageTool();
-        ToolExecutionResult result = tool.execute(Map.of("path", "missing.png"), new ToolExecutionContext(tmp, true, true, 5));
+        ToolExecutionResult result = tool.execute(Map.of("path", "missing.png"), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null));
 
         assertFalse(result.isSuccess());
         assertThat(result.getText()).contains("file not found");
@@ -45,7 +45,7 @@ class DisplayImageToolTest {
         Files.writeString(file, "not an image");
 
         DisplayImageTool tool = new DisplayImageTool();
-        ToolExecutionResult result = tool.execute(Map.of("path", "notes.txt"), new ToolExecutionContext(tmp, true, true, 5));
+        ToolExecutionResult result = tool.execute(Map.of("path", "notes.txt"), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null));
 
         assertFalse(result.isSuccess());
         assertThat(result.getText()).contains("unsupported image type");
@@ -61,7 +61,7 @@ class DisplayImageToolTest {
             Files.createSymbolicLink(link, outside);
 
             DisplayImageTool tool = new DisplayImageTool();
-            assertThrows(Exception.class, () -> tool.execute(Map.of("path", "images/escape.png"), new ToolExecutionContext(tmp, true, true, 5)));
+            assertThrows(Exception.class, () -> tool.execute(Map.of("path", "images/escape.png"), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null)));
         } finally {
             Files.deleteIfExists(outside);
         }

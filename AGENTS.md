@@ -80,3 +80,4 @@ This section is intentionally stable: document the repository layout and long-li
 4. When adding browser/frontend library assets (for example xterm, marked, DOMPurify), use WebJars instead of external CDN URLs
 5. Never use reflection in tests; open production visibility appropriately, preferably package-private, when tests need access.
 6. Always run all tests after targeted tests pass
+7. Prefer one constructor per production class. Do not add constructor overloads for defaults, optional dependencies, compatibility, test setup, or convenience. Use a record's canonical constructor; keep test defaults in test fixtures; use a named static factory for genuinely distinct construction semantics; use a parameter object or builder when direct construction becomes unclear. An overload is allowed only when required by a framework or external compatibility contract, and its exception must be documented.

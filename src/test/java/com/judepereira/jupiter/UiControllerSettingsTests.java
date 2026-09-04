@@ -280,19 +280,7 @@ public class UiControllerSettingsTests {
                 openAiOAuthService,
                 mcpRuntimeManager,
                 gitAutoUpdateService,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService,
-                        new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
-                        ModelCatalogTestSupport.modelCatalogService(),
-                        new SystemBalloonService(new ObjectMapper()),
-                        new WorkspaceRailRefreshService(),
-                        terminalManager,
-                        new TerminalStateService(),
-                        openAiOAuthService,
-                        TestAppStateSupport.contextCompactionService(appStateService),
-                        tokenUsageService,
-                        mock(CommandStreamService.class),
-                        mcpRuntimeManager,
-                        gitAutoUpdateService, "test"));
+                new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), tokenUsageService, mock(CommandStreamService.class), mcpRuntimeManager, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, gitAutoUpdateService, "test"));
     }
 
     private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, UiController controller) {

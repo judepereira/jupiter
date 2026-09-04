@@ -244,7 +244,7 @@ class LifecycleHookIntegrationTests {
 
     private static SubagentTaskService.SubagentTaskRequest request(long parentSessionId, Path workspaceRoot) {
         return new SubagentTaskService.SubagentTaskRequest(parentSessionId, "parent-tool", workspaceRoot.toString(),
-                "worker", "summary", "task", "output");
+                "worker", "summary", "task", "output", null);
     }
 
     private static ObjectProvider<CodingAgentHarness> provider(CodingAgentHarness harness) {
@@ -267,7 +267,7 @@ class LifecycleHookIntegrationTests {
     }
 
     private static CodingAgentHarness harness(HarnessBehavior behavior) {
-        return new CodingAgentHarness(null, null, null) {
+        return new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 return behavior.run(request, listener);

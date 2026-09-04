@@ -47,7 +47,7 @@ class UiControllerSystemBalloonTests {
         when(appStateService.loadViewData()).thenReturn(new AppStateView(
                 List.of(new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of())),
                 new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of()),
-                List.of(), null, List.of(), null, null));
+                List.of(), null, List.of(), null, null, false));
         when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(
                 new McpServerView(10L, "GitHub MCP", "http://localhost:3000", true, List.of(), List.of(1L))
         ));
@@ -69,17 +69,6 @@ class UiControllerSystemBalloonTests {
         TerminalManager terminalManager = mock(TerminalManager.class);
         OpenAiOAuthService openAiOAuthService = mock(OpenAiOAuthService.class);
         ModelCatalogService modelCatalogService = ModelCatalogTestSupport.modelCatalogService();
-        return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
-                new AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService,
-                balloonService,
-                new WorkspaceRailRefreshService(),
-                terminalManager,
-                new TerminalStateService(),
-                openAiOAuthService,
-                TestAppStateSupport.contextCompactionService(appStateService),
-                mock(CommandStreamService.class),
-                runtimeManager,
-                "test");
+        return new UiController(mock(CodingAgentHarness.class), properties, appStateService, new AgentDefinitionService(new ObjectMapper()), modelCatalogService, balloonService, new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), null, mock(CommandStreamService.class), runtimeManager, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, null, "test");
     }
 }

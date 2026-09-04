@@ -20,11 +20,11 @@ class McpRuntimeBalloonListenerTests {
     void toolsChange_publishesBalloon_afterFirstSeenChange() {
         AppStateService appStateService = mock(AppStateService.class);
         McpProjectMcpServerRuntimeManager runtimeManager = mock(McpProjectMcpServerRuntimeManager.class);
-        SystemBalloonService balloonService = spy(new SystemBalloonService(new com.fasterxml.jackson.databind.ObjectMapper()));
+        SystemBalloonService balloonService = spy(new SystemBalloonService(new com.fasterxml.jackson.databind.ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)));
         McpRuntimeBalloonListener listener = new McpRuntimeBalloonListener(appStateService, runtimeManager, balloonService);
 
         when(appStateService.loadViewData()).thenReturn(new com.judepereira.jupiter.persistence.Persistence.AppStateView(
-                List.of(new ProjectView(1L, "Alpha", "/tmp/a", null, List.of())), null, List.of(), null, List.of(), null, null));
+                List.of(new ProjectView(1L, "Alpha", "/tmp/a", null, List.of())), null, List.of(), null, List.of(), null, null, false));
         when(runtimeManager.snapshot(1L)).thenReturn(new com.judepereira.jupiter.agent.mcp.McpProjectToolSnapshot(1L,
                 List.of(new ToolDefinition("mcp__alpha__one", "desc", ToolSchema.object())), Map.of()));
 
@@ -46,11 +46,11 @@ class McpRuntimeBalloonListenerTests {
     void failedThenReady_publishesWarningAndRecoveryBalloons() {
         AppStateService appStateService = mock(AppStateService.class);
         McpProjectMcpServerRuntimeManager runtimeManager = mock(McpProjectMcpServerRuntimeManager.class);
-        SystemBalloonService balloonService = new SystemBalloonService(new com.fasterxml.jackson.databind.ObjectMapper());
+        SystemBalloonService balloonService = new SystemBalloonService(new com.fasterxml.jackson.databind.ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
         McpRuntimeBalloonListener listener = new McpRuntimeBalloonListener(appStateService, runtimeManager, balloonService);
 
         when(appStateService.loadViewData()).thenReturn(new com.judepereira.jupiter.persistence.Persistence.AppStateView(
-                List.of(new ProjectView(1L, "Alpha", "/tmp/a", null, List.of())), null, List.of(), null, List.of(), null, null));
+                List.of(new ProjectView(1L, "Alpha", "/tmp/a", null, List.of())), null, List.of(), null, List.of(), null, null, false));
 
         listener.onProjectMcpServerStatusChanged(new McpRuntimeEvents.ProjectMcpServerStatusChanged(1L, 10L, "server", McpRuntimeEvents.ConnectionStatus.CONNECTING, "connecting"));
         listener.onProjectMcpServerStatusChanged(new McpRuntimeEvents.ProjectMcpServerStatusChanged(1L, 10L, "server", McpRuntimeEvents.ConnectionStatus.FAILED, "boom"));

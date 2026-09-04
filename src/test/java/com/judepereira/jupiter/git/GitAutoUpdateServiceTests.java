@@ -71,7 +71,7 @@ class GitAutoUpdateServiceTests {
     void changedHeadEmitsInfoAndResetsFailure(@TempDir Path tempDir) {
         AppStateService appStateService = mock(AppStateService.class);
         var workspace = workspace(8, "project", tempDir.resolve("workspace"));
-        var session = new Persistence.SessionView(81, "Session #1");
+        var session = new Persistence.SessionView(81, "Session #1", false, Persistence.RailStatus.NONE);
         when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(8)).thenReturn(Optional.of(session));
         GitCommandRunner commandRunner = runner(
                 success("main\n"), success("origin/main\n"), success("before\n"), success("Already up to date\n"), success("after\n"));
@@ -172,7 +172,7 @@ class GitAutoUpdateServiceTests {
     }
 
     private static Persistence.WorkspaceView workspace(long id, String name, Path path) {
-        return new Persistence.WorkspaceView(id, name, path.toString());
+        return new Persistence.WorkspaceView(id, name, path.toString(), false, Persistence.RailStatus.NONE);
     }
 
     private static GitCommandRunner successfulRunner() {

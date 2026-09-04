@@ -21,25 +21,8 @@ public class ToolExecutionContext {
     private final ToolProgressSink progressSink;
     private final CancellationToken cancellationToken;
 
-    public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds) {
-        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, null, null, null, null, Map.of(), ToolProgressSink.noop(), null);
-    }
 
-    public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
-                                Long sessionId, String agentId, AgentMode agentMode, String toolCallId) {
-        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, sessionId, agentId, agentMode, toolCallId, Map.of(), ToolProgressSink.noop(), null);
-    }
 
-    public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
-                                Long sessionId, String agentId, AgentMode agentMode, String toolCallId, ToolProgressSink progressSink) {
-        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, sessionId, agentId, agentMode, toolCallId, Map.of(), progressSink, null);
-    }
-
-    public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
-                                Long sessionId, String agentId, AgentMode agentMode, String toolCallId,
-                                Map<String, String> environmentVariables, ToolProgressSink progressSink) {
-        this(workspaceRoot, allowWrite, allowCommand, commandTimeoutSeconds, sessionId, agentId, agentMode, toolCallId, environmentVariables, progressSink, null);
-    }
 
     public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
                                 Long sessionId, String agentId, AgentMode agentMode, String toolCallId,

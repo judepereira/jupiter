@@ -20,8 +20,8 @@ public class SearchCodeToolTest {
         Files.writeString(a, "needle");
         Files.writeString(b, "needle\n");
 
-        SearchCodeTool t = new SearchCodeTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5);
+        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", "", "pattern", "needle", "include", "**/*.java"), ctx);
         assertTrue(res.isSuccess());
@@ -38,8 +38,8 @@ public class SearchCodeToolTest {
         Files.createDirectories(nested);
         Files.writeString(nested.resolve("AGENTS.md"), "needle");
 
-        SearchCodeTool t = new SearchCodeTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5);
+        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", "", "pattern", "needle", "include", "**/AGENTS.md"), ctx);
         assertTrue(res.isSuccess());
@@ -58,8 +58,8 @@ public class SearchCodeToolTest {
         Files.writeString(a, "needle");
         Files.writeString(b, "needle\n");
 
-        SearchCodeTool t = new SearchCodeTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5);
+        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5, null, null, null, null, Map.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", ws.getFileName().toString(), "pattern", "needle", "include", "**/*.java"), ctx);
         assertTrue(res.isSuccess());

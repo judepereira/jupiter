@@ -30,7 +30,7 @@ class UiControllerInvalidCheckoutBranchTests {
     void invalidNewBranchNameKeepsStateAndPublishesValidationBalloon(@TempDir Path projectRoot) throws Exception {
         initGitRepo(projectRoot);
 
-        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper());
+        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
         var appStateService = TestAppStateSupport.appStateService();
         UiController controller = controller(projectRoot, appStateService, balloonService);
 
@@ -66,7 +66,7 @@ class UiControllerInvalidCheckoutBranchTests {
     void invalidBranchModeThrowsIllegalArgumentException(@TempDir Path projectRoot) throws Exception {
         initGitRepo(projectRoot);
 
-        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper());
+        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
         var appStateService = TestAppStateSupport.appStateService();
         UiController controller = controller(projectRoot, appStateService, balloonService);
 
@@ -82,7 +82,7 @@ class UiControllerInvalidCheckoutBranchTests {
     void invalidExistingBranchCheckoutKeepsStateAndPublishesGitErrorBalloon(@TempDir Path projectRoot) throws Exception {
         initGitRepo(projectRoot);
 
-        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper());
+        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
         var appStateService = TestAppStateSupport.appStateService();
         UiController controller = controller(projectRoot, appStateService, balloonService);
 
@@ -116,20 +116,7 @@ class UiControllerInvalidCheckoutBranchTests {
     }
 
     private static UiController controller(Path projectRoot, AppStateService appStateService, SystemBalloonService balloonService) {
-        return new UiController(
-                mock(CodingAgentHarness.class),
-                agentProperties(projectRoot),
-                appStateService,
-                new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
-                ModelCatalogTestSupport.modelCatalogService(),
-                balloonService,
-                new WorkspaceRailRefreshService(),
-                mock(TerminalManager.class),
-                new TerminalStateService(),
-                new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
-                TestAppStateSupport.contextCompactionService(appStateService),
-                mock(CommandStreamService.class),
-                "0.0.1-SNAPSHOT");
+        return new UiController(mock(CodingAgentHarness.class), agentProperties(projectRoot), appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), balloonService, new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(), new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class)), TestAppStateSupport.contextCompactionService(appStateService), null, mock(CommandStreamService.class), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, null, "0.0.1-SNAPSHOT");
     }
 
     private static AgentProperties agentProperties(Path workspaceRoot) {

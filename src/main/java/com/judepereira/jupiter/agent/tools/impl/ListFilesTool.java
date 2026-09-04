@@ -19,10 +19,6 @@ public class ListFilesTool implements AgentTool {
     );
     private final RipgrepToolSupport ripgrep;
 
-    public ListFilesTool() {
-        this(new RipgrepToolSupport());
-    }
-
     public ListFilesTool(RipgrepToolSupport ripgrep) {
         this.ripgrep = ripgrep;
     }
