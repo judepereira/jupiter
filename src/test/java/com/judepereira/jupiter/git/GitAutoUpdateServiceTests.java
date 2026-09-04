@@ -129,18 +129,86 @@ class GitAutoUpdateServiceTests {
     }
 
     @Test
-    void noUpstreamSkipsPullAndResetsFailure(@TempDir Path tempDir) {
+    void noRemotesSkipUpstreamlessPullAndResetFailure(@TempDir Path tempDir) {
         AppStateService appStateService = mock(AppStateService.class);
         var workspace = workspace(11, "project", tempDir.resolve("workspace"));
-        GitCommandRunner commandRunner = runner(success("main"), failure("fatal: no upstream branch"));
+        GitCommandRunner commandRunner = runner(success("main"), failure("fatal: no upstream branch"), success(""));
         GitAutoUpdateService service = new GitAutoUpdateService(appStateService, commandRunner);
 
         var result = service.updateWorkspace(workspace);
 
         assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.SKIPPED);
-        assertThat(result.message()).isEqualTo("Git workspace has no upstream branch");
+        assertThat(result.message()).isEqualTo("Git workspace has no configured remote");
         verify(appStateService).resetWorkspaceAutoGitUpdateFailure(11);
-        verify(commandRunner, times(2)).run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT));
+        verify(commandRunner, times(3)).run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT));
+    }
+
+    @Test
+    void upstreamlessPullUsesOriginAndPreservesSlashBranch(@TempDir Path tempDir) {
+        AppStateService appStateService = mock(AppStateService.class);
+        var workspace = workspace(13, "project", tempDir.resolve("workspace"));
+        List<List<String>> commands = new ArrayList<>();
+        GitCommandRunner commandRunner = runnerWithCommands(commands,
+                success("feature/topic"), failure("fatal: no upstream branch"), success("origin\n"),
+                success("abc\trefs/heads/feature/topic\n"), success("before"), success(""), success("before"));
+        GitAutoUpdateService service = new GitAutoUpdateService(appStateService, commandRunner);
+
+        var result = service.updateWorkspace(workspace);
+
+        assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE);
+        assertThat(commands).contains(List.of("git", "pull", "--ff-only", "origin", "feature/topic"));
+    }
+
+    @Test
+    void upstreamlessPullUsesSoleNonOriginRemote(@TempDir Path tempDir) {
+        AppStateService appStateService = mock(AppStateService.class);
+        var workspace = workspace(14, "project", tempDir.resolve("workspace"));
+        List<List<String>> commands = new ArrayList<>();
+        GitCommandRunner commandRunner = runnerWithCommands(commands,
+                success("main"), failure("no upstream"), success("upstream\n"), success("x\trefs/heads/main\n"),
+                success("same"), success(""), success("same"));
+        var result = new GitAutoUpdateService(appStateService, commandRunner).updateWorkspace(workspace);
+
+        assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE);
+        assertThat(commands).contains(List.of("git", "pull", "--ff-only", "upstream", "main"));
+    }
+
+    @Test
+    void upstreamlessPullSkipsAmbiguousRemotes(@TempDir Path tempDir) {
+        AppStateService appStateService = mock(AppStateService.class);
+        var workspace = workspace(15, "project", tempDir.resolve("workspace"));
+        var result = new GitAutoUpdateService(appStateService, runner(success("main"), failure("no upstream"), success("one\ntwo\n")))
+                .updateWorkspace(workspace);
+
+        assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.SKIPPED);
+        assertThat(result.message()).contains("multiple remotes");
+    }
+
+    @Test
+    void upstreamlessPullSkipsMissingRemoteBranch(@TempDir Path tempDir) {
+        AppStateService appStateService = mock(AppStateService.class);
+        var workspace = workspace(16, "project", tempDir.resolve("workspace"));
+        when(appStateService.appendAutoGitUpdateFailureMessage(eq(16L), anyString()))
+                .thenReturn(new Persistence.AutoGitUpdateFailureNotification(true));
+        var result = new GitAutoUpdateService(appStateService, runner(success("main"), failure("no upstream"),
+                success("origin\n"), new GitCommandRunner.GitCommandResult(2, "", ""))).updateWorkspace(workspace);
+
+        assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.SKIPPED);
+        assertThat(result.message()).contains("has no branch named main");
+    }
+
+    @Test
+    void upstreamlessPullFailureIsFailed(@TempDir Path tempDir) {
+        AppStateService appStateService = mock(AppStateService.class);
+        var workspace = workspace(17, "project", tempDir.resolve("workspace"));
+        when(appStateService.appendAutoGitUpdateFailureMessage(eq(17L), anyString()))
+                .thenReturn(new Persistence.AutoGitUpdateFailureNotification(true));
+        var result = new GitAutoUpdateService(appStateService, runner(success("main"), failure("no upstream"),
+                success("origin\n"), success("x\trefs/heads/main\n"), success("before"), failure("transport failed")))
+                .updateWorkspace(workspace);
+
+        assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.FAILED);
+        assertThat(result.message()).contains("Git pull failed");
     }
 
     @Test
@@ -206,6 +274,15 @@ class GitAutoUpdateServiceTests {
 
     private static GitCommandRunner runner(GitCommandRunner.GitCommandResult... results) {
         return mockRunner(results);
+    }
+
+    private static GitCommandRunner runnerWithCommands(List<List<String>> commands, GitCommandRunner.GitCommandResult... results) {
+        GitCommandRunner commandRunner = mock(GitCommandRunner.class);
+        when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT))).thenAnswer(invocation -> {
+            commands.add(invocation.getArgument(1));
+            return results[commands.size() - 1];
+        });
+        return commandRunner;
     }
 
     private static GitCommandRunner mockRunner(GitCommandRunner.GitCommandResult... results) {
