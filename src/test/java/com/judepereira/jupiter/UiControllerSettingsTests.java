@@ -3,6 +3,7 @@ package com.judepereira.jupiter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
@@ -27,8 +28,12 @@ import org.springframework.ui.ConcurrentModel;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -92,6 +97,47 @@ public class UiControllerSettingsTests {
         assertThat(view).isEqualTo("fragments/projects :: settingsModal");
         assertThat(model.getAttribute("activeProject")).isNull();
         assertThat(model.getAttribute("lifecycleHookSettings")).isEqualTo(new LifecycleHookSettings(null, null, null, 30));
+    }
+
+    @Test
+    public void settingsModalIncludesAutoGitUpdatePreference(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        ConcurrentModel model = new ConcurrentModel();
+
+        context.controller().settingsModal(model);
+
+        assertThat(model.getAttribute("autoGitUpdateEnabled")).isEqualTo(true);
+    }
+
+    @Test
+    public void applyAutoGitUpdateSettingsPersistsPreference(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+
+        assertThat(context.controller().applyAutoGitUpdateSettings(false)).isEqualTo("fragments/projects :: modalClose");
+        assertThat(context.appStateService().loadAutoGitUpdateEnabled()).isFalse();
+
+        context.controller().applyAutoGitUpdateSettings(true);
+        assertThat(context.appStateService().loadAutoGitUpdateEnabled()).isTrue();
+    }
+
+    @Test
+    public void manualPullUsesActiveWorkspaceAndReportsResult(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long workspaceId = context.appStateService().loadViewData().activeWorkspace().id();
+        when(context.gitAutoUpdateService().updateWorkspaceManually(workspaceId)).thenReturn(
+                new GitAutoUpdateService.UpdateResult(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE, "abc", "abc", null, false));
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().pullActiveWorkspace(model)).isEqualTo("fragments/projects :: gitPullControl");
+        assertThat(model.getAttribute("gitPullBusy")).isEqualTo(true);
+        assertThat(model.getAttribute("workspaceId")).isEqualTo(workspaceId);
+        assertThat(context.executor().size()).isEqualTo(1);
+
+        context.controller().pullActiveWorkspace(new ConcurrentModel());
+        assertThat(context.executor().size()).isEqualTo(1);
+        context.executor().runNext();
+        verify(context.gitAutoUpdateService()).updateWorkspaceManually(workspaceId);
     }
 
     @Test
@@ -234,30 +280,70 @@ public class UiControllerSettingsTests {
         TerminalManager terminalManager = mock(TerminalManager.class);
         OpenAiOAuthService openAiOAuthService = mock(OpenAiOAuthService.class);
         McpProjectMcpServerRuntimeManager mcpRuntimeManager = mock(McpProjectMcpServerRuntimeManager.class);
+        GitAutoUpdateService gitAutoUpdateService = mock(GitAutoUpdateService.class);
 
         TestAppStateSupport.AppStateTestContext appStateContext = TestAppStateSupport.appStateContext(event -> {});
         AppStateService appStateService = appStateContext.service();
         TokenUsageService tokenUsageService = new TokenUsageService(appStateContext.repository(), new ObjectMapper());
+        QueuedExecutor executor = new QueuedExecutor();
+        com.judepereira.jupiter.git.ManualGitPullCoordinator coordinator = new com.judepereira.jupiter.git.ManualGitPullCoordinator(
+                appStateService, gitAutoUpdateService, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), executor);
 
         return new TestContext(appStateService,
                 tokenUsageService,
                 openAiOAuthService,
                 mcpRuntimeManager,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService,
-                        new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
-                        ModelCatalogTestSupport.modelCatalogService(),
-                        new SystemBalloonService(new ObjectMapper()),
-                        new WorkspaceRailRefreshService(),
-                        terminalManager,
-                        new TerminalStateService(),
-                        openAiOAuthService,
-                        TestAppStateSupport.contextCompactionService(appStateService),
-                        tokenUsageService,
-                        mock(CommandStreamService.class),
-                        mcpRuntimeManager,
-                        "test"));
+                gitAutoUpdateService,
+                executor,
+                new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), tokenUsageService, mock(CommandStreamService.class), mcpRuntimeManager, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, gitAutoUpdateService, coordinator, "test"));
     }
 
-    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, UiController controller) {
+    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor, UiController controller) {
+    }
+
+    private static final class QueuedExecutor extends AbstractExecutorService {
+        private final Queue<Runnable> tasks = new ArrayDeque<>();
+        private boolean shutdown;
+
+        @Override
+        public void execute(Runnable command) {
+            tasks.add(command);
+        }
+
+        @Override
+        public void shutdown() {
+            shutdown = true;
+        }
+
+        @Override
+        public List<Runnable> shutdownNow() {
+            shutdown = true;
+            List<Runnable> remaining = List.copyOf(tasks);
+            tasks.clear();
+            return remaining;
+        }
+
+        @Override
+        public boolean isShutdown() {
+            return shutdown;
+        }
+
+        @Override
+        public boolean isTerminated() {
+            return shutdown && tasks.isEmpty();
+        }
+
+        @Override
+        public boolean awaitTermination(long timeout, TimeUnit unit) {
+            return isTerminated();
+        }
+
+        int size() {
+            return tasks.size();
+        }
+
+        void runNext() {
+            tasks.remove().run();
+        }
     }
 }

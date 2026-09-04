@@ -35,6 +35,7 @@ This section is intentionally stable: document the repository layout and long-li
 - Static CSS lives in `src/main/resources/static/css`; static browser scripts live in `src/main/resources/static/js`.
 - `index.html` is the main shell; most UI updates swap fragments rather than rendering a SPA.
 - UI behavior is intentionally split between Thymeleaf fragments, HTMX requests, and small browser-side scripts for resize/keyboard/terminal behavior.
+- Durable UI state should be persisted and rendered through the existing server-rendered Thymeleaf/HTMX path. Do not introduce feature-specific JavaScript rendering when the standard fragment rendering flow can represent the state.
 
 ### Agent and tooling architecture
 - Agent prompt/persona definitions live under `src/main/resources/agents`.
@@ -56,6 +57,8 @@ This section is intentionally stable: document the repository layout and long-li
 - Workspace rail refreshes and system balloons also use SSE channels.
 - Terminal interaction uses WebSockets (`TerminalWebSocketHandler`) with state managed separately from the main chat stream.
 - The UI may hold multiple live emitters per active stream; streaming state is coordinated through controller/service classes rather than the browser.
+- Use SSE and WebSockets for genuinely live or transient behavior. Do not add a dedicated real-time channel solely to render durable state that will naturally appear through the normal server-rendered flow.
+- Scheduling, concurrency, lifecycle, deduplication, and recovery semantics belong in backend services. Browser timing or browser-held state must not be required for correctness.
 - Failures are surfaced loudly to the frontend instead of being silently retried or hidden.
 
 ### Testing conventions
@@ -64,17 +67,17 @@ This section is intentionally stable: document the repository layout and long-li
 - Template rendering tests validate Thymeleaf fragments and pages without a browser.
 - Shared test helpers live in `src/test/java/com/judepereira/jupiter/testsupport`.
 - Tests should avoid reflection; expose production code with the narrowest sensible visibility instead.
+- Isolate external processes and environment-dependent integrations behind small injectable boundaries. Test their policies, no-op cases, failures, deduplication, and recovery transitions without requiring the external environment.
 - When a targeted test passes, run the full test suite afterward.
 
 ## Principles
-1. Follow YAGNI, DRY and KISS
+1. Prefer the simplest existing end-to-end path (YAGNI, DRY, and KISS). Avoid parallel mechanisms for the same state or behavior, and remove superseded plumbing rather than preserving it.
 
 ## Coding guidelines
-1. No defensive coding - if something can be fully implemented in the backend, 
-   there's no need to add handling for it in the frontend.
-2. If something fails, it should fail loud - do not add fallbacks for it. Log errors, 
-   and remember, we always communicate the error to the user via the frontend
+1. Keep business rules and state transitions in backend services. Treat frontend code as a thin rendering and interaction layer; do not duplicate server-owned state or add frontend-only fallbacks for backend behavior.
+2. Fail loudly and observably: log errors and communicate them through the canonical user-visible path. Do not silently retry, swallow errors, or add fallback paths that obscure failures.
 3. Use lombok and Java records wherever possible 
 4. When adding browser/frontend library assets (for example xterm, marked, DOMPurify), use WebJars instead of external CDN URLs
 5. Never use reflection in tests; open production visibility appropriately, preferably package-private, when tests need access.
 6. Always run all tests after targeted tests pass
+7. Prefer one constructor per production class. Do not add constructor overloads for defaults, optional dependencies, compatibility, test setup, or convenience. Use a record's canonical constructor; keep test defaults in test fixtures; use a named static factory for genuinely distinct construction semantics; use a parameter object or builder when direct construction becomes unclear. An overload is allowed only when required by a framework or external compatibility contract, and its exception must be documented.

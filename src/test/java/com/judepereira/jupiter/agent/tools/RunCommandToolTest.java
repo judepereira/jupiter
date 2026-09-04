@@ -17,7 +17,7 @@ public class RunCommandToolTest {
     @Test
     public void does_not_hang_on_output(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null);
         String cmd = "for i in $(seq 1 10); do echo out$i; echo err$i 1>&2; done";
         var res = t.execute(Map.of("command", cmd), ctx);
         assertTrue(res.isSuccess());
@@ -35,7 +35,7 @@ public class RunCommandToolTest {
     public void passesEnvironmentVariablesToProcess(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
         ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null,
-                Map.of("PROJECT_ENV_VAR", "project-value"), ToolProgressSink.noop());
+                Map.of("PROJECT_ENV_VAR", "project-value"), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("command", "printf '%s' \"$PROJECT_ENV_VAR\""), ctx);
 
@@ -49,7 +49,7 @@ public class RunCommandToolTest {
         ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null,
                 Map.of("JUPITER_HTTP_AUTH_PASSWORD", "secret-password",
                         "JUPITER_HTTP_AUTH_USERNAME", "secret-user",
-                        "PROJECT_ENV_VAR", "project-value"), ToolProgressSink.noop());
+                        "PROJECT_ENV_VAR", "project-value"), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("command", "printf '%s|%s|%s' \"${JUPITER_HTTP_AUTH_PASSWORD-}\" \"${JUPITER_HTTP_AUTH_USERNAME-}\" \"$PROJECT_ENV_VAR\""), ctx);
 
@@ -60,7 +60,7 @@ public class RunCommandToolTest {
     @Test
     public void long_stdout_is_previewed_with_utf8_boundaries_and_written_to_file(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null);
         String cmd = "i=0; while [ $i -lt 3000 ]; do printf '😀'; i=$((i+1)); done";
 
         var res = t.execute(Map.of("command", cmd), ctx);
@@ -85,7 +85,7 @@ public class RunCommandToolTest {
     @Test
     public void long_stderr_is_previewed_with_utf8_boundaries_and_written_to_file(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null);
         String cmd = "for i in $(seq 1 3000); do printf '😀' 1>&2; done";
 
         var res = t.execute(Map.of("command", cmd), ctx);

@@ -171,6 +171,18 @@
     border-top: 1px solid #e6eef6;
 }
 
+.settings-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+
+.settings-toggle input {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
 .settings-mcp-section {
     padding: 14px;
     border: 1px solid #dbeafe;

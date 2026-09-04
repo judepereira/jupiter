@@ -65,6 +65,36 @@ public class ProjectsTemplateRenderTest {
     }
 
     @Test
+    public void gitPullControlRendersIdleButton() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("workspaceId", 7L);
+        context.setVariable("busy", false);
+        context.setVariable("hasWorkspace", true);
+
+        String html = engine.process(new TemplateSpec("fragments/projects", Set.of("gitPullControl"), TemplateMode.HTML, null), context);
+
+        assertThat(html).contains("bi-cloud-arrow-down", "hx-post=\"/ui/workspaces/active/git/pull\"",
+                "hx-target=\"#git-pull-control\"", "hx-swap=\"outerHTML\"");
+        assertThat(html).doesNotContain("spinner-border", "hx-get=");
+    }
+
+    @Test
+    public void gitPullControlRendersBusyPollingButton() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("workspaceId", 7L);
+        context.setVariable("busy", true);
+        context.setVariable("hasWorkspace", true);
+
+        String html = engine.process(new TemplateSpec("fragments/projects", Set.of("gitPullControl"), TemplateMode.HTML, null), context);
+
+        assertThat(html).contains("disabled", "spinner-border spinner-border-sm", "Git pull in progress",
+                "aria-busy=\"true\"", "hx-get=\"/ui/workspaces/7/git/pull/status\"", "hx-trigger=\"every 1s\"");
+        assertThat(html).doesNotContain("hx-post=");
+    }
+
+    @Test
     public void indexPageIncludesPersistentSystemBalloonRootContainer() {
         SpringTemplateEngine engine = engine();
 
@@ -110,8 +140,10 @@ public class ProjectsTemplateRenderTest {
                 new ProjectEnvironmentVariable("API_URL", "https://example.test"),
                 new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
         ))));
-        context.setVariable("visibleProjects", List.of(new Project(1L, "Alpha", "/repo", ""), new Project(2L, "Beta", "/repo-b", "")));
+        context.setVariable("visibleProjects", List.of(new Project(1L, "Alpha", "/repo", "", List.of()), new Project(2L, "Beta", "/repo-b", "", List.of())));
         context.setVariable("lifecycleHookSettings", new LifecycleHookSettings("echo <done>\nline 2", "echo error", "echo subagent", 45));
+        context.setVariable("autoGitUpdateEnabled", true);
+        context.setVariable("reviewPanelOpen", false);
         context.setVariable("mcpServers", List.of(new com.judepereira.jupiter.persistence.Persistence.McpServerView(9L, "Local MCP", "http://localhost:3000/mcp", true,
                 List.of(new com.judepereira.jupiter.persistence.Persistence.McpServerHeader("Authorization", "Bearer token")), List.of(1L))));
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", "", List.of(
@@ -142,6 +174,7 @@ public class ProjectsTemplateRenderTest {
         assertThat(html).contains(
                 "class=\"nav nav-pills flex-md-column settings-nav\"",
                 "id=\"settings-current-project\"",
+                "id=\"settings-application\"",
                 "id=\"settings-mcp-servers\"",
                 "id=\"settings-model-providers\"",
                 "id=\"settings-usage\"",
@@ -235,14 +268,14 @@ public class ProjectsTemplateRenderTest {
 
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
-        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null)));
-        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null));
+        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null, List.of())));
+        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null, List.of()));
         context.setVariable("workspaces", List.of(
-                new Workspace(1L, "Default Workspace", "/repo", true),
-                new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace")));
-        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo", true));
-        context.setVariable("sessions", List.of(new Session(1L, "Session #1", true), new Session(2L, "Session #2")));
-        context.setVariable("activeSession", new Session(2L, "Session #2"));
+                new Workspace(1L, "Default Workspace", "/repo", true, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE),
+                new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE)));
+        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo", true, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE));
+        context.setVariable("sessions", List.of(new Session(1L, "Session #1", true, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE), new Session(2L, "Session #2", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE)));
+        context.setVariable("activeSession", new Session(2L, "Session #2", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE));
         context.setVariable("selectedName", "");
         context.setVariable("selectedPath", "");
         context.setVariable("currentPath", "");
@@ -273,16 +306,16 @@ public class ProjectsTemplateRenderTest {
 
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
-        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null)));
-        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null));
+        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null, List.of())));
+        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null, List.of()));
         context.setVariable("workspaces", List.of(
-                new Workspace(1L, "Default Workspace", "/repo", false, true),
-                new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace", false, false)));
-        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo", false, true));
+                new Workspace(1L, "Default Workspace", "/repo", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.IN_PROGRESS),
+                new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE)));
+        context.setVariable("activeWorkspace", new Workspace(1L, "Default Workspace", "/repo", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.IN_PROGRESS));
         context.setVariable("sessions", List.of(
-                new Session(1L, "Session #1", false, true),
-                new Session(2L, "Session #2", false, false)));
-        context.setVariable("activeSession", new Session(2L, "Session #2"));
+                new Session(1L, "Session #1", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.IN_PROGRESS),
+                new Session(2L, "Session #2", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE)));
+        context.setVariable("activeSession", new Session(2L, "Session #2", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE));
         context.setVariable("selectedName", "");
         context.setVariable("selectedPath", "");
         context.setVariable("currentPath", "");

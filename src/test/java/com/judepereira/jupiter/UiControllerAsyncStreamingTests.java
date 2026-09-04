@@ -8,6 +8,7 @@ import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.harness.StreamCancelledException;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.command.CommandStreamService;
@@ -42,7 +43,7 @@ public class UiControllerAsyncStreamingTests {
     @Test
     public void sendReturnsQuickly_withPending_andDoesNotRunHarnessSynchronously() throws Exception {
         AtomicBoolean runCalled = new AtomicBoolean(false);
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 runCalled.set(true);
@@ -91,7 +92,7 @@ public class UiControllerAsyncStreamingTests {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null);
+                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
             }
 
             @Override
@@ -140,7 +141,7 @@ public class UiControllerAsyncStreamingTests {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null);
+                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
             }
 
             @Override
@@ -181,7 +182,7 @@ public class UiControllerAsyncStreamingTests {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null);
+                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
             }
 
             @Override
@@ -243,7 +244,7 @@ public class UiControllerAsyncStreamingTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return null;
                     }
-                }) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public java.util.Optional<com.judepereira.jupiter.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
                                                                                                                        com.judepereira.jupiter.agent.catalog.ModelDefinition model,
@@ -255,11 +256,7 @@ public class UiControllerAsyncStreamingTests {
                 return java.util.Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 7L));
             }
         };
-        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
-                new SystemBalloonService(new ObjectMapper()), new com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService(),
-                mock(TerminalManager.class), new TerminalStateService(),
-                new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
-                contextCompactionService, mock(CommandStreamService.class), "0.0.1-SNAPSHOT");
+        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(), new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class)), contextCompactionService, null, mock(CommandStreamService.class), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, null, mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
 
         for (int i = 1; i <= 7; i++) {
             Model model = new ConcurrentModel();
@@ -347,8 +344,8 @@ public class UiControllerAsyncStreamingTests {
                 conversations.add(List.copyOf(conversation));
                 return switch (index++) {
                     case 0 -> new com.judepereira.jupiter.agent.llm.dto.ModelResponse(null,
-                            new com.judepereira.jupiter.agent.llm.dto.ToolCall("big_tool", java.util.Map.of()));
-                    default -> new com.judepereira.jupiter.agent.llm.dto.ModelResponse("all done", null);
+                            new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "big_tool", java.util.Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
+                    default -> new com.judepereira.jupiter.agent.llm.dto.ModelResponse("all done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
                 };
             }
         }
@@ -385,7 +382,7 @@ public class UiControllerAsyncStreamingTests {
             public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                 return model;
             }
-        }, registry, props, agentDefinitionService, modelCatalog);
+        }, registry, props, agentDefinitionService, modelCatalog, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
 
         java.util.concurrent.atomic.AtomicInteger compactionCalls = new java.util.concurrent.atomic.AtomicInteger();
         ContextCompactionService contextCompactionService = new ContextCompactionService(appStateService,
@@ -394,7 +391,7 @@ public class UiControllerAsyncStreamingTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return null;
                     }
-                }) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public java.util.Optional<com.judepereira.jupiter.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
                                                                                                                        com.judepereira.jupiter.agent.catalog.ModelDefinition model,
@@ -407,11 +404,7 @@ public class UiControllerAsyncStreamingTests {
             }
         };
 
-        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                new SystemBalloonService(new ObjectMapper()), new com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService(),
-                mock(TerminalManager.class), new TerminalStateService(),
-                new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
-                contextCompactionService, mock(CommandStreamService.class), "0.0.1-SNAPSHOT");
+        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(), new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class)), contextCompactionService, null, mock(CommandStreamService.class), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, null, mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
 
         Model sendModel = new ConcurrentModel();
         ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);
@@ -432,7 +425,7 @@ public class UiControllerAsyncStreamingTests {
 
     @Test
     public void streaming_preserves_spaces_and_newlines_in_final_text() throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
@@ -533,7 +526,7 @@ public class UiControllerAsyncStreamingTests {
     public void streaming_error_normalizes_openai_json_message() throws Exception {
         String quotaJson = "{\"error\":{\"message\":\"You exceeded your current quota, please check your plan and billing details.\",\"type\":\"insufficient_quota\",\"param\":null,\"code\":\"insufficient_quota\"}}";
 
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
@@ -608,7 +601,7 @@ public class UiControllerAsyncStreamingTests {
     public void streaming_error_normalizes_nested_openai_token_expired_json() throws Exception {
         String nestedJson = "{\"error\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"},\"detail\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"}}";
 
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
@@ -648,7 +641,7 @@ public class UiControllerAsyncStreamingTests {
 
     @Test
     public void stopChatCancelsInFlightStreamAndPersistsStoppedAssistantMessage(@TempDir java.nio.file.Path tmp) throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());

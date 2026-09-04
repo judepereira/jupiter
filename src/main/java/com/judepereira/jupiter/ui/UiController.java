@@ -18,6 +18,8 @@ import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
 import com.judepereira.jupiter.config.PublicRequestScheme;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
@@ -91,9 +93,15 @@ public class UiController {
     private final ChatToolCallHtmlService chatToolCallHtmlService;
     private final LifecycleHookService lifecycleHookService;
     private final HttpAuthProperties httpAuthProperties;
+    private final GitAutoUpdateService gitAutoUpdateService;
+    private final ManualGitPullCoordinator manualGitPullCoordinator;
     private final String appVersion;
 
     private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
+
+    private ManualGitPullCoordinator manualGitPullCoordinator() {
+        return manualGitPullCoordinator;
+    }
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -107,6 +115,7 @@ public class UiController {
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
                         ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
                         HttpAuthProperties httpAuthProperties,
+                        GitAutoUpdateService gitAutoUpdateService, ManualGitPullCoordinator manualGitPullCoordinator,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -127,9 +136,14 @@ public class UiController {
         this.chatToolCallHtmlService = chatToolCallHtmlService;
         this.lifecycleHookService = lifecycleHookService;
         this.httpAuthProperties = httpAuthProperties == null ? new HttpAuthProperties() : httpAuthProperties;
+        this.gitAutoUpdateService = gitAutoUpdateService;
+        this.manualGitPullCoordinator = manualGitPullCoordinator;
         this.appVersion = appVersion;
     }
 
+    /**
+     * Keeps the direct-test shape used before Git auto-update was introduced.
+     */
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                         SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
@@ -138,103 +152,13 @@ public class UiController {
                         ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
                         CommandStreamService commandStreamService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
                         ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
-                        LifecycleHookService lifecycleHookService, String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, tokenUsageService, commandStreamService, mcpRuntimeManager,
-                chatPresentationService, chatToolCallHtmlService, lifecycleHookService, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        ActiveStreamRegistryService activeStreamRegistryService,
-                        TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, null, chatPresentationService,
-                chatToolCallHtmlService, null, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        ActiveStreamRegistryService activeStreamRegistryService,
-                        TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
-                        LifecycleHookService lifecycleHookService, String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, null, chatPresentationService,
-                chatToolCallHtmlService, lifecycleHookService, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        McpProjectMcpServerRuntimeManager mcpRuntimeManager,
-                        ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, mcpRuntimeManager,
-                chatPresentationService, chatToolCallHtmlService, null, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, null, new ChatPresentationService(), null, null, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        TerminalManager terminalManager, TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, null, new ChatPresentationService(), null, null, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        TerminalManager terminalManager, TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
-                        CommandStreamService commandStreamService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, tokenUsageService, commandStreamService, mcpRuntimeManager,
-                new ChatPresentationService(), null, null, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        TerminalManager terminalManager, TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        McpProjectMcpServerRuntimeManager mcpRuntimeManager, String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, null, commandStreamService, mcpRuntimeManager, new ChatPresentationService(), null, null, null, appVersion);
+                        LifecycleHookService lifecycleHookService, GitAutoUpdateService gitAutoUpdateService,
+                        ManualGitPullCoordinator manualGitPullCoordinator, String appVersion) {
+        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService,
+                systemBalloonService, workspaceRailRefreshService, activeStreamRegistryService, terminalManager,
+                terminalStateService, openAiOAuthService, contextCompactionService, tokenUsageService,
+                commandStreamService, mcpRuntimeManager, chatPresentationService, chatToolCallHtmlService,
+                lifecycleHookService, new HttpAuthProperties(), gitAutoUpdateService, manualGitPullCoordinator, appVersion);
     }
 
     @GetMapping("/")
@@ -291,7 +215,7 @@ public class UiController {
 
             List<Message> conversationHistory = new ArrayList<>(appStateService.buildConversationHistory(session.id()));
             CancellationToken cancellationToken = new CancellationToken();
-            ActiveStream activeStream = new ActiveStream(new PendingStream(session.id(), workspaceRoot,
+            ActiveStream activeStream = ActiveStream.create(new PendingStream(session.id(), workspaceRoot,
                     new AgentTurnRequest(null, conversationHistory, workspaceRoot,
                             selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id(), cancellationToken)), cancellationToken);
             activeStreams.put(assistantId, activeStream);
@@ -1021,6 +945,7 @@ public class UiController {
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
         model.addAttribute("lifecycleHookSettings", appStateService.loadLifecycleHookSettings());
+        model.addAttribute("autoGitUpdateEnabled", appStateService.loadAutoGitUpdateEnabled());
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
         return "fragments/projects :: settingsModal";
     }
@@ -1061,6 +986,12 @@ public class UiController {
             Model model) {
         appStateService.updateLifecycleHookSettings(new LifecycleHookSettings(assistantCompletedScript,
                 assistantErroredScript, subagentCompletedScript, timeoutSeconds));
+        return "fragments/projects :: modalClose";
+    }
+
+    @PostMapping("/ui/settings/auto-git-update/apply")
+    public String applyAutoGitUpdateSettings(@RequestParam(name = "enabled", defaultValue = "false") boolean enabled) {
+        appStateService.updateAutoGitUpdateEnabled(enabled);
         return "fragments/projects :: modalClose";
     }
 
@@ -1170,6 +1101,34 @@ public class UiController {
     public String openAiOAuthStatus(Model model) {
         model.addAttribute("openAiOAuthView", openAiOAuthService.pollCurrentDeviceAuthorization());
         return "fragments/projects :: openaiOAuthSection";
+    }
+
+    @PostMapping("/ui/workspaces/active/git/pull")
+    public String pullActiveWorkspace(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeWorkspace() == null) {
+            systemBalloonService.publishWarning("Git Pull", "No active workspace is selected.");
+            addGitPullModel(model, null);
+        } else {
+            manualGitPullCoordinator().dispatch(view.activeWorkspace().id());
+            addGitPullModel(model, view.activeWorkspace());
+        }
+        return "fragments/projects :: gitPullControl";
+    }
+
+    @GetMapping("/ui/workspaces/{workspaceId}/git/pull/status")
+    public String gitPullStatus(@PathVariable long workspaceId, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        WorkspaceView workspace = view.activeWorkspace() != null && view.activeWorkspace().id() == workspaceId
+                ? view.activeWorkspace() : null;
+        addGitPullModel(model, workspace);
+        return "fragments/projects :: gitPullControl";
+    }
+
+    private void addGitPullModel(Model model, WorkspaceView workspace) {
+        model.addAttribute("workspaceId", workspace == null ? null : workspace.id());
+        model.addAttribute("gitPullBusy", workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
+        model.addAttribute("hasWorkspace", workspace != null);
     }
 
     @PostMapping("/ui/projects/add")
@@ -1568,7 +1527,7 @@ public class UiController {
     }
 
     private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {
-        model.addAttribute("workspace", new Workspace(inspection.workspaceId(), inspection.workspaceName(), inspection.workspacePath()));
+        model.addAttribute("workspace", new Workspace(inspection.workspaceId(), inspection.workspaceName(), inspection.workspacePath(), false, RailStatus.NONE));
         model.addAttribute("workspaceId", inspection.workspaceId());
         model.addAttribute("workspaceName", inspection.workspaceName());
         model.addAttribute("workspacePath", inspection.workspacePath());
@@ -1897,23 +1856,9 @@ public class UiController {
     public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
 
     public record Project(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables) {
-        public Project(long id, String name, String path, String workspaceInitCommands) {
-            this(id, name, path, workspaceInitCommands, List.of());
-        }
     }
 
     public record Workspace(long id, String name, String path, boolean unread, RailStatus railStatus) {
-        public Workspace(long id, String name, String path, boolean unread) {
-            this(id, name, path, unread, RailStatus.NONE);
-        }
-
-        public Workspace(long id, String name, String path, boolean unread, boolean inProgress) {
-            this(id, name, path, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
-        }
-
-        public Workspace(long id, String name, String path) {
-            this(id, name, path, false, RailStatus.NONE);
-        }
 
         public boolean inProgress() {
             return railStatus == RailStatus.IN_PROGRESS;
@@ -1927,17 +1872,6 @@ public class UiController {
     public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
 
     public record Session(long id, String name, boolean unread, RailStatus railStatus) {
-        public Session(long id, String name, boolean unread) {
-            this(id, name, unread, RailStatus.NONE);
-        }
-
-        public Session(long id, String name, boolean unread, boolean inProgress) {
-            this(id, name, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
-        }
-
-        public Session(long id, String name) {
-            this(id, name, false, RailStatus.NONE);
-        }
 
         public boolean inProgress() {
             return railStatus == RailStatus.IN_PROGRESS;
@@ -1958,8 +1892,8 @@ public class UiController {
     private record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean started,
                                 AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,
                                 CancellationToken cancellationToken, AtomicReference<StringBuilder> accumulatedText) {
-        private ActiveStream(PendingStream pendingStream, CancellationToken cancellationToken) {
-            this(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false),
+        private static ActiveStream create(PendingStream pendingStream, CancellationToken cancellationToken) {
+            return new ActiveStream(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false),
                     new AtomicBoolean(false), new AtomicReference<>(), cancellationToken, new AtomicReference<>(new StringBuilder()));
         }
     }

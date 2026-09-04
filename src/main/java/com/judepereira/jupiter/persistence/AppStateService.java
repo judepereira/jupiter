@@ -38,6 +38,43 @@ public class AppStateService {
         return activeStreamRegistryService;
     }
 
+    @Transactional(readOnly = true)
+    public boolean loadAutoGitUpdateEnabled() {
+        return repository.loadAutoGitUpdateEnabled();
+    }
+
+    @Transactional
+    public void updateAutoGitUpdateEnabled(boolean enabled) {
+        repository.updateAutoGitUpdateEnabled(enabled);
+    }
+
+    @Transactional(readOnly = true)
+    public Persistence.AutoGitUpdateFailureState loadWorkspaceAutoGitUpdateFailureState(long workspaceId) {
+        var state = repository.findWorkspaceAutoGitUpdateState(workspaceId)
+                .orElseThrow(() -> new IllegalStateException("Missing auto git update state for workspace " + workspaceId));
+        return new Persistence.AutoGitUpdateFailureState(state.failureEpisodeActive(), state.failureStartedAt(), state.lastSuccessAt());
+    }
+
+    @Transactional
+    public Persistence.AutoGitUpdateFailureNotification appendAutoGitUpdateFailureMessage(long workspaceId, String content) {
+        Instant now = Instant.now();
+        repository.markWorkspaceAutoGitUpdateFailure(workspaceId, now);
+        Optional<SessionView> targetSession = repository.findMostRecentlyOpenedVisiblePrimarySession(workspaceId)
+                .filter(session -> repository.claimWorkspaceAutoGitUpdateFailureNotification(workspaceId, session.id(), now))
+                .map(this::toSessionView);
+        if (targetSession.isEmpty()) {
+            return new Persistence.AutoGitUpdateFailureNotification(false);
+        }
+
+        appendInfoMessageInternal(targetSession.get().id(), content);
+        return new Persistence.AutoGitUpdateFailureNotification(true);
+    }
+
+    @Transactional
+    public void resetWorkspaceAutoGitUpdateFailure(long workspaceId) {
+        repository.resetWorkspaceAutoGitUpdateFailure(workspaceId, Instant.now());
+    }
+
     @Transactional
     public SessionView ensureChatSession(String defaultWorkspaceRoot) {
         var appState = repository.loadAppState();
@@ -367,7 +404,23 @@ public class AppStateService {
         List<SessionView> sessions = activeWorkspace == null ? List.of() : repository.listSessionsByWorkspace(activeWorkspace.id()).stream().map(session -> toSessionView(session, activeSessionIds)).toList();
         SessionView activeSession = activeSessionRow == null ? null : toSessionView(activeSessionRow, activeSessionIds);
         SessionDetailView sessionDetail = activeSession == null ? null : loadSessionDetail(activeSession.id());
-        return new AppStateView(projects, activeProject, workspaces, activeWorkspace, sessions, activeSession, sessionDetail);
+        return new AppStateView(projects, activeProject, workspaces, activeWorkspace, sessions, activeSession, sessionDetail,
+                repository.loadAutoGitUpdateEnabled());
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<SessionView> findMostRecentlyOpenedVisiblePrimarySession(long workspaceId) {
+        return repository.findMostRecentlyOpenedVisiblePrimarySession(workspaceId).map(this::toSessionView);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkspaceView> listAutoGitUpdateWorkspaces() {
+        return repository.listAutoGitUpdateWorkspaces().stream().map(this::toWorkspaceView).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public WorkspaceView loadAutoGitUpdateWorkspace(long workspaceId) {
+        return toWorkspaceView(repository.findWorkspace(workspaceId));
     }
 
     private String normalizeOptionalScript(String script) {
@@ -702,6 +755,30 @@ public class AppStateService {
         return appendVisibleSystemMessage(sessionId, content, null);
     }
 
+    /** Adds a durable UI message without exposing it to the model. */
+    @Transactional
+    public ChatMessageView appendInfoMessage(long sessionId, String content) {
+        return appendInfoMessageInternal(sessionId, content);
+    }
+
+    private ChatMessageView appendInfoMessageInternal(long sessionId, String content) {
+        Instant now = Instant.now();
+        long turnId = repository.nextTurnId(sessionId);
+        long sequence = repository.nextMessageSequence(sessionId);
+        String id = UUID.randomUUID().toString();
+        repository.insertConversationMessage(sessionId, id, "info", turnId, sequence, content, null, null, true, false, false,
+                null, null, null, null, null, now, now);
+        ChatMessageView message = toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
+        applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
+        markUnreadIfInactive(sessionId);
+        return message;
+    }
+
+    @Transactional
+    public boolean markSessionUnreadIfInactive(long sessionId) {
+        return markUnreadIfInactive(sessionId);
+    }
+
     @Transactional
     public void updateSessionDraft(long sessionId, String draft) {
         repository.updateSessionDraft(sessionId, draft);
@@ -733,7 +810,7 @@ public class AppStateService {
 
     public List<Message> buildConversationHistory(long sessionId) {
         var messages = repository.listMessagesBySession(sessionId).stream()
-                .filter(message -> message.includeInModel() && !message.pending())
+                .filter(message -> message.includeInModel() && !message.pending() && !"info".equals(message.role()))
                 .toList();
 
         long compactionCutoffTurnId = messages.stream()
@@ -867,7 +944,7 @@ public class AppStateService {
             stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr);
+                throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr, null);
             }
         } catch (Exception e) {
             if (e instanceof GitWorktreeException gitWorktreeException) {
@@ -1165,7 +1242,7 @@ public class AppStateService {
             }
             ToolCallView syntheticToolCall = new ToolCallView(parentToolCallId, "task", true, null, null, false, false,
                     childSession.id(), childSession.subagentAgentId(), childSession.subagentAgentName(), "running",
-                    taskRequestSummary(parentSessionId, parentToolCallId));
+                    null, null, null, null, taskRequestSummary(parentSessionId, parentToolCallId));
             Long parentAssistantMessageId = childSession.parentAssistantMessageId();
             if (parentAssistantMessageId != null) {
                 Integer messageIndex = pendingAssistantIndexByMessageId.get(parentAssistantMessageId);
@@ -1279,7 +1356,7 @@ public class AppStateService {
         boolean success = Boolean.TRUE.equals(trace.success());
         String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
         return new ToolCallView(toolCallId, trace.toolName(), success, null, null, false, false,
-                null, null, null, status);
+                null, null, null, status, null, null, null, null, null);
     }
 
     private ToolCallView toTaskCallProjection(AppStateRepository.TaskCallProjectionRow projection,
@@ -1287,11 +1364,11 @@ public class AppStateService {
         boolean success = Boolean.TRUE.equals(trace.success());
         String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
         if (projection == null) {
-            return new ToolCallView(toolCallId, "task", success, null, null, false, false, null, null, null, status);
+            return new ToolCallView(toolCallId, "task", success, null, null, false, false, null, null, null, status, null, null, null, null, null);
         }
         return new ToolCallView(toolCallId, "task", success, null, null, false, false,
                 projection.subagentSessionId(), projection.subagentAgentId(), projection.subagentAgentName(), status,
-                projection.requestSummary());
+                null, null, null, null, projection.requestSummary());
     }
 
     private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace, String toolCallId, long sessionId) {
@@ -1424,12 +1501,12 @@ public class AppStateService {
 
     private Message toModelMessage(AppStateRepository.ConversationMessageRow row) {
         return switch (row.role()) {
-            case "assistant" -> new Message(Message.Role.ASSISTANT, row.content(), toolCalls(row.toolCallsJson()));
-            case "tool" -> new Message(Message.Role.TOOL, row.content(), row.toolCallId());
+            case "assistant" -> new Message(Message.Role.ASSISTANT, row.content(), null, toolCalls(row.toolCallsJson()));
+            case "tool" -> new Message(Message.Role.TOOL, row.content(), row.toolCallId(), null);
             case "system" -> row.compactedThroughTurnId() != null
-                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content())
-                    : new Message(Message.Role.SYSTEM, row.content());
-            case "user" -> new Message(Message.Role.USER, row.content());
+                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content(), null, null)
+                    : new Message(Message.Role.SYSTEM, row.content(), null, null);
+            case "user" -> new Message(Message.Role.USER, row.content(), null, null);
             default -> throw new IllegalStateException("Unsupported role: " + row.role());
         };
     }

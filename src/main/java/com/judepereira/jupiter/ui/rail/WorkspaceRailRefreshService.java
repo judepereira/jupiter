@@ -26,11 +26,7 @@ public class WorkspaceRailRefreshService {
     private final Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
-    public WorkspaceRailRefreshService() {
-        this(() -> new SseEmitter(0L), WorkspaceRailRefreshService::sendNamedEvent);
-    }
-
-    WorkspaceRailRefreshService(Supplier<SseEmitter> emitterFactory, EventSender eventSender) {
+    public WorkspaceRailRefreshService(Supplier<SseEmitter> emitterFactory, EventSender eventSender) {
         this.emitterFactory = emitterFactory;
         this.eventSender = eventSender;
     }
@@ -108,7 +104,7 @@ public class WorkspaceRailRefreshService {
     }
 
     @FunctionalInterface
-    interface EventSender {
+    public interface EventSender {
         void send(SseEmitter emitter, String eventName, Object data) throws IOException;
     }
 }

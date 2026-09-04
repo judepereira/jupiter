@@ -15,10 +15,6 @@ final class McpTemplateResolver {
 
     private final Function<String, String> systemEnvironmentLookup;
 
-    McpTemplateResolver() {
-        this(System::getenv);
-    }
-
     McpTemplateResolver(Function<String, String> systemEnvironmentLookup) {
         this.systemEnvironmentLookup = systemEnvironmentLookup;
     }

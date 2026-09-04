@@ -19,7 +19,7 @@ public class ToolRegistryTest {
         String text = "x".repeat(40 * 1024);
         registry.register(tool("read_file", text));
 
-        ToolExecutionResult result = registry.executeByName("read_file", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
+        ToolExecutionResult result = registry.executeByName("read_file", Map.of(), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null));
 
         String suffix = "\n\n[tool_output_truncated: output exceeded 16 KiB. Use startLine/endLine to read a smaller range.]";
         assertTrue(result.getText().endsWith(suffix));
@@ -35,7 +35,7 @@ public class ToolRegistryTest {
         String text = "x".repeat(40 * 1024);
         registry.register(tool("task", text));
 
-        ToolExecutionResult result = registry.executeByName("task", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
+        ToolExecutionResult result = registry.executeByName("task", Map.of(), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null));
 
         assertEquals(text, result.getText());
         assertTrue(result.getText().getBytes(StandardCharsets.UTF_8).length > 16 * 1024);
@@ -47,7 +47,7 @@ public class ToolRegistryTest {
         String text = "x".repeat(8 * 1024);
         registry.register(tool("run_command", text));
 
-        ToolExecutionResult result = registry.executeByName("run_command", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
+        ToolExecutionResult result = registry.executeByName("run_command", Map.of(), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null));
 
         assertEquals(text, result.getText());
     }
@@ -58,7 +58,7 @@ public class ToolRegistryTest {
         String text = "😀".repeat(9000);
         registry.register(tool("search_code", text));
 
-        ToolExecutionResult result = registry.executeByName("search_code", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
+        ToolExecutionResult result = registry.executeByName("search_code", Map.of(), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null));
 
         String suffix = "\n\n[tool_output_truncated: output exceeded 16 KiB. Narrow path, include, or pattern.]";
         assertTrue(result.getText().endsWith(suffix));
@@ -73,7 +73,7 @@ public class ToolRegistryTest {
         ToolRegistry registry = new ToolRegistry();
         registry.register(tool("read_file", null));
 
-        ToolExecutionResult result = registry.executeByName("read_file", Map.of(), new ToolExecutionContext(tmp, true, true, 5));
+        ToolExecutionResult result = registry.executeByName("read_file", Map.of(), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null));
 
         assertNull(result.getText());
         assertTrue(result.isSuccess());

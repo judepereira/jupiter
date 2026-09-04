@@ -20,10 +20,6 @@ public class SearchCodeTool implements AgentTool {
     );
     private final RipgrepToolSupport ripgrep;
 
-    public SearchCodeTool() {
-        this(new RipgrepToolSupport());
-    }
-
     public SearchCodeTool(RipgrepToolSupport ripgrep) {
         this.ripgrep = ripgrep;
     }

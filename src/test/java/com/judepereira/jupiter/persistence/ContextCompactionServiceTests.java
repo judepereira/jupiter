@@ -10,6 +10,7 @@ import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,7 +37,7 @@ class ContextCompactionServiceTests {
         }
 
         RecordingStreamingFactory factory = recordingStreamingFactory();
-        ContextCompactionService compactionService = new ContextCompactionService(service, factory);
+        ContextCompactionService compactionService = new ContextCompactionService(service, factory, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true,
                 List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 50000, 32, null, null, null);
@@ -64,7 +65,7 @@ class ContextCompactionServiceTests {
         var secondTurn = service.appendUserMessageAndPendingAssistant(sessionId, "second turn " + "b".repeat(200));
         service.completeAssistantMessage(sessionId, secondTurn.assistantMessage().id(), "reply 2 " + "c".repeat(200), List.of());
 
-        ContextCompactionService compactionService = new ContextCompactionService(service, failIfUsedFactory());
+        ContextCompactionService compactionService = new ContextCompactionService(service, failIfUsedFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true,
                 List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 1200, 32, null, null, null);
@@ -144,7 +145,7 @@ class ContextCompactionServiceTests {
             this.options.add(options);
             onDelta.accept("streamed ");
             onDelta.accept("summary");
-            return new ModelResponse("streamed summary", null);
+            return new ModelResponse("streamed summary", null, ModelResponseMetadata.empty());
         }
     }
 }

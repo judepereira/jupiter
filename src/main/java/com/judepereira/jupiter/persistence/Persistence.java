@@ -21,9 +21,6 @@ public final class Persistence {
     }
 
     public record ProjectView(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables) {
-        public ProjectView(long id, String name, String path, String workspaceInitCommands) {
-            this(id, name, path, workspaceInitCommands, List.of());
-        }
     }
 
     public record ProjectEnvironmentVariable(String name, String value) {
@@ -33,23 +30,9 @@ public final class Persistence {
     }
 
     public record McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
-        public McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers) {
-            this(id, name, url, enabled, headers, List.of());
-        }
     }
 
     public record WorkspaceView(long id, String name, String path, boolean unread, RailStatus railStatus) {
-        public WorkspaceView(long id, String name, String path, boolean unread) {
-            this(id, name, path, unread, RailStatus.NONE);
-        }
-
-        public WorkspaceView(long id, String name, String path, boolean unread, boolean inProgress) {
-            this(id, name, path, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
-        }
-
-        public WorkspaceView(long id, String name, String path) {
-            this(id, name, path, false, RailStatus.NONE);
-        }
 
         public boolean inProgress() {
             return railStatus == RailStatus.IN_PROGRESS;
@@ -61,17 +44,6 @@ public final class Persistence {
     }
 
     public record SessionView(long id, String name, boolean unread, RailStatus railStatus) {
-        public SessionView(long id, String name, boolean unread) {
-            this(id, name, unread, RailStatus.NONE);
-        }
-
-        public SessionView(long id, String name, boolean unread, boolean inProgress) {
-            this(id, name, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
-        }
-
-        public SessionView(long id, String name) {
-            this(id, name, false, RailStatus.NONE);
-        }
 
         public boolean inProgress() {
             return railStatus == RailStatus.IN_PROGRESS;
@@ -85,25 +57,6 @@ public final class Persistence {
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                                 Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
                                 String imageUrl, String imageAlt, String imagePath, String imageMediaType, String taskBody) {
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, null);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null, null);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status, String taskBody) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, taskBody);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status, String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, imageUrl, imageAlt, imagePath, imageMediaType, null);
-        }
     }
 
     public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel) {
@@ -123,7 +76,14 @@ public final class Persistence {
                                             String subagentAgentId, String subagentAgentName) {
     }
 
-    public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail) {
+    public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail,
+                               boolean autoGitUpdateEnabled) {
+    }
+
+    public record AutoGitUpdateFailureState(boolean failureEpisodeActive, Instant failureStartedAt, Instant lastSuccessAt) {
+    }
+
+    public record AutoGitUpdateFailureNotification(boolean firstFailure) {
     }
 
     public record LifecycleHookSettings(String assistantCompletedScript, String assistantErroredScript,

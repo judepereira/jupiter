@@ -52,10 +52,10 @@ public class LangChain4jMapperTest {
     @Test
     public void converts_conversation_with_tool_calls_and_tool_results() {
         List<ChatMessage> messages = messageMapper.toChatMessages(List.of(
-                new Message(Message.Role.SYSTEM, "sys"),
-                new Message(Message.Role.USER, "user"),
-                new Message(Message.Role.ASSISTANT, null, List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt")))),
-                new Message(Message.Role.TOOL, "written", "call-123")
+                new Message(Message.Role.SYSTEM, "sys", null, null),
+                new Message(Message.Role.USER, "user", null, null),
+                new Message(Message.Role.ASSISTANT, null, null, List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt")))),
+                new Message(Message.Role.TOOL, "written", "call-123", null)
         ));
 
         assertInstanceOf(SystemMessage.class, messages.get(0));

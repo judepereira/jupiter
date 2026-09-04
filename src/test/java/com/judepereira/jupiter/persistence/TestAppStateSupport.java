@@ -10,9 +10,11 @@ import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.terminal.TerminalHandle;
@@ -26,6 +28,7 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import org.flywaydb.core.Flyway;
+
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.thymeleaf.spring6.SpringTemplateEngine;
@@ -82,10 +85,12 @@ public final class TestAppStateSupport {
 
         AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource));
         AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher, activeStreamRegistryService);
-        return new AppStateTestContext(service, repository, activeStreamRegistryService);
+        return new AppStateTestContext(service, repository, activeStreamRegistryService, dataSource);
     }
 
-    public record AppStateTestContext(AppStateService service, AppStateRepository repository, ActiveStreamRegistryService activeStreamRegistryService) {}
+    public record AppStateTestContext(AppStateService service, AppStateRepository repository,
+                                      ActiveStreamRegistryService activeStreamRegistryService,
+                                      javax.sql.DataSource dataSource) {}
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
         return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService(), null);
@@ -121,21 +126,7 @@ public final class TestAppStateSupport {
         resolver.setTemplateMode(TemplateMode.HTML);
         resolver.setCacheable(false);
         templateEngine.setTemplateResolver(resolver);
-        return new UiController(harness, properties, appStateService,
-                new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService,
-                new SystemBalloonService(new ObjectMapper()),
-                new WorkspaceRailRefreshService(),
-                activeStreamRegistryService,
-                terminalManager,
-                new TerminalStateService(),
-                new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
-                contextCompactionService(appStateService),
-                new TokenUsageService(context.repository(), new ObjectMapper()),
-                mock(CommandStreamService.class),
-                mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
-                new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
-                lifecycleHookService, "0.0.1-SNAPSHOT");
+        return new UiController(harness, properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), modelCatalogService, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), activeStreamRegistryService, terminalManager, new TerminalStateService(), new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), context.repository()), contextCompactionService(appStateService), new TokenUsageService(context.repository(), new ObjectMapper()), mock(CommandStreamService.class), mock(McpProjectMcpServerRuntimeManager.class), new com.judepereira.jupiter.ui.ChatPresentationService(), new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService), lifecycleHookService, mock(GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {
@@ -196,7 +187,7 @@ public final class TestAppStateSupport {
     }
 
     public static ContextCompactionService contextCompactionService(AppStateService appStateService) {
-        return new ContextCompactionService(appStateService, summaryClientFactory());
+        return new ContextCompactionService(appStateService, summaryClientFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
     }
 
     private static AgentModelClientFactory summaryClientFactory() {
@@ -208,14 +199,14 @@ public final class TestAppStateSupport {
 
             @Override
             public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
-                return new ModelResponse("compact summary", null);
+                return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
             }
 
             @Override
             public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
                                                java.util.function.Consumer<String> onDelta) {
                 onDelta.accept("compact summary");
-                return new ModelResponse("compact summary", null);
+                return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
             }
         };
 
