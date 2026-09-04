@@ -94,8 +94,8 @@ class LifecycleHookServiceTests {
         long sessionId = appStateService.loadViewData().activeSession().id();
         SystemBalloonService balloons = mock(SystemBalloonService.class);
         var executor = Executors.newVirtualThreadPerTaskExecutor();
-        LifecycleHookService service = new LifecycleHookService(appStateService, balloons, executor,
-                ignored -> { throw new IOException("test launch failure"); }, tempDir);
+        LifecycleHookService service = new LifecycleHookService(appStateService, balloons,
+                new LifecycleHookRuntime(executor, ignored -> { throw new IOException("test launch failure"); }, tempDir));
         try {
             var result = service.dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, sessionId).get(5, TimeUnit.SECONDS);
             assertThat(result.status()).isEqualTo(LifecycleHookService.HookStatus.LAUNCH_FAILED);
@@ -137,7 +137,7 @@ class LifecycleHookServiceTests {
     }
 
     private static LifecycleHookService service(AppStateService appStateService, SystemBalloonService balloons, Path tempDir) {
-        return new LifecycleHookService(appStateService, balloons, Executors.newVirtualThreadPerTaskExecutor(),
-                LifecycleHookService::startProcess, tempDir);
+        return new LifecycleHookService(appStateService, balloons,
+                new LifecycleHookRuntime(Executors.newVirtualThreadPerTaskExecutor(), LifecycleHookService::startProcess, tempDir));
     }
 }

@@ -38,26 +38,26 @@ public class CodingAgentHarnessTaskToolTests {
 
         RecordingTool taskTool = recordingTool("task");
         RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new ToolCall("task", Map.of(
+                new ModelResponse(null, new ToolCall(null, "task", Map.of(
                         "agentId", "engineer",
                         "requestSummary", "Do the thing",
                         "task", "do the thing",
                         "expectedOutput", "done"
-                ))),
-                new ModelResponse("primary complete", null)
+                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse("primary complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
         ));
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp), agentService(primary),
-                ModelCatalogTestSupport.modelCatalogService());
+                ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "Primary system prompt",
-                List.of(new Message(Message.Role.USER, "hello")),
+                List.of(new Message(Message.Role.USER, "hello", null, null)),
                 tmp.toString(),
                 "primary",
                 null,
                 null
-        ));
+        , null, null));
 
         assertThat(model.capturedToolNames()).hasSize(2).allMatch(names -> names.contains("task"));
         assertThat(taskTool.executions).isEqualTo(1);
@@ -74,26 +74,26 @@ public class CodingAgentHarnessTaskToolTests {
 
         RecordingTool taskTool = recordingTool("task");
         RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new ToolCall("task", Map.of(
+                new ModelResponse(null, new ToolCall(null, "task", Map.of(
                         "agentId", "explore",
                         "requestSummary", "Recursively call task",
                         "task", "recursively call task",
                         "expectedOutput", "never"
-                ))),
-                new ModelResponse("subagent complete", null)
+                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse("subagent complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
         ));
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp), agentService(subagent),
-                ModelCatalogTestSupport.modelCatalogService());
+                ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "Subagent system prompt",
-                List.of(new Message(Message.Role.USER, "hello")),
+                List.of(new Message(Message.Role.USER, "hello", null, null)),
                 tmp.toString(),
                 "engineer",
                 null,
                 null
-        ));
+        , null, null));
 
         assertThat(model.capturedToolNames()).hasSize(2).allMatch(List::isEmpty);
         assertThat(taskTool.executions).isZero();
@@ -184,7 +184,7 @@ public class CodingAgentHarnessTaskToolTests {
             capturedConversations.add(List.copyOf(conversation));
             capturedToolDefinitions.add(List.copyOf(tools));
             if (index >= responses.size()) {
-                return new ModelResponse("", null);
+                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
             }
             return responses.get(index++);
         }

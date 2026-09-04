@@ -7,8 +7,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PreDestroy;
-import org.springframework.beans.factory.annotation.Autowired;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -45,19 +43,13 @@ public class LifecycleHookService {
     private final Set<CompletableFuture<HookExecutionResult>> activeTasks = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
-    @Autowired
-    public LifecycleHookService(AppStateService appStateService, SystemBalloonService systemBalloonService) {
-        this(appStateService, systemBalloonService, Executors.newVirtualThreadPerTaskExecutor(),
-                LifecycleHookService::startProcess, TEMP_DIRECTORY);
-    }
-
-    LifecycleHookService(AppStateService appStateService, SystemBalloonService systemBalloonService,
-                         ExecutorService executor, ProcessLauncher processLauncher, Path tempDirectory) {
+    public LifecycleHookService(AppStateService appStateService, SystemBalloonService systemBalloonService,
+                                LifecycleHookRuntime runtime) {
         this.appStateService = appStateService;
         this.systemBalloonService = systemBalloonService;
-        this.executor = executor;
-        this.processLauncher = processLauncher;
-        this.tempDirectory = tempDirectory;
+        this.executor = runtime.executor();
+        this.processLauncher = runtime.processLauncher();
+        this.tempDirectory = runtime.tempDirectory();
     }
 
     /** Queues the selected action and returns a future useful to callers that need to observe its outcome. */

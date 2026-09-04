@@ -44,21 +44,7 @@ class UiControllerDisplayImageTests {
                         "Displayed image: images/cat.png",
                         Map.of("displayType", "image", "path", "images/cat.png", "alt", "Cat", "mediaType", "image/png")));
 
-        UiController controller = new UiController(
-                new CodingAgentHarness(null, null, new AgentProperties()),
-                new AgentProperties(),
-                appStateService,
-                new AgentDefinitionService(new ObjectMapper()),
-                ModelCatalogTestSupport.modelCatalogService(),
-                new SystemBalloonService(new ObjectMapper()),
-                new WorkspaceRailRefreshService(),
-                appStateContext.activeStreamRegistryService(),
-                mock(TerminalManager.class),
-                new TerminalStateService(),
-                new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient()),
-                new com.judepereira.jupiter.persistence.ContextCompactionService(appStateService, mock(AgentModelClientFactory.class)),
-                mock(CommandStreamService.class),
-                "0.0.1-SNAPSHOT");
+        UiController controller = new UiController(new CodingAgentHarness(null, null, new AgentProperties(), null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()), new AgentProperties(), appStateService, new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(), new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class)), new com.judepereira.jupiter.persistence.ContextCompactionService(appStateService, mock(AgentModelClientFactory.class), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()), null, mock(CommandStreamService.class), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, null, com.judepereira.jupiter.git.ManualGitPullCoordinator.noOp(), "0.0.1-SNAPSHOT");
 
         var response = controller.streamDisplayImage(sessionId, "image-1");
 

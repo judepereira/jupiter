@@ -41,7 +41,7 @@ public class TaskToolAndSubagentServiceTests {
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
 
-        CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null) {
+        CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 assertThat(request.getAgentId()).isEqualTo("engineer");
@@ -55,7 +55,7 @@ public class TaskToolAndSubagentServiceTests {
             }
         };
 
-        SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService, childHarnessProvider(childHarness));
+        SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService, childHarnessProvider(childHarness), null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         ToolExecutionResult result = taskTool.execute(Map.of(
@@ -63,7 +63,7 @@ public class TaskToolAndSubagentServiceTests {
                 "requestSummary", "Create the parser file",
                 "task", "write a file",
                 "expectedOutput", "child final"
-        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call"));
+        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), ToolProgressSink.noop(), null));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getText()).isEqualTo("child final");
@@ -99,14 +99,14 @@ public class TaskToolAndSubagentServiceTests {
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent system prompt", AgentMode.SUBAGENT,
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
-        SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService, childHarnessProvider(null));
+        SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService, childHarnessProvider(null), null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         ToolExecutionResult result = taskTool.execute(Map.of(
                 "agentId", "engineer",
                 "task", "write a file",
                 "expectedOutput", "child final"
-        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call"));
+        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), ToolProgressSink.noop(), null));
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getText()).contains("missing required task tool arguments");
@@ -117,7 +117,7 @@ public class TaskToolAndSubagentServiceTests {
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent system prompt", AgentMode.SUBAGENT,
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
-        TaskTool taskTool = new TaskTool(agentDefinitionService, new SubagentTaskService(null, agentDefinitionService, childHarnessProvider(null)));
+        TaskTool taskTool = new TaskTool(agentDefinitionService, new SubagentTaskService(null, agentDefinitionService, childHarnessProvider(null), null));
 
         var schema = taskTool.definition().getSchema();
         assertThat(schema.properties()).extracting(com.judepereira.jupiter.agent.llm.dto.ToolParameter::name)
@@ -135,7 +135,7 @@ public class TaskToolAndSubagentServiceTests {
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
 
-        CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null) {
+        CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 ToolCallTrace trace = new ToolCallTrace("child-tool-1", "write_file", Map.of("path", "child.txt", "content", "hello"), true,
@@ -148,7 +148,7 @@ public class TaskToolAndSubagentServiceTests {
             }
         };
 
-        SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService, childHarnessProvider(childHarness));
+        SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService, childHarnessProvider(childHarness), null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         List<String> events = new ArrayList<>();
@@ -174,7 +174,7 @@ public class TaskToolAndSubagentServiceTests {
                 "requestSummary", "Create the parser file",
                 "task", "write a file",
                 "expectedOutput", "child final"
-        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", sink));
+        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), sink, null));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(events).containsExactly(

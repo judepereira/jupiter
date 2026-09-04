@@ -79,7 +79,7 @@ class ManualGitPullCoordinatorTests {
 
     private static Fixture fixture() {
         AppStateService app = mock(AppStateService.class);
-        when(app.loadAutoGitUpdateWorkspace(7)).thenReturn(new Persistence.WorkspaceView(7, "Alpha", "/repo"));
+        when(app.loadAutoGitUpdateWorkspace(7)).thenReturn(new Persistence.WorkspaceView(7, "Alpha", "/repo", false, Persistence.RailStatus.NONE));
         GitAutoUpdateService git = mock(GitAutoUpdateService.class);
         SystemBalloonService balloon = mock(SystemBalloonService.class);
         QueuedExecutor executor = new QueuedExecutor();

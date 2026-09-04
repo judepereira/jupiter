@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 public class OpenAiOAuthServiceTests {
 
@@ -36,7 +37,8 @@ public class OpenAiOAuthServiceTests {
             properties.setIssuer(server.baseUrl());
             properties.setClientId("client-123");
 
-            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient());
+            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
+                    mock(AppStateRepository.class));
 
             OpenAiOAuthService.OpenAiOAuthView started = service.startDeviceAuthorization();
             assertThat(started.pending()).isTrue();
@@ -104,7 +106,8 @@ public class OpenAiOAuthServiceTests {
             properties.setIssuer(server.baseUrl());
             properties.setClientId("client-123");
 
-            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient());
+            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
+                    mock(AppStateRepository.class));
 
             service.startDeviceAuthorization();
             OpenAiOAuthService.OpenAiOAuthView pending = service.pollCurrentDeviceAuthorization();
@@ -122,7 +125,8 @@ public class OpenAiOAuthServiceTests {
     public void startFailsWhenClientIdIsMissing() {
         OpenAiOAuthProperties properties = new OpenAiOAuthProperties();
         properties.setClientId(" ");
-        OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient());
+        OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
+                mock(AppStateRepository.class));
 
         assertThatThrownBy(service::startDeviceAuthorization)
                 .isInstanceOf(IllegalStateException.class)

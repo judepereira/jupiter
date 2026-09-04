@@ -49,11 +49,6 @@ public class SubagentTaskService {
         this.lifecycleHookService = lifecycleHookService;
     }
 
-    public SubagentTaskService(AppStateService appStateService, AgentDefinitionService agentDefinitionService,
-                               ObjectProvider<CodingAgentHarness> harnessProvider) {
-        this(appStateService, agentDefinitionService, harnessProvider, null);
-    }
-
     public SubagentTaskResult runTask(SubagentTaskRequest request) {
         return runTask(request, SubagentTaskStreamListener.noop());
     }
@@ -301,10 +296,6 @@ public class SubagentTaskService {
 
     public record SubagentTaskRequest(Long parentSessionId, String parentToolCallId, String workspaceRoot, String subagentAgentId,
                                       String requestSummary, String task, String expectedOutput, CancellationToken cancellationToken) {
-        public SubagentTaskRequest(Long parentSessionId, String parentToolCallId, String workspaceRoot, String subagentAgentId,
-                                   String requestSummary, String task, String expectedOutput) {
-            this(parentSessionId, parentToolCallId, workspaceRoot, subagentAgentId, requestSummary, task, expectedOutput, null);
-        }
     }
 
     public record SubagentTaskResult(boolean success, long childSessionId, String subagentAgentId, String subagentAgentName, String finalText,

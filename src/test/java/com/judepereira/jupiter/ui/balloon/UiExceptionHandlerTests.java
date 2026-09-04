@@ -10,7 +10,7 @@ class UiExceptionHandlerTests {
 
     @Test
     void handlesUiExceptionByPublishingInternalErrorBalloonAndReturning500() {
-        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper());
+        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
         UiExceptionHandler handler = new UiExceptionHandler(balloonService);
 
         var response = handler.handleUiException(new IllegalStateException("Boom"));
