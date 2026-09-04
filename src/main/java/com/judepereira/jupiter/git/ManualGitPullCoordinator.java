@@ -5,12 +5,12 @@ import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /** Owns the lifetime and deduplication of user-requested Git pulls. */
 @Service
@@ -21,43 +21,22 @@ public class ManualGitPullCoordinator {
     private final SystemBalloonService systemBalloonService;
     private final ExecutorService executor;
     private final ConcurrentMap<Long, Boolean> activePulls = new ConcurrentHashMap<>();
-    private final boolean noOp;
-
-    public static ManualGitPullCoordinator noOp() {
-        return new ManualGitPullCoordinator();
-    }
-
-    private ManualGitPullCoordinator() {
-        this.appStateService = null;
-        this.gitAutoUpdateService = null;
-        this.systemBalloonService = null;
-        this.executor = null;
-        this.noOp = true;
-    }
 
     public ManualGitPullCoordinator(AppStateService appStateService, GitAutoUpdateService gitAutoUpdateService,
-                                    SystemBalloonService systemBalloonService) {
-        this(appStateService, gitAutoUpdateService, systemBalloonService, Executors.newVirtualThreadPerTaskExecutor());
-    }
-
-    public ManualGitPullCoordinator(AppStateService appStateService, GitAutoUpdateService gitAutoUpdateService,
-                                    SystemBalloonService systemBalloonService, ExecutorService executor) {
+                                    SystemBalloonService systemBalloonService,
+                                    @Qualifier("manualGitPullExecutor") ExecutorService executor) {
         this.appStateService = appStateService;
         this.gitAutoUpdateService = gitAutoUpdateService;
         this.systemBalloonService = systemBalloonService;
         this.executor = executor;
-        this.noOp = false;
     }
 
     public boolean isPulling(long workspaceId) {
-        return !noOp && activePulls.containsKey(workspaceId);
+        return activePulls.containsKey(workspaceId);
     }
 
     /** Returns false when an equivalent pull is already running. */
     public boolean dispatch(long workspaceId) {
-        if (noOp) {
-            return false;
-        }
         if (activePulls.putIfAbsent(workspaceId, Boolean.TRUE) != null) {
             return false;
         }
@@ -99,8 +78,6 @@ public class ManualGitPullCoordinator {
 
     @PreDestroy
     void shutdown() {
-        if (!noOp) {
-            executor.shutdown();
-        }
+        executor.shutdown();
     }
 }

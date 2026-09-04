@@ -6,6 +6,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
 @Configuration
@@ -14,6 +16,11 @@ public class UiSseConfig {
     @Bean
     public Supplier<SseEmitter> sseEmitterFactory() {
         return () -> new SseEmitter(0L);
+    }
+
+    @Bean(name = "manualGitPullExecutor", destroyMethod = "")
+    public ExecutorService manualGitPullExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
     }
 
     @Bean
