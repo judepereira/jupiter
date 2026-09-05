@@ -51,4 +51,4 @@ fi
 echo "Starting Jupiter as $USERNAME on port $PORT"
 
 su "${su_args[@]}" - "$USERNAME" -c \
-  '/opt/java/openjdk/bin/java -jar -Dserver.port="$1" /opt/jupiter.jar' -- "$PORT"
+  "/opt/java/openjdk/bin/java -jar -Dserver.port="$PORT" /opt/jupiter.jar"
