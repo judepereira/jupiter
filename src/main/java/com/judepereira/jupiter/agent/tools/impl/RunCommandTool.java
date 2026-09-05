@@ -63,7 +63,10 @@ public class RunCommandTool implements AgentTool {
         Path wd = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), working);
         ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", cmd);
         pb.directory(wd.toFile());
-        pb.environment().putAll(context.getEnvironmentVariables());
+        Map<String, String> environment = pb.environment();
+        environment.putAll(context.getEnvironmentVariables());
+        environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
+        environment.remove("JUPITER_HTTP_AUTH_USERNAME");
         Process p = pb.start();
         StringBuilder stdoutBuilder = new StringBuilder();
         StringBuilder stderrBuilder = new StringBuilder();
