@@ -68,21 +68,92 @@ class GitAutoUpdateServiceTests {
     }
 
     @Test
-    void changedHeadEmitsInfoAndResetsFailure(@TempDir Path tempDir) {
+    void changedHeadEmitsSummaryAndUsesExactMetadataCommands(@TempDir Path tempDir) {
         AppStateService appStateService = mock(AppStateService.class);
         var workspace = workspace(8, "project", tempDir.resolve("workspace"));
         var session = new Persistence.SessionView(81, "Session #1", false, Persistence.RailStatus.NONE);
         when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(8)).thenReturn(Optional.of(session));
-        GitCommandRunner commandRunner = runner(
-                success("main\n"), success("origin/main\n"), success("before\n"), success("Already up to date\n"), success("after\n"));
-        GitAutoUpdateService service = new GitAutoUpdateService(appStateService, commandRunner);
+        List<List<String>> commands = new ArrayList<>();
+        GitCommandRunner commandRunner = metadataRunner(commands, "before", "after", success("2\n"), success("latest subject\n"));
 
-        var result = service.updateWorkspace(workspace);
+        var result = new GitAutoUpdateService(appStateService, commandRunner).updateWorkspace(workspace);
 
         assertThat(result).isEqualTo(new GitAutoUpdateService.UpdateResult(
                 GitAutoUpdateService.UpdateResult.Status.UPDATED, "before", "after", null, false));
+        assertThat(commands).containsExactly(
+                List.of("git", "symbolic-ref", "--quiet", "--short", "HEAD"),
+                List.of("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"),
+                List.of("git", "rev-parse", "--verify", "HEAD"),
+                List.of("git", "pull", "--ff-only"),
+                List.of("git", "rev-parse", "--verify", "HEAD"),
+                List.of("git", "rev-list", "--count", "before..after"),
+                List.of("git", "log", "-1", "--format=%s", "after"));
         verify(appStateService).resetWorkspaceAutoGitUpdateFailure(8);
-        verify(appStateService).appendInfoMessage(81, "Git updated workspace \"project\" to after.");
+        verify(appStateService).appendInfoMessage(81,
+                "Background git update brought 2 commits into this workspace. Latest commit: latest subject");
+    }
+
+    @Test
+    void changedHeadUsesSingularAndFirstCrlfSafeSubjectLine(@TempDir Path tempDir) {
+        AppStateService appStateService = mock(AppStateService.class);
+        var workspace = workspace(18, "project", tempDir.resolve("workspace"));
+        var session = new Persistence.SessionView(181, "Session", false, Persistence.RailStatus.NONE);
+        when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(18)).thenReturn(Optional.of(session));
+        GitCommandRunner runner = metadataRunner(new ArrayList<>(), "before", "after", success("1"), success("one line\r\nsecond line"));
+
+        new GitAutoUpdateService(appStateService, runner).updateWorkspace(workspace);
+
+        verify(appStateService).appendInfoMessage(181,
+                "Background git update brought 1 commit into this workspace. Latest commit: one line");
+    }
+
+    @Test
+    void changedHeadTruncatesTo256UnicodeCodePoints(@TempDir Path tempDir) {
+        AppStateService appStateService = mock(AppStateService.class);
+        var workspace = workspace(19, "project", tempDir.resolve("workspace"));
+        var session = new Persistence.SessionView(191, "Session", false, Persistence.RailStatus.NONE);
+        when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(19)).thenReturn(Optional.of(session));
+        String subject = "a".repeat(255) + "\uD83D\uDE00" + "extra";
+        new GitAutoUpdateService(appStateService, metadataRunner(new ArrayList<>(), "before", "after", success("3"), success(subject))).updateWorkspace(workspace);
+
+        verify(appStateService).appendInfoMessage(191,
+                "Background git update brought 3 commits into this workspace. Latest commit: " + "a".repeat(255) + "\uD83D\uDE00");
+    }
+
+    @Test
+    void changedHeadAllowsBlankSubject(@TempDir Path tempDir) {
+        AppStateService appStateService = mock(AppStateService.class);
+        var workspace = workspace(20, "project", tempDir.resolve("workspace"));
+        var session = new Persistence.SessionView(201, "Session", false, Persistence.RailStatus.NONE);
+        when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(20)).thenReturn(Optional.of(session));
+        new GitAutoUpdateService(appStateService, metadataRunner(new ArrayList<>(), "before", "after", success("1"), success("\r\nbody"))).updateWorkspace(workspace);
+
+        verify(appStateService).appendInfoMessage(201,
+                "Background git update brought 1 commit into this workspace. Latest commit: ");
+    }
+
+    @Test
+    void metadataFailuresAndInvalidCountsFailWithoutInfo(@TempDir Path tempDir) {
+        assertMetadataFailure(tempDir, "count", failure("count failed"));
+        assertMetadataFailure(tempDir, "subject", failure("subject failed"));
+        assertMetadataFailure(tempDir, "zero", success("0"));
+        assertMetadataFailure(tempDir, "invalid", success("not-a-number"));
+    }
+
+    private void assertMetadataFailure(Path tempDir, String name, GitCommandRunner.GitCommandResult metadataResult) {
+        AppStateService appStateService = mock(AppStateService.class);
+        when(appStateService.appendAutoGitUpdateFailureMessage(anyLong(), anyString()))
+                .thenReturn(new Persistence.AutoGitUpdateFailureNotification(true));
+        var workspace = workspace(21, name, tempDir.resolve(name));
+        GitCommandRunner commandRunner;
+        if (name.equals("count") || name.equals("zero") || name.equals("invalid")) {
+            commandRunner = metadataRunner(new ArrayList<>(), "before", "after", metadataResult, success("subject"));
+        } else {
+            commandRunner = metadataRunner(new ArrayList<>(), "before", "after", success("2"), metadataResult);
+        }
+        var result = new GitAutoUpdateService(appStateService, commandRunner).updateWorkspace(workspace);
+        assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.FAILED);
+        verify(appStateService, never()).appendInfoMessage(anyLong(), anyString());
     }
 
     @Test
@@ -274,6 +345,33 @@ class GitAutoUpdateServiceTests {
 
     private static GitCommandRunner runner(GitCommandRunner.GitCommandResult... results) {
         return mockRunner(results);
+    }
+
+    private static GitCommandRunner metadataRunner(List<List<String>> commands, String before, String after,
+                                                    GitCommandRunner.GitCommandResult count,
+                                                    GitCommandRunner.GitCommandResult subject) {
+        GitCommandRunner commandRunner = mock(GitCommandRunner.class);
+        when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT))).thenAnswer(new org.mockito.stubbing.Answer<GitCommandRunner.GitCommandResult>() {
+            int headLookups;
+
+            @Override
+            public GitCommandRunner.GitCommandResult answer(org.mockito.invocation.InvocationOnMock invocation) {
+                List<String> command = invocation.getArgument(1);
+                commands.add(command);
+                if (command.get(1).equals("rev-parse") && command.getLast().equals("HEAD")) {
+                    return headLookups++ == 0 ? success(before) : success(after);
+                }
+                if (command.get(1).equals("rev-list")) return count;
+                if (command.get(1).equals("log")) return subject;
+                return switch (command.get(1)) {
+                    case "symbolic-ref" -> success("main");
+                    case "rev-parse" -> success("origin/main");
+                    case "pull" -> success("");
+                    default -> success("");
+                };
+            }
+        });
+        return commandRunner;
     }
 
     private static GitCommandRunner runnerWithCommands(List<List<String>> commands, GitCommandRunner.GitCommandResult... results) {
