@@ -5,6 +5,7 @@ import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -402,6 +403,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("subagentAgentName", "Engineer");
         context.setVariable("subagentAgentId", "engineer");
         context.setVariable("subagentSessionId", 42L);
+        context.setVariable("activeSession", new UiController.Session(7L, "Primary"));
         context.setVariable("chatMessages", List.of(
                 new ChatPresentationService.ChatMessage("user", "Primary task:\nwrite a file", 1L, false, "user-1", null, List.of(), null, null),
                 new ChatPresentationService.ChatMessage("assistant", "child final", 2L, false, "assistant-1", null, List.of(), null, null)
@@ -416,6 +418,7 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("subagent-bar", "subagent-back-button", "Engineer", "Primary task:", "child final");
+        assertThat(html).contains("data-session-id=\"7\"");
         assertThat(html).doesNotContain("id=\"chat-send-form\"");
         assertThat(html).doesNotContain("id=\"chat-agent-select\"");
     }

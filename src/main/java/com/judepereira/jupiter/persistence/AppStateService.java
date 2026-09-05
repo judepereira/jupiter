@@ -287,6 +287,16 @@ public class AppStateService {
     }
 
     @Transactional
+    public SubagentSessionDetailView restoreChatContext(long primarySessionId, Long childSessionId) {
+        SubagentSessionDetailView child = childSessionId == null ? null : loadSubagentSessionDetail(childSessionId);
+        if (child != null && !Objects.equals(child.parentSessionId(), primarySessionId)) {
+            throw new IllegalStateException("Subagent session does not belong to primary session: " + childSessionId);
+        }
+        activateSession(primarySessionId);
+        return child;
+    }
+
+    @Transactional
     public SessionView createSession(long workspaceId) {
         long sessionId = createSessionInternal(workspaceId, Instant.now());
         return toSessionView(repository.findSession(sessionId));

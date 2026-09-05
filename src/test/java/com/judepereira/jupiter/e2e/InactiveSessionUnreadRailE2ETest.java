@@ -116,6 +116,78 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
     }
 
     @Test
+    void browserBackAndForwardRestoresTwoPrimarySessions(@TempDir Path tempDir) throws Exception {
+        TestAppConfig.reset();
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        String previousHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+
+        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             BrowserContext context = browser.newContext()) {
+            Page page = context.newPage();
+            List<String> pageErrors = new java.util.concurrent.CopyOnWriteArrayList<>();
+            List<String> consoleErrors = new java.util.concurrent.CopyOnWriteArrayList<>();
+            page.onPageError(error -> pageErrors.add(error));
+            page.onConsoleMessage(message -> {
+                if (message.type().equals("error")) {
+                    consoleErrors.add(message.text());
+                }
+            });
+
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
+
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New session")).click();
+            assertThat(page.locator("#session-name-input")).isVisible();
+            page.locator("#session-name-input").fill("Session #2");
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
+                    () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
+
+            Locator sessionOne = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #1"));
+            Locator sessionTwo = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #2"));
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/") && response.url().contains("/activate") && response.status() == 200,
+                    () -> sessionOne.locator(".session-item").click());
+            assertThat(page.locator(".session-item.active .session-label")).hasText("Session #1");
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/") && response.url().contains("/activate") && response.status() == 200,
+                    () -> sessionTwo.locator(".session-item").click());
+            assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
+            page.waitForTimeout(100);
+            assertThat(page.locator("#chat-container")).hasAttribute("data-session-id", "2");
+            org.assertj.core.api.Assertions.assertThat((String) page.evaluate("() => JSON.stringify(history.state)")).contains("chatNavigation");
+
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/chat/restore/") && response.status() == 200,
+                    () -> page.evaluate("() => history.back()"));
+            assertThat(page.locator(".session-item.active .session-label")).hasText("Session #1");
+            assertThat(page.locator("#chat-send-form")).isVisible();
+
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/chat/restore/") && response.status() == 200,
+                    () -> page.evaluate("() => history.forward()"));
+            assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
+            assertThat(page.locator("#chat-send-form")).isVisible();
+            assertTrue(pageErrors.isEmpty(), () -> "Page errors: " + pageErrors);
+            assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
+        } finally {
+            if (previousHome == null) {
+                System.clearProperty("user.home");
+            } else {
+                System.setProperty("user.home", previousHome);
+            }
+        }
+    }
+
+
+    @Test
     void inactiveSessionStreamDoesNotMoveScrolledActiveSession(@TempDir Path tempDir) throws Exception {
         TestAppConfig.reset();
         TestAppConfig.blockPrimaryTurnUntilDeltaRelease();

@@ -19,9 +19,18 @@ let lastSettledChatContainer = null;
 let transitionChatScroll = null;
 let initialChatScroll = null;
 let initialChatScrollListenersBound = false;
+let browserNavigationRestorePending = false;
 
 function setHistoryScrollTop(history, target) {
     history.scrollTop = target;
+}
+
+export function setBrowserNavigationRestorePending(pending) {
+    browserNavigationRestorePending = pending === true;
+    if (browserNavigationRestorePending) {
+        primaryChatScrollState = null;
+        primaryChatScrollRestorePending = false;
+    }
 }
 
 export function scrollChatToBottom(after) {
@@ -207,6 +216,10 @@ export function checkAndMaybeScroll() {
             lastMessageCount = -1;
             return;
         }
+        if (browserNavigationRestorePending) {
+            lastMessageCount = list.children ? list.children.length : 0;
+            return;
+        }
         const count = list.children ? list.children.length : 0;
         if (lastMessageCount === -1) {
             lastMessageCount = count;
@@ -380,11 +393,11 @@ function bindSubagentScrollListeners() {
             const target = evt && evt.target;
             const subagentButton = target && target.closest ? target.closest('.tool-call-subagent-button') : null;
             if (subagentButton) {
-                capturePrimaryChatScrollState();
+                if (!browserNavigationRestorePending) capturePrimaryChatScrollState();
                 return;
             }
             const backButton = target && target.closest ? target.closest('.subagent-back-button') : null;
-            if (backButton && primaryChatScrollState) {
+            if (backButton && primaryChatScrollState && !browserNavigationRestorePending) {
                 primaryChatScrollRestorePending = true;
             }
         } catch (_) {
@@ -396,7 +409,7 @@ function bindSubagentScrollListeners() {
             const detail = evt && evt.detail;
             const target = detail && detail.target;
             const path = getHtmxRequestPath(evt);
-            if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
+            if (browserNavigationRestorePending || !primaryChatScrollRestorePending || !primaryChatScrollState) return;
             if (!path.includes('/ui/chat/primary')) return;
             if (!target || target.id !== 'chat-container') return;
             restorePrimaryChatScrollState();
@@ -439,6 +452,7 @@ function htmxBeforeSwapListener(evt) {
 
 function htmxChatListener(evt) {
     try {
+        if (browserNavigationRestorePending) return;
         const trg = (evt && evt.detail && evt.detail.target) || evt.target;
         if (!trg) return;
 
