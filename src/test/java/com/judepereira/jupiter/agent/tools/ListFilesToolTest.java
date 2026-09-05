@@ -21,7 +21,7 @@ public class ListFilesToolTest {
         Files.writeString(b, "y");
 
         ListFilesTool t = new ListFilesTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), ToolProgressSink.noop(), null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", "", "include", "**/*.java"), ctx);
         assertTrue(res.isSuccess());
@@ -39,7 +39,7 @@ public class ListFilesToolTest {
         Files.writeString(nested.resolve("AGENTS.md"), "nested");
 
         ListFilesTool t = new ListFilesTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), ToolProgressSink.noop(), null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", "", "include", "**/AGENTS.md"), ctx);
         assertTrue(res.isSuccess());
@@ -60,7 +60,7 @@ public class ListFilesToolTest {
         Files.writeString(b, "y");
 
         ListFilesTool t = new ListFilesTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5, null, null, null, null, Map.of(), ToolProgressSink.noop(), null);
+        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", ws.getFileName().toString(), "include", "**/*.java"), ctx);
         assertTrue(res.isSuccess());

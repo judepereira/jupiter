@@ -82,7 +82,7 @@ class McpToolAdapterTest {
 
     private static ToolExecutionContext context() {
         return new ToolExecutionContext(Path.of("."), false, false, 30, null, null, null,
-                "call", Map.of(), null, null);
+                "call", Map.of(), java.util.Set.of(), null, null);
     }
 
     @Test

@@ -18,7 +18,7 @@ public class ToolGuardrailsTest {
     @Test
     public void write_file_blocked_when_allow_write_false(@TempDir Path tmp) throws Exception {
         WriteFileTool t = new WriteFileTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, false, false, 5, null, null, null, null, null, null, null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, false, false, 5, null, null, null, null, null, java.util.Set.of(), null, null);
         ToolExecutionResult res = t.execute(Map.of("path", "a.txt", "content", "hello"), ctx);
         assertFalse(res.isSuccess());
         assertTrue(res.getText().toLowerCase().contains("disabled") || res.getText().toLowerCase().contains("disabled"));
@@ -28,7 +28,7 @@ public class ToolGuardrailsTest {
     @Test
     public void run_command_blocked_when_allow_command_false(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, false, false, 1, null, null, null, null, null, null, null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, false, false, 1, null, null, null, null, null, java.util.Set.of(), null, null);
         ToolExecutionResult res = t.execute(Map.of("command", "echo hi"), ctx);
         assertFalse(res.isSuccess());
         assertTrue(res.getText().toLowerCase().contains("disabled"));
@@ -40,7 +40,7 @@ public class ToolGuardrailsTest {
         Path file = tmp.resolve("file.txt");
         Files.writeString(file, "original content\n");
         ApplyPatchTool t = new ApplyPatchTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, false, 5, null, null, null, null, null, null, null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, false, 5, null, null, null, null, null, java.util.Set.of(), null, null);
         // missing oldText
         ToolExecutionResult res = t.execute(Map.of("path", "file.txt", "newText", "new"), ctx);
         assertFalse(res.isSuccess());

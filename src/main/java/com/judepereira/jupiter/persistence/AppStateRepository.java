@@ -374,6 +374,11 @@ public class AppStateRepository {
                 new MapSqlParameterSource().addValue("projectId", projectId).addValue("environmentVariables", environmentVariablesJson));
     }
 
+    void updateProjectCommandEnvironmentAllowlist(long projectId, String allowlist) {
+        jdbc.update("UPDATE projects SET command_environment_allowlist = :allowlist WHERE id = :projectId",
+                new MapSqlParameterSource().addValue("projectId", projectId).addValue("allowlist", allowlist));
+    }
+
     long insertMcpServer(String name, String url, boolean enabled, String headersJson, Instant now) {
         return insertAndReturnId("""
                 INSERT INTO mcp_servers (name, url, enabled, headers_json, created_at)
@@ -1222,7 +1227,7 @@ public class AppStateRepository {
     private ProjectRow mapProject(ResultSet rs, int rowNum) throws SQLException {
         return new ProjectRow(rs.getLong("id"), rs.getString("name"), rs.getString("normalized_path"), rs.getLong("display_order"),
                 timestampToInstant(rs.getTimestamp("closed_at")), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")),
-                rs.getString("workspace_init_commands"), rs.getString("environment_variables"));
+                rs.getString("workspace_init_commands"), rs.getString("environment_variables"), rs.getString("command_environment_allowlist"));
     }
 
     private WorkspaceRow mapWorkspace(ResultSet rs, int rowNum) throws SQLException {
@@ -1289,7 +1294,8 @@ public class AppStateRepository {
     record WorkspaceAutoGitUpdateStateRow(long workspaceId, boolean failureEpisodeActive, Instant failureStartedAt,
                                           Instant lastSuccessAt) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
-    record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
+    record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt,
+                      String workspaceInitCommands, String environmentVariables, String commandEnvironmentAllowlist) {}
     record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt, List<Long> exposedProjectIds) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt, boolean unread, boolean inProgress) {}
     record SessionUsageContext(String sessionUsageKey, long sessionId, long workspaceId, long projectId, String sessionName,

@@ -197,19 +197,41 @@ public class UiControllerSettingsTests {
 
         String commands = "echo init-one\npwd\ntouch init-ran.txt";
         ConcurrentModel model = new ConcurrentModel();
-        String view = context.controller().applySettings(commands,
+        String view = context.controller().applySettings(commands, "HOME, PATH",
                 List.of("API_URL", "FEATURE_FLAG", "API_URL", ""),
                 List.of("https://example.test", "true", "https://override.test", "ignored"),
                 model);
 
         assertThat(view).isEqualTo("fragments/projects :: modalClose");
         assertThat(context.appStateService().loadViewData().activeProject().workspaceInitCommands()).isEqualTo(commands);
+        assertThat(context.appStateService().loadViewData().activeProject().commandEnvironmentAllowlist()).isEqualTo("HOME, PATH");
         long projectId = context.appStateService().loadViewData().activeProject().id();
         assertThat(context.appStateService().loadProjectEnvironmentVariables(projectId))
                 .containsEntry("FEATURE_FLAG", "true")
                 .containsEntry("API_URL", "https://override.test")
                 .doesNotContainKey("");
         verify(context.mcpRuntimeManager(), times(1)).reloadProject(projectId);
+    }
+
+    @Test
+    public void invalidAllowlistDoesNotPartiallyPersistProjectSettings(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        String existingCommands = "echo existing";
+        context.appStateService().updateProjectSettings(projectId, existingCommands,
+                List.of(new com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable("API_URL", "old")),
+                "HOME");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> context.controller().applySettings(
+                        "echo replacement", "INVALID-NAME", List.of("API_URL"), List.of("new"), new ConcurrentModel()))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        var project = context.appStateService().loadViewData().activeProject();
+        assertThat(project.workspaceInitCommands()).isEqualTo(existingCommands);
+        assertThat(project.commandEnvironmentAllowlist()).isEqualTo("HOME");
+        assertThat(context.appStateService().loadProjectEnvironmentVariables(projectId))
+                .containsEntry("API_URL", "old");
     }
 
     @Test

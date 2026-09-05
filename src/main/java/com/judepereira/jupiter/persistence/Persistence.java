@@ -1,8 +1,12 @@
 package com.judepereira.jupiter.persistence;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 public final class Persistence {
 
@@ -20,7 +24,31 @@ public final class Persistence {
     private Persistence() {
     }
 
-    public record ProjectView(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables) {
+    public record ProjectView(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables,
+                              String commandEnvironmentAllowlist) {
+        private static final Pattern ENVIRONMENT_VARIABLE_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+        public Set<String> commandEnvironmentAllowlistNames() {
+            return parseCommandEnvironmentAllowlist(commandEnvironmentAllowlist);
+        }
+
+        public static Set<String> parseCommandEnvironmentAllowlist(String rawAllowlist) {
+            if (rawAllowlist == null || rawAllowlist.isBlank()) {
+                return Set.of();
+            }
+            LinkedHashSet<String> names = new LinkedHashSet<>();
+            for (String segment : rawAllowlist.split(",", -1)) {
+                String name = segment.trim();
+                if (name.isEmpty()) {
+                    continue;
+                }
+                if (!ENVIRONMENT_VARIABLE_NAME.matcher(name).matches()) {
+                    throw new IllegalArgumentException("Invalid command environment allowlist variable name: " + name);
+                }
+                names.add(name);
+            }
+            return Collections.unmodifiableSet(names);
+        }
     }
 
     public record ProjectEnvironmentVariable(String name, String value) {

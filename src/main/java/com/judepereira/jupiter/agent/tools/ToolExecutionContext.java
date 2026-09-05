@@ -6,6 +6,7 @@ import lombok.Getter;
 
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Set;
 
 @Getter
 public class ToolExecutionContext {
@@ -18,6 +19,7 @@ public class ToolExecutionContext {
     private final AgentMode agentMode;
     private final String toolCallId;
     private final Map<String, String> environmentVariables;
+    private final Set<String> commandEnvironmentAllowlist;
     private final ToolProgressSink progressSink;
     private final CancellationToken cancellationToken;
 
@@ -26,8 +28,8 @@ public class ToolExecutionContext {
 
     public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
                                 Long sessionId, String agentId, AgentMode agentMode, String toolCallId,
-                                Map<String, String> environmentVariables, ToolProgressSink progressSink,
-                                CancellationToken cancellationToken) {
+                                Map<String, String> environmentVariables, Set<String> commandEnvironmentAllowlist,
+                                ToolProgressSink progressSink, CancellationToken cancellationToken) {
         this.workspaceRoot = workspaceRoot;
         this.allowWrite = allowWrite;
         this.allowCommand = allowCommand;
@@ -37,6 +39,7 @@ public class ToolExecutionContext {
         this.agentMode = agentMode;
         this.toolCallId = toolCallId;
         this.environmentVariables = environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables);
+        this.commandEnvironmentAllowlist = commandEnvironmentAllowlist == null ? Set.of() : Set.copyOf(commandEnvironmentAllowlist);
         this.progressSink = progressSink == null ? ToolProgressSink.noop() : progressSink;
         this.cancellationToken = cancellationToken;
     }

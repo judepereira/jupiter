@@ -221,7 +221,7 @@
     </section>
 </th:block>
 
-<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
+<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, commandEnvironmentAllowlistValue=${activeProject == null or activeProject.commandEnvironmentAllowlist == null ? '' : activeProject.commandEnvironmentAllowlist}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
     <div id="settings-modal" class="project-modal settings-modal">
         <div class="project-modal-backdrop"
              hx-get="/ui/projects/modal/close"
@@ -307,6 +307,17 @@
                             </template>
                             <button type="button" class="btn btn-outline-primary btn-sm" data-settings-env-add>Add Variable</button>
                         </div>
+
+                        <label class="project-form-field">
+                            <span>Command environment allowlist</span>
+                            <input type="text"
+                                   name="commandEnvironmentAllowlist"
+                                   autocomplete="off"
+                                   placeholder="HOME, PATH, CI"
+                                   th:value="${commandEnvironmentAllowlistValue}"
+                                   aria-describedby="command-environment-allowlist-help">
+                            <small id="command-environment-allowlist-help">Comma-separated system environment variable names. This controls only the run command tool; leave blank for no system variables. Terminal sessions retain the normal system environment. Project environment variables remain separate.</small>
+                        </label>
 
                         <label class="project-form-field settings-commands-field">
                             <span>Workspace init commands</span>

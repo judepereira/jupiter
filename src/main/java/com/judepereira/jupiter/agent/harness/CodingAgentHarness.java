@@ -93,6 +93,7 @@ public class CodingAgentHarness {
                 ? props.getWorkspaceRoot()
                 : request.getWorkspaceRoot();
         Map<String, String> environmentVariables = resolveEnvironmentVariables(request.getSessionId());
+        Set<String> commandEnvironmentAllowlist = resolveCommandEnvironmentAllowlist(request.getSessionId());
         ToolExecutionContext execCtxTemplate = new ToolExecutionContext(Path.of(workspaceRoot),
                 agent != null ? agent.allowWrite() : props.getTooling().isAllowWrite(),
                 agent != null ? agent.allowCommand() : props.getTooling().isAllowCommand(),
@@ -101,7 +102,7 @@ public class CodingAgentHarness {
                 request.getAgentId(),
                 agent == null ? null : agent.mode(),
                 null,
-                environmentVariables,
+                environmentVariables, commandEnvironmentAllowlist,
                 ToolProgressSink.noop(), null);
 
         long projectId = resolveProjectId(request.getSessionId());
@@ -188,7 +189,7 @@ public class CodingAgentHarness {
                                 execCtxTemplate.getAgentId(),
                                 execCtxTemplate.getAgentMode(),
                                 toolCallId,
-                                execCtxTemplate.getEnvironmentVariables(),
+                                execCtxTemplate.getEnvironmentVariables(), execCtxTemplate.getCommandEnvironmentAllowlist(),
                                 (eventName, payload) -> listener.onToolCallProgress(toolCallId, toolName, eventName, payload),
                                 cancellationToken);
                         ToolExecutionResult result = executeTool(toolName, args, execCtx, mcpSnapshot);
@@ -382,6 +383,13 @@ public class CodingAgentHarness {
             return Map.of();
         }
         return appStateService.loadSessionProjectEnvironmentVariables(sessionId);
+    }
+
+    private Set<String> resolveCommandEnvironmentAllowlist(Long sessionId) {
+        if (sessionId == null || appStateService == null) {
+            return Set.of();
+        }
+        return appStateService.loadSessionProjectCommandEnvironmentAllowlist(sessionId);
     }
 
     private McpProjectToolSnapshot resolveMcpSnapshot(long projectId) {
