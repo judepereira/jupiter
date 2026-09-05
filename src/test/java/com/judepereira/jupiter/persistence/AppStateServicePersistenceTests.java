@@ -129,6 +129,43 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void infoMessagesDoNotMarkInactiveSessionsUnread(@TempDir Path projectPath) {
+        List<Object> events = new ArrayList<>();
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(events::add);
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long workspaceId = service.loadViewData().activeWorkspace().id();
+        long inactiveSessionId = service.loadViewData().activeSession().id();
+        long activeSessionId = service.createSession(workspaceId, "Active").id();
+        service.activateSession(activeSessionId);
+        events.clear();
+
+        service.appendInfoMessage(inactiveSessionId, "Updated in background");
+
+        AppStateView afterInfo = service.loadViewData();
+        assertThat(afterInfo.sessions()).extracting(SessionView::id, SessionView::unread)
+                .contains(tuple(inactiveSessionId, false), tuple(activeSessionId, false));
+        assertThat(afterInfo.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
+                .containsExactly(tuple(workspaceId, false));
+        assertThat(events).extracting(Object::getClass)
+                .containsExactly(WorkspaceRailRefreshEvent.class);
+
+        repository.updateSessionUnread(inactiveSessionId, true);
+        events.clear();
+        service.appendInfoMessage(inactiveSessionId, "Another background update");
+
+        AppStateView afterExistingUnread = service.loadViewData();
+        assertThat(afterExistingUnread.sessions()).extracting(SessionView::id, SessionView::unread)
+                .contains(tuple(inactiveSessionId, true), tuple(activeSessionId, false));
+        assertThat(afterExistingUnread.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
+                .containsExactly(tuple(workspaceId, true));
+        assertThat(events).extracting(Object::getClass)
+                .containsExactly(WorkspaceRailRefreshEvent.class);
+    }
+
+    @Test
     public void selectsMostRecentlyOpenedVisiblePrimarySessionWithoutActivating(@TempDir Path projectPath) {
         AppStateService service = TestAppStateSupport.appStateService();
         service.addOrReopenProject("Alpha", projectPath.toString());
