@@ -46,7 +46,6 @@ Use a skill when:
 - Its name is explicitly mentioned.
 - Its description clearly matches the task.
 Before following a skill, read the complete SKILL.md file.
-Activated skills apply to the current turn only unless referenced again.
 Use multiple skills when they are all necessary.
 Supporting files are relative to the directory containing SKILL.md.
 

@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.agent.skill;
 
 import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -18,15 +19,16 @@ class SkillContextInjectorTest {
         Path workspace = Files.createDirectory(temp.resolve("workspace"));
         Path external = Files.writeString(temp.resolve("external.md"), "EXTERNAL SECRET BODY");
         Path skillFile = writeSkill(workspace, "deploy", "SAFE BODY");
-        SkillDefinition discovered = new SkillDiscoveryService(new SkillParser(), temp.resolve("home").toString())
+        var skills = SkillTestSupport.components(temp.resolve("home"));
+        SkillDefinition discovered = SkillTestSupport.components(temp.resolve("home")).discovery()
                 .discover(workspace).skills().getFirst();
 
         Files.delete(skillFile);
         Files.createSymbolicLink(skillFile, external);
 
-        List<Message> injected = new SkillContextInjector(new SkillParser()).injectBeforeNewestUser(
+        List<Message> injected = skills.injector().injectBeforeNewestUser(
                 List.of(new Message(Message.Role.USER, "$deploy", null, null)),
-                new SkillInvocationResolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
+                skills.resolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
 
         assertThat(injected).anySatisfy(message -> assertThat(message.getContent())
                 .contains("could not be loaded").doesNotContain("EXTERNAL SECRET BODY"));
@@ -37,14 +39,15 @@ class SkillContextInjectorTest {
     void rejectsRegularFileReplacementWhenMetadataChanges() throws Exception {
         Path workspace = Files.createDirectory(temp.resolve("workspace"));
         Path skillFile = writeSkill(workspace, "deploy", "SAFE BODY");
-        SkillDefinition discovered = new SkillDiscoveryService(new SkillParser(), temp.resolve("home").toString())
+        var skills = SkillTestSupport.components(temp.resolve("home"));
+        SkillDefinition discovered = SkillTestSupport.components(temp.resolve("home")).discovery()
                 .discover(workspace).skills().getFirst();
 
         Files.writeString(skillFile, "---\nname: deploy\ndescription: changed description\n---\nREPLACED SECRET BODY");
 
-        List<Message> injected = new SkillContextInjector(new SkillParser()).injectBeforeNewestUser(
+        List<Message> injected = skills.injector().injectBeforeNewestUser(
                 List.of(new Message(Message.Role.USER, "$deploy", null, null)),
-                new SkillInvocationResolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
+                skills.resolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
 
         assertThat(injected).anySatisfy(message -> assertThat(message.getContent())
                 .contains("could not be loaded: invalid SKILL.md")
@@ -59,15 +62,16 @@ class SkillContextInjectorTest {
         Files.writeString(external.resolve("SKILL.md"), "EXTERNAL SECRET BODY");
         Path skillDirectory = workspace.resolve(".agents/skills/deploy");
         writeSkill(workspace, "deploy", "SAFE BODY");
-        SkillDefinition discovered = new SkillDiscoveryService(new SkillParser(), temp.resolve("home").toString())
+        var skills = SkillTestSupport.components(temp.resolve("home"));
+        SkillDefinition discovered = SkillTestSupport.components(temp.resolve("home")).discovery()
                 .discover(workspace).skills().getFirst();
 
         deleteRecursively(skillDirectory);
         Files.createSymbolicLink(skillDirectory, external);
 
-        List<Message> injected = new SkillContextInjector(new SkillParser()).injectBeforeNewestUser(
+        List<Message> injected = skills.injector().injectBeforeNewestUser(
                 List.of(new Message(Message.Role.USER, "$deploy", null, null)),
-                new SkillInvocationResolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
+                skills.resolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
 
         assertThat(injected).anySatisfy(message -> assertThat(message.getContent())
                 .contains("could not be loaded").doesNotContain("EXTERNAL SECRET BODY"));

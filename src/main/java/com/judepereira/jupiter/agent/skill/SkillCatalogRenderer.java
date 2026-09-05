@@ -19,10 +19,8 @@ public final class SkillCatalogRenderer {
                     .append("  </skill>\n");
         }
         output.append("  <usage>\n")
-                .append("    <bullet>Skills are available separately per workspace.</bullet>\n")
                 .append("    <bullet>Use a skill when its description clearly matches the task, or when the user explicitly names it with $skill-name.</bullet>\n")
                 .append("    <bullet>Read the complete SKILL.md file before using a skill.</bullet>\n")
-                .append("    <bullet>Activated skills apply to the current turn only.</bullet>\n")
                 .append("    <bullet>Multiple skills may be activated together.</bullet>\n")
                 .append("    <bullet>Supporting files are available at paths relative to the skill directory; read them only when needed.</bullet>\n")
                 .append("  </usage>\n")
