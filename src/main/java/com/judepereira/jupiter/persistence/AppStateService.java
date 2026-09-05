@@ -770,7 +770,6 @@ public class AppStateService {
                 null, null, null, null, null, now, now);
         ChatMessageView message = toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
         applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
-        markUnreadIfInactive(sessionId);
         return message;
     }
 
