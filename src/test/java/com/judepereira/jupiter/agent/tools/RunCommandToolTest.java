@@ -44,6 +44,20 @@ public class RunCommandToolTest {
     }
 
     @Test
+    public void does_not_pass_http_auth_credentials_to_process(@TempDir Path tmp) throws Exception {
+        RunCommandTool t = new RunCommandTool();
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null,
+                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "secret-password",
+                        "JUPITER_HTTP_AUTH_USERNAME", "secret-user",
+                        "PROJECT_ENV_VAR", "project-value"), ToolProgressSink.noop(), null);
+
+        var res = t.execute(Map.of("command", "printf '%s|%s|%s' \"${JUPITER_HTTP_AUTH_PASSWORD-}\" \"${JUPITER_HTTP_AUTH_USERNAME-}\" \"$PROJECT_ENV_VAR\""), ctx);
+
+        assertThat(res.isSuccess()).isTrue();
+        assertThat((String) res.getMachine().get("stdout")).isEqualTo("||project-value\n");
+    }
+
+    @Test
     public void long_stdout_is_previewed_with_utf8_boundaries_and_written_to_file(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
         ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, null, null);

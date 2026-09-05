@@ -20,8 +20,8 @@ class ManualGitPullCoordinatorTests {
         Fixture f = fixture();
         when(f.git.updateWorkspaceManually(7)).thenReturn(result(GitAutoUpdateService.UpdateResult.Status.UPDATED, "updated"));
 
-        assertThat(f.coordinator.dispatch(7)).isTrue();
-        assertThat(f.coordinator.dispatch(7)).isFalse();
+        assertThat(f.coordinator.dispatch(7)).isEqualTo(ManualGitPullCoordinator.DispatchResult.ACCEPTED);
+        assertThat(f.coordinator.dispatch(7)).isEqualTo(ManualGitPullCoordinator.DispatchResult.ALREADY_RUNNING);
         assertThat(f.coordinator.isPulling(7)).isTrue();
         f.executor.runNext();
         assertThat(f.coordinator.isPulling(7)).isFalse();
@@ -62,7 +62,7 @@ class ManualGitPullCoordinatorTests {
         Fixture f = fixture();
         when(f.app.loadAutoGitUpdateWorkspace(7)).thenReturn(null);
 
-        assertThat(f.coordinator.dispatch(7)).isFalse();
+        assertThat(f.coordinator.dispatch(7)).isEqualTo(ManualGitPullCoordinator.DispatchResult.FAILED);
         assertThat(f.coordinator.isPulling(7)).isFalse();
         verify(f.balloon).publishError(eq("Git Pull"), contains("Git pull could not be started"));
         assertThat(f.executor.tasks).isEmpty();
@@ -72,7 +72,7 @@ class ManualGitPullCoordinatorTests {
     void submissionFailureResetsStatusAndPublishesError() {
         Fixture f = fixture();
         f.executor.reject = true;
-        assertThat(f.coordinator.dispatch(7)).isFalse();
+        assertThat(f.coordinator.dispatch(7)).isEqualTo(ManualGitPullCoordinator.DispatchResult.FAILED);
         assertThat(f.coordinator.isPulling(7)).isFalse();
         verify(f.balloon).publishError(eq("Git Pull"), contains("Git pull could not be started"));
     }

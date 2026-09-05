@@ -38,5 +38,10 @@ docker run --rm -p 7272:7272 -v "$(pwd)/.jupiter:/home/jupiter/.jupiter" jupiter
 ## Defaults
 - `PORT` defaults to `7272`, so the app is available at http://localhost:7272
 
+## Public deployment
+Set `JUPITER_HTTP_AUTH_PASSWORD` to a nonblank value to enable HTTP Basic authentication. The username defaults to `jupiter` and can be changed with `JUPITER_HTTP_AUTH_USERNAME`. Only the implemented `GET /health` route is exempt; every other request, including `/error`, static files, SSE, and WebSocket handshakes, requires credentials. Passwords are read from the environment and are not passed as Java arguments or logged.
+
+Use HTTPS for every public deployment. If TLS terminates at a reverse proxy, configure it to pass the public scheme in `Forwarded` or `X-Forwarded-Proto`; the warning detection accepts common comma-separated proxy values. The reverse proxy must support long-lived SSE connections and WebSocket upgrades.
+
 ## Contributing
 Contributions are welcome. For major changes, please open an issue first so we can discuss the direction.

@@ -16,6 +16,8 @@ import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.config.HttpAuthProperties;
+import com.judepereira.jupiter.config.PublicRequestScheme;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
@@ -90,6 +92,7 @@ public class UiController {
     private final ChatPresentationService chatPresentationService;
     private final ChatToolCallHtmlService chatToolCallHtmlService;
     private final LifecycleHookService lifecycleHookService;
+    private final HttpAuthProperties httpAuthProperties;
     private final GitAutoUpdateService gitAutoUpdateService;
     private final ManualGitPullCoordinator manualGitPullCoordinator;
     private final String appVersion;
@@ -111,6 +114,7 @@ public class UiController {
                         CommandStreamService commandStreamService,
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
                         ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
+                        HttpAuthProperties httpAuthProperties,
                         GitAutoUpdateService gitAutoUpdateService, ManualGitPullCoordinator manualGitPullCoordinator,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
@@ -131,6 +135,7 @@ public class UiController {
         this.chatPresentationService = chatPresentationService;
         this.chatToolCallHtmlService = chatToolCallHtmlService;
         this.lifecycleHookService = lifecycleHookService;
+        this.httpAuthProperties = httpAuthProperties;
         this.gitAutoUpdateService = gitAutoUpdateService;
         this.manualGitPullCoordinator = manualGitPullCoordinator;
         this.appVersion = appVersion;
@@ -735,11 +740,20 @@ public class UiController {
         return "fragments/projects :: shellUpdates";
     }
 
-    @GetMapping("/ui/system-balloons/stream")
     public SseEmitter systemBalloonStream(@RequestParam(value = "shellId", required = false) String shellId) {
+        return systemBalloonStream(shellId, null);
+    }
+
+    @GetMapping("/ui/system-balloons/stream")
+    public SseEmitter systemBalloonStream(@RequestParam(value = "shellId", required = false) String shellId,
+                                           HttpServletRequest request) {
         SseEmitter emitter = systemBalloonService.connect();
         if (systemBalloonService.markShellInitialized(shellId)) {
             sendInitialMcpFailureBalloons(emitter);
+            if (httpAuthProperties.enabled() && request != null && !PublicRequestScheme.isHttps(request)) {
+                systemBalloonService.publishWarning(emitter, "Use HTTPS",
+                        "Jupiter HTTP Basic authentication is enabled, but this connection is not using HTTPS. Configure HTTPS at the public proxy.");
+            }
         }
         return emitter;
     }
@@ -1076,8 +1090,8 @@ public class UiController {
             systemBalloonService.publishWarning("Git Pull", "No active workspace is selected.");
             addGitPullModel(model, null);
         } else {
-            manualGitPullCoordinator().dispatch(view.activeWorkspace().id());
-            addGitPullModel(model, view.activeWorkspace());
+            ManualGitPullCoordinator.DispatchResult result = manualGitPullCoordinator().dispatch(view.activeWorkspace().id());
+            addGitPullModel(model, view.activeWorkspace(), result != ManualGitPullCoordinator.DispatchResult.FAILED);
         }
         return "fragments/projects :: gitPullControl";
     }
@@ -1087,13 +1101,17 @@ public class UiController {
         AppStateView view = appStateService.loadViewData();
         WorkspaceView workspace = view.activeWorkspace() != null && view.activeWorkspace().id() == workspaceId
                 ? view.activeWorkspace() : null;
-        addGitPullModel(model, workspace);
+        addGitPullModel(model, workspace, workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
         return "fragments/projects :: gitPullControl";
     }
 
     private void addGitPullModel(Model model, WorkspaceView workspace) {
+        addGitPullModel(model, workspace, workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
+    }
+
+    private void addGitPullModel(Model model, WorkspaceView workspace, boolean busy) {
         model.addAttribute("workspaceId", workspace == null ? null : workspace.id());
-        model.addAttribute("gitPullBusy", workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
+        model.addAttribute("gitPullBusy", workspace != null && busy);
         model.addAttribute("hasWorkspace", workspace != null);
     }
 

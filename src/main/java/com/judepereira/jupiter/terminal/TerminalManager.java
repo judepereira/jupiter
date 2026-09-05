@@ -96,8 +96,7 @@ public class TerminalManager {
     private PtyProcess startProcess(String workspaceRoot, Map<String, String> environmentVariables) {
         try {
             String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank()).orElse("/bin/bash");
-            Map<String, String> env = new HashMap<>(System.getenv());
-            env.putAll(environmentVariables);
+            Map<String, String> env = terminalEnvironment(environmentVariables);
             env.put("TERM", "xterm-256color");
             return new PtyProcessBuilder(new String[]{shell, "-l"}) // Force a login shell.
                     .setEnvironment(env)
@@ -110,6 +109,14 @@ public class TerminalManager {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to start terminal", e);
         }
+    }
+
+    static Map<String, String> terminalEnvironment(Map<String, String> projectEnvironmentVariables) {
+        Map<String, String> environment = new HashMap<>(System.getenv());
+        environment.putAll(projectEnvironmentVariables);
+        environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
+        environment.remove("JUPITER_HTTP_AUTH_USERNAME");
+        return environment;
     }
 
     private TerminalRuntime runtime(String terminalId) {
