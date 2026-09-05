@@ -45,8 +45,8 @@ class UiControllerSystemBalloonTests {
         UiController controller = controller(appStateService, runtimeManager, balloonService);
 
         when(appStateService.loadViewData()).thenReturn(new AppStateView(
-                List.of(new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of())),
-                new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of()),
+                List.of(new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of(), null)),
+                new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of(), null),
                 List.of(), null, List.of(), null, null, false));
         when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(
                 new McpServerView(10L, "GitHub MCP", "http://localhost:3000", true, List.of(), List.of(1L))

@@ -64,9 +64,8 @@ public class RunCommandTool implements AgentTool {
         ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", cmd);
         pb.directory(wd.toFile());
         Map<String, String> environment = pb.environment();
-        environment.putAll(context.getEnvironmentVariables());
-        environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
-        environment.remove("JUPITER_HTTP_AUTH_USERNAME");
+        environment.clear();
+        environment.putAll(buildCommandEnvironment(System.getenv(), context.getCommandEnvironmentAllowlist(), context.getEnvironmentVariables()));
         Process p = pb.start();
         StringBuilder stdoutBuilder = new StringBuilder();
         StringBuilder stderrBuilder = new StringBuilder();
@@ -149,6 +148,22 @@ public class RunCommandTool implements AgentTool {
                 "stderr", stderr);
         String text = "exitCode=" + code + "\n" + stdout + stderr;
         return new ToolExecutionResult(code == 0, text, machine);
+    }
+
+    static Map<String, String> buildCommandEnvironment(Map<String, String> hostEnvironment,
+                                                        java.util.Set<String> allowlist,
+                                                        Map<String, String> projectEnvironment) {
+        Map<String, String> environment = new java.util.HashMap<>();
+        for (String name : allowlist) {
+            String value = hostEnvironment.get(name);
+            if (value != null) {
+                environment.put(name, value);
+            }
+        }
+        environment.putAll(projectEnvironment);
+        environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
+        environment.remove("JUPITER_HTTP_AUTH_USERNAME");
+        return Map.copyOf(environment);
     }
 
     private String formatOutput(String streamName, String output) throws Exception {

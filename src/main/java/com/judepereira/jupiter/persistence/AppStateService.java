@@ -439,6 +439,28 @@ public class AppStateService {
     }
 
     @Transactional
+    public void updateProjectCommandEnvironmentAllowlist(long projectId, String allowlist) {
+        // Parse before writing so invalid values cannot reach persistent state.
+        Persistence.ProjectView.parseCommandEnvironmentAllowlist(allowlist);
+        repository.updateProjectCommandEnvironmentAllowlist(projectId, allowlist);
+    }
+
+    @Transactional
+    public void updateProjectSettings(long projectId, String workspaceInitCommands,
+                                     List<ProjectEnvironmentVariable> environmentVariables,
+                                     String commandEnvironmentAllowlist) {
+        String normalizedWorkspaceInitCommands = workspaceInitCommands == null || workspaceInitCommands.isBlank()
+                ? null : workspaceInitCommands;
+        List<ProjectEnvironmentVariable> normalizedEnvironmentVariables = normalizeEnvironmentVariables(environmentVariables);
+        String normalizedEnvironmentVariablesJson = json(normalizedEnvironmentVariables);
+        Persistence.ProjectView.parseCommandEnvironmentAllowlist(commandEnvironmentAllowlist);
+
+        repository.updateProjectWorkspaceInitCommands(projectId, normalizedWorkspaceInitCommands);
+        repository.updateProjectEnvironmentVariables(projectId, normalizedEnvironmentVariablesJson);
+        repository.updateProjectCommandEnvironmentAllowlist(projectId, commandEnvironmentAllowlist);
+    }
+
+    @Transactional
     public McpServerView createMcpServer(String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
         String normalizedName = normalizeRequiredName(name, "MCP server name");
         String normalizedUrl = normalizeRequiredName(url, "MCP server URL");
@@ -500,6 +522,20 @@ public class AppStateService {
     @Transactional(readOnly = true)
     public Map<String, String> loadProjectEnvironmentVariables(long projectId) {
         return toEnvironmentVariables(projectEnvironmentVariables(repository.findProject(projectId).environmentVariables()));
+    }
+
+    @Transactional(readOnly = true)
+    public Set<String> loadSessionProjectCommandEnvironmentAllowlist(long sessionId) {
+        var session = repository.findSession(sessionId);
+        var workspace = repository.findWorkspace(session.workspaceId());
+        return Persistence.ProjectView.parseCommandEnvironmentAllowlist(
+                repository.findProject(workspace.projectId()).commandEnvironmentAllowlist());
+    }
+
+    @Transactional(readOnly = true)
+    public Set<String> loadProjectCommandEnvironmentAllowlist(long projectId) {
+        return Persistence.ProjectView.parseCommandEnvironmentAllowlist(
+                repository.findProject(projectId).commandEnvironmentAllowlist());
     }
 
     @Transactional
@@ -1699,7 +1735,8 @@ public class AppStateService {
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
         String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank() ? null : row.workspaceInitCommands();
         List<ProjectEnvironmentVariable> environmentVariables = projectEnvironmentVariables(row.environmentVariables());
-        return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands, environmentVariables);
+        return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands, environmentVariables,
+                row.commandEnvironmentAllowlist());
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {

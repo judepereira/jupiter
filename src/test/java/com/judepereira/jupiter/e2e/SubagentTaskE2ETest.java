@@ -537,7 +537,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                         "requestSummary", "Inspect the task flow and report back.",
                         "task", "Inspect the task flow and report back.",
                         "expectedOutput", "Explore subagent finished"
-                ), new ToolExecutionContext(Path.of(request.getWorkspaceRoot()), false, false, 30, request.getSessionId(), "task-1", com.judepereira.jupiter.agent.catalog.AgentMode.AGENT, "task-1", Map.of(), (eventName, payload) -> listener.onToolCallProgress("task-1", "task", eventName, payload), null));
+                ), new ToolExecutionContext(Path.of(request.getWorkspaceRoot()), false, false, 30, request.getSessionId(), "task-1", com.judepereira.jupiter.agent.catalog.AgentMode.AGENT, "task-1", Map.of(), java.util.Set.of(), (eventName, payload) -> listener.onToolCallProgress("task-1", "task", eventName, payload), null));
 
                 ToolCallTrace trace = new ToolCallTrace("task-1", "task", Map.of(
                         "agentId", "explore",
