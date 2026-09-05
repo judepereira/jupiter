@@ -135,30 +135,10 @@ public class UiController {
         this.chatPresentationService = chatPresentationService;
         this.chatToolCallHtmlService = chatToolCallHtmlService;
         this.lifecycleHookService = lifecycleHookService;
-        this.httpAuthProperties = httpAuthProperties == null ? new HttpAuthProperties() : httpAuthProperties;
+        this.httpAuthProperties = httpAuthProperties;
         this.gitAutoUpdateService = gitAutoUpdateService;
         this.manualGitPullCoordinator = manualGitPullCoordinator;
         this.appVersion = appVersion;
-    }
-
-    /**
-     * Keeps the direct-test shape used before Git auto-update was introduced.
-     */
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
-                        CommandStreamService commandStreamService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
-                        ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
-                        LifecycleHookService lifecycleHookService, GitAutoUpdateService gitAutoUpdateService,
-                        ManualGitPullCoordinator manualGitPullCoordinator, String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService,
-                systemBalloonService, workspaceRailRefreshService, activeStreamRegistryService, terminalManager,
-                terminalStateService, openAiOAuthService, contextCompactionService, tokenUsageService,
-                commandStreamService, mcpRuntimeManager, chatPresentationService, chatToolCallHtmlService,
-                lifecycleHookService, new HttpAuthProperties(), gitAutoUpdateService, manualGitPullCoordinator, appVersion);
     }
 
     @GetMapping("/")
