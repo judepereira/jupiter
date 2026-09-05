@@ -26,7 +26,7 @@ class McpRuntimeBalloonListenerTests {
         when(appStateService.loadViewData()).thenReturn(new com.judepereira.jupiter.persistence.Persistence.AppStateView(
                 List.of(new ProjectView(1L, "Alpha", "/tmp/a", null, List.of())), null, List.of(), null, List.of(), null, null, false));
         when(runtimeManager.snapshot(1L)).thenReturn(new com.judepereira.jupiter.agent.mcp.McpProjectToolSnapshot(1L,
-                List.of(new ToolDefinition("mcp__alpha__one", "desc", ToolSchema.object())), Map.of()));
+                List.of(ToolDefinition.builtIn("mcp__alpha__one", "desc", ToolSchema.object())), Map.of()));
 
         listener.onProjectMcpToolsChanged(new McpRuntimeEvents.ProjectMcpToolsChanged(1L));
         listener.onProjectMcpToolsChanged(new McpRuntimeEvents.ProjectMcpToolsChanged(1L));
@@ -35,7 +35,7 @@ class McpRuntimeBalloonListenerTests {
 
         balloonService.connect();
         when(runtimeManager.snapshot(1L)).thenReturn(new com.judepereira.jupiter.agent.mcp.McpProjectToolSnapshot(1L,
-                List.of(new ToolDefinition("mcp__alpha__two", "desc", ToolSchema.object())), Map.of()));
+                List.of(ToolDefinition.builtIn("mcp__alpha__two", "desc", ToolSchema.object())), Map.of()));
         listener.onProjectMcpToolsChanged(new McpRuntimeEvents.ProjectMcpToolsChanged(1L));
 
         assertThat(balloonService.publishedBalloons()).hasSize(1);

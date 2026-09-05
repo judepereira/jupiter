@@ -60,7 +60,7 @@ class McpProjectMcpServerRuntimeManagerTest {
         McpProjectToolSnapshot firstSnapshot = manager.snapshot(1L);
         assertEquals(1, firstSnapshot.toolDefinitions().size());
         assertEquals("mcp__first__alpha", firstSnapshot.toolDefinitions().getFirst().getName());
-        assertThrows(UnsupportedOperationException.class, () -> firstSnapshot.toolDefinitions().add(new ToolDefinition("x", "", null)));
+        assertThrows(UnsupportedOperationException.class, () -> firstSnapshot.toolDefinitions().add(ToolDefinition.builtIn("x", "", null)));
 
         when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(
                 new Persistence.McpServerView(10L, "first", "http://one", true, List.of(), List.of()),

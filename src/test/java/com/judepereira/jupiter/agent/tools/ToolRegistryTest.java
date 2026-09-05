@@ -89,7 +89,7 @@ public class ToolRegistryTest {
 
             @Override
             public ToolDefinition definition() {
-                return new ToolDefinition(name, "", ToolSchema.object());
+                return ToolDefinition.builtIn(name, "", ToolSchema.object());
             }
 
             @Override

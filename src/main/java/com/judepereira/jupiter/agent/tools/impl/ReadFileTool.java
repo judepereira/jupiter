@@ -18,7 +18,7 @@ import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.integer;
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
 public class ReadFileTool implements AgentTool {
-    private static final ToolDefinition DEF = new ToolDefinition(
+    private static final ToolDefinition DEF = ToolDefinition.builtIn(
             "read_file",
             "Read a file from the workspace (utf-8) with optional line range",
             ToolSchema.object(

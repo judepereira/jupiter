@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Objects.requireNonNull;
+
 final class McpToolAdapter implements McpProjectToolExecutor {
     private final String modelToolName;
     private final String serverSlug;
@@ -34,7 +36,7 @@ final class McpToolAdapter implements McpProjectToolExecutor {
         String toolSlug = McpTemplateResolver.slugify(specification.name());
         String modelToolName = "mcp__" + serverSlug + "__" + toolSlug;
         return new McpToolAdapter(modelToolName, serverSlug, toolSlug, specification.name(), client,
-                new ToolDefinition(modelToolName, specification.description(), toSchema(specification)));
+                ToolDefinition.withNativeToolSpecification(modelToolName, specification.description(), toSchema(specification), specification));
     }
 
     ToolDefinition definition() {
@@ -63,10 +65,10 @@ final class McpToolAdapter implements McpProjectToolExecutor {
                 .name(remoteToolName)
                 .arguments(McpToolJson.toJson(args))
                 .build();
-        var result = client.executeTool(request);
+        var result = requireNonNull(client.executeTool(request), "MCP tool execution returned no result");
         String text = result.resultText();
         if (text == null && result.result() != null) {
-            text = result.result().toString();
+            text = McpToolJson.toJsonValue(result.result(), "result");
         }
         return new ToolExecutionResult(!result.isError(), text, result.attributes());
     }
@@ -82,11 +84,7 @@ final class McpToolAdapter implements McpProjectToolExecutor {
         return new ToolSchema(specification.parameters().description(), properties, specification.parameters().required(), specification.parameters().additionalProperties());
     }
 
-    /**
-     * Minimal schema conversion: primitive/object/enum shapes are preserved.
-     * More advanced LangChain4j schema nodes are flattened to strings/objects.
-     * That keeps the runtime compiling and exposes basic object schemas.
-     */
+    /** Converts the schema shapes supported by the model-facing tool contract recursively. */
     private static ToolParameter toParameter(String name, dev.langchain4j.model.chat.request.json.JsonSchemaElement element) {
         if (element instanceof dev.langchain4j.model.chat.request.json.JsonStringSchema stringSchema) {
             return ToolParameter.string(name, stringSchema.description());
@@ -105,6 +103,9 @@ final class McpToolAdapter implements McpProjectToolExecutor {
         }
         if (element instanceof dev.langchain4j.model.chat.request.json.JsonObjectSchema objectSchema) {
             return ToolParameter.object(name, objectSchema.description(), toSchema(objectSchema));
+        }
+        if (element instanceof dev.langchain4j.model.chat.request.json.JsonArraySchema arraySchema) {
+            return ToolParameter.array(name, arraySchema.description(), toParameter(null, arraySchema.items()));
         }
         return ToolParameter.string(name, element.description());
     }

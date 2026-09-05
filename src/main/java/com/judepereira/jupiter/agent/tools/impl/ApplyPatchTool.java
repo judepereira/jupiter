@@ -14,7 +14,7 @@ import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
  * Simple patch tool: replace first occurrence of oldText with newText in file.
  */
 public class ApplyPatchTool implements AgentTool {
-    private static final ToolDefinition DEF = new ToolDefinition(
+    private static final ToolDefinition DEF = ToolDefinition.builtIn(
             "apply_patch",
             "Apply a simple text replace patch to a file",
             ToolSchema.object(
