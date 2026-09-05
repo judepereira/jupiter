@@ -49,6 +49,10 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             Page page = context.newPage();
             page.navigate(app.baseUrl());
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            assertThat(page.locator("#topbar-logo"))
+                    .hasAttribute("src", "/favicon-32x32.png");
+            assertThat(page.locator("#favicon-32x32")).hasAttribute("href", "/favicon-32x32.png");
+            assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-16x16.png");
 
             openProject(page, "Alpha", projectDir);
 
@@ -89,12 +93,18 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
             assertThat(sessionOneRow.locator(".pending-dot")).hasCount(0);
             assertThat(sessionOneRow.locator(".unread-dot")).hasCount(1);
+            assertThat(page.locator("#topbar-logo")).hasAttribute("src", "/favicon-complete-32x32.png");
+            assertThat(page.locator("#favicon-32x32")).hasAttribute("href", "/favicon-complete-32x32.png");
+            assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-complete-16x16.png");
 
             page.waitForResponse(
                     response -> response.url().contains("/ui/sessions/") && response.url().contains("/activate") && response.status() == 200,
                     () -> sessionOneRow.locator(".session-item").click());
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #1");
             assertThat(sessionOneRow.locator(".unread-dot")).hasCount(0);
+            assertThat(page.locator("#topbar-logo")).hasAttribute("src", "/favicon-32x32.png");
+            assertThat(page.locator("#favicon-32x32")).hasAttribute("href", "/favicon-32x32.png");
+            assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-16x16.png");
         } finally {
             TestAppConfig.reset();
             if (previousHome == null) {
