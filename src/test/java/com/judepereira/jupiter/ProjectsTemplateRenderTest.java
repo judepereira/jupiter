@@ -169,7 +169,16 @@ public class ProjectsTemplateRenderTest {
 
         assertThat(html).contains("id=\"settings-modal\"", "Environment variables", "API_URL", "https://example.test", "FEATURE_FLAG", "true", "Add Variable");
         assertThat(html).contains("MCP servers", "Local MCP", "http://localhost:3000/mcp", "Header name", "Authorization", "Bearer token", "Exposed projects");
-        assertThat(html).contains("Hooks", "Assistant completion script", "Assistant error script", "Subagent completion script", "name=\"timeoutSeconds\"", "min=\"1\"", "max=\"3600\"", "Scripts execute with Bash");
+        assertThat(html).contains(
+                "Hooks", "Agent completion script", "Agent error script", "Subagent completion script",
+                "name=\"assistantCompletedScript\"", "name=\"assistantErroredScript\"", "name=\"subagentCompletedScript\"",
+                "Runs after the agent response completes.", "Runs when the agent execution fails.",
+                "Runs when a subagent completes, using the parent session's context.",
+                "name=\"timeoutSeconds\"", "min=\"1\"", "max=\"3600\"",
+                "Hooks run asynchronously", "/bin/bash", "/tmp",
+                "JUPITER_PROJECT_NAME", "JUPITER_WORKSPACE_NAME", "JUPITER_SESSION_NAME",
+                "Project-configured environment variables", "JUPITER_*", "\"$WEBHOOK_URL\"",
+                "A hook failure does not change", "timeout applies to each hook", "/tmp/jupiter-hooks.log");
         assertThat(html).contains("echo &lt;done&gt;\nline 2").doesNotContain("echo <done>");
         assertThat(html).contains(
                 "class=\"nav nav-pills flex-md-column settings-nav\"",
