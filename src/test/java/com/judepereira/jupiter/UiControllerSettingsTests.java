@@ -141,6 +141,22 @@ public class UiControllerSettingsTests {
     }
 
     @Test
+    public void manualPullReportsBusyWhenExecutorCompletesSynchronously(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot, new QueuedExecutor(true));
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long workspaceId = context.appStateService().loadViewData().activeWorkspace().id();
+        when(context.gitAutoUpdateService().updateWorkspaceManually(workspaceId)).thenReturn(
+                new GitAutoUpdateService.UpdateResult(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE, "abc", "abc", null, false));
+
+        ConcurrentModel model = new ConcurrentModel();
+        context.controller().pullActiveWorkspace(model);
+
+        assertThat(model.getAttribute("gitPullBusy")).isEqualTo(true);
+        assertThat(context.executor().size()).isEqualTo(0);
+        verify(context.gitAutoUpdateService()).updateWorkspaceManually(workspaceId);
+    }
+
+    @Test
     public void applyLifecycleHookSettingsPersistsWithoutAnActiveProject(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
 
@@ -275,6 +291,10 @@ public class UiControllerSettingsTests {
     }
 
     private static TestContext newContext(Path workspaceRoot) {
+        return newContext(workspaceRoot, new QueuedExecutor());
+    }
+
+    private static TestContext newContext(Path workspaceRoot, QueuedExecutor executor) {
         AgentProperties properties = new AgentProperties();
         properties.setWorkspaceRoot(workspaceRoot.toAbsolutePath().normalize().toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
@@ -285,7 +305,6 @@ public class UiControllerSettingsTests {
         TestAppStateSupport.AppStateTestContext appStateContext = TestAppStateSupport.appStateContext(event -> {});
         AppStateService appStateService = appStateContext.service();
         TokenUsageService tokenUsageService = new TokenUsageService(appStateContext.repository(), new ObjectMapper());
-        QueuedExecutor executor = new QueuedExecutor();
         com.judepereira.jupiter.git.ManualGitPullCoordinator coordinator = new com.judepereira.jupiter.git.ManualGitPullCoordinator(
                 appStateService, gitAutoUpdateService, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), executor);
 
@@ -304,10 +323,23 @@ public class UiControllerSettingsTests {
     private static final class QueuedExecutor extends AbstractExecutorService {
         private final Queue<Runnable> tasks = new ArrayDeque<>();
         private boolean shutdown;
+        private final boolean runSynchronously;
+
+        private QueuedExecutor() {
+            this(false);
+        }
+
+        private QueuedExecutor(boolean runSynchronously) {
+            this.runSynchronously = runSynchronously;
+        }
 
         @Override
         public void execute(Runnable command) {
-            tasks.add(command);
+            if (runSynchronously) {
+                command.run();
+            } else {
+                tasks.add(command);
+            }
         }
 
         @Override
