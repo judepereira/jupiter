@@ -62,6 +62,7 @@ public class ProjectsTemplateRenderTest {
         String html = engine.process("fragments/projects", context);
 
         assertThat(html).contains("No projects", "No project selected", "New tab");
+        assertThat(html).contains("id=\"topbar-logo\"", "src=\"/favicon-32x32.png\"");
     }
 
     @Test
