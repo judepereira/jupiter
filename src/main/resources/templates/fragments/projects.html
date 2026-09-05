@@ -485,18 +485,26 @@
                             <form class="settings-form" hx-post="/ui/settings/hooks/apply" hx-target="#modal-root" hx-swap="innerHTML">
                                 <section class="settings-section settings-app-section">
                                     <h5>Lifecycle hooks</h5>
-                                    <p class="settings-help-text">Scripts execute with Bash. Each hook receives project, workspace, and session name environment variables.</p>
+                                    <div class="settings-hooks-docs">
+                                        <p class="settings-help-text">Hooks run asynchronously in Bash using <code>/bin/bash</code>, with <code>/tmp</code> as the working directory. A hook failure does not change the agent or subagent lifecycle result; the timeout applies to each hook.</p>
+                                        <p class="settings-help-text">These runtime variables are always available: <code>JUPITER_PROJECT_NAME</code> (project name), <code>JUPITER_WORKSPACE_NAME</code> (workspace name), and <code>JUPITER_SESSION_NAME</code> (session name). Project-configured environment variables are also passed and can be expanded normally, such as <code>"$WEBHOOK_URL"</code>. The three <code>JUPITER_*</code> values take precedence over project variables with matching names.</p>
+                                        <p class="settings-help-text">Example:</p>
+                                        <pre class="settings-hooks-example"><code>printf '%s | %s | %s\n' "$JUPITER_PROJECT_NAME" "$JUPITER_WORKSPACE_NAME" "$JUPITER_SESSION_NAME" &gt;&gt; /tmp/jupiter-hooks.log</code></pre>
+                                    </div>
                                     <label class="project-form-field">
-                                        <span>Assistant completion script</span>
-                                        <textarea name="assistantCompletedScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantCompletedScript}"></textarea>
+                                        <span>Agent completion script</span>
+                                        <small id="agent-completion-help">Runs after the agent response completes.</small>
+                                        <textarea name="assistantCompletedScript" rows="6" spellcheck="false" aria-describedby="agent-completion-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantCompletedScript}"></textarea>
                                     </label>
                                     <label class="project-form-field">
-                                        <span>Assistant error script</span>
-                                        <textarea name="assistantErroredScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantErroredScript}"></textarea>
+                                        <span>Agent error script</span>
+                                        <small id="agent-error-help">Runs when the agent execution fails.</small>
+                                        <textarea name="assistantErroredScript" rows="6" spellcheck="false" aria-describedby="agent-error-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantErroredScript}"></textarea>
                                     </label>
                                     <label class="project-form-field">
                                         <span>Subagent completion script</span>
-                                        <textarea name="subagentCompletedScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.subagentCompletedScript}"></textarea>
+                                        <small id="subagent-completion-help">Runs when a subagent completes, using the parent session's context.</small>
+                                        <textarea name="subagentCompletedScript" rows="6" spellcheck="false" aria-describedby="subagent-completion-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.subagentCompletedScript}"></textarea>
                                     </label>
                                     <label class="project-form-field">
                                         <span>Timeout (seconds)</span>
