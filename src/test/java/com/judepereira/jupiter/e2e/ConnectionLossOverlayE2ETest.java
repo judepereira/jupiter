@@ -53,6 +53,7 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
             try (RunningApp restarted = startApp(fakeHome, sqliteDbFile, port, TestAppConfig.class)) {
                 assertThat(restarted.port()).isEqualTo(port);
                 page.waitForFunction("() => Number(sessionStorage.getItem('connection-loss-reload-count') || '0') >= 2");
+                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
                 page.waitForFunction("() => !document.body.classList.contains('connection-loss-overlay-open')");
 
                 assertThat(page.locator("#connection-loss-overlay")).isHidden();
