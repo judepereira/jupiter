@@ -8,6 +8,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -119,15 +120,34 @@ public class GitAutoUpdateService {
                 return fail(workspace, "Could not determine the Git revision after pulling", after);
             }
 
-            appStateService.resetWorkspaceAutoGitUpdateFailure(workspace.id());
             String beforeRevision = before.stdout().trim();
             String afterRevision = after.stdout().trim();
             if (!beforeRevision.equals(afterRevision)) {
+                GitCommandRunner.GitCommandResult count = run(path, "git", "rev-list", "--count",
+                        beforeRevision + ".." + afterRevision);
+                if (!count.succeeded()) {
+                    return fail(workspace, "Could not determine commits introduced by the Git update", count);
+                }
+                String commitCount = count.stdout().trim();
+                if (!commitCount.matches("[0-9]+") || new BigInteger(commitCount).signum() <= 0) {
+                    return fail(workspace, "Could not determine commits introduced by the Git update: invalid commit count", count);
+                }
+                BigInteger introducedCommitCount = new BigInteger(commitCount);
+
+                GitCommandRunner.GitCommandResult subject = run(path, "git", "log", "-1", "--format=%s", afterRevision);
+                if (!subject.succeeded()) {
+                    return fail(workspace, "Could not determine the latest Git commit subject", subject);
+                }
+
+                appStateService.resetWorkspaceAutoGitUpdateFailure(workspace.id());
+                String latestSubject = firstLine(subject.stdout());
                 appStateService.findMostRecentlyOpenedVisiblePrimarySession(workspace.id())
                         .ifPresent(session -> appStateService.appendInfoMessage(session.id(),
-                                "Git updated workspace \"" + workspace.name() + "\" to " + afterRevision + "."));
+                                "Background git update brought " + introducedCommitCount + (introducedCommitCount.equals(BigInteger.ONE) ? " commit" : " commits")
+                                        + " into this workspace. Latest commit: " + truncateCodePoints(latestSubject, 256)));
                 return UpdateResult.updated(beforeRevision, afterRevision);
             }
+            appStateService.resetWorkspaceAutoGitUpdateFailure(workspace.id());
             return UpdateResult.upToDate(beforeRevision);
         } catch (RuntimeException e) {
             return fail(workspace, "Git update failed", e);
@@ -220,6 +240,22 @@ public class GitAutoUpdateService {
         return List.of(stdout == null ? "" : stdout.trim(), stderr == null ? "" : stderr.trim()).stream()
                 .filter(value -> !value.isBlank())
                 .reduce((left, right) -> left + "\n" + right).orElse("");
+    }
+
+    private String firstLine(String value) {
+        String line = value == null ? "" : value;
+        int newline = line.indexOf('\n');
+        if (newline >= 0) {
+            line = line.substring(0, newline);
+        }
+        return line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
+    }
+
+    private String truncateCodePoints(String value, int maximum) {
+        if (value.codePointCount(0, value.length()) <= maximum) {
+            return value;
+        }
+        return value.substring(0, value.offsetByCodePoints(0, maximum));
     }
 
     public record UpdateResult(Status status, String beforeRevision, String afterRevision, String message, boolean firstFailure) {
