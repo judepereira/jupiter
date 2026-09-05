@@ -43,7 +43,7 @@ public class UiControllerAsyncStreamingTests {
     @Test
     public void sendReturnsQuickly_withPending_andDoesNotRunHarnessSynchronously() throws Exception {
         AtomicBoolean runCalled = new AtomicBoolean(false);
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 runCalled.set(true);
@@ -92,7 +92,7 @@ public class UiControllerAsyncStreamingTests {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
+                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
@@ -141,7 +141,7 @@ public class UiControllerAsyncStreamingTests {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
+                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
@@ -182,7 +182,7 @@ public class UiControllerAsyncStreamingTests {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
+                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
@@ -244,7 +244,7 @@ public class UiControllerAsyncStreamingTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return null;
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
             @Override
             public java.util.Optional<com.judepereira.jupiter.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
                                                                                                                        com.judepereira.jupiter.agent.catalog.ModelDefinition model,
@@ -382,7 +382,7 @@ public class UiControllerAsyncStreamingTests {
             public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                 return model;
             }
-        }, registry, props, agentDefinitionService, modelCatalog, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
+        }, registry, props, agentDefinitionService, modelCatalog, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         java.util.concurrent.atomic.AtomicInteger compactionCalls = new java.util.concurrent.atomic.AtomicInteger();
         ContextCompactionService contextCompactionService = new ContextCompactionService(appStateService,
@@ -391,7 +391,7 @@ public class UiControllerAsyncStreamingTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return null;
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
             @Override
             public java.util.Optional<com.judepereira.jupiter.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
                                                                                                                        com.judepereira.jupiter.agent.catalog.ModelDefinition model,
@@ -425,7 +425,7 @@ public class UiControllerAsyncStreamingTests {
 
     @Test
     public void streaming_preserves_spaces_and_newlines_in_final_text() throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
@@ -526,7 +526,7 @@ public class UiControllerAsyncStreamingTests {
     public void streaming_error_normalizes_openai_json_message() throws Exception {
         String quotaJson = "{\"error\":{\"message\":\"You exceeded your current quota, please check your plan and billing details.\",\"type\":\"insufficient_quota\",\"param\":null,\"code\":\"insufficient_quota\"}}";
 
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
@@ -601,7 +601,7 @@ public class UiControllerAsyncStreamingTests {
     public void streaming_error_normalizes_nested_openai_token_expired_json() throws Exception {
         String nestedJson = "{\"error\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"},\"detail\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"}}";
 
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
@@ -641,7 +641,7 @@ public class UiControllerAsyncStreamingTests {
 
     @Test
     public void stopChatCancelsInFlightStreamAndPersistsStoppedAssistantMessage(@TempDir java.nio.file.Path tmp) throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());

@@ -14,6 +14,10 @@ import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpProjectToolExecutor;
 import com.judepereira.jupiter.agent.mcp.McpProjectToolSnapshot;
+import com.judepereira.jupiter.agent.skill.SkillCatalog;
+import com.judepereira.jupiter.agent.skill.SkillContextInjector;
+import com.judepereira.jupiter.agent.skill.SkillDiscoveryService;
+import com.judepereira.jupiter.agent.skill.SkillInvocationResolver;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
@@ -48,16 +52,17 @@ public class CodingAgentHarness {
     private final TokenUsageService tokenUsageService;
     private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
     private final SystemPromptComposer systemPromptComposer;
-
-
-
+    private final SkillDiscoveryService skillDiscoveryService;
+    private final SkillInvocationResolver skillInvocationResolver;
+    private final SkillContextInjector skillContextInjector;
 
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
                               AppStateService appStateService, TokenUsageService tokenUsageService,
                               McpProjectMcpServerRuntimeManager mcpRuntimeManager,
-                              SystemPromptComposer systemPromptComposer) {
+                              SystemPromptComposer systemPromptComposer, SkillDiscoveryService skillDiscoveryService,
+                              SkillInvocationResolver skillInvocationResolver, SkillContextInjector skillContextInjector) {
         this.modelFactory = modelFactory;
         this.registry = registry;
         this.props = props;
@@ -67,6 +72,9 @@ public class CodingAgentHarness {
         this.tokenUsageService = tokenUsageService;
         this.mcpRuntimeManager = mcpRuntimeManager;
         this.systemPromptComposer = systemPromptComposer;
+        this.skillDiscoveryService = skillDiscoveryService;
+        this.skillInvocationResolver = skillInvocationResolver;
+        this.skillContextInjector = skillContextInjector;
     }
 
     public AgentTurnResult runTurn(AgentTurnRequest request) {
@@ -76,6 +84,10 @@ public class CodingAgentHarness {
     public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
         AgentModelClient model = modelFactory.getClient();
 
+        String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
+                ? props.getWorkspaceRoot() : request.getWorkspaceRoot();
+        Path workspace = Path.of(workspaceRoot);
+        SkillCatalog skillCatalog = skillDiscoveryService.discover(workspace);
         AgentDefinition agent = resolveAgent(request);
         ModelDefinition selectedModel = resolveModel(request, agent);
         ThinkingLevel thinkingLevel = resolveThinkingLevel(request, agent);
@@ -83,15 +95,17 @@ public class CodingAgentHarness {
                 selectedModel.id(), selectedModel.apiModelId(), thinkingLevel, selectedModel.supportsReasoning(),
                 agent == null ? null : agent.textVerbosity());
 
-        String systemPrompt = resolveSystemPrompt(request, agent);
+        String systemPrompt = resolveSystemPrompt(request, agent, skillCatalog);
         List<Message> convo = new ArrayList<>(seedConversation(systemPrompt, request.getConversationHistory()));
+        Message newestUser = convo.stream().filter(message -> message.getRole() == Message.Role.USER).reduce((a, b) -> b).orElse(null);
+        if (newestUser != null) {
+            var resolution = skillInvocationResolver.resolveExplicit(newestUser.getContent(), skillCatalog);
+            convo = new ArrayList<>(skillContextInjector.injectBeforeNewestUser(convo, resolution));
+        }
 
         List<ToolCallTrace> traces = new ArrayList<>();
 
         int max = props.getMaxIterations();
-        String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
-                ? props.getWorkspaceRoot()
-                : request.getWorkspaceRoot();
         Map<String, String> environmentVariables = resolveEnvironmentVariables(request.getSessionId());
         ToolExecutionContext execCtxTemplate = new ToolExecutionContext(Path.of(workspaceRoot),
                 agent != null ? agent.allowWrite() : props.getTooling().isAllowWrite(),
@@ -280,17 +294,17 @@ public class CodingAgentHarness {
         return agent == null ? null : agent.defaultThinkingLevel();
     }
 
-    private String resolveSystemPrompt(AgentTurnRequest request, AgentDefinition agent) {
+    private String resolveSystemPrompt(AgentTurnRequest request, AgentDefinition agent, SkillCatalog catalog) {
         if (agent == null) {
             String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
                     ? props.getWorkspaceRoot()
                     : request.getWorkspaceRoot();
-            return systemPromptComposer.compose(request.getSystemPrompt(), workspaceRoot);
+            return systemPromptComposer.compose(request.getSystemPrompt(), workspaceRoot, catalog);
         }
         String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
                 ? props.getWorkspaceRoot()
                 : request.getWorkspaceRoot();
-        return systemPromptComposer.composeForAgent(agent, workspaceRoot);
+        return systemPromptComposer.composeForAgent(agent, workspaceRoot, catalog);
     }
 
     private static List<Message> seedConversation(String systemPrompt, List<Message> conversation) {

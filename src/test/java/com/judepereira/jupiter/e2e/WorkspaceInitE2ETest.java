@@ -101,7 +101,7 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
                 @Override
                 public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                     AgentTurnResult result = new AgentTurnResult("done", java.util.List.of());

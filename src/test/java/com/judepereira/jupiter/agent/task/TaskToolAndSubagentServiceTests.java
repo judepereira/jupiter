@@ -18,6 +18,13 @@ import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
+import com.judepereira.jupiter.agent.llm.AgentModelClient;
+import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter.agent.config.AgentProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,7 +48,7 @@ public class TaskToolAndSubagentServiceTests {
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
 
-        CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+        CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 assertThat(request.getAgentId()).isEqualTo("engineer");
@@ -86,8 +93,58 @@ public class TaskToolAndSubagentServiceTests {
                 .isNotEmpty()
                 .extracting(call -> call.outputPreview())
                 .anySatisfy(output -> assertThat(output).contains("wrote child.txt")));
+        assertThat(childMessages).allSatisfy(message -> assertThat(message.text()).doesNotContain("<skill>"));
 
         assertThat(appStateService.loadViewData().sessions()).hasSize(1);
+    }
+
+    @Test
+    public void childHarnessUsesWorkspaceSkillMetadataAndEphemeralExplicitBody(@TempDir Path workspaceRoot) throws Exception {
+        Path skill = workspaceRoot.resolve(".agents/skills/release/SKILL.md");
+        java.nio.file.Files.createDirectories(skill.getParent());
+        java.nio.file.Files.writeString(skill, "---\nname: release\ndescription: release workflow\n---\nFULL RELEASE BODY");
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long parentSessionId = appStateService.loadViewData().activeSession().id();
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent system prompt", AgentMode.SUBAGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of());
+        AgentDefinitionService definitions = agentService(subagent);
+        List<List<Message>> captured = new ArrayList<>();
+        AgentModelClient model = (conversation, tools) -> {
+            captured.add(List.copyOf(conversation));
+            return new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
+        };
+        CodingAgentHarness childHarness = realHarness(model, workspaceRoot);
+        SubagentTaskService service = new SubagentTaskService(appStateService, definitions, childHarnessProvider(childHarness), null);
+        TaskTool taskTool = new TaskTool(definitions, service);
+
+        taskTool.execute(Map.of("agentId", "engineer", "requestSummary", "release", "task", "use $release", "expectedOutput", "done"),
+                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool-explicit", AgentMode.AGENT, "tool-explicit", Map.of(), ToolProgressSink.noop(), null));
+        assertThat(captured).hasSize(1);
+        assertThat(captured.getFirst().getFirst().getContent()).contains("<available_skills>").contains("release workflow");
+        assertThat(captured.getFirst()).anySatisfy(message -> assertThat(message.getContent()).contains("FULL RELEASE BODY"));
+        assertThat(captured.getFirst()).anySatisfy(message -> assertThat(message.getContent()).contains("Primary task:\nuse $release"));
+
+        taskTool.execute(Map.of("agentId", "engineer", "requestSummary", "metadata", "task", "inspect skills", "expectedOutput", "done"),
+                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool-metadata", AgentMode.AGENT, "tool-metadata", Map.of(), ToolProgressSink.noop(), null));
+        assertThat(captured).hasSize(2);
+        assertThat(captured.get(1).getFirst().getContent()).contains("<available_skills>");
+        assertThat(captured.get(1)).noneSatisfy(message -> assertThat(message.getContent()).contains("FULL RELEASE BODY"));
+        assertThat(appStateService.loadSessionDetail(parentSessionId).chatMessages())
+                .allSatisfy(message -> assertThat(message.text()).doesNotContain("<skill>").doesNotContain("FULL RELEASE BODY"));
+    }
+
+    private static CodingAgentHarness realHarness(AgentModelClient model, Path workspace) {
+        AgentProperties props = new AgentProperties();
+        props.setMaxIterations(1);
+        props.setWorkspaceRoot(workspace.toString());
+        AgentModelClientFactory factory = new AgentModelClientFactory(null, props) {
+            @Override public AgentModelClient getClient() { return model; }
+        };
+        return new CodingAgentHarness(factory, new com.judepereira.jupiter.agent.tools.ToolRegistry(), props, null, null, null, null, null,
+                new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.components(workspace.resolve("empty-home")).discovery(),
+                com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
     }
 
     @Test
@@ -135,7 +192,7 @@ public class TaskToolAndSubagentServiceTests {
                 "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
 
-        CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
+        CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 ToolCallTrace trace = new ToolCallTrace("child-tool-1", "write_file", Map.of("path", "child.txt", "content", "hello"), true,
