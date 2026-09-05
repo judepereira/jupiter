@@ -40,6 +40,9 @@ RUN     groupdel ubuntu || true
 COPY --from=build /workspace/target/jupiter-0.0.1-SNAPSHOT.jar /opt/jupiter.jar
 ADD entrypoint.sh /entrypoint.sh
 
+# Keep only names so build-time environment values are not stored in the image.
+RUN bash -c 'set -euo pipefail; env -0 | while IFS= read -r -d "" entry; do printf "%s\0" "${entry%%=*}"; done > /etc/jupiter-image-env-names'
+
 EXPOSE 7272
 
 CMD ["bash", "/entrypoint.sh"]
