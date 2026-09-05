@@ -1076,8 +1076,8 @@ public class UiController {
             systemBalloonService.publishWarning("Git Pull", "No active workspace is selected.");
             addGitPullModel(model, null);
         } else {
-            manualGitPullCoordinator().dispatch(view.activeWorkspace().id());
-            addGitPullModel(model, view.activeWorkspace());
+            ManualGitPullCoordinator.DispatchResult result = manualGitPullCoordinator().dispatch(view.activeWorkspace().id());
+            addGitPullModel(model, view.activeWorkspace(), result != ManualGitPullCoordinator.DispatchResult.FAILED);
         }
         return "fragments/projects :: gitPullControl";
     }
@@ -1087,13 +1087,17 @@ public class UiController {
         AppStateView view = appStateService.loadViewData();
         WorkspaceView workspace = view.activeWorkspace() != null && view.activeWorkspace().id() == workspaceId
                 ? view.activeWorkspace() : null;
-        addGitPullModel(model, workspace);
+        addGitPullModel(model, workspace, workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
         return "fragments/projects :: gitPullControl";
     }
 
     private void addGitPullModel(Model model, WorkspaceView workspace) {
+        addGitPullModel(model, workspace, workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
+    }
+
+    private void addGitPullModel(Model model, WorkspaceView workspace, boolean busy) {
         model.addAttribute("workspaceId", workspace == null ? null : workspace.id());
-        model.addAttribute("gitPullBusy", workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
+        model.addAttribute("gitPullBusy", workspace != null && busy);
         model.addAttribute("hasWorkspace", workspace != null);
     }
 

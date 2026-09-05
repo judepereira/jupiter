@@ -16,6 +16,12 @@ import java.util.concurrent.ExecutorService;
 @Service
 @Log4j2
 public class ManualGitPullCoordinator {
+    public enum DispatchResult {
+        ACCEPTED,
+        ALREADY_RUNNING,
+        FAILED
+    }
+
     private final AppStateService appStateService;
     private final GitAutoUpdateService gitAutoUpdateService;
     private final SystemBalloonService systemBalloonService;
@@ -35,10 +41,9 @@ public class ManualGitPullCoordinator {
         return activePulls.containsKey(workspaceId);
     }
 
-    /** Returns false when an equivalent pull is already running. */
-    public boolean dispatch(long workspaceId) {
+    public DispatchResult dispatch(long workspaceId) {
         if (activePulls.putIfAbsent(workspaceId, Boolean.TRUE) != null) {
-            return false;
+            return DispatchResult.ALREADY_RUNNING;
         }
         try {
             Persistence.WorkspaceView workspace = appStateService.loadAutoGitUpdateWorkspace(workspaceId);
@@ -46,12 +51,12 @@ public class ManualGitPullCoordinator {
                 throw new IllegalStateException("Workspace " + workspaceId + " could not be found");
             }
             executor.submit(() -> run(workspaceId, workspace));
-            return true;
+            return DispatchResult.ACCEPTED;
         } catch (Throwable failure) {
             activePulls.remove(workspaceId);
             log.error("Manual Git pull could not be queued for workspace {}", workspaceId, failure);
             systemBalloonService.publishError("Git Pull", "Git pull could not be started: " + message(failure));
-            return false;
+            return DispatchResult.FAILED;
         }
     }
 
