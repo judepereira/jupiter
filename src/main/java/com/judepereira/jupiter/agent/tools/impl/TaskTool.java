@@ -29,7 +29,7 @@ public class TaskTool implements AgentTool {
 
     @Override
     public ToolDefinition definition() {
-        return new ToolDefinition("task", buildDescription(), ToolSchema.object(
+        return ToolDefinition.builtIn("task", buildDescription(), ToolSchema.object(
                 string("agentId", "subagent id to run"),
                 string("requestSummary", "concise summary of the request for UI display"),
                 string("task", "task instruction for the subagent"),

@@ -11,7 +11,7 @@ import java.util.Map;
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
 public class WriteFileTool implements AgentTool {
-    private static final ToolDefinition DEF = new ToolDefinition(
+    private static final ToolDefinition DEF = ToolDefinition.builtIn(
             "write_file",
             "Write full content to a file (overwrites)",
             ToolSchema.object(

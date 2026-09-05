@@ -16,6 +16,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
@@ -85,7 +86,7 @@ public class LangChain4jMapperTest {
         assertEquals(List.of("path"), schema.required());
 
         List<ToolSpecification> specs = toolSpecificationMapper.toToolSpecifications(List.of(
-                new ToolDefinition("read_file", "Read a file", schema)
+                ToolDefinition.builtIn("read_file", "Read a file", schema)
         ));
 
         assertEquals(1, specs.size());
@@ -95,6 +96,26 @@ public class LangChain4jMapperTest {
         JsonObjectSchema parameters = specs.get(0).parameters();
         assertInstanceOf(JsonStringSchema.class, parameters.properties().get("path"));
         assertInstanceOf(JsonObjectSchema.class, parameters.properties().get("options"));
+    }
+
+    @Test
+    public void converts_recursive_array_schemas_to_langchain4j() {
+        ToolParameter objectItem = ToolParameter.object(null, "item", ToolSchema.object(
+                string("label", "label"),
+                ToolParameter.array("children", "children", ToolParameter.integer(null, "child"))
+        ));
+        ToolSchema schema = ToolSchema.object(
+                ToolParameter.array("tags", "tags", string(null, "tag")),
+                ToolParameter.array("items", "items", objectItem)
+        );
+
+        JsonObjectSchema parameters = toolSpecificationMapper.toToolSpecifications(List.of(
+                ToolDefinition.builtIn("test", "test", schema))).getFirst().parameters();
+        JsonArraySchema tags = assertInstanceOf(JsonArraySchema.class, parameters.properties().get("tags"));
+        assertInstanceOf(JsonStringSchema.class, tags.items());
+        JsonArraySchema items = assertInstanceOf(JsonArraySchema.class, parameters.properties().get("items"));
+        JsonObjectSchema item = assertInstanceOf(JsonObjectSchema.class, items.items());
+        assertInstanceOf(JsonArraySchema.class, item.properties().get("children"));
     }
 
     @Test

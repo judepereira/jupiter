@@ -13,7 +13,7 @@ import java.util.Map;
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
 public class DisplayImageTool implements AgentTool {
-    private static final ToolDefinition DEF = new ToolDefinition(
+    private static final ToolDefinition DEF = ToolDefinition.builtIn(
             "display_image",
             "Display an image from the workspace",
             ToolSchema.object(

@@ -126,7 +126,7 @@ public class CodingAgentHarnessTaskToolTests {
     }
 
     private static RecordingTool recordingTool(String name) {
-        return new RecordingTool(name, new ToolDefinition(name, name + " tool", com.judepereira.jupiter.agent.llm.dto.ToolSchema.object()),
+        return new RecordingTool(name, ToolDefinition.builtIn(name, name + " tool", com.judepereira.jupiter.agent.llm.dto.ToolSchema.object()),
                 (args, context) -> new ToolExecutionResult(true, name + " executed", Map.of()));
     }
 
