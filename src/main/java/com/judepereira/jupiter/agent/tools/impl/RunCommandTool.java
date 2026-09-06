@@ -66,7 +66,6 @@ public class RunCommandTool implements AgentTool {
         Map<String, String> environment = pb.environment();
         environment.clear();
         environment.putAll(buildCommandEnvironment(System.getenv(), context.getCommandEnvironmentAllowlist(), context.getEnvironmentVariables()));
-        ProcessEnvironmentSanitizer.sanitize(environment);
         Process p = pb.start();
         StringBuilder stdoutBuilder = new StringBuilder();
         StringBuilder stderrBuilder = new StringBuilder();
@@ -162,9 +161,8 @@ public class RunCommandTool implements AgentTool {
             }
         }
         environment.putAll(projectEnvironment);
-        environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
-        environment.remove("JUPITER_HTTP_AUTH_USERNAME");
-        return Map.copyOf(ProcessEnvironmentSanitizer.sanitize(environment));
+        ProcessEnvironmentSanitizer.sanitize(environment);
+        return Map.copyOf(environment);
     }
 
     private String formatOutput(String streamName, String output) throws Exception {

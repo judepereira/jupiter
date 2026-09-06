@@ -57,7 +57,7 @@ This section is intentionally stable: document the repository layout and long-li
 - Keep only the minimum query and relationship metadata plaintext. For required equality or uniqueness lookups, use keyed blind indexes rather than deterministic encryption.
 - Extend `EncryptionMigrationRunner` for newly protected existing columns; migrations must be resumable and fail fast on errors.
 - Do not use SQL text, JSON, or ordering predicates on encrypted columns unless the design explicitly decrypts safely or provides a safe index.
-- Never log, persist, expose, or pass `JUPITER_ENCRYPTION_KEY` to child processes. Use `ProcessEnvironmentSanitizer` for every process launch, after merging variables and before creating the final environment.
+- Never log or expose sensitive Jupiter credentials (`JUPITER_ENCRYPTION_KEY`, `JUPITER_HTTP_AUTH_PASSWORD`, or `JUPITER_HTTP_AUTH_USERNAME`), or pass them to child processes. Use `ProcessEnvironmentSanitizer` for every process launch, after merging variables and before creating the final environment.
 - Add tests that inspect raw database ciphertext and verify transparent round trips, migration behavior, and query semantics.
 
 ### Real-time interaction model

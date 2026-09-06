@@ -173,7 +173,8 @@ public class LifecycleHookService {
         environment.put("JUPITER_PROJECT_NAME", context.projectName());
         environment.put("JUPITER_WORKSPACE_NAME", context.workspaceName());
         environment.put("JUPITER_SESSION_NAME", context.sessionName());
-        return ProcessEnvironmentSanitizer.sanitize(environment);
+        ProcessEnvironmentSanitizer.sanitize(environment);
+        return environment;
     }
 
     private void reportFailure(LifecycleEvent event, long sessionId, HookStatus status, Integer exitCode,

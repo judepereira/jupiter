@@ -115,9 +115,8 @@ public class TerminalManager {
     static Map<String, String> terminalEnvironment(Map<String, String> projectEnvironmentVariables) {
         Map<String, String> environment = new HashMap<>(System.getenv());
         environment.putAll(projectEnvironmentVariables);
-        environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
-        environment.remove("JUPITER_HTTP_AUTH_USERNAME");
-        return ProcessEnvironmentSanitizer.sanitize(environment);
+        ProcessEnvironmentSanitizer.sanitize(environment);
+        return environment;
     }
 
     private TerminalRuntime runtime(String terminalId) {
