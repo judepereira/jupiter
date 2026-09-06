@@ -135,8 +135,10 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
                     for (let frame = 0; frame < 60; frame++) {
                         await new Promise(resolve => requestAnimationFrame(resolve));
                         if (!history.isConnected || !list.isConnected || history.scrollHeight <= history.clientHeight) return false;
+                        const max = history.scrollHeight - history.clientHeight;
                         const signature = [history.scrollHeight, history.clientHeight, list.getBoundingClientRect().height].join(':');
-                        stableFrames = signature === previousSignature ? stableFrames + 1 : 0;
+                        const atBottom = Math.abs(history.scrollTop - max) <= 1;
+                        stableFrames = signature === previousSignature && atBottom ? stableFrames + 1 : 0;
                         previousSignature = signature;
                         if (stableFrames >= 3) return true;
                     }
