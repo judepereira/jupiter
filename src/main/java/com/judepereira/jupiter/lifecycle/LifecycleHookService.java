@@ -4,10 +4,10 @@ import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -189,7 +189,7 @@ public class LifecycleHookService {
         ProcessBuilder builder = new ProcessBuilder("setsid", "/bin/bash", request.scriptFile().toString());
         builder.directory(TEMP_DIRECTORY.toFile());
         builder.environment().putAll(request.environment());
-        ProcessEnvironmentSanitizer.sanitize(builder.environment());
+        ProcessEnvironmentSanitizer.sanitize(builder);
         return builder.start();
     }
 

@@ -4,14 +4,25 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport;
+import com.judepereira.jupiter.security.EncryptionKey;
+import com.judepereira.jupiter.security.EncryptionKeyBootstrapReader;
+import com.judepereira.jupiter.security.LinuxProcessHardening;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
+
+import java.io.InputStream;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @SpringBootApplication
 @EnableScheduling
 public class Jupiter {
+
+    private static final String ENCRYPTION_KEY_BEAN_NAME = "jupiterEncryptionKey";
 
     @Bean
     ObjectMapper objectMapper() {
@@ -33,7 +44,23 @@ public class Jupiter {
     }
 
     public static void main(String[] args) {
-        SpringApplication.run(Jupiter.class, args);
+        bootstrap(System.in, LinuxProcessHardening::enforce, EncryptionKeyBootstrapReader::read,
+                key -> application(key).run(args));
+    }
+
+    static void bootstrap(InputStream input, Runnable harden, Function<InputStream, EncryptionKey> keyReader,
+            Consumer<EncryptionKey> startApplication) {
+        harden.run();
+        EncryptionKey key = keyReader.apply(input);
+        startApplication.accept(key);
+    }
+
+    static SpringApplication application(EncryptionKey key) {
+        SpringApplication application = new SpringApplication(Jupiter.class);
+        ApplicationContextInitializer<ConfigurableApplicationContext> initializer = context ->
+                context.getBeanFactory().registerSingleton(ENCRYPTION_KEY_BEAN_NAME, key);
+        application.addInitializers(initializer);
+        return application;
     }
 
 }

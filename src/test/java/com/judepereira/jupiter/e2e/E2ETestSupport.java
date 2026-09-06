@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.e2e;
 
 import com.judepereira.jupiter.Jupiter;
+import com.judepereira.jupiter.testsupport.TestEncryptionConfiguration;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.microsoft.playwright.Browser;
@@ -175,7 +176,7 @@ abstract class E2ETestSupport {
         Map<String, String> previousProperties = new HashMap<>();
         overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
         additionalProperties.forEach((key, value) -> overrideSystemProperty(previousProperties, key, value));
-        Class<?>[] sources = Stream.concat(Stream.of(Jupiter.class), Arrays.stream(testConfigClasses)).toArray(Class<?>[]::new);
+        Class<?>[] sources = Stream.concat(Stream.of(Jupiter.class, TestEncryptionConfiguration.class), Arrays.stream(testConfigClasses)).toArray(Class<?>[]::new);
         Map<String, String> properties = new LinkedHashMap<>();
         properties.put("server.port", "0");
         properties.put("spring.datasource.url", jdbcUrl);
@@ -183,7 +184,6 @@ abstract class E2ETestSupport {
         properties.put("spring.flyway.enabled", "true");
         properties.put("agent.workspace-root", fakeHome.toAbsolutePath().normalize().toString());
         properties.put("openai.api-key", "test");
-        properties.put("JUPITER_ENCRYPTION_KEY", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=");
         properties.putAll(additionalProperties);
         ConfigurableApplicationContext context = new SpringApplicationBuilder(sources)
                 .web(WebApplicationType.SERVLET)

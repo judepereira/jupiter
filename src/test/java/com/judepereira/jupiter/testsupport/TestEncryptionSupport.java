@@ -10,6 +10,10 @@ public final class TestEncryptionSupport {
     private TestEncryptionSupport() {
     }
 
+    public static EncryptionKey encryptionKey() {
+        return EncryptionKey.fromBase64(KEY);
+    }
+
     public static TextEncryptor encryptor() {
         return ENCRYPTOR;
     }
