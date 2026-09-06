@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EncryptionMigrationIntegrationTests {
-    private static final String KEY = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+    private static final String KEY = TestEncryptionSupport.KEY;
 
     @Test
     void convertsLegacyRowsAndRepositoryReadsPlaintext() throws Exception {

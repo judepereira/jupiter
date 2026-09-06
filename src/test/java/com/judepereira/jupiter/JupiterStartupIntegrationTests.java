@@ -3,10 +3,11 @@ package com.judepereira.jupiter;
 import com.judepereira.jupiter.security.EncryptionKey;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.security.TextEncryptor;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -27,7 +28,7 @@ class JupiterStartupIntegrationTests {
     @TempDir
     Path tempDir;
 
-    private static final String KEY = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+    private static final String KEY = TestEncryptionSupport.KEY;
     private static final String WRONG_KEY = "//////////////////////////////////////////8=";
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(45);
 

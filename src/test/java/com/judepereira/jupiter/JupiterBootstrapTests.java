@@ -1,6 +1,7 @@
 package com.judepereira.jupiter;
 
 import com.judepereira.jupiter.security.EncryptionKey;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -12,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JupiterBootstrapTests {
-    private static final String KEY = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+    private static final String KEY = TestEncryptionSupport.KEY;
 
     @Test
     void hardensBeforeReadingKeyAndDoesNotReadAfterHardeningFails() {

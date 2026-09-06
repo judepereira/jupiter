@@ -1,10 +1,12 @@
 package com.judepereira.jupiter.security;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 class TextEncryptorTests {
-    private static final EncryptionKey KEY = EncryptionKey.fromBase64("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=");
+    private static final EncryptionKey KEY = EncryptionKey.fromBase64(TestEncryptionSupport.KEY);
 
     @Test void encryptsWithRandomNonceAndRoundTrips() {
         var crypto = new TextEncryptor(KEY);

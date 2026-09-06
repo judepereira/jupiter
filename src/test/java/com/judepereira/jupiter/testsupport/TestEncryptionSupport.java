@@ -4,7 +4,7 @@ import com.judepereira.jupiter.security.EncryptionKey;
 import com.judepereira.jupiter.security.TextEncryptor;
 
 public final class TestEncryptionSupport {
-    private static final String KEY = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+    public static final String KEY = "K9fFdgQTSimRghWh99cnOZ9UoPEzz97NKf16loLUKYw=";
     private static final TextEncryptor ENCRYPTOR = new TextEncryptor(EncryptionKey.fromBase64(KEY));
 
     private TestEncryptionSupport() {
