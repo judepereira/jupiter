@@ -14,7 +14,9 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -44,12 +46,20 @@ public class Jupiter {
     }
 
     public static void main(String[] args) {
-        bootstrap(System.in, LinuxProcessHardening::enforce, EncryptionKeyBootstrapReader::read,
+        InputStream in;
+        if (System.getenv("INSECURE_ACCEPT_KEY_FROM_ENV").equals("1")) {
+            in = new ByteArrayInputStream(System.getenv("JUPITER_INSECURE_ENCRYPTION_KEY")
+                    .getBytes(StandardCharsets.UTF_8));
+        } else {
+            in = System.in;
+        }
+
+        bootstrap(in, LinuxProcessHardening::enforce, EncryptionKeyBootstrapReader::read,
                 key -> application(key).run(args));
     }
 
     static void bootstrap(InputStream input, Runnable harden, Function<InputStream, EncryptionKey> keyReader,
-            Consumer<EncryptionKey> startApplication) {
+                          Consumer<EncryptionKey> startApplication) {
         harden.run();
         EncryptionKey key = keyReader.apply(input);
         startApplication.accept(key);
