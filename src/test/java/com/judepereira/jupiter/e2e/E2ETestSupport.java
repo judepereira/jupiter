@@ -171,7 +171,7 @@ abstract class E2ETestSupport {
     }
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {
-        String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize() + "?journal_mode=WAL&foreign_keys=on";
+        String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize() + "?journal_mode=WAL&foreign_keys=on&busy_timeout=30000";
         Map<String, String> previousProperties = new HashMap<>();
         overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
         additionalProperties.forEach((key, value) -> overrideSystemProperty(previousProperties, key, value));
@@ -183,6 +183,7 @@ abstract class E2ETestSupport {
         properties.put("spring.flyway.enabled", "true");
         properties.put("agent.workspace-root", fakeHome.toAbsolutePath().normalize().toString());
         properties.put("openai.api-key", "test");
+        properties.put("JUPITER_ENCRYPTION_KEY", "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=");
         properties.putAll(additionalProperties);
         ConfigurableApplicationContext context = new SpringApplicationBuilder(sources)
                 .web(WebApplicationType.SERVLET)

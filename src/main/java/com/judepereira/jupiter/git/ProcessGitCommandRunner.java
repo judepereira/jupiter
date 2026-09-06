@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.git;
 
 import org.springframework.stereotype.Component;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,6 +22,7 @@ public class ProcessGitCommandRunner implements GitCommandRunner {
             ProcessBuilder builder = new ProcessBuilder(command).directory(workingDirectory.toFile());
             builder.environment().put("GIT_TERMINAL_PROMPT", "0");
             builder.environment().put("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
+            ProcessEnvironmentSanitizer.sanitize(builder.environment());
             Process process = builder.start();
             try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
                 Future<byte[]> stdout = executor.submit(() -> process.getInputStream().readAllBytes());

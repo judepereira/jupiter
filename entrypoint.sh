@@ -6,6 +6,16 @@ PORT=${PORT:-7272}
 WITH_UID=${WITH_UID:-1000}
 WITH_GID=${WITH_GID:-1000}
 
+# Keep the database key out of all setup processes, then restore it only for Java.
+encryption_key_present=false
+encryption_key_value=""
+if [[ ${JUPITER_ENCRYPTION_KEY+x} == x ]]; then
+  encryption_key_present=true
+  encryption_key_value=$JUPITER_ENCRYPTION_KEY
+  declare +x encryption_key_value
+  unset JUPITER_ENCRYPTION_KEY
+fi
+
 # su - resets the environment. Preserve only variables added after the image was built.
 declare -A image_env_names=()
 while IFS= read -r -d '' env_name; do
@@ -21,6 +31,10 @@ while IFS= read -r -d '' env_entry; do
     forwarded_env_names_seen["$env_name"]=1
   fi
 done < <(env -0)
+
+if [[ $encryption_key_present == true ]]; then
+  forwarded_env_names+=(JUPITER_ENCRYPTION_KEY)
+fi
 
 forwarded_env_list=""
 if ((${#forwarded_env_names[@]})); then
@@ -49,6 +63,10 @@ if [[ -f /init-user.sh ]]; then
 fi
 
 echo "Starting Jupiter as $USERNAME on port $PORT"
+
+if [[ $encryption_key_present == true ]]; then
+  export JUPITER_ENCRYPTION_KEY=$encryption_key_value
+fi
 
 su "${su_args[@]}" - "$USERNAME" -c \
   "/opt/java/openjdk/bin/java -jar -Dserver.port="$PORT" /opt/jupiter.jar"

@@ -8,9 +8,14 @@ Jupiter coding agent harness in the spirit of Claude Code, Codex, and opencode. 
 | 🏠 Self-hostable | 💻 Local-first | ☁️ Service-backed | 📦 DIY-friendly |
 
 ## Running locally
+Set the mandatory, stable database encryption key before starting:
 ```bash
+export JUPITER_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ./mvnw spring-boot:run
 ```
+The key must be standard Base64 encoding of exactly 32 bytes. Keep it unchanged across restarts and back it up separately from the database: losing it makes encrypted data unrecoverable, and changing it causes startup failure.
+
+On the first startup after upgrading, back up the database and key first. Existing plaintext data is migrated automatically before readiness; migration is one-way for older app versions. Database and key backups must be managed separately. App-level encryption protects values going forward, but old WAL/backups, deleted pages, and other external copies may still contain pre-migration plaintext unless securely handled.
 
 Or build and run the packaged jar:
 ```bash
@@ -26,13 +31,17 @@ Build a Docker image as usual:
 
 ```bash
 docker build -t jupiter .
-docker run --rm -p 7272:7272 jupiter
+docker run --rm -p 7272:7272 \
+  -e JUPITER_ENCRYPTION_KEY="$(openssl rand -base64 32)" jupiter
 ```
+Keep the same key for every restart; do not bake it into image layers.
 
 For persistence inside a container, mount the app user's `/home/<app-user>/.jupiter` directory:
 
 ```bash
-docker run --rm -p 7272:7272 -v "$(pwd)/.jupiter:/home/jupiter/.jupiter" jupiter
+docker run --rm -p 7272:7272 \
+  -e JUPITER_ENCRYPTION_KEY="$JUPITER_ENCRYPTION_KEY" \
+  -v "$(pwd)/.jupiter:/home/jupiter/.jupiter" jupiter
 ```
 
 ## Defaults

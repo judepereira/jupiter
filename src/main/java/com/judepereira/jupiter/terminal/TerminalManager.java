@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.terminal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import com.pty4j.WinSize;
@@ -116,7 +117,7 @@ public class TerminalManager {
         environment.putAll(projectEnvironmentVariables);
         environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
         environment.remove("JUPITER_HTTP_AUTH_USERNAME");
-        return environment;
+        return ProcessEnvironmentSanitizer.sanitize(environment);
     }
 
     private TerminalRuntime runtime(String terminalId) {

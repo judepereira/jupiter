@@ -7,6 +7,8 @@ import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.flywaydb.core.Flyway;
+import com.judepereira.jupiter.security.EncryptionMigrationRunner;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -319,7 +321,12 @@ public class OpenAiOAuthServiceTests {
 
             Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
             SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
-            return new TestDatabase(new AppStateRepository(new NamedParameterJdbcTemplate(dataSource)));
+            try { new EncryptionMigrationRunner(new org.springframework.jdbc.core.JdbcTemplate(dataSource),
+                    new org.springframework.transaction.support.TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource)),
+                    TestEncryptionSupport.encryptor()).run(new org.springframework.boot.DefaultApplicationArguments()); }
+            catch (Exception e) { throw new IllegalStateException("Failed to initialize encryption", e); }
+            return new TestDatabase(new AppStateRepository(new NamedParameterJdbcTemplate(dataSource),
+                    TestEncryptionSupport.encryptor(), new ObjectMapper()));
         }
 
         @Override

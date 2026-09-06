@@ -37,6 +37,16 @@ class RunCommandEnvironmentTest {
     }
 
     @Test
+    void encryptionKeyIsBlockedEvenWhenProjectEnvironmentReintroducesIt() {
+        Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
+                Map.of("JUPITER_ENCRYPTION_KEY", "host-key"),
+                Set.of("JUPITER_ENCRYPTION_KEY"),
+                Map.of("JUPITER_ENCRYPTION_KEY", "project-key"));
+
+        assertThat(environment).doesNotContainKey("JUPITER_ENCRYPTION_KEY");
+    }
+
+    @Test
     void authCredentialsAreBlockedFromBothSources() {
         Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
                 Map.of("JUPITER_HTTP_AUTH_PASSWORD", "host-password",

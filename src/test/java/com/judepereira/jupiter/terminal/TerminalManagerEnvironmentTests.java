@@ -15,10 +15,11 @@ class TerminalManagerEnvironmentTests {
         Map<String, String> environment = TerminalManager.terminalEnvironment(Map.of(
                 "JUPITER_HTTP_AUTH_PASSWORD", "secret-password",
                 "JUPITER_HTTP_AUTH_USERNAME", "secret-user",
+                "JUPITER_ENCRYPTION_KEY", "secret-key",
                 "PROJECT_ENV_VAR", "project-value"));
 
         assertThat(environment)
-                .doesNotContainKeys("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME")
+                .doesNotContainKeys("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME", "JUPITER_ENCRYPTION_KEY")
                 .containsEntry("PROJECT_ENV_VAR", "project-value");
     }
 }

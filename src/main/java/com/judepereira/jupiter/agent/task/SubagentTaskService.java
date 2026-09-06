@@ -16,6 +16,7 @@ import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -271,9 +272,10 @@ public class SubagentTaskService {
 
     private static String gitDiff(Path workspaceRoot, String relativePath) {
         try {
-            Process process = new ProcessBuilder("git", "diff", "HEAD", "--", relativePath)
-                    .directory(workspaceRoot.toFile())
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder("git", "diff", "HEAD", "--", relativePath)
+                    .directory(workspaceRoot.toFile());
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();

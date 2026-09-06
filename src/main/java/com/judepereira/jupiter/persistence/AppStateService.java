@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.persistence;
 
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -972,9 +974,10 @@ public class AppStateService {
             List<String> command = createBranch
                     ? List.of("git", "worktree", "add", "-b", branchName, worktreePath.toString())
                     : List.of("git", "worktree", "add", worktreePath.toString(), branchName);
-            Process process = new ProcessBuilder(command)
-                    .directory(projectRoot.toFile())
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder(command)
+                    .directory(projectRoot.toFile());
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
@@ -991,8 +994,9 @@ public class AppStateService {
 
     private void validateGitBranchName(String branchName) {
         try {
-            Process process = new ProcessBuilder("git", "check-ref-format", "--branch", branchName)
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder("git", "check-ref-format", "--branch", branchName);
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
@@ -1039,9 +1043,10 @@ public class AppStateService {
 
     private GitCommandResult runGitCommand(Path cwd, List<String> command) {
         try {
-            Process process = new ProcessBuilder(command)
-                    .directory(cwd.toFile())
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder(command)
+                    .directory(cwd.toFile());
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
@@ -1059,9 +1064,10 @@ public class AppStateService {
 
     private GitCommandResult runGitCommandAllowingMissingHead(Path cwd, List<String> command) {
         try {
-            Process process = new ProcessBuilder(command)
-                    .directory(cwd.toFile())
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder(command)
+                    .directory(cwd.toFile());
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
