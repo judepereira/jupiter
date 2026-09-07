@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.git;
 
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -7,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -17,10 +19,17 @@ public class ProcessGitCommandRunner implements GitCommandRunner {
 
     @Override
     public GitCommandResult run(Path workingDirectory, List<String> command, Duration timeout) {
+        return runWithEnvironment(workingDirectory, command, timeout, Map.of());
+    }
+
+    GitCommandResult runWithEnvironment(Path workingDirectory, List<String> command, Duration timeout,
+                                        Map<String, String> suppliedEnvironment) {
         try {
             ProcessBuilder builder = new ProcessBuilder(command).directory(workingDirectory.toFile());
+            builder.environment().putAll(suppliedEnvironment);
             builder.environment().put("GIT_TERMINAL_PROMPT", "0");
             builder.environment().put("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
+            ProcessEnvironmentSanitizer.sanitize(builder);
             Process process = builder.start();
             try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
                 Future<byte[]> stdout = executor.submit(() -> process.getInputStream().readAllBytes());

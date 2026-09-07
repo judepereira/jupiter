@@ -5,6 +5,7 @@ import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
@@ -355,7 +356,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
                 UUID.randomUUID().toString(),
                 turnId,
                 sequence,
-                content,
+                TestEncryptionSupport.encrypt("conversation_messages", "content", content),
                 pending ? 0 : 1,
                 pending,
                 Timestamp.from(Instant.now()));

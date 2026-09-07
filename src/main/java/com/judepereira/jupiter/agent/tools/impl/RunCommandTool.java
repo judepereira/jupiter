@@ -2,11 +2,11 @@ package com.judepereira.jupiter.agent.tools.impl;
 
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
-
-import com.judepereira.jupiter.agent.harness.StreamCancelledException;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -161,8 +161,7 @@ public class RunCommandTool implements AgentTool {
             }
         }
         environment.putAll(projectEnvironment);
-        environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
-        environment.remove("JUPITER_HTTP_AUTH_USERNAME");
+        ProcessEnvironmentSanitizer.sanitize(environment);
         return Map.copyOf(environment);
     }
 

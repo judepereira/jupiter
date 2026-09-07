@@ -29,6 +29,7 @@ import com.judepereira.jupiter.persistence.GitWorktreeException;
 import com.judepereira.jupiter.persistence.InvalidGitBranchNameException;
 import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.persistence.Persistence.*;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.terminal.TerminalHandle;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalPanelState;
@@ -1557,6 +1558,7 @@ public class UiController {
         try {
             Path relForGit = FileUtils.relativizeWorkspacePath(root, resolved);
             ProcessBuilder pb = new ProcessBuilder("git", "diff", "--", relForGit.toString());
+            ProcessEnvironmentSanitizer.sanitize(pb);
             pb.directory(new File(root.toAbsolutePath().normalize().toString()));
             Process p = pb.start();
             StringBuilder out = new StringBuilder();

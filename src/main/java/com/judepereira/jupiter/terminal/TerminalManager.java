@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.terminal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import com.pty4j.WinSize;
@@ -98,24 +99,29 @@ public class TerminalManager {
             String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank()).orElse("/bin/bash");
             Map<String, String> env = terminalEnvironment(environmentVariables);
             env.put("TERM", "xterm-256color");
-            return new PtyProcessBuilder(new String[]{shell, "-l"}) // Force a login shell.
-                    .setEnvironment(env)
-                    .setDirectory(Path.of(workspaceRoot).toAbsolutePath().normalize().toString())
-                    .setConsole(false)
-                    .setRedirectErrorStream(true)
-                    .setInitialColumns(120)
-                    .setInitialRows(32)
-                    .start();
+            return startProcess(workspaceRoot, new String[]{shell, "-l"}, env);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to start terminal", e);
         }
     }
 
+    static PtyProcess startProcess(String workspaceRoot, String[] command, Map<String, String> environment)
+            throws IOException {
+        ProcessEnvironmentSanitizer.sanitize(environment);
+        return new PtyProcessBuilder(command)
+                .setEnvironment(environment)
+                .setDirectory(Path.of(workspaceRoot).toAbsolutePath().normalize().toString())
+                .setConsole(false)
+                .setRedirectErrorStream(true)
+                .setInitialColumns(120)
+                .setInitialRows(32)
+                .start();
+    }
+
     static Map<String, String> terminalEnvironment(Map<String, String> projectEnvironmentVariables) {
         Map<String, String> environment = new HashMap<>(System.getenv());
         environment.putAll(projectEnvironmentVariables);
-        environment.remove("JUPITER_HTTP_AUTH_PASSWORD");
-        environment.remove("JUPITER_HTTP_AUTH_USERNAME");
+        ProcessEnvironmentSanitizer.sanitize(environment);
         return environment;
     }
 
