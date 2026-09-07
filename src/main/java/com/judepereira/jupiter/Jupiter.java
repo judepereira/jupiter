@@ -47,7 +47,7 @@ public class Jupiter {
 
     public static void main(String[] args) {
         InputStream in;
-        if (System.getenv("INSECURE_ACCEPT_KEY_FROM_ENV").equals("1")) {
+        if ("1".equals(System.getenv("INSECURE_ACCEPT_KEY_FROM_ENV"))) {
             in = new ByteArrayInputStream(System.getenv("JUPITER_INSECURE_ENCRYPTION_KEY")
                     .getBytes(StandardCharsets.UTF_8));
         } else {
