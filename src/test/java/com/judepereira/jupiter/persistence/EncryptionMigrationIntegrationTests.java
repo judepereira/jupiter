@@ -2,8 +2,8 @@ package com.judepereira.jupiter.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.security.EncryptionKey;
-import com.judepereira.jupiter.security.EncryptionMigrationCallback;
 import com.judepereira.jupiter.security.EncryptionMigrationService;
+import com.judepereira.jupiter.security.EncryptionMigrationStrategy;
 import com.judepereira.jupiter.security.TextEncryptor;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
@@ -24,23 +24,25 @@ class EncryptionMigrationIntegrationTests {
     private static final String KEY = TestEncryptionSupport.KEY;
 
     @Test
-    void callbackMigratesRowsAfterV26AndCompletesMigration() throws Exception {
+    void strategyMigratesRowsAfterV26AndCompletesMigration() throws Exception {
         var dataSource = SQLiteTestSupport.fileBackedDataSource(
-                Files.createTempDirectory("jupiter-encryption-callback-").resolve("db.sqlite"));
+                Files.createTempDirectory("jupiter-encryption-strategy-").resolve("db.sqlite"));
         Flyway.configure().dataSource(dataSource).locations("classpath:db/migration")
                 .target("25").load().migrate();
         var jdbc = new JdbcTemplate(dataSource);
         jdbc.update("INSERT INTO projects (id,name,normalized_path,display_order) VALUES (1,?,?,1)",
-                "callback secret", "/tmp/callback-secret");
+                "strategy secret", "/tmp/strategy-secret");
 
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration")
-                .callbacks(new EncryptionMigrationCallback(new EncryptionMigrationService(TestEncryptionSupport.encryptor())))
-                .load().migrate();
+        Flyway flyway = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load();
+        new EncryptionMigrationStrategy(dataSource, new EncryptionMigrationService(TestEncryptionSupport.encryptor()))
+                .migrate(flyway);
 
+        assertThat(jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE installed_rank = (SELECT MAX(installed_rank) FROM flyway_schema_history)", String.class))
+                .isEqualTo("26");
         assertThat(jdbc.queryForObject("SELECT migration_complete FROM encryption_metadata WHERE id=1", Integer.class))
                 .isEqualTo(1);
-        assertEncryptedAndHidden(jdbc, "projects", "name", "callback secret");
-        assertEncryptedAndHidden(jdbc, "projects", "normalized_path", "/tmp/callback-secret");
+        assertEncryptedAndHidden(jdbc, "projects", "name", "strategy secret");
+        assertEncryptedAndHidden(jdbc, "projects", "normalized_path", "/tmp/strategy-secret");
     }
 
     @Test
