@@ -9,7 +9,7 @@ import java.util.Map;
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
 public class ListFilesTool implements AgentTool {
-    private static final ToolDefinition DEF = new ToolDefinition(
+    private static final ToolDefinition DEF = ToolDefinition.builtIn(
             "list_files",
             "List files under a relative path",
             ToolSchema.object(

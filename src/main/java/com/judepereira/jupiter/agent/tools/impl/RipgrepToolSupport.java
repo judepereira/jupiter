@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -184,6 +185,7 @@ public final class RipgrepToolSupport {
         if (workingDirectory != null) {
             builder.directory(workingDirectory.toFile());
         }
+        ProcessEnvironmentSanitizer.sanitize(builder);
 
         Process process;
         try {

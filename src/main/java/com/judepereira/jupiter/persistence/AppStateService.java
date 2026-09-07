@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.persistence;
 
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -439,6 +441,28 @@ public class AppStateService {
     }
 
     @Transactional
+    public void updateProjectCommandEnvironmentAllowlist(long projectId, String allowlist) {
+        // Parse before writing so invalid values cannot reach persistent state.
+        Persistence.ProjectView.parseCommandEnvironmentAllowlist(allowlist);
+        repository.updateProjectCommandEnvironmentAllowlist(projectId, allowlist);
+    }
+
+    @Transactional
+    public void updateProjectSettings(long projectId, String workspaceInitCommands,
+                                     List<ProjectEnvironmentVariable> environmentVariables,
+                                     String commandEnvironmentAllowlist) {
+        String normalizedWorkspaceInitCommands = workspaceInitCommands == null || workspaceInitCommands.isBlank()
+                ? null : workspaceInitCommands;
+        List<ProjectEnvironmentVariable> normalizedEnvironmentVariables = normalizeEnvironmentVariables(environmentVariables);
+        String normalizedEnvironmentVariablesJson = json(normalizedEnvironmentVariables);
+        Persistence.ProjectView.parseCommandEnvironmentAllowlist(commandEnvironmentAllowlist);
+
+        repository.updateProjectWorkspaceInitCommands(projectId, normalizedWorkspaceInitCommands);
+        repository.updateProjectEnvironmentVariables(projectId, normalizedEnvironmentVariablesJson);
+        repository.updateProjectCommandEnvironmentAllowlist(projectId, commandEnvironmentAllowlist);
+    }
+
+    @Transactional
     public McpServerView createMcpServer(String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
         String normalizedName = normalizeRequiredName(name, "MCP server name");
         String normalizedUrl = normalizeRequiredName(url, "MCP server URL");
@@ -500,6 +524,20 @@ public class AppStateService {
     @Transactional(readOnly = true)
     public Map<String, String> loadProjectEnvironmentVariables(long projectId) {
         return toEnvironmentVariables(projectEnvironmentVariables(repository.findProject(projectId).environmentVariables()));
+    }
+
+    @Transactional(readOnly = true)
+    public Set<String> loadSessionProjectCommandEnvironmentAllowlist(long sessionId) {
+        var session = repository.findSession(sessionId);
+        var workspace = repository.findWorkspace(session.workspaceId());
+        return Persistence.ProjectView.parseCommandEnvironmentAllowlist(
+                repository.findProject(workspace.projectId()).commandEnvironmentAllowlist());
+    }
+
+    @Transactional(readOnly = true)
+    public Set<String> loadProjectCommandEnvironmentAllowlist(long projectId) {
+        return Persistence.ProjectView.parseCommandEnvironmentAllowlist(
+                repository.findProject(projectId).commandEnvironmentAllowlist());
     }
 
     @Transactional
@@ -770,7 +808,6 @@ public class AppStateService {
                 null, null, null, null, null, now, now);
         ChatMessageView message = toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
         applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
-        markUnreadIfInactive(sessionId);
         return message;
     }
 
@@ -937,9 +974,10 @@ public class AppStateService {
             List<String> command = createBranch
                     ? List.of("git", "worktree", "add", "-b", branchName, worktreePath.toString())
                     : List.of("git", "worktree", "add", worktreePath.toString(), branchName);
-            Process process = new ProcessBuilder(command)
-                    .directory(projectRoot.toFile())
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder(command)
+                    .directory(projectRoot.toFile());
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
@@ -956,8 +994,9 @@ public class AppStateService {
 
     private void validateGitBranchName(String branchName) {
         try {
-            Process process = new ProcessBuilder("git", "check-ref-format", "--branch", branchName)
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder("git", "check-ref-format", "--branch", branchName);
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
@@ -1004,9 +1043,10 @@ public class AppStateService {
 
     private GitCommandResult runGitCommand(Path cwd, List<String> command) {
         try {
-            Process process = new ProcessBuilder(command)
-                    .directory(cwd.toFile())
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder(command)
+                    .directory(cwd.toFile());
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
@@ -1024,9 +1064,10 @@ public class AppStateService {
 
     private GitCommandResult runGitCommandAllowingMissingHead(Path cwd, List<String> command) {
         try {
-            Process process = new ProcessBuilder(command)
-                    .directory(cwd.toFile())
-                    .start();
+            ProcessBuilder processBuilder = new ProcessBuilder(command)
+                    .directory(cwd.toFile());
+            ProcessEnvironmentSanitizer.sanitize(processBuilder);
+            Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
@@ -1700,7 +1741,8 @@ public class AppStateService {
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
         String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank() ? null : row.workspaceInitCommands();
         List<ProjectEnvironmentVariable> environmentVariables = projectEnvironmentVariables(row.environmentVariables());
-        return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands, environmentVariables);
+        return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands, environmentVariables,
+                row.commandEnvironmentAllowlist());
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {

@@ -62,6 +62,7 @@ public class ProjectsTemplateRenderTest {
         String html = engine.process("fragments/projects", context);
 
         assertThat(html).contains("No projects", "No project selected", "New tab");
+        assertThat(html).contains("id=\"topbar-logo\"", "src=\"/favicon-32x32.png\"");
     }
 
     @Test
@@ -139,8 +140,8 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", "", List.of(
                 new ProjectEnvironmentVariable("API_URL", "https://example.test"),
                 new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
-        ))));
-        context.setVariable("visibleProjects", List.of(new Project(1L, "Alpha", "/repo", "", List.of()), new Project(2L, "Beta", "/repo-b", "", List.of())));
+        ), "HOME, PATH")));
+        context.setVariable("visibleProjects", List.of(new Project(1L, "Alpha", "/repo", "", List.of(), "HOME, PATH"), new Project(2L, "Beta", "/repo-b", "", List.of(), null)));
         context.setVariable("lifecycleHookSettings", new LifecycleHookSettings("echo <done>\nline 2", "echo error", "echo subagent", 45));
         context.setVariable("autoGitUpdateEnabled", true);
         context.setVariable("reviewPanelOpen", false);
@@ -149,7 +150,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", "", List.of(
                 new ProjectEnvironmentVariable("API_URL", "https://example.test"),
                 new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
-        )));
+        ), "HOME, PATH"));
         context.setVariable("workspaces", List.of());
         context.setVariable("activeWorkspace", null);
         context.setVariable("sessions", List.of());
@@ -167,9 +168,19 @@ public class ProjectsTemplateRenderTest {
 
         String html = engine.process("fragments/projects", context);
 
-        assertThat(html).contains("id=\"settings-modal\"", "Environment variables", "API_URL", "https://example.test", "FEATURE_FLAG", "true", "Add Variable");
+        assertThat(html).contains("id=\"settings-modal\"", "Environment variables", "API_URL", "https://example.test", "FEATURE_FLAG", "true", "Add Variable",
+                "name=\"commandEnvironmentAllowlist\"", "HOME, PATH", "run command tool", "Terminal sessions retain the normal system environment");
         assertThat(html).contains("MCP servers", "Local MCP", "http://localhost:3000/mcp", "Header name", "Authorization", "Bearer token", "Exposed projects");
-        assertThat(html).contains("Hooks", "Assistant completion script", "Assistant error script", "Subagent completion script", "name=\"timeoutSeconds\"", "min=\"1\"", "max=\"3600\"", "Scripts execute with Bash");
+        assertThat(html).contains(
+                "Hooks", "Agent completion script", "Agent error script", "Subagent completion script",
+                "name=\"assistantCompletedScript\"", "name=\"assistantErroredScript\"", "name=\"subagentCompletedScript\"",
+                "Runs after the agent response completes.", "Runs when the agent execution fails.",
+                "Runs when a subagent completes, using the parent session's context.",
+                "name=\"timeoutSeconds\"", "min=\"1\"", "max=\"3600\"",
+                "Hooks run asynchronously", "/bin/bash", "/tmp",
+                "JUPITER_PROJECT_NAME", "JUPITER_WORKSPACE_NAME", "JUPITER_SESSION_NAME",
+                "Project-configured environment variables", "JUPITER_*", "\"$WEBHOOK_URL\"",
+                "A hook failure does not change", "timeout applies to each hook", "/tmp/jupiter-hooks.log");
         assertThat(html).contains("echo &lt;done&gt;\nline 2").doesNotContain("echo <done>");
         assertThat(html).contains(
                 "class=\"nav nav-pills flex-md-column settings-nav\"",
@@ -268,8 +279,8 @@ public class ProjectsTemplateRenderTest {
 
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
-        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null, List.of())));
-        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null, List.of()));
+        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null, List.of(), null)));
+        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null, List.of(), null));
         context.setVariable("workspaces", List.of(
                 new Workspace(1L, "Default Workspace", "/repo", true, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE),
                 new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE)));
@@ -306,8 +317,8 @@ public class ProjectsTemplateRenderTest {
 
         WebContext context = webContext();
         context.setVariable("shellRefresh", false);
-        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null, List.of())));
-        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null, List.of()));
+        context.setVariable("projects", List.of(new Project(1L, "Alpha", "/repo", null, List.of(), null)));
+        context.setVariable("activeProject", new Project(1L, "Alpha", "/repo", null, List.of(), null));
         context.setVariable("workspaces", List.of(
                 new Workspace(1L, "Default Workspace", "/repo", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.IN_PROGRESS),
                 new Workspace(2L, "feature-workspace", "/repo/.trees/repo/feature-workspace", false, com.judepereira.jupiter.persistence.Persistence.RailStatus.NONE)));

@@ -70,7 +70,7 @@ public class TaskToolAndSubagentServiceTests {
                 "requestSummary", "Create the parser file",
                 "task", "write a file",
                 "expectedOutput", "child final"
-        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), ToolProgressSink.noop(), null));
+        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getText()).isEqualTo("child final");
@@ -163,7 +163,7 @@ public class TaskToolAndSubagentServiceTests {
                 "agentId", "engineer",
                 "task", "write a file",
                 "expectedOutput", "child final"
-        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), ToolProgressSink.noop(), null));
+        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null));
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getText()).contains("missing required task tool arguments");
@@ -231,7 +231,7 @@ public class TaskToolAndSubagentServiceTests {
                 "requestSummary", "Create the parser file",
                 "task", "write a file",
                 "expectedOutput", "child final"
-        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), sink, null));
+        ), new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call", AgentMode.AGENT, "parent-tool-call", Map.of(), java.util.Set.of(), sink, null));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(events).containsExactly(

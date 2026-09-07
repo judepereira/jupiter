@@ -159,7 +159,7 @@ public class CodingAgentHarnessAgentSelectionTest {
     }
 
     private static RecordingTool recordingTool(String name, BiFunction<Map<String, Object>, ToolExecutionContext, ToolExecutionResult> executor) {
-        return new RecordingTool(name, new ToolDefinition(name, name + " tool", ToolSchema.object()), executor);
+        return new RecordingTool(name, ToolDefinition.builtIn(name, name + " tool", ToolSchema.object()), executor);
     }
 
     private static void assertSystemPrompt(String actual, String appendage, Path workspaceRoot) {

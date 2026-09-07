@@ -360,7 +360,7 @@ public class UiControllerAsyncStreamingTests {
 
             @Override
             public com.judepereira.jupiter.agent.llm.dto.ToolDefinition definition() {
-                return new com.judepereira.jupiter.agent.llm.dto.ToolDefinition("big_tool", "Big tool",
+                return com.judepereira.jupiter.agent.llm.dto.ToolDefinition.builtIn("big_tool", "Big tool",
                         com.judepereira.jupiter.agent.llm.dto.ToolSchema.object());
             }
 

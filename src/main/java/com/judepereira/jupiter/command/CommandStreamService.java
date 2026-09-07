@@ -20,6 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -52,7 +53,8 @@ public class CommandStreamService {
     public void queue(long sessionId, String assistantId, String commandId, String workspaceRoot, Map<String, String> environmentVariables) {
         activeStreams.put(assistantId, new ActiveCommandStream(
                 new PendingCommand(sessionId, assistantId, commandId, workspaceRoot,
-                        environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables)),
+                        environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables),
+                        appStateService.loadSessionProjectCommandEnvironmentAllowlist(sessionId)),
                 new CopyOnWriteArrayList<>(),
                 new AtomicBoolean(false),
                 new AtomicBoolean(false),
@@ -62,6 +64,11 @@ public class CommandStreamService {
                 new AtomicReference<>(new StringBuilder())));
         activeStreamRegistryService.register(assistantId, sessionId, workspaceRoot);
         appStateService.publishWorkspaceRailRefresh();
+    }
+
+    PendingCommand pendingCommand(String assistantId) {
+        ActiveCommandStream active = activeStreams.get(assistantId);
+        return active == null ? null : active.pendingCommand();
     }
 
     public SseEmitter tryConnect(String assistantId) {
@@ -109,7 +116,7 @@ public class CommandStreamService {
             CancellationToken cancellationToken = active.cancellationToken();
             ToolExecutionContext context = new ToolExecutionContext(Path.of(pending.workspaceRoot()), false, true,
                     timeoutSeconds == null ? 60 : timeoutSeconds, pending.sessionId(), null, null, assistantId,
-                    pending.environmentVariables(), (eventName, payload) -> broadcastEvent(active, assistantId, "tool_call_progress", Map.of(
+                    pending.environmentVariables(), pending.commandEnvironmentAllowlist(), (eventName, payload) -> broadcastEvent(active, assistantId, "tool_call_progress", Map.of(
                             "toolCallId", assistantId,
                             "toolName", "run_command",
                             "eventName", eventName,
@@ -286,7 +293,13 @@ public class CommandStreamService {
         return args;
     }
 
-    private record PendingCommand(long sessionId, String assistantId, String commandId, String workspaceRoot, Map<String, String> environmentVariables) {}
+    record PendingCommand(long sessionId, String assistantId, String commandId, String workspaceRoot,
+                          Map<String, String> environmentVariables, Set<String> commandEnvironmentAllowlist) {
+        PendingCommand {
+            environmentVariables = environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables);
+            commandEnvironmentAllowlist = commandEnvironmentAllowlist == null ? Set.of() : Set.copyOf(commandEnvironmentAllowlist);
+        }
+    }
 
     private record ActiveCommandStream(PendingCommand pendingCommand, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean started,
                                        AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,

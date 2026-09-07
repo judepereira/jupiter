@@ -27,7 +27,9 @@ import com.judepereira.jupiter.persistence.ContextCompactionService;
 import com.judepereira.jupiter.persistence.TokenUsageService;
 import com.judepereira.jupiter.persistence.GitWorktreeException;
 import com.judepereira.jupiter.persistence.InvalidGitBranchNameException;
+import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.persistence.Persistence.*;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.terminal.TerminalHandle;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalPanelState;
@@ -977,10 +979,11 @@ public class UiController {
 
     @PostMapping("/ui/settings/apply")
     public String applySettings(@RequestParam("workspaceInitCommands") String workspaceInitCommands,
+                                @RequestParam(name = "commandEnvironmentAllowlist", required = false) String commandEnvironmentAllowlist,
                                 @RequestParam(name = "environmentVariableNames", required = false) List<String> environmentVariableNames,
                                 @RequestParam(name = "environmentVariableValues", required = false) List<String> environmentVariableValues,
                                 Model model) {
-        return applySettingsInternal(workspaceInitCommands, environmentVariableNames, environmentVariableValues, model);
+        return applySettingsInternal(workspaceInitCommands, commandEnvironmentAllowlist, environmentVariableNames, environmentVariableValues, model);
     }
 
     @PostMapping("/ui/settings/mcp/apply")
@@ -989,6 +992,7 @@ public class UiController {
     }
 
     String applySettingsInternal(String workspaceInitCommands,
+                                 String commandEnvironmentAllowlist,
                                  List<String> environmentVariableNames,
                                  List<String> environmentVariableValues,
                                  Model model) {
@@ -1005,8 +1009,8 @@ public class UiController {
             environmentVariables.add(new ProjectEnvironmentVariable(name, value));
         }
 
-        appStateService.updateProjectWorkspaceInitCommands(view.activeProject().id(), workspaceInitCommands);
-        appStateService.updateProjectEnvironmentVariables(view.activeProject().id(), environmentVariables);
+        appStateService.updateProjectSettings(view.activeProject().id(), workspaceInitCommands,
+                environmentVariables, commandEnvironmentAllowlist);
         reloadMcpRuntimeForProject(view.activeProject().id());
         return "fragments/projects :: modalClose";
     }
@@ -1554,6 +1558,7 @@ public class UiController {
         try {
             Path relForGit = FileUtils.relativizeWorkspacePath(root, resolved);
             ProcessBuilder pb = new ProcessBuilder("git", "diff", "--", relForGit.toString());
+            ProcessEnvironmentSanitizer.sanitize(pb);
             pb.directory(new File(root.toAbsolutePath().normalize().toString()));
             Process p = pb.start();
             StringBuilder out = new StringBuilder();
@@ -1659,7 +1664,7 @@ public class UiController {
     }
 
     private Project toProject(ProjectView view) {
-        return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(), view.environmentVariables());
+        return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(), view.environmentVariables(), view.commandEnvironmentAllowlist());
     }
 
     private Map<String, String> activeProjectEnvironmentVariables(AppStateView view) {
@@ -1839,7 +1844,8 @@ public class UiController {
 
     public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
 
-    public record Project(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables) {
+    public record Project(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables,
+                          String commandEnvironmentAllowlist) {
     }
 
     public record Workspace(long id, String name, String path, boolean unread, RailStatus railStatus) {

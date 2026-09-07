@@ -2,11 +2,12 @@ package com.judepereira.jupiter.lifecycle;
 
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -172,6 +173,7 @@ public class LifecycleHookService {
         environment.put("JUPITER_PROJECT_NAME", context.projectName());
         environment.put("JUPITER_WORKSPACE_NAME", context.workspaceName());
         environment.put("JUPITER_SESSION_NAME", context.sessionName());
+        ProcessEnvironmentSanitizer.sanitize(environment);
         return environment;
     }
 
@@ -187,6 +189,7 @@ public class LifecycleHookService {
         ProcessBuilder builder = new ProcessBuilder("setsid", "/bin/bash", request.scriptFile().toString());
         builder.directory(TEMP_DIRECTORY.toFile());
         builder.environment().putAll(request.environment());
+        ProcessEnvironmentSanitizer.sanitize(builder);
         return builder.start();
     }
 
@@ -206,7 +209,9 @@ public class LifecycleHookService {
 
     private void signalProcessGroup(String signal, long pid) {
         try {
-            Process signalProcess = new ProcessBuilder("/bin/kill", "-" + signal, "-" + pid).start();
+            ProcessBuilder signalBuilder = new ProcessBuilder("/bin/kill", "-" + signal, "-" + pid);
+            ProcessEnvironmentSanitizer.sanitize(signalBuilder);
+            Process signalProcess = signalBuilder.start();
             signalProcess.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS);
             signalProcess.destroyForcibly();
         } catch (Exception ignored) {

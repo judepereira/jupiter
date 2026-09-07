@@ -190,7 +190,7 @@ class CodingAgentHarnessMcpIntegrationTest {
     }
 
     private static RecordingTool recordingTool(String name) {
-        return new RecordingTool(name, new ToolDefinition(name, name + " tool", ToolSchema.object()),
+        return new RecordingTool(name, ToolDefinition.builtIn(name, name + " tool", ToolSchema.object()),
                 (args, context) -> new ToolExecutionResult(true, name + " executed", Map.of()));
     }
 
@@ -309,7 +309,7 @@ class CodingAgentHarnessMcpIntegrationTest {
 
         private McpProjectToolSnapshot snapshotFor(int currentVersion, long projectId) {
             String suffix = currentVersion == 1 ? v1 : v2;
-            ToolDefinition definition = new ToolDefinition(toolName, "mcp tool", ToolSchema.object(ToolParameter.string("input", "input")));
+            ToolDefinition definition = ToolDefinition.builtIn(toolName, "mcp tool", ToolSchema.object(ToolParameter.string("input", "input")));
             McpProjectToolExecutor executor = new McpProjectToolExecutor() {
                 @Override
                 public String modelToolName() {
