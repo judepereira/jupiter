@@ -33,11 +33,7 @@ public class SystemBalloonService {
     private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
     @Autowired
-    public SystemBalloonService(ObjectMapper objectMapper) {
-        this(objectMapper, () -> new SseEmitter(0L));
-    }
-
-    SystemBalloonService(ObjectMapper objectMapper, Supplier<SseEmitter> emitterFactory) {
+    public SystemBalloonService(ObjectMapper objectMapper, Supplier<SseEmitter> emitterFactory) {
         this.objectMapper = objectMapper;
         this.emitterFactory = emitterFactory;
     }

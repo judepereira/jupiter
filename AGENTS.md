@@ -52,6 +52,13 @@ This section is intentionally stable: document the repository layout and long-li
 - Configuration files with the `.sql.conf` suffix are companion metadata for specific migration steps; keep them aligned with the matching SQL migration.
 - Prefer schema evolution through migrations rather than ad hoc initialization code.
 
+### Security and encrypted persistence
+- Before changing a schema or repository, classify every newly persisted field as sensitive or structural. Keep domain objects plaintext, but encrypt sensitive text, JSON, secrets, and content at the `AppStateRepository` boundary with `TextEncryptor` and stable associated data (AAD).
+- Keep only the minimum query and relationship metadata plaintext. For required equality or uniqueness lookups, use keyed blind indexes rather than deterministic encryption.
+- Do not use SQL text, JSON, or ordering predicates on encrypted columns unless the design explicitly decrypts safely or provides a safe index.
+- The production encryption key enters the JVM once through the bootstrap stdin stream before Spring starts; the JVM must not look it up through environment variables, system properties, or command-line arguments. Never log or expose sensitive Jupiter credentials (`JUPITER_ENCRYPTION_KEY`, `JUPITER_HTTP_AUTH_PASSWORD`, or `JUPITER_HTTP_AUTH_USERNAME`), or pass them to child processes. The child `ProcessEnvironmentSanitizer` remains defense-in-depth; use it for every process launch, after merging variables and before creating the final environment.
+- Add tests that inspect raw database ciphertext and verify transparent round trips, migration behavior, and query semantics.
+
 ### Real-time interaction model
 - Chat turns stream over SSE from the UI layer.
 - Workspace rail refreshes and system balloons also use SSE channels.
@@ -80,3 +87,4 @@ This section is intentionally stable: document the repository layout and long-li
 4. When adding browser/frontend library assets (for example xterm, marked, DOMPurify), use WebJars instead of external CDN URLs
 5. Never use reflection in tests; open production visibility appropriately, preferably package-private, when tests need access.
 6. Always run all tests after targeted tests pass
+7. Prefer one constructor per production class. Do not add constructor overloads for defaults, optional dependencies, compatibility, test setup, or convenience. Use a record's canonical constructor; keep test defaults in test fixtures; use a named static factory for genuinely distinct construction semantics; use a parameter object or builder when direct construction becomes unclear. An overload is allowed only when required by a framework or external compatibility contract, and its exception must be documented.

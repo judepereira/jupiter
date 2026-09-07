@@ -4,7 +4,7 @@ import java.util.List;
 
 public sealed interface ToolParameter permits ToolParameter.StringParameter, ToolParameter.IntegerParameter,
         ToolParameter.NumberParameter, ToolParameter.BooleanParameter, ToolParameter.EnumParameter,
-        ToolParameter.ObjectParameter {
+        ToolParameter.ObjectParameter, ToolParameter.ArrayParameter {
 
     String name();
 
@@ -38,6 +38,10 @@ public sealed interface ToolParameter permits ToolParameter.StringParameter, Too
         return new ObjectParameter(name, description, schema);
     }
 
+    static ArrayParameter array(String name, String description, ToolParameter items) {
+        return new ArrayParameter(name, description, items);
+    }
+
     record StringParameter(String name, String description) implements ToolParameter {}
 
     record IntegerParameter(String name, String description) implements ToolParameter {}
@@ -53,4 +57,7 @@ public sealed interface ToolParameter permits ToolParameter.StringParameter, Too
     }
 
     record ObjectParameter(String name, String description, ToolSchema schema) implements ToolParameter {}
+
+    /** Array item parameters have a null name because items are not object properties. */
+    record ArrayParameter(String name, String description, ToolParameter items) implements ToolParameter {}
 }

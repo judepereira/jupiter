@@ -9,7 +9,7 @@ import java.util.Map;
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
 public class SearchCodeTool implements AgentTool {
-    private static final ToolDefinition DEF = new ToolDefinition(
+    private static final ToolDefinition DEF = ToolDefinition.builtIn(
             "search_code",
             "Search regex across files in workspace",
             ToolSchema.object(
@@ -19,10 +19,6 @@ public class SearchCodeTool implements AgentTool {
             ).required("pattern")
     );
     private final RipgrepToolSupport ripgrep;
-
-    public SearchCodeTool() {
-        this(new RipgrepToolSupport());
-    }
 
     public SearchCodeTool(RipgrepToolSupport ripgrep) {
         this.ripgrep = ripgrep;

@@ -36,15 +36,6 @@ public class ContextCompactionService {
     private final TokenUsageService tokenUsageService;
     private final SystemPromptComposer systemPromptComposer;
 
-    public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory) {
-        this(appStateService, modelClientFactory, null, new SystemPromptComposer());
-    }
-
-    public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory,
-                                    SystemPromptComposer systemPromptComposer) {
-        this(appStateService, modelClientFactory, null, systemPromptComposer);
-    }
-
     @Autowired
     public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory,
                                     TokenUsageService tokenUsageService, SystemPromptComposer systemPromptComposer) {
@@ -85,8 +76,8 @@ public class ContextCompactionService {
         AgentModelOptions options = new AgentModelOptions(model.id(), model.apiModelId(), thinkingLevel, model.supportsReasoning(), agent.textVerbosity());
         StringBuilder streamedSummary = new StringBuilder();
         ModelResponse summaryResult = client.chatStreaming(List.of(
-                new Message(Message.Role.SYSTEM, SUMMARY_SYSTEM_PROMPT),
-                new Message(Message.Role.USER, transcript)
+                new Message(Message.Role.SYSTEM, SUMMARY_SYSTEM_PROMPT, null, null),
+                new Message(Message.Role.USER, transcript, null, null)
         ), List.of(), options, delta -> {
             if (delta != null) {
                 streamedSummary.append(delta);

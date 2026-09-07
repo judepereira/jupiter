@@ -2,6 +2,7 @@ package com.judepereira.jupiter.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
@@ -10,6 +11,7 @@ import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
@@ -27,6 +29,7 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import org.flywaydb.core.Flyway;
+import com.judepereira.jupiter.security.EncryptionMigrationService;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -81,8 +84,15 @@ public final class TestAppStateSupport {
 
         Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
         SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
+        var jdbc = new org.springframework.jdbc.core.JdbcTemplate(dataSource);
+        try (var connection = dataSource.getConnection()) {
+            new EncryptionMigrationService(TestEncryptionSupport.encryptor()).run(connection);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to initialize encryption", e);
+        }
 
-        AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource));
+        AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource),
+                TestEncryptionSupport.encryptor(), new ObjectMapper());
         AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher, activeStreamRegistryService);
         return new AppStateTestContext(service, repository, activeStreamRegistryService, dataSource);
     }
@@ -125,21 +135,7 @@ public final class TestAppStateSupport {
         resolver.setTemplateMode(TemplateMode.HTML);
         resolver.setCacheable(false);
         templateEngine.setTemplateResolver(resolver);
-        return new UiController(harness, properties, appStateService,
-                new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService,
-                new SystemBalloonService(new ObjectMapper()),
-                new WorkspaceRailRefreshService(),
-                activeStreamRegistryService,
-                terminalManager,
-                new TerminalStateService(),
-                new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient()),
-                contextCompactionService(appStateService),
-                new TokenUsageService(context.repository(), new ObjectMapper()),
-                mock(CommandStreamService.class),
-                mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
-                new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
-                lifecycleHookService, mock(GitAutoUpdateService.class), "0.0.1-SNAPSHOT");
+        return new UiController(harness, properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), modelCatalogService, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), activeStreamRegistryService, terminalManager, new TerminalStateService(), new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), context.repository()), contextCompactionService(appStateService), new TokenUsageService(context.repository(), new ObjectMapper()), mock(CommandStreamService.class), mock(McpProjectMcpServerRuntimeManager.class), new com.judepereira.jupiter.ui.ChatPresentationService(), new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService), lifecycleHookService, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {
@@ -200,7 +196,7 @@ public final class TestAppStateSupport {
     }
 
     public static ContextCompactionService contextCompactionService(AppStateService appStateService) {
-        return new ContextCompactionService(appStateService, summaryClientFactory());
+        return new ContextCompactionService(appStateService, summaryClientFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
     }
 
     private static AgentModelClientFactory summaryClientFactory() {
@@ -212,14 +208,14 @@ public final class TestAppStateSupport {
 
             @Override
             public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
-                return new ModelResponse("compact summary", null);
+                return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
             }
 
             @Override
             public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
                                                java.util.function.Consumer<String> onDelta) {
                 onDelta.accept("compact summary");
-                return new ModelResponse("compact summary", null);
+                return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
             }
         };
 

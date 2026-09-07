@@ -16,7 +16,7 @@ class UiControllerChatMessageGroupingTests {
                 toolCall("list-1", "list_files", true),
                 toolCall("task-1", "task", true),
                 toolCall("list-2", "list_files", true)
-        ), null);
+        ), null, null);
 
         List<ChatPresentationService.ToolCallGroupView> groups = message.toolCallGroups();
 
@@ -40,7 +40,7 @@ class UiControllerChatMessageGroupingTests {
         ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
                 toolCall("write-1", "write_file", true),
                 toolCall("write-2", "write_file", true)
-        ), null);
+        ), null, null);
 
         List<ChatPresentationService.ToolCallGroupView> groups = message.toolCallGroups();
 
@@ -57,7 +57,7 @@ class UiControllerChatMessageGroupingTests {
                 toolCall("read-2", "read_file", true),
                 toolCall("task-1", "task", true),
                 toolCall("read-3", "read_file", true)
-        ), null);
+        ), null, null);
 
         List<ChatPresentationService.ToolCallBlockView> blocks = message.toolCallBlocks();
 
@@ -70,7 +70,7 @@ class UiControllerChatMessageGroupingTests {
     @Test
     void presentationModelsOwnStableSafeDomIds() {
         ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "", 1L, false,
-                "assistant / ü", null, List.of(toolCall("call / ü", "read_file", true)), null);
+                "assistant / ü", null, List.of(toolCall("call / ü", "read_file", true)), null, null);
 
         assertThat(message.toolCallHostId()).isEqualTo("assistant-tool-calls-assistant-20-2f-20-c3-bc");
         assertThat(message.toolCallBlocks().get(0).bundle().domId(message.id()))
@@ -84,13 +84,13 @@ class UiControllerChatMessageGroupingTests {
     @Test
     void emptyAssistantToolCallHostIsStableAndHasNoToolCallChildren() {
         ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "", 1L, false,
-                "assistant-1", null, List.of(), null);
+                "assistant-1", null, List.of(), null, null);
 
         assertThat(message.toolCallHostId()).isEqualTo("assistant-tool-calls-assistant-1");
         assertThat(message.toolCallBlocks()).isEmpty();
     }
 
     private static ChatPresentationService.ToolCallView toolCall(String id, String toolName, boolean success) {
-        return new ChatPresentationService.ToolCallView(id, toolName, success, "input", "output", false, false, null, null, null);
+        return new ChatPresentationService.ToolCallView(id, toolName, success, "input", "output", false, false, null, null, null, null, null, null, null, null, null);
     }
 }

@@ -177,36 +177,6 @@ public class ChatPresentationService {
                                boolean inputTruncated, boolean outputTruncated, Long subagentSessionId,
                                String subagentAgentId, String subagentAgentName, String status, String imageUrl,
                                String imageAlt, String imagePath, String imageMediaType, String taskBody) {
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview,
-                            boolean inputTruncated, boolean outputTruncated, Long subagentSessionId, String subagentAgentId,
-                            String subagentAgentName, String status) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated,
-                    subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, null);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview,
-                            boolean inputTruncated, boolean outputTruncated, Long subagentSessionId, String subagentAgentId,
-                            String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated,
-                    subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null, null);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview,
-                            boolean inputTruncated, boolean outputTruncated, Long subagentSessionId, String subagentAgentId,
-                            String subagentAgentName, String status, String taskBody) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated,
-                    subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null, taskBody);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview,
-                            boolean inputTruncated, boolean outputTruncated, Long subagentSessionId, String subagentAgentId,
-                            String subagentAgentName, String status, String imageUrl, String imageAlt, String imagePath,
-                            String imageMediaType) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated,
-                    subagentSessionId, subagentAgentId, subagentAgentName, status, imageUrl, imageAlt, imagePath,
-                    imageMediaType, null);
-        }
-
         public String domId(String assistantId) {
             return "assistant-tool-call-" + domToken(assistantId) + "-" + domToken(toolCallId);
         }
@@ -253,11 +223,6 @@ public class ChatPresentationService {
 
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs,
                               List<ToolCallView> toolCalls, ChatMessageMetadata metadata, String modelLabel) {
-        public ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs,
-                           List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
-            this(role, text, ts, pending, id, completedTs, toolCalls, metadata, null);
-        }
-
         public String toolCallHostId() {
             return "assistant-tool-calls-" + domToken(id);
         }

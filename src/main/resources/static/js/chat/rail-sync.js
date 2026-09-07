@@ -3,10 +3,12 @@ export function syncFaviconWithRail() {
         const unreadDotPresent = !!document.querySelector('#workspace-session-rail .unread-dot');
         const favicon32 = document.getElementById('favicon-32x32');
         const favicon16 = document.getElementById('favicon-16x16');
-        if (!favicon32 || !favicon16) return;
+        const topbarLogo = document.getElementById('topbar-logo');
         const base = unreadDotPresent ? '/favicon-complete' : '/favicon';
-        favicon32.setAttribute('href', base + '-32x32.png');
-        favicon16.setAttribute('href', base + '-16x16.png');
+        const source32 = base + '-32x32.png';
+        if (favicon32) favicon32.setAttribute('href', source32);
+        if (favicon16) favicon16.setAttribute('href', base + '-16x16.png');
+        if (topbarLogo) topbarLogo.setAttribute('src', source32);
     } catch (error) {
         console.error(error);
     }

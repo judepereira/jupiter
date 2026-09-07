@@ -332,6 +332,30 @@
     font: inherit;
 }
 
+.settings-hooks-docs {
+    min-width: 0;
+}
+
+.settings-hooks-docs p {
+    margin: 0 0 8px;
+}
+
+.settings-hooks-docs p:last-of-type {
+    margin-bottom: 4px;
+}
+
+.settings-hooks-example {
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #f1f5f9;
+}
+
 .workspace-mode-field {
     border: 0;
     margin: 0;

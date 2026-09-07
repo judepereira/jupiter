@@ -15,7 +15,7 @@ class GitWorktreeExceptionTests {
                 .reduce((a, b) -> a + "\n" + b)
                 .orElseThrow();
 
-        GitWorktreeException exception = new GitWorktreeException("git failed", output, null);
+        GitWorktreeException exception = new GitWorktreeException("git failed", output, null, null);
 
         assertThat(exception.lastGitOutputLines().split("\\R"))
                 .hasSize(10)

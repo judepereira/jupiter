@@ -22,7 +22,7 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
     private final AppStateService appStateService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final McpClientFactory clientFactory;
-    private final McpTemplateResolver templateResolver = new McpTemplateResolver();
+    private final McpTemplateResolver templateResolver = new McpTemplateResolver(System::getenv);
     private final Map<Long, ProjectRuntime> runtimes = new ConcurrentHashMap<>();
     private final Map<Long, String> projectToolFingerprints = new ConcurrentHashMap<>();
     private final Set<Long> reloadingProjects = ConcurrentHashMap.newKeySet();

@@ -76,14 +76,14 @@ class TokenUsageLifecycleAndHarnessTests {
         ToolRegistry registry = new ToolRegistry();
         registry.register(new WriteFileTool());
         AgentModelClient model = new SequenceModel(List.of(
-                new ModelResponse(null, new ToolCall("write_file", Map.of("path", "iteration.txt", "content", "written")), metadata(10, 4, 14)),
+                new ModelResponse(null, new ToolCall(null, "write_file", Map.of("path", "iteration.txt", "content", "written")), metadata(10, 4, 14)),
                 new ModelResponse("final response", null, metadata(15, 6, 21))));
         CodingAgentHarness harness = new CodingAgentHarness(
                 fakeFactory(model), registry, properties, null, null, appStateService, tokenUsageService, null,
                 new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
 
-        AgentTurnRequest request = new AgentTurnRequest("system", List.of(new Message(Message.Role.USER, "user")), workspacePath.toString(),
-                null, "model-iterations", null, sessionId);
+        AgentTurnRequest request = new AgentTurnRequest("system", List.of(new Message(Message.Role.USER, "user", null, null)), workspacePath.toString(),
+                null, "model-iterations", null, sessionId, null);
         assertThat(harness.runTurn(request).getFinalText()).isEqualTo("final response");
 
         assertThat(tokenUsageService.findFacts(usageKey))

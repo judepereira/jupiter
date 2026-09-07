@@ -4,12 +4,6 @@ public class GitWorktreeException extends RuntimeException {
     private final String stdout;
     private final String stderr;
 
-    public GitWorktreeException(String message, String stdout, String stderr) {
-        super(message);
-        this.stdout = stdout;
-        this.stderr = stderr;
-    }
-
     public GitWorktreeException(String message, String stdout, String stderr, Throwable cause) {
         super(message, cause);
         this.stdout = stdout;

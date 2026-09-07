@@ -25,10 +25,6 @@ public final class LangChain4jMessageMapper {
 
     private final ToolArgumentsCodec toolArgumentsCodec;
 
-    public LangChain4jMessageMapper() {
-        this(new ToolArgumentsCodec());
-    }
-
     public LangChain4jMessageMapper(ToolArgumentsCodec toolArgumentsCodec) {
         this.toolArgumentsCodec = toolArgumentsCodec;
     }

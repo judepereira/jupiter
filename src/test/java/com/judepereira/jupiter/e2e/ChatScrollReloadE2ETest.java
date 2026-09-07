@@ -2,6 +2,7 @@ package com.judepereira.jupiter.e2e;
 
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
@@ -135,8 +136,10 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
                     for (let frame = 0; frame < 60; frame++) {
                         await new Promise(resolve => requestAnimationFrame(resolve));
                         if (!history.isConnected || !list.isConnected || history.scrollHeight <= history.clientHeight) return false;
+                        const max = history.scrollHeight - history.clientHeight;
                         const signature = [history.scrollHeight, history.clientHeight, list.getBoundingClientRect().height].join(':');
-                        stableFrames = signature === previousSignature ? stableFrames + 1 : 0;
+                        const atBottom = Math.abs(history.scrollTop - max) <= 1;
+                        stableFrames = signature === previousSignature && atBottom ? stableFrames + 1 : 0;
                         previousSignature = signature;
                         if (stableFrames >= 3) return true;
                     }
@@ -169,7 +172,9 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
                     : null;
             jdbcTemplate.update(
                     "INSERT INTO conversation_messages (session_id, public_id, role, turn_id, sequence, content, tool_calls_json, show_in_chat, include_in_model, pending, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, ?)",
-                    sessionId, UUID.randomUUID().toString(), role, (sequence + 1) / 2, sequence, content, toolCalls, Timestamp.from(createdAt.plusMillis(sequence)));
+                    sessionId, UUID.randomUUID().toString(), role, (sequence + 1) / 2, sequence,
+                    TestEncryptionSupport.encrypt("conversation_messages", "content", content),
+                    TestEncryptionSupport.encrypt("conversation_messages", "tool_calls_json", toolCalls), Timestamp.from(createdAt.plusMillis(sequence)));
             if (toolCalls != null) {
                 String assistantPublicId = jdbcTemplate.queryForObject("SELECT public_id FROM conversation_messages WHERE session_id = ? AND sequence = ?", String.class, sessionId, sequence);
                 String toolName = taskCall ? "task" : "search";
@@ -182,8 +187,10 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
                         : "{}";
                 jdbcTemplate.update(
                         "INSERT INTO tool_call_traces (session_id, assistant_message_id, sequence, tool_call_id, tool_name, success, args_json, text_summary, machine_summary_json, completed_at, created_at) SELECT ?, id, ?, ?, ?, 1, ?, ?, ?, ?, ? FROM conversation_messages WHERE public_id = ?",
-                        sessionId, sequence, toolCallId, toolName, argsJson,
-                        taskCall ? "delegated result " + label : "result " + label + " content", machineJson,
+                        sessionId, sequence, toolCallId, toolName,
+                        TestEncryptionSupport.encrypt("tool_call_traces", "args_json", argsJson),
+                        TestEncryptionSupport.encrypt("tool_call_traces", "text_summary", taskCall ? "delegated result " + label : "result " + label + " content"),
+                        TestEncryptionSupport.encrypt("tool_call_traces", "machine_summary_json", machineJson),
                         Timestamp.from(createdAt.plusMillis(sequence)), Timestamp.from(createdAt.plusMillis(sequence)), assistantPublicId);
             }
         }
@@ -194,7 +201,8 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
         long childSessionId = state.createHiddenSubagentSession(parentSessionId, toolCallId, agents.getRequired("explore"));
         String assistantId = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO conversation_messages (session_id, public_id, role, turn_id, sequence, content, show_in_chat, include_in_model, pending, created_at) VALUES (?, ?, 'assistant', 1, 2, ?, 1, 1, 0, ?)",
-                childSessionId, assistantId, "Explore subagent result for " + label, Timestamp.from(Instant.now()));
+                childSessionId, assistantId,
+                TestEncryptionSupport.encrypt("conversation_messages", "content", "Explore subagent result for " + label), Timestamp.from(Instant.now()));
         return childSessionId;
     }
 

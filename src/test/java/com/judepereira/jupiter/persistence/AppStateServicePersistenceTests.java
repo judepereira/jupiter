@@ -5,6 +5,7 @@ import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
@@ -125,6 +126,43 @@ public class AppStateServicePersistenceTests {
                 .doesNotContain("Updated in background");
         assertThat(service.listConversationMessages(sessionId)).anyMatch(row -> row.publicId().equals(message.id())
                 && row.showInChat() && !row.includeInModel());
+    }
+
+    @Test
+    public void infoMessagesDoNotMarkInactiveSessionsUnread(@TempDir Path projectPath) {
+        List<Object> events = new ArrayList<>();
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(events::add);
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long workspaceId = service.loadViewData().activeWorkspace().id();
+        long inactiveSessionId = service.loadViewData().activeSession().id();
+        long activeSessionId = service.createSession(workspaceId, "Active").id();
+        service.activateSession(activeSessionId);
+        events.clear();
+
+        service.appendInfoMessage(inactiveSessionId, "Updated in background");
+
+        AppStateView afterInfo = service.loadViewData();
+        assertThat(afterInfo.sessions()).extracting(SessionView::id, SessionView::unread)
+                .contains(tuple(inactiveSessionId, false), tuple(activeSessionId, false));
+        assertThat(afterInfo.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
+                .containsExactly(tuple(workspaceId, false));
+        assertThat(events).extracting(Object::getClass)
+                .containsExactly(WorkspaceRailRefreshEvent.class);
+
+        repository.updateSessionUnread(inactiveSessionId, true);
+        events.clear();
+        service.appendInfoMessage(inactiveSessionId, "Another background update");
+
+        AppStateView afterExistingUnread = service.loadViewData();
+        assertThat(afterExistingUnread.sessions()).extracting(SessionView::id, SessionView::unread)
+                .contains(tuple(inactiveSessionId, true), tuple(activeSessionId, false));
+        assertThat(afterExistingUnread.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
+                .containsExactly(tuple(workspaceId, true));
+        assertThat(events).extracting(Object::getClass)
+                .containsExactly(WorkspaceRailRefreshEvent.class);
     }
 
     @Test
@@ -1315,12 +1353,12 @@ public class AppStateServicePersistenceTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return client;
                     }
-                }) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                          ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
                 service.markTurnsIncludeInModelFalse(sessionId, 5);
-                client.chat(List.of(new Message(Message.Role.SYSTEM, "Summarize"), new Message(Message.Role.USER, "transcript")), List.of(),
+                client.chat(List.of(new Message(Message.Role.SYSTEM, "Summarize", null, null), new Message(Message.Role.USER, "transcript", null, null)), List.of(),
                         new AgentModelOptions(ignoredModel.id(), ignoredModel.apiModelId(), ignoredThinkingLevel, ignoredModel.supportsReasoning(), ignoredAgent.textVerbosity()));
                 return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 5L));
             }
@@ -1377,7 +1415,7 @@ public class AppStateServicePersistenceTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return new RecordingSummaryClient();
                     }
-                }) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                        ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
@@ -1435,7 +1473,7 @@ public class AppStateServicePersistenceTests {
                     public AgentModelClient getClient() {
                         return new RecordingSummaryClient();
                     }
-                }) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                        ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
@@ -1487,7 +1525,7 @@ public class AppStateServicePersistenceTests {
             conversations.add(List.copyOf(conversation));
             toolCalls.add(List.copyOf(tools));
             this.options.add(options);
-            return new ModelResponse("compact summary", null);
+            return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
         }
 
         @Override

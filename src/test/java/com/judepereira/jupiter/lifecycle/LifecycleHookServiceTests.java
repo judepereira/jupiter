@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
@@ -20,6 +23,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 class LifecycleHookServiceTests {
+
+    @Test
+    void lifecycleChildDoesNotReceiveEncryptionKey(@TempDir Path tempDir) throws Exception {
+        Path script = tempDir.resolve("env.sh");
+        Files.writeString(script, "#!/bin/bash\n/usr/bin/env\n");
+        Map<String, String> environment = new HashMap<>(Map.of(
+                "JUPITER_ENCRYPTION_KEY", "secret", "LIFECYCLE_SENTINEL", "preserved"));
+        Process process = LifecycleHookService.startProcess(new LifecycleHookService.ProcessLaunchRequest(script, environment));
+        try {
+            assertThat(process.waitFor(2, TimeUnit.SECONDS)).isTrue();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(output).doesNotContain("JUPITER_ENCRYPTION_KEY=")
+                    .contains("LIFECYCLE_SENTINEL=preserved");
+        } finally {
+            process.destroyForcibly();
+        }
+    }
 
     @Test
     void runsMultilineBashInTmpWithProjectAndReservedEnvironment(@TempDir Path tempDir) throws Exception {
@@ -94,8 +114,8 @@ class LifecycleHookServiceTests {
         long sessionId = appStateService.loadViewData().activeSession().id();
         SystemBalloonService balloons = mock(SystemBalloonService.class);
         var executor = Executors.newVirtualThreadPerTaskExecutor();
-        LifecycleHookService service = new LifecycleHookService(appStateService, balloons, executor,
-                ignored -> { throw new IOException("test launch failure"); }, tempDir);
+        LifecycleHookService service = new LifecycleHookService(appStateService, balloons,
+                new LifecycleHookRuntime(executor, ignored -> { throw new IOException("test launch failure"); }, tempDir));
         try {
             var result = service.dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, sessionId).get(5, TimeUnit.SECONDS);
             assertThat(result.status()).isEqualTo(LifecycleHookService.HookStatus.LAUNCH_FAILED);
@@ -137,7 +157,7 @@ class LifecycleHookServiceTests {
     }
 
     private static LifecycleHookService service(AppStateService appStateService, SystemBalloonService balloons, Path tempDir) {
-        return new LifecycleHookService(appStateService, balloons, Executors.newVirtualThreadPerTaskExecutor(),
-                LifecycleHookService::startProcess, tempDir);
+        return new LifecycleHookService(appStateService, balloons,
+                new LifecycleHookRuntime(Executors.newVirtualThreadPerTaskExecutor(), LifecycleHookService::startProcess, tempDir));
     }
 }

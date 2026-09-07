@@ -2,6 +2,7 @@ package com.judepereira.jupiter;
 
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.testsupport.TestEncryptionConfiguration;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,7 +14,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = "spring.main.allow-bean-definition-overriding=true")
-@Import(JupiterTests.TestCatalogConfiguration.class)
+@Import({JupiterTests.TestCatalogConfiguration.class, TestEncryptionConfiguration.class})
 class JupiterTests {
 
     @Test

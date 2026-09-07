@@ -43,7 +43,7 @@ class SystemBalloonServiceTests {
 
     @Test
     void publishRecordsBalloonWithoutConnectedClients() {
-        SystemBalloonService service = new SystemBalloonService(new ObjectMapper());
+        SystemBalloonService service = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
 
         service.publishError("Git error", "Could not check out existing Git branch \"missing\".\n\nGit output:\nfatal: invalid reference: missing");
 

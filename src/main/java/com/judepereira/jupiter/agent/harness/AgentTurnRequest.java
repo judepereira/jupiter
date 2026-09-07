@@ -17,27 +17,9 @@ public class AgentTurnRequest {
     private final Long sessionId;
     private final CancellationToken cancellationToken;
 
-    public AgentTurnRequest(String systemPrompt, String userPrompt) {
-        this(systemPrompt, List.of(new Message(Message.Role.USER, userPrompt)), null, null, null, null, null);
-    }
 
-    public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory) {
-        this(systemPrompt, conversationHistory, null, null, null, null, null);
-    }
 
-    public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot) {
-        this(systemPrompt, conversationHistory, workspaceRoot, null, null, null, null);
-    }
 
-    public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
-                            String agentId, String modelId, ThinkingLevel thinkingLevel) {
-        this(systemPrompt, conversationHistory, workspaceRoot, agentId, modelId, thinkingLevel, null);
-    }
-
-    public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
-                            String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId) {
-        this(systemPrompt, conversationHistory, workspaceRoot, agentId, modelId, thinkingLevel, sessionId, null);
-    }
 
     public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
                             String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,

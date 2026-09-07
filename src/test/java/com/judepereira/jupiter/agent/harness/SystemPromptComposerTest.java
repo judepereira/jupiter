@@ -18,7 +18,11 @@ public class SystemPromptComposerTest {
     public void compose_withoutAppendageAddsDefaultPromptAndEnv(@TempDir Path workspaceRoot) {
         String prompt = new SystemPromptComposer().compose(null, workspaceRoot.toString());
 
-        assertThat(prompt).isEqualTo(SystemPromptTestSupport.composeExpected(null, workspaceRoot));
+        assertThat(prompt)
+                .isEqualTo(SystemPromptTestSupport.composeExpected(null, workspaceRoot))
+                .contains("## Subagent Delegation")
+                .contains("A subagent started with the `task` tool has zero history of the parent agent's conversation.")
+                .contains("Make every delegated task self-contained.");
     }
 
     @Test

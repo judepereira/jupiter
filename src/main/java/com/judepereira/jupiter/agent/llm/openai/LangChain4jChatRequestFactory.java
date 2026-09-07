@@ -16,10 +16,6 @@ public final class LangChain4jChatRequestFactory {
     private final LangChain4jToolSpecificationMapper toolSpecificationMapper;
     private final OpenAiRequestParametersMapper requestParametersMapper;
 
-    public LangChain4jChatRequestFactory() {
-        this(new LangChain4jMessageMapper(), new LangChain4jToolSpecificationMapper(), new OpenAiRequestParametersMapper());
-    }
-
     public LangChain4jChatRequestFactory(LangChain4jMessageMapper messageMapper,
                                          LangChain4jToolSpecificationMapper toolSpecificationMapper,
                                          OpenAiRequestParametersMapper requestParametersMapper) {

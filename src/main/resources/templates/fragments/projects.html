@@ -7,7 +7,7 @@
                 aria-expanded="false"
                 aria-label="Toggle workspace rail"
                 title="Toggle workspace rail">
-            <img src="/favicon-32x32.png" alt="Jupiter" width="100%">
+            <img id="topbar-logo" src="/favicon-32x32.png" alt="Jupiter" width="100%">
         </button>
 
         <nav class="project-tabs" aria-label="Projects">
@@ -40,16 +40,7 @@
         </nav>
 
         <div class="top-bar-actions">
-            <button type="button"
-                    class="rail-btn topbar-rail-btn topbar-git-pull-btn"
-                    aria-label="Pull latest changes"
-                    title="Pull latest changes"
-                    th:disabled="${activeWorkspaceView == null}"
-                    hx-post="/ui/workspaces/active/git/pull"
-                    hx-target="#shell"
-                    hx-swap="none">
-                <i class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
-            </button>
+            <th:block th:replace="~{fragments/projects :: gitPullControl(${activeWorkspaceView == null ? null : activeWorkspaceView.id}, ${gitPullBusy ?: false}, ${activeWorkspaceView != null})}"></th:block>
             <button type="button"
                     class="rail-btn topbar-rail-btn"
                     aria-label="Settings"
@@ -71,6 +62,18 @@
                 </button>
         </div>
     </header>
+</th:block>
+
+<th:block th:fragment="gitPullControl(workspaceId, busy, hasWorkspace)"
+          th:with="normalizedWorkspaceId=${workspaceId ?: null}, normalizedBusy=${busy ?: false}, normalizedHasWorkspace=${hasWorkspace != null ? hasWorkspace : normalizedWorkspaceId != null}">
+    <button id="git-pull-control" type="button"
+            class="rail-btn topbar-rail-btn topbar-git-pull-btn"
+            th:disabled="${!normalizedHasWorkspace or normalizedBusy}"
+            th:attr="aria-label=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, title=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, aria-busy=${normalizedBusy}, hx-post=${!normalizedBusy and normalizedHasWorkspace ? '/ui/workspaces/active/git/pull' : null}, hx-get=${normalizedBusy and normalizedWorkspaceId != null ? '/ui/workspaces/' + normalizedWorkspaceId + '/git/pull/status' : null}, hx-trigger=${normalizedBusy and normalizedWorkspaceId != null ? 'every 1s' : null}, hx-target='#git-pull-control', hx-swap='outerHTML'">
+        <span th:if="${normalizedBusy}" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        <span th:if="${normalizedBusy}" class="visually-hidden">Git pull in progress</span>
+        <i th:unless="${normalizedBusy}" class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
+    </button>
 </th:block>
 
 <th:block th:fragment="workspaceRail" th:with="shellRefreshFlag=${shellRefresh ?: false}, workspaceList=${workspaces ?: T(java.util.List).of()}, sessionList=${sessions ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, activeSessionView=${activeSession}">
@@ -218,7 +221,7 @@
     </section>
 </th:block>
 
-<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
+<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, commandEnvironmentAllowlistValue=${activeProject == null or activeProject.commandEnvironmentAllowlist == null ? '' : activeProject.commandEnvironmentAllowlist}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
     <div id="settings-modal" class="project-modal settings-modal">
         <div class="project-modal-backdrop"
              hx-get="/ui/projects/modal/close"
@@ -304,6 +307,17 @@
                             </template>
                             <button type="button" class="btn btn-outline-primary btn-sm" data-settings-env-add>Add Variable</button>
                         </div>
+
+                        <label class="project-form-field">
+                            <span>Command environment allowlist</span>
+                            <input type="text"
+                                   name="commandEnvironmentAllowlist"
+                                   autocomplete="off"
+                                   placeholder="HOME, PATH, CI"
+                                   th:value="${commandEnvironmentAllowlistValue}"
+                                   aria-describedby="command-environment-allowlist-help">
+                            <small id="command-environment-allowlist-help">Comma-separated system environment variable names. This controls only the run command tool; leave blank for no system variables. Terminal sessions retain the normal system environment. Project environment variables remain separate.</small>
+                        </label>
 
                         <label class="project-form-field settings-commands-field">
                             <span>Workspace init commands</span>
@@ -482,18 +496,26 @@
                             <form class="settings-form" hx-post="/ui/settings/hooks/apply" hx-target="#modal-root" hx-swap="innerHTML">
                                 <section class="settings-section settings-app-section">
                                     <h5>Lifecycle hooks</h5>
-                                    <p class="settings-help-text">Scripts execute with Bash. Each hook receives project, workspace, and session name environment variables.</p>
+                                    <div class="settings-hooks-docs">
+                                        <p class="settings-help-text">Hooks run asynchronously in Bash using <code>/bin/bash</code>, with <code>/tmp</code> as the working directory. A hook failure does not change the agent or subagent lifecycle result; the timeout applies to each hook.</p>
+                                        <p class="settings-help-text">These runtime variables are always available: <code>JUPITER_PROJECT_NAME</code> (project name), <code>JUPITER_WORKSPACE_NAME</code> (workspace name), and <code>JUPITER_SESSION_NAME</code> (session name). Project-configured environment variables are also passed and can be expanded normally, such as <code>"$WEBHOOK_URL"</code>. The three <code>JUPITER_*</code> values take precedence over project variables with matching names.</p>
+                                        <p class="settings-help-text">Example:</p>
+                                        <pre class="settings-hooks-example"><code>printf '%s | %s | %s\n' "$JUPITER_PROJECT_NAME" "$JUPITER_WORKSPACE_NAME" "$JUPITER_SESSION_NAME" &gt;&gt; /tmp/jupiter-hooks.log</code></pre>
+                                    </div>
                                     <label class="project-form-field">
-                                        <span>Assistant completion script</span>
-                                        <textarea name="assistantCompletedScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantCompletedScript}"></textarea>
+                                        <span>Agent completion script</span>
+                                        <small id="agent-completion-help">Runs after the agent response completes.</small>
+                                        <textarea name="assistantCompletedScript" rows="6" spellcheck="false" aria-describedby="agent-completion-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantCompletedScript}"></textarea>
                                     </label>
                                     <label class="project-form-field">
-                                        <span>Assistant error script</span>
-                                        <textarea name="assistantErroredScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantErroredScript}"></textarea>
+                                        <span>Agent error script</span>
+                                        <small id="agent-error-help">Runs when the agent execution fails.</small>
+                                        <textarea name="assistantErroredScript" rows="6" spellcheck="false" aria-describedby="agent-error-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantErroredScript}"></textarea>
                                     </label>
                                     <label class="project-form-field">
                                         <span>Subagent completion script</span>
-                                        <textarea name="subagentCompletedScript" rows="6" spellcheck="false" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.subagentCompletedScript}"></textarea>
+                                        <small id="subagent-completion-help">Runs when a subagent completes, using the parent session's context.</small>
+                                        <textarea name="subagentCompletedScript" rows="6" spellcheck="false" aria-describedby="subagent-completion-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.subagentCompletedScript}"></textarea>
                                     </label>
                                     <label class="project-form-field">
                                         <span>Timeout (seconds)</span>

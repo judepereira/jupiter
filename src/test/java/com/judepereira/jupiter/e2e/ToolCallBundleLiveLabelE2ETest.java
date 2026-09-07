@@ -89,7 +89,7 @@ class ToolCallBundleLiveLabelE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null) {
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
                 @Override
                 public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                     Map<String, Object> args = Map.of("path", "README.md");

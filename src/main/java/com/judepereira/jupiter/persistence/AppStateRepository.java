@@ -1,5 +1,8 @@
 package com.judepereira.jupiter.persistence;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.security.TextEncryptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -13,11 +16,11 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 
@@ -26,6 +29,16 @@ import java.util.UUID;
 public class AppStateRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final TextEncryptor crypto;
+    private final ObjectMapper objectMapper;
+
+    private String enc(String table, String column, String value) {
+        return crypto.encrypt(value, table + "." + column);
+    }
+
+    private String dec(String table, String column, String value) {
+        return value == null ? null : crypto.decrypt(value, table + "." + column);
+    }
 
     AppStateRow loadAppState() {
         return jdbc.queryForObject("SELECT active_project_id, active_workspace_id, active_session_id FROM app_state WHERE id = 1", new MapSqlParameterSource(), (rs, rowNum) -> new AppStateRow(
@@ -103,9 +116,9 @@ public class AppStateRepository {
                        subagent_completed_hook_script, lifecycle_hook_timeout_seconds
                 FROM app_state WHERE id = 1
                 """, new MapSqlParameterSource(), (rs, rowNum) -> new AppStateLifecycleHookSettingsRow(
-                rs.getString("assistant_completed_hook_script"),
-                rs.getString("assistant_errored_hook_script"),
-                rs.getString("subagent_completed_hook_script"),
+                dec("app_state", "assistant_completed_hook_script", rs.getString("assistant_completed_hook_script")),
+                dec("app_state", "assistant_errored_hook_script", rs.getString("assistant_errored_hook_script")),
+                dec("app_state", "subagent_completed_hook_script", rs.getString("subagent_completed_hook_script")),
                 nullableInteger(rs, "lifecycle_hook_timeout_seconds")));
     }
 
@@ -118,9 +131,9 @@ public class AppStateRepository {
                     lifecycle_hook_timeout_seconds = :timeoutSeconds
                 WHERE id = 1
                 """, new MapSqlParameterSource()
-                .addValue("assistantCompletedScript", assistantCompletedScript)
-                .addValue("assistantErroredScript", assistantErroredScript)
-                .addValue("subagentCompletedScript", subagentCompletedScript)
+                .addValue("assistantCompletedScript", enc("app_state", "assistant_completed_hook_script", assistantCompletedScript))
+                .addValue("assistantErroredScript", enc("app_state", "assistant_errored_hook_script", assistantErroredScript))
+                .addValue("subagentCompletedScript", enc("app_state", "subagent_completed_hook_script", subagentCompletedScript))
                 .addValue("timeoutSeconds", timeoutSeconds));
     }
 
@@ -134,7 +147,7 @@ public class AppStateRepository {
                 VALUES (:sessionUsageKey, :sessionId, :workspaceId, :projectId, :sessionName, :workspaceName, :projectName,
                     :workspacePath, :projectPath, :occurredAt, :hourStart, :modelKey, :operation, :inputTokens, :outputTokens, :totalTokens,
                     :cachedTokens, :cacheWriteTokens, :reasoningTokens, :responseId, :responseModelId, :finishReason, :providerMetadataJson)
-                """, usageParams(fact, providerMetadataJson));
+                """, usageParams(fact, providerMetadataJson, "token_usage_facts"));
     }
 
     void upsertTokenUsageHourly(Persistence.TokenUsageFact fact) {
@@ -155,7 +168,7 @@ public class AppStateRepository {
                     cache_write_token_count = CASE WHEN excluded.cache_write_token_count IS NULL THEN cache_write_token_count ELSE COALESCE(cache_write_token_count, 0) + excluded.cache_write_token_count END,
                     reasoning_token_count = CASE WHEN excluded.reasoning_token_count IS NULL THEN reasoning_token_count ELSE COALESCE(reasoning_token_count, 0) + excluded.reasoning_token_count END,
                     last_occurred_at = MAX(last_occurred_at, excluded.last_occurred_at)
-                """, usageParams(fact, null));
+                """, usageParams(fact, null, "token_usage_hourly"));
     }
 
     int deleteTokenUsageFactsBefore(Instant cutoff) {
@@ -169,23 +182,27 @@ public class AppStateRepository {
     }
 
     void rebuildTokenUsageHourlyAt(Instant cutoff, Instant hourStart) {
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("cutoff", Timestamp.from(cutoff))
-                .addValue("hourStart", Timestamp.from(hourStart));
+        MapSqlParameterSource params = new MapSqlParameterSource().addValue("hourStart", Timestamp.from(hourStart));
         jdbc.update("DELETE FROM token_usage_hourly WHERE hour_start_utc = :hourStart", params);
-        jdbc.update("""
-                INSERT INTO token_usage_hourly (session_usage_key, session_id_snapshot, workspace_id_snapshot, project_id_snapshot,
-                    session_name_snapshot, workspace_name_snapshot, project_name_snapshot, workspace_path_snapshot, project_path_snapshot,
-                    hour_start_utc, model_key, request_count, input_token_count, output_token_count, total_token_count,
-                    cached_input_token_count, cache_write_token_count, reasoning_token_count, last_occurred_at)
-                SELECT session_usage_key, MIN(session_id_snapshot), MIN(workspace_id_snapshot), MIN(project_id_snapshot),
-                       MIN(session_name_snapshot), MIN(workspace_name_snapshot), MIN(project_name_snapshot), MIN(workspace_path_snapshot), MIN(project_path_snapshot),
-                       hour_start_utc, model_key, COUNT(*), SUM(input_token_count), SUM(output_token_count), SUM(total_token_count),
-                       SUM(cached_input_token_count), SUM(cache_write_token_count), SUM(reasoning_token_count), MAX(occurred_at)
-                FROM token_usage_facts
-                WHERE hour_start_utc = :hourStart AND occurred_at >= :cutoff
-                GROUP BY session_usage_key, hour_start_utc, model_key
-                """, params);
+        var facts = findTokenUsageFactsForHour(cutoff, hourStart);
+        facts.forEach(this::upsertTokenUsageHourly);
+    }
+
+    private List<Persistence.TokenUsageFact> findTokenUsageFactsForHour(Instant cutoff, Instant hourStart) {
+        return jdbc.query("SELECT * FROM token_usage_facts WHERE hour_start_utc = :hourStart AND occurred_at >= :cutoff ORDER BY occurred_at ASC, id ASC",
+                new MapSqlParameterSource().addValue("hourStart", Timestamp.from(hourStart)).addValue("cutoff", Timestamp.from(cutoff)),
+                (rs, rowNum) -> mapTokenUsageFact(rs));
+    }
+
+    private Persistence.TokenUsageFact mapTokenUsageFact(ResultSet rs) throws SQLException {
+        return new Persistence.TokenUsageFact(rs.getString("session_usage_key"), rs.getLong("session_id_snapshot"), rs.getLong("workspace_id_snapshot"), rs.getLong("project_id_snapshot"),
+                dec("token_usage_facts", "session_name_snapshot", rs.getString("session_name_snapshot")), dec("token_usage_facts", "workspace_name_snapshot", rs.getString("workspace_name_snapshot")),
+                dec("token_usage_facts", "project_name_snapshot", rs.getString("project_name_snapshot")), dec("token_usage_facts", "workspace_path_snapshot", rs.getString("workspace_path_snapshot")),
+                dec("token_usage_facts", "project_path_snapshot", rs.getString("project_path_snapshot")), timestampToInstant(rs.getTimestamp("occurred_at")), timestampToInstant(rs.getTimestamp("hour_start_utc")),
+                rs.getString("model_key"), rs.getString("operation"), nullableInteger(rs, "input_token_count"), nullableInteger(rs, "output_token_count"), nullableInteger(rs, "total_token_count"),
+                nullableInteger(rs, "cached_input_token_count"), nullableInteger(rs, "cache_write_token_count"), nullableInteger(rs, "reasoning_token_count"),
+                dec("token_usage_facts", "response_id", rs.getString("response_id")), dec("token_usage_facts", "response_model_id", rs.getString("response_model_id")),
+                dec("token_usage_facts", "finish_reason", rs.getString("finish_reason")), Map.of());
     }
     List<Persistence.ProjectTokenUsageHourly> findProjectHourlyTokenUsage(long projectId, Instant fromInclusive, Instant toExclusive) {
         return jdbc.query("""
@@ -199,9 +216,9 @@ public class AppStateRepository {
                 GROUP BY hour_start_utc, model_key
                 ORDER BY hour_start_utc ASC, model_key ASC
                 """, new MapSqlParameterSource()
-                        .addValue("projectId", projectId)
-                        .addValue("fromInclusive", Timestamp.from(fromInclusive))
-                        .addValue("toExclusive", Timestamp.from(toExclusive)), (rs, rowNum) ->
+                       .addValue("projectId", projectId)
+                       .addValue("fromInclusive", Timestamp.from(fromInclusive))
+                       .addValue("toExclusive", Timestamp.from(toExclusive)), (rs, rowNum) ->
                 new Persistence.ProjectTokenUsageHourly(
                         timestampToInstant(rs.getTimestamp("hour_start_utc")), rs.getString("model_key"),
                         rs.getLong("request_count"), nullableLong(rs, "input_token_count"),
@@ -219,9 +236,9 @@ public class AppStateRepository {
                   AND hour_start_utc < :toExclusive
                 ORDER BY hour_start_utc ASC, model_key ASC
                 """, new MapSqlParameterSource()
-                        .addValue("sessionUsageKey", sessionUsageKey)
-                        .addValue("fromInclusive", Timestamp.from(fromInclusive))
-                        .addValue("toExclusive", Timestamp.from(toExclusive)), (rs, rowNum) ->
+                       .addValue("sessionUsageKey", sessionUsageKey)
+                       .addValue("fromInclusive", Timestamp.from(fromInclusive))
+                       .addValue("toExclusive", Timestamp.from(toExclusive)), (rs, rowNum) ->
                 new Persistence.TokenUsageHourly(
                         rs.getString("session_usage_key"), timestampToInstant(rs.getTimestamp("hour_start_utc")),
                         rs.getString("model_key"), rs.getLong("request_count"),
@@ -245,30 +262,35 @@ public class AppStateRepository {
                 new Persistence.TokenUsageFact(
                         rs.getString("session_usage_key"), rs.getLong("session_id_snapshot"),
                         rs.getLong("workspace_id_snapshot"), rs.getLong("project_id_snapshot"),
-                        rs.getString("session_name_snapshot"), rs.getString("workspace_name_snapshot"),
-                        rs.getString("project_name_snapshot"), rs.getString("workspace_path_snapshot"),
-                        rs.getString("project_path_snapshot"), timestampToInstant(rs.getTimestamp("occurred_at")),
+                        dec("token_usage_facts", "session_name_snapshot", rs.getString("session_name_snapshot")), dec("token_usage_facts", "workspace_name_snapshot", rs.getString("workspace_name_snapshot")),
+                        dec("token_usage_facts", "project_name_snapshot", rs.getString("project_name_snapshot")), dec("token_usage_facts", "workspace_path_snapshot", rs.getString("workspace_path_snapshot")),
+                        dec("token_usage_facts", "project_path_snapshot", rs.getString("project_path_snapshot")), timestampToInstant(rs.getTimestamp("occurred_at")),
                         timestampToInstant(rs.getTimestamp("hour_start_utc")), rs.getString("model_key"),
                         rs.getString("operation"), nullableInteger(rs, "input_token_count"),
                         nullableInteger(rs, "output_token_count"), nullableInteger(rs, "total_token_count"),
                         nullableInteger(rs, "cached_input_token_count"), nullableInteger(rs, "cache_write_token_count"),
-                        nullableInteger(rs, "reasoning_token_count"), rs.getString("response_id"),
-                        rs.getString("response_model_id"), rs.getString("finish_reason"), Map.of()));
+                        nullableInteger(rs, "reasoning_token_count"), dec("token_usage_facts", "response_id", rs.getString("response_id")),
+                        dec("token_usage_facts", "response_model_id", rs.getString("response_model_id")), dec("token_usage_facts", "finish_reason", rs.getString("finish_reason")), Map.of()));
     }
 
-    private MapSqlParameterSource usageParams(Persistence.TokenUsageFact fact, String providerMetadataJson) {
+    private MapSqlParameterSource usageParams(Persistence.TokenUsageFact fact, String providerMetadataJson, String table) {
         return new MapSqlParameterSource()
                 .addValue("sessionUsageKey", fact.sessionUsageKey()).addValue("sessionId", fact.sessionIdSnapshot())
                 .addValue("workspaceId", fact.workspaceIdSnapshot()).addValue("projectId", fact.projectIdSnapshot())
-                .addValue("sessionName", fact.sessionNameSnapshot()).addValue("workspaceName", fact.workspaceNameSnapshot())
-                .addValue("projectName", fact.projectNameSnapshot()).addValue("workspacePath", fact.workspacePathSnapshot())
-                .addValue("projectPath", fact.projectPathSnapshot()).addValue("occurredAt", Timestamp.from(fact.occurredAt()))
-                .addValue("hourStart", Timestamp.from(fact.hourStartUtc())).addValue("modelKey", fact.modelKey())
-                .addValue("operation", fact.operation()).addValue("inputTokens", fact.inputTokenCount())
+                .addValue("sessionName", enc(table, "session_name_snapshot", fact.sessionNameSnapshot()))
+                .addValue("workspaceName", enc(table, "workspace_name_snapshot", fact.workspaceNameSnapshot()))
+                .addValue("projectName", enc(table, "project_name_snapshot", fact.projectNameSnapshot()))
+                .addValue("workspacePath", enc(table, "workspace_path_snapshot", fact.workspacePathSnapshot()))
+                .addValue("projectPath", enc(table, "project_path_snapshot", fact.projectPathSnapshot()))
+                .addValue("occurredAt", Timestamp.from(fact.occurredAt())).addValue("hourStart", Timestamp.from(fact.hourStartUtc()))
+                .addValue("modelKey", fact.modelKey()).addValue("operation", fact.operation()).addValue("inputTokens", fact.inputTokenCount())
                 .addValue("outputTokens", fact.outputTokenCount()).addValue("totalTokens", fact.totalTokenCount())
                 .addValue("cachedTokens", fact.cachedInputTokenCount()).addValue("cacheWriteTokens", fact.cacheWriteTokenCount())
-                .addValue("reasoningTokens", fact.reasoningTokenCount()).addValue("responseId", fact.responseId())
-                .addValue("responseModelId", fact.responseModelId()).addValue("finishReason", fact.finishReason()).addValue("providerMetadataJson", providerMetadataJson == null ? "{}" : providerMetadataJson);
+                .addValue("reasoningTokens", fact.reasoningTokenCount())
+                .addValue("responseId", enc("token_usage_facts", "response_id", fact.responseId()))
+                .addValue("responseModelId", enc("token_usage_facts", "response_model_id", fact.responseModelId()))
+                .addValue("finishReason", enc("token_usage_facts", "finish_reason", fact.finishReason()))
+                .addValue("providerMetadataJson", enc("token_usage_facts", "provider_metadata_json", providerMetadataJson == null ? "{}" : providerMetadataJson));
     }
 
     public Optional<OpenAiOAuthStateRow> loadOpenAiOAuthState() {
@@ -279,11 +301,11 @@ public class AppStateRepository {
     public void updateOpenAiOAuthState(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {
         jdbc.update("UPDATE app_state SET openai_access_token = :accessToken, openai_refresh_token = :refreshToken, openai_id_token = :idToken, openai_account_id = :accountId, openai_expires_at = :expiresAt WHERE id = 1",
                 new MapSqlParameterSource()
-                        .addValue("accessToken", accessToken)
-                        .addValue("refreshToken", refreshToken)
-                        .addValue("idToken", idToken)
-                        .addValue("accountId", accountId)
-                        .addValue("expiresAt", Timestamp.from(expiresAt)));
+                       .addValue("accessToken", enc("app_state", "openai_access_token", accessToken))
+                       .addValue("refreshToken", enc("app_state", "openai_refresh_token", refreshToken))
+                       .addValue("idToken", enc("app_state", "openai_id_token", idToken))
+                       .addValue("accountId", enc("app_state", "openai_account_id", accountId))
+                       .addValue("expiresAt", Timestamp.from(expiresAt)));
     }
 
     public void clearOpenAiOAuthState() {
@@ -294,13 +316,13 @@ public class AppStateRepository {
     void updateAppState(Long projectId, Long workspaceId, Long sessionId) {
         jdbc.update("UPDATE app_state SET active_project_id = :projectId, active_workspace_id = :workspaceId, active_session_id = :sessionId WHERE id = 1",
                 new MapSqlParameterSource()
-                        .addValue("projectId", projectId)
-                        .addValue("workspaceId", workspaceId)
-                        .addValue("sessionId", sessionId));
+                       .addValue("projectId", projectId)
+                       .addValue("workspaceId", workspaceId)
+                       .addValue("sessionId", sessionId));
     }
 
     Optional<ProjectRow> findProjectByNormalizedPath(String normalizedPath) {
-        return queryOne("SELECT * FROM projects WHERE normalized_path = :normalizedPath", new MapSqlParameterSource("normalizedPath", normalizedPath), this::mapProject);
+        return queryOne("SELECT * FROM projects WHERE normalized_path_blind_index = :normalizedPathBlindIndex", new MapSqlParameterSource("normalizedPathBlindIndex", crypto.blindIndex(normalizedPath, "projects.normalized_path")), this::mapProject);
     }
 
     ProjectRow findProject(long id) {
@@ -328,11 +350,12 @@ public class AppStateRepository {
 
     long insertProject(String name, String normalizedPath, long displayOrder, Instant now) {
         return insertAndReturnId("""
-                INSERT INTO projects (name, normalized_path, display_order, closed_at, created_at, last_opened_at)
-                VALUES (:name, :normalizedPath, :displayOrder, NULL, :createdAt, :lastOpenedAt)
+                INSERT INTO projects (name, normalized_path, normalized_path_blind_index, display_order, closed_at, created_at, last_opened_at)
+                VALUES (:name, :normalizedPath, :normalizedPathBlindIndex, :displayOrder, NULL, :createdAt, :lastOpenedAt)
                 """, params -> params
-                .addValue("name", name)
-                .addValue("normalizedPath", normalizedPath)
+                .addValue("name", enc("projects", "name", name))
+                .addValue("normalizedPath", enc("projects", "normalized_path", normalizedPath))
+                .addValue("normalizedPathBlindIndex", crypto.blindIndex(normalizedPath, "projects.normalized_path"))
                 .addValue("displayOrder", displayOrder)
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("lastOpenedAt", Timestamp.from(now)));
@@ -349,7 +372,7 @@ public class AppStateRepository {
             sql = "UPDATE projects SET closed_at = NULL, display_order = :displayOrder, last_opened_at = :lastOpenedAt WHERE id = :projectId";
         } else {
             sql = "UPDATE projects SET name = :name, closed_at = NULL, display_order = :displayOrder, last_opened_at = :lastOpenedAt WHERE id = :projectId";
-            params.addValue("name", name);
+            params.addValue("name", enc("projects", "name", name));
         }
         jdbc.update(sql, params);
     }
@@ -366,12 +389,20 @@ public class AppStateRepository {
 
     void updateProjectWorkspaceInitCommands(long projectId, String workspaceInitCommands) {
         jdbc.update("UPDATE projects SET workspace_init_commands = :workspaceInitCommands WHERE id = :projectId",
-                new MapSqlParameterSource().addValue("projectId", projectId).addValue("workspaceInitCommands", workspaceInitCommands));
+                new MapSqlParameterSource().addValue("projectId", projectId)
+                        .addValue("workspaceInitCommands", enc("projects", "workspace_init_commands", workspaceInitCommands)));
     }
 
     void updateProjectEnvironmentVariables(long projectId, String environmentVariablesJson) {
         jdbc.update("UPDATE projects SET environment_variables = :environmentVariables WHERE id = :projectId",
-                new MapSqlParameterSource().addValue("projectId", projectId).addValue("environmentVariables", environmentVariablesJson));
+                new MapSqlParameterSource().addValue("projectId", projectId)
+                        .addValue("environmentVariables", enc("projects", "environment_variables", environmentVariablesJson)));
+    }
+
+    void updateProjectCommandEnvironmentAllowlist(long projectId, String allowlist) {
+        jdbc.update("UPDATE projects SET command_environment_allowlist = :allowlist WHERE id = :projectId",
+                new MapSqlParameterSource().addValue("projectId", projectId)
+                        .addValue("allowlist", enc("projects", "command_environment_allowlist", allowlist)));
     }
 
     long insertMcpServer(String name, String url, boolean enabled, String headersJson, Instant now) {
@@ -379,21 +410,21 @@ public class AppStateRepository {
                 INSERT INTO mcp_servers (name, url, enabled, headers_json, created_at)
                 VALUES (:name, :url, :enabled, :headersJson, :createdAt)
                 """, params -> params
-                .addValue("name", name)
-                .addValue("url", url)
+                .addValue("name", enc("mcp_servers", "name", name))
+                .addValue("url", enc("mcp_servers", "url", url))
                 .addValue("enabled", enabled)
-                .addValue("headersJson", headersJson)
+                .addValue("headersJson", enc("mcp_servers", "headers_json", headersJson))
                 .addValue("createdAt", Timestamp.from(now)));
     }
 
     void updateMcpServer(long mcpServerId, String name, String url, boolean enabled, String headersJson) {
         jdbc.update("UPDATE mcp_servers SET name = :name, url = :url, enabled = :enabled, headers_json = :headersJson WHERE id = :mcpServerId",
                 new MapSqlParameterSource()
-                        .addValue("mcpServerId", mcpServerId)
-                        .addValue("name", name)
-                        .addValue("url", url)
-                        .addValue("enabled", enabled)
-                        .addValue("headersJson", headersJson));
+                       .addValue("mcpServerId", mcpServerId)
+                       .addValue("name", enc("mcp_servers", "name", name))
+                       .addValue("url", enc("mcp_servers", "url", url))
+                       .addValue("enabled", enabled)
+                       .addValue("headersJson", enc("mcp_servers", "headers_json", headersJson)));
     }
 
     void deleteMcpServer(long mcpServerId) {
@@ -412,8 +443,8 @@ public class AppStateRepository {
         for (Long projectId : projectIds) {
             jdbc.update("INSERT INTO project_mcp_servers (mcp_server_id, project_id) VALUES (:mcpServerId, :projectId)",
                     new MapSqlParameterSource()
-                            .addValue("mcpServerId", mcpServerId)
-                            .addValue("projectId", projectId));
+                          .addValue("mcpServerId", mcpServerId)
+                          .addValue("projectId", projectId));
         }
     }
 
@@ -424,8 +455,9 @@ public class AppStateRepository {
     }
 
     List<McpServerRow> listMcpServers() {
-        return attachMcpServerProjectIds(jdbc.query("SELECT * FROM mcp_servers ORDER BY name ASC, id ASC",
-                new MapSqlParameterSource(), this::mapMcpServer));
+        var rows = jdbc.query("SELECT * FROM mcp_servers ORDER BY id ASC", new MapSqlParameterSource(), this::mapMcpServer);
+        rows.sort(java.util.Comparator.comparing(McpServerRow::name, String.CASE_INSENSITIVE_ORDER).thenComparing(McpServerRow::id));
+        return attachMcpServerProjectIds(rows);
     }
 
     List<McpServerRow> listEnabledMcpServersByProject(long projectId) {
@@ -434,8 +466,9 @@ public class AppStateRepository {
                 FROM mcp_servers ms
                 JOIN project_mcp_servers pms ON pms.mcp_server_id = ms.id
                 WHERE pms.project_id = :projectId AND ms.enabled = TRUE
-                ORDER BY ms.name ASC, ms.id ASC
-                """, new MapSqlParameterSource("projectId", projectId), this::mapMcpServer));
+                ORDER BY ms.id ASC
+                """, new MapSqlParameterSource("projectId", projectId), this::mapMcpServer).stream()
+                .sorted(java.util.Comparator.comparing(McpServerRow::name, String.CASE_INSENSITIVE_ORDER).thenComparing(McpServerRow::id)).toList());
     }
 
     private McpServerRow attachMcpServerProjectIds(McpServerRow row) {
@@ -559,8 +592,8 @@ public class AppStateRepository {
                 VALUES (:projectId, :name, :normalizedPath, :position, :createdAt, :lastOpenedAt)
                 """, params -> params
                 .addValue("projectId", projectId)
-                .addValue("name", name)
-                .addValue("normalizedPath", normalizedPath)
+                .addValue("name", enc("workspaces", "name", name))
+                .addValue("normalizedPath", enc("workspaces", "normalized_path", normalizedPath))
                 .addValue("position", position)
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("lastOpenedAt", Timestamp.from(now)));
@@ -591,8 +624,8 @@ public class AppStateRepository {
                 WHERE s.id = :id
                 """, new MapSqlParameterSource("id", sessionId), (rs, rowNum) -> new SessionUsageContext(
                 rs.getString("session_usage_key"), rs.getLong("session_id"), rs.getLong("workspace_id"), rs.getLong("project_id"),
-                rs.getString("session_name"), rs.getString("workspace_name"), rs.getString("project_name"),
-                rs.getString("workspace_path"), rs.getString("project_path")));
+                dec("sessions", "name", rs.getString("session_name")), dec("workspaces", "name", rs.getString("workspace_name")), dec("projects", "name", rs.getString("project_name")),
+                dec("workspaces", "normalized_path", rs.getString("workspace_path")), dec("projects", "normalized_path", rs.getString("project_path"))));
     }
 
     Optional<LifecycleHookContextRow> findLifecycleHookContext(long sessionId) {
@@ -604,8 +637,8 @@ public class AppStateRepository {
                 JOIN projects p ON p.id = w.project_id
                 WHERE s.id = :id
                 """, new MapSqlParameterSource("id", sessionId), (rs, rowNum) -> new LifecycleHookContextRow(
-                rs.getLong("session_id"), rs.getString("project_name"), rs.getString("workspace_name"),
-                rs.getString("session_name"), rs.getString("environment_variables")));
+                rs.getLong("session_id"), dec("projects", "name", rs.getString("project_name")), dec("workspaces", "name", rs.getString("workspace_name")),
+                dec("sessions", "name", rs.getString("session_name")), dec("projects", "environment_variables", rs.getString("environment_variables"))));
     }
 
     SessionRow findSession(long sessionId) {
@@ -623,7 +656,8 @@ public class AppStateRepository {
 
     void updateSessionDraft(long sessionId, String draft) {
         jdbc.update("UPDATE sessions SET chat_draft = :draft WHERE id = :sessionId",
-                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("draft", draft == null ? "" : draft));
+                new MapSqlParameterSource().addValue("sessionId", sessionId)
+                        .addValue("draft", enc("sessions", "chat_draft", draft == null ? "" : draft)));
     }
 
     void clearSessionDraft(long sessionId) {
@@ -790,10 +824,11 @@ public class AppStateRepository {
                        Long parentAssistantMessageId) {
         return insertAndReturnId("""
                 INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, chat_draft, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, session_usage_key, created_at, last_opened_at)
-                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, '', :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :sessionUsageKey, :createdAt, :lastOpenedAt)
+                VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :chatDraft, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :sessionUsageKey, :createdAt, :lastOpenedAt)
                 """, params -> params
                 .addValue("workspaceId", workspaceId)
-                .addValue("name", name)
+                .addValue("chatDraft", enc("sessions", "chat_draft", ""))
+                .addValue("name", enc("sessions", "name", name))
                 .addValue("position", position)
                 .addValue("reviewPanelOpen", reviewPanelOpen)
                 .addValue("reviewSource", reviewSource.name())
@@ -801,8 +836,8 @@ public class AppStateRepository {
                 .addValue("hidden", hidden)
                 .addValue("parentSessionId", parentSessionId)
                 .addValue("parentToolCallId", parentToolCallId)
-                .addValue("subagentAgentId", subagentAgentId)
-                .addValue("subagentAgentName", subagentAgentName)
+                .addValue("subagentAgentId", enc("sessions", "subagent_agent_id", subagentAgentId))
+                .addValue("subagentAgentName", enc("sessions", "subagent_agent_name", subagentAgentName))
                 .addValue("parentAssistantMessageId", parentAssistantMessageId)
                 .addValue("sessionUsageKey", UUID.randomUUID().toString())
                 .addValue("createdAt", Timestamp.from(now))
@@ -836,25 +871,25 @@ public class AppStateRepository {
     void updateSessionReviewState(long sessionId, boolean reviewPanelOpen, Persistence.ReviewSource reviewSource, Long selectedChangedFileId) {
         jdbc.update("UPDATE sessions SET review_panel_open = :reviewPanelOpen, review_source = :reviewSource, selected_changed_file_id = :selectedChangedFileId WHERE id = :sessionId",
                 new MapSqlParameterSource()
-                        .addValue("sessionId", sessionId)
-                        .addValue("reviewPanelOpen", reviewPanelOpen)
-                        .addValue("reviewSource", reviewSource.name())
-                        .addValue("selectedChangedFileId", selectedChangedFileId));
+                       .addValue("sessionId", sessionId)
+                       .addValue("reviewPanelOpen", reviewPanelOpen)
+                       .addValue("reviewSource", reviewSource.name())
+                       .addValue("selectedChangedFileId", selectedChangedFileId));
     }
 
     void updateSessionSelectedChangedFile(long sessionId, Long selectedChangedFileId) {
         jdbc.update("UPDATE sessions SET review_source = :reviewSource, selected_changed_file_id = :selectedChangedFileId WHERE id = :sessionId",
                 new MapSqlParameterSource()
-                        .addValue("sessionId", sessionId)
-                        .addValue("reviewSource", Persistence.ReviewSource.SESSION.name())
-                        .addValue("selectedChangedFileId", selectedChangedFileId));
+                       .addValue("sessionId", sessionId)
+                       .addValue("reviewSource", Persistence.ReviewSource.SESSION.name())
+                       .addValue("selectedChangedFileId", selectedChangedFileId));
     }
 
     void updateSessionReviewSource(long sessionId, Persistence.ReviewSource reviewSource) {
         jdbc.update("UPDATE sessions SET review_source = :reviewSource WHERE id = :sessionId",
                 new MapSqlParameterSource()
-                        .addValue("sessionId", sessionId)
-                        .addValue("reviewSource", reviewSource.name()));
+                       .addValue("sessionId", sessionId)
+                       .addValue("reviewSource", reviewSource.name()));
     }
 
     ConversationMessageRow findMessageBySessionAndPublicId(long sessionId, String publicId) {
@@ -903,16 +938,16 @@ public class AppStateRepository {
                 .addValue("role", role)
                 .addValue("turnId", turnId)
                 .addValue("sequence", sequence)
-                .addValue("content", content)
+                .addValue("content", enc("conversation_messages", "content", content))
                 .addValue("toolCallId", toolCallId)
-                .addValue("toolCallsJson", toolCallsJson)
+                .addValue("toolCallsJson", enc("conversation_messages", "tool_calls_json", toolCallsJson))
                 .addValue("showInChat", showInChat)
                 .addValue("includeInModel", includeInModel)
                 .addValue("pending", pending)
-                .addValue("agentId", agentId)
-                .addValue("agentName", agentName)
-                .addValue("modelId", modelId)
-                .addValue("thinkingLevel", thinkingLevel)
+                .addValue("agentId", enc("conversation_messages", "agent_id", agentId))
+                .addValue("agentName", enc("conversation_messages", "agent_name", agentName))
+                .addValue("modelId", enc("conversation_messages", "model_id", modelId))
+                .addValue("thinkingLevel", enc("conversation_messages", "thinking_level", thinkingLevel))
                 .addValue("compactedThroughTurnId", compactedThroughTurnId)
                 .addValue("completedAt", completedAt == null ? null : Timestamp.from(completedAt))
                 .addValue("createdAt", Timestamp.from(now)));
@@ -920,8 +955,9 @@ public class AppStateRepository {
 
     void updateMessageContentAndPending(long messageId, String content, boolean pending, boolean includeInModel, Instant completedAt) {
         jdbc.update("UPDATE conversation_messages SET content = :content, pending = :pending, include_in_model = :includeInModel, completed_at = :completedAt WHERE id = :messageId",
-                new MapSqlParameterSource().addValue("messageId", messageId).addValue("content", content).addValue("pending", pending).addValue("includeInModel", includeInModel)
-                        .addValue("completedAt", completedAt == null ? null : Timestamp.from(completedAt)));
+                new MapSqlParameterSource().addValue("messageId", messageId)
+                        .addValue("content", enc("conversation_messages", "content", content)).addValue("pending", pending).addValue("includeInModel", includeInModel)
+                       .addValue("completedAt", completedAt == null ? null : Timestamp.from(completedAt)));
     }
 
     void updateConversationMessagesIncludeInModelUpToTurnId(long sessionId, long maxTurnId, boolean includeInModel) {
@@ -930,14 +966,15 @@ public class AppStateRepository {
         }
         jdbc.update("UPDATE conversation_messages SET include_in_model = :includeInModel WHERE session_id = :sessionId AND turn_id <= :maxTurnId",
                 new MapSqlParameterSource()
-                        .addValue("sessionId", sessionId)
-                        .addValue("maxTurnId", maxTurnId)
-                        .addValue("includeInModel", includeInModel));
+                       .addValue("sessionId", sessionId)
+                       .addValue("maxTurnId", maxTurnId)
+                       .addValue("includeInModel", includeInModel));
     }
 
     void updateMessageToolCalls(long messageId, String toolCallsJson) {
         jdbc.update("UPDATE conversation_messages SET tool_calls_json = :toolCallsJson WHERE id = :messageId",
-                new MapSqlParameterSource().addValue("messageId", messageId).addValue("toolCallsJson", toolCallsJson));
+                new MapSqlParameterSource().addValue("messageId", messageId)
+                        .addValue("toolCallsJson", enc("conversation_messages", "tool_calls_json", toolCallsJson)));
     }
 
     long nextToolCallTraceSequence(long sessionId) {
@@ -975,7 +1012,7 @@ public class AppStateRepository {
                 .addValue("sequence", sequence)
                 .addValue("toolCallId", toolCallId)
                 .addValue("toolName", toolName)
-                .addValue("argsJson", argsJson)
+                .addValue("argsJson", enc("tool_call_traces", "args_json", argsJson))
                 .addValue("createdAt", Timestamp.from(now)));
     }
 
@@ -991,9 +1028,9 @@ public class AppStateRepository {
                 """, new MapSqlParameterSource()
                 .addValue("toolCallTraceId", toolCallTraceId)
                 .addValue("success", success)
-                .addValue("argsJson", argsJson)
-                .addValue("textSummary", textSummary)
-                .addValue("machineSummaryJson", machineSummaryJson)
+                .addValue("argsJson", enc("tool_call_traces", "args_json", argsJson))
+                .addValue("textSummary", enc("tool_call_traces", "text_summary", textSummary))
+                .addValue("machineSummaryJson", enc("tool_call_traces", "machine_summary_json", machineSummaryJson))
                 .addValue("completedAt", Timestamp.from(completedAt)));
     }
 
@@ -1008,9 +1045,9 @@ public class AppStateRepository {
                 .addValue("toolCallId", toolCallId)
                 .addValue("toolName", toolName)
                 .addValue("success", success)
-                .addValue("argsJson", argsJson)
-                .addValue("textSummary", textSummary)
-                .addValue("machineSummaryJson", machineSummaryJson)
+                .addValue("argsJson", enc("tool_call_traces", "args_json", argsJson))
+                .addValue("textSummary", enc("tool_call_traces", "text_summary", textSummary))
+                .addValue("machineSummaryJson", enc("tool_call_traces", "machine_summary_json", machineSummaryJson))
                 .addValue("completedAt", completedAt == null ? null : Timestamp.from(completedAt))
                 .addValue("createdAt", Timestamp.from(now)));
     }
@@ -1035,29 +1072,38 @@ public class AppStateRepository {
 
     List<TaskCallProjectionRow> listTaskCallProjectionsBySession(long sessionId) {
         return jdbc.query("""
-                SELECT t.id, t.session_id, t.assistant_message_id, t.sequence, t.tool_call_id, t.success, t.completed_at,
-                       CASE WHEN json_valid(t.args_json) THEN
-                           substr(COALESCE(NULLIF(json_extract(t.args_json, '$.requestSummary'), ''), json_extract(t.args_json, '$.task')), 1, 500)
-                       END AS request_summary,
-                       child.id AS subagent_session_id, child.subagent_agent_id, child.subagent_agent_name,
-                       EXISTS(
-                           SELECT 1
-                           FROM conversation_messages child_message
-                           WHERE child_message.session_id = child.id AND child_message.role = 'assistant'
-                             AND child_message.show_in_chat = TRUE
-                             AND child_message.sequence = (SELECT MAX(latest.sequence) FROM conversation_messages latest WHERE latest.session_id = child.id AND latest.role = 'assistant' AND latest.show_in_chat = TRUE)
-                             AND child_message.pending = TRUE
-                       ) AS subagent_in_progress
+                SELECT t.id, t.session_id, t.assistant_message_id, t.sequence, t.tool_call_id, t.success,
+                       t.args_json, t.completed_at, child.id AS subagent_session_id,
+                       child.subagent_agent_id, child.subagent_agent_name,
+                       EXISTS(SELECT 1 FROM conversation_messages child_message
+                              WHERE child_message.session_id = child.id AND child_message.role = 'assistant'
+                                AND child_message.show_in_chat = TRUE
+                                AND child_message.sequence = (SELECT MAX(latest.sequence) FROM conversation_messages latest WHERE latest.session_id = child.id AND latest.role = 'assistant' AND latest.show_in_chat = TRUE)
+                                AND child_message.pending = TRUE) AS subagent_in_progress
                 FROM tool_call_traces t
                 LEFT JOIN sessions child ON child.parent_session_id = t.session_id
                     AND child.parent_tool_call_id = t.tool_call_id AND child.hidden = TRUE
                 WHERE t.session_id = :sessionId AND t.tool_name = 'task'
                 ORDER BY t.sequence ASC
-                """, new MapSqlParameterSource("sessionId", sessionId), (rs, rowNum) -> new TaskCallProjectionRow(
-                rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"),
-                rs.getString("tool_call_id"), nullableBoolean(rs, "success"), timestampToInstant(rs.getTimestamp("completed_at")),
-                rs.getString("request_summary"), nullableLong(rs, "subagent_session_id"), rs.getString("subagent_agent_id"),
-                rs.getString("subagent_agent_name"), rs.getBoolean("subagent_in_progress")));
+                """, new MapSqlParameterSource("sessionId", sessionId), (rs, rowNum) -> {
+            String args = dec("tool_call_traces", "args_json", rs.getString("args_json"));
+            String summary = null;
+            if (args != null) {
+                try {
+                    JsonNode json = objectMapper.readTree(args);
+                    JsonNode value = json.path("requestSummary");
+                    if (value.isMissingNode() || value.isNull() || value.asText().isEmpty()) value = json.path("task");
+                    if (!value.isMissingNode() && !value.isNull()) summary = value.asText().substring(0, Math.min(500, value.asText().length()));
+                } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                    // SQLite json_valid previously made malformed arguments project as no summary.
+                    summary = null;
+                }
+            }
+            return new TaskCallProjectionRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"),
+                    rs.getString("tool_call_id"), nullableBoolean(rs, "success"), timestampToInstant(rs.getTimestamp("completed_at")), summary,
+                    nullableLong(rs, "subagent_session_id"), dec("sessions", "subagent_agent_id", rs.getString("subagent_agent_id")),
+                    dec("sessions", "subagent_agent_name", rs.getString("subagent_agent_name")), rs.getBoolean("subagent_in_progress"));
+        });
     }
 
     Optional<TaskCallProjectionRow> findTaskCallProjection(long sessionId, String toolCallId) {
@@ -1098,7 +1144,7 @@ public class AppStateRepository {
                 WHERE assistant_message_id = :assistantMessageId AND completed_at IS NULL
                 """, new MapSqlParameterSource()
                 .addValue("assistantMessageId", assistantMessageId)
-                .addValue("textSummary", textSummary)
+                .addValue("textSummary", enc("tool_call_traces", "text_summary", textSummary))
                 .addValue("completedAt", Timestamp.from(completedAt)));
     }
 
@@ -1128,8 +1174,8 @@ public class AppStateRepository {
                 VALUES (:sessionId, :path, :diff, :position, :createdAt)
                 """, params -> params
                 .addValue("sessionId", sessionId)
-                .addValue("path", path)
-                .addValue("diff", diff)
+                .addValue("path", enc("changed_files", "path", path))
+                .addValue("diff", enc("changed_files", "diff", diff))
                 .addValue("position", position)
                 .addValue("createdAt", Timestamp.from(now)));
     }
@@ -1220,48 +1266,48 @@ public class AppStateRepository {
     }
 
     private ProjectRow mapProject(ResultSet rs, int rowNum) throws SQLException {
-        return new ProjectRow(rs.getLong("id"), rs.getString("name"), rs.getString("normalized_path"), rs.getLong("display_order"),
+        return new ProjectRow(rs.getLong("id"), dec("projects", "name", rs.getString("name")), dec("projects", "normalized_path", rs.getString("normalized_path")), rs.getLong("display_order"),
                 timestampToInstant(rs.getTimestamp("closed_at")), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")),
-                rs.getString("workspace_init_commands"), rs.getString("environment_variables"));
+                dec("projects", "workspace_init_commands", rs.getString("workspace_init_commands")), dec("projects", "environment_variables", rs.getString("environment_variables")), dec("projects", "command_environment_allowlist", rs.getString("command_environment_allowlist")));
     }
 
     private WorkspaceRow mapWorkspace(ResultSet rs, int rowNum) throws SQLException {
-        return new WorkspaceRow(rs.getLong("id"), rs.getLong("project_id"), rs.getString("name"), rs.getString("normalized_path"), rs.getLong("position"),
+        return new WorkspaceRow(rs.getLong("id"), rs.getLong("project_id"), dec("workspaces", "name", rs.getString("name")), dec("workspaces", "normalized_path", rs.getString("normalized_path")), rs.getLong("position"),
                 timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")), rs.getBoolean("unread"), rs.getBoolean("in_progress"));
     }
 
     private McpServerRow mapMcpServer(ResultSet rs, int rowNum) throws SQLException {
-        return new McpServerRow(rs.getLong("id"), rs.getString("name"), rs.getString("url"), rs.getBoolean("enabled"), rs.getString("headers_json"), timestampToInstant(rs.getTimestamp("created_at")), List.of());
+        return new McpServerRow(rs.getLong("id"), dec("mcp_servers", "name", rs.getString("name")), dec("mcp_servers", "url", rs.getString("url")), rs.getBoolean("enabled"), dec("mcp_servers", "headers_json", rs.getString("headers_json")), timestampToInstant(rs.getTimestamp("created_at")), List.of());
     }
 
     private SessionRow mapSession(ResultSet rs, int rowNum) throws SQLException {
         Long selectedChangedFileId = nullableLong(rs, "selected_changed_file_id");
-        return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), rs.getString("name"), rs.getLong("position"), rs.getBoolean("review_panel_open"),
-                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, rs.getString("chat_draft"), rs.getBoolean("unread"), rs.getBoolean("hidden"),
-                nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"), rs.getString("subagent_agent_id"), rs.getString("subagent_agent_name"),
+        return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"), dec("sessions", "name", rs.getString("name")), rs.getLong("position"), rs.getBoolean("review_panel_open"),
+                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId, dec("sessions", "chat_draft", rs.getString("chat_draft")), rs.getBoolean("unread"), rs.getBoolean("hidden"),
+                nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"), dec("sessions", "subagent_agent_id", rs.getString("subagent_agent_id")), dec("sessions", "subagent_agent_name", rs.getString("subagent_agent_name")),
                 nullableLong(rs, "parent_assistant_message_id"), timestampToInstant(rs.getTimestamp("created_at")), timestampToInstant(rs.getTimestamp("last_opened_at")), rs.getBoolean("in_progress"));
     }
 
     private ConversationMessageRow mapConversationMessage(ResultSet rs, int rowNum) throws SQLException {
         return new ConversationMessageRow(rs.getLong("id"), rs.getLong("session_id"), rs.getString("public_id"), rs.getString("role"), rs.getLong("turn_id"),
-                rs.getLong("sequence"), rs.getString("content"), rs.getString("tool_call_id"), rs.getString("tool_calls_json"), rs.getBoolean("show_in_chat"),
-                rs.getBoolean("include_in_model"), rs.getBoolean("pending"), rs.getString("agent_id"), rs.getString("agent_name"), rs.getString("model_id"),
-                rs.getString("thinking_level"), nullableLong(rs, "compacted_through_turn_id"), timestampToInstant(rs.getTimestamp("completed_at")), timestampToInstant(rs.getTimestamp("created_at")));
+                rs.getLong("sequence"), dec("conversation_messages", "content", rs.getString("content")), rs.getString("tool_call_id"), dec("conversation_messages", "tool_calls_json", rs.getString("tool_calls_json")), rs.getBoolean("show_in_chat"),
+                rs.getBoolean("include_in_model"), rs.getBoolean("pending"), dec("conversation_messages", "agent_id", rs.getString("agent_id")), dec("conversation_messages", "agent_name", rs.getString("agent_name")), dec("conversation_messages", "model_id", rs.getString("model_id")),
+                dec("conversation_messages", "thinking_level", rs.getString("thinking_level")), nullableLong(rs, "compacted_through_turn_id"), timestampToInstant(rs.getTimestamp("completed_at")), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private OpenAiOAuthStateRow mapOpenAiOAuthState(ResultSet rs, int rowNum) throws SQLException {
-        return new OpenAiOAuthStateRow(rs.getString("openai_access_token"), rs.getString("openai_refresh_token"), rs.getString("openai_id_token"),
-                rs.getString("openai_account_id"), timestampToInstant(rs.getTimestamp("openai_expires_at")));
+        return new OpenAiOAuthStateRow(dec("app_state", "openai_access_token", rs.getString("openai_access_token")), dec("app_state", "openai_refresh_token", rs.getString("openai_refresh_token")), dec("app_state", "openai_id_token", rs.getString("openai_id_token")),
+                dec("app_state", "openai_account_id", rs.getString("openai_account_id")), timestampToInstant(rs.getTimestamp("openai_expires_at")));
     }
 
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
         return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"), rs.getString("tool_call_id"),
-                rs.getString("tool_name"), nullableBoolean(rs, "success"), rs.getString("args_json"), rs.getString("text_summary"), rs.getString("machine_summary_json"),
+                rs.getString("tool_name"), nullableBoolean(rs, "success"), dec("tool_call_traces", "args_json", rs.getString("args_json")), dec("tool_call_traces", "text_summary", rs.getString("text_summary")), dec("tool_call_traces", "machine_summary_json", rs.getString("machine_summary_json")),
                 timestampToInstant(rs.getTimestamp("completed_at")), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private ChangedFileRow mapChangedFile(ResultSet rs, int rowNum) throws SQLException {
-        return new ChangedFileRow(rs.getLong("id"), rs.getLong("session_id"), rs.getString("path"), rs.getString("diff"), rs.getLong("position"), timestampToInstant(rs.getTimestamp("created_at")));
+        return new ChangedFileRow(rs.getLong("id"), rs.getLong("session_id"), dec("changed_files", "path", rs.getString("path")), dec("changed_files", "diff", rs.getString("diff")), rs.getLong("position"), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private static Instant timestampToInstant(Timestamp timestamp) {
@@ -1289,7 +1335,8 @@ public class AppStateRepository {
     record WorkspaceAutoGitUpdateStateRow(long workspaceId, boolean failureEpisodeActive, Instant failureStartedAt,
                                           Instant lastSuccessAt) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
-    record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables) {}
+    record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt,
+                      String workspaceInitCommands, String environmentVariables, String commandEnvironmentAllowlist) {}
     record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt, List<Long> exposedProjectIds) {}
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt, Instant lastOpenedAt, boolean unread, boolean inProgress) {}
     record SessionUsageContext(String sessionUsageKey, long sessionId, long workspaceId, long projectId, String sessionName,
