@@ -1,74 +1,75 @@
 package com.judepereira.jupiter.security;
 
+import java.sql.Connection;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@Component
+@Service
 @RequiredArgsConstructor
-public class EncryptionMigrationRunner implements ApplicationRunner {
+public class EncryptionMigrationService {
     static final int BATCH_SIZE = 100;
 
     private static final int CURRENT_FORMAT_VERSION = 1;
     private static final long METADATA_ID = 1L;
     private static final String VERIFIER_AAD = "encryption_metadata.verifier";
     private static final String VERIFIER = "Jupiter encryption verifier v1";
-    private static final List<ColumnDescriptor> COLUMNS = java.util.stream.Stream.of(
+    private static final List<ColumnDescriptor> COLUMNS = Stream.of(
             columns("projects", "name", "normalized_path"),
-            columns("projects", "workspace_init_commands", "environment_variables",
-                    "command_environment_allowlist"),
+            columns("projects", "workspace_init_commands", "environment_variables", "command_environment_allowlist"),
             columns("workspaces", "name", "normalized_path"),
             columns("sessions", "name", "chat_draft", "subagent_agent_id", "subagent_agent_name"),
-            columns("conversation_messages", "content", "tool_calls_json", "agent_id", "agent_name",
-                    "model_id", "thinking_level"),
+            columns("conversation_messages", "content", "tool_calls_json", "agent_id", "agent_name", "model_id", "thinking_level"),
             columns("tool_call_traces", "args_json", "text_summary", "machine_summary_json"),
             columns("changed_files", "path", "diff"),
-            columns("app_state", "openai_access_token", "openai_refresh_token", "openai_id_token",
-                    "openai_account_id", "assistant_completed_hook_script", "assistant_errored_hook_script",
-                    "subagent_completed_hook_script"),
+            columns("app_state", "openai_access_token", "openai_refresh_token", "openai_id_token", "openai_account_id",
+                    "assistant_completed_hook_script", "assistant_errored_hook_script", "subagent_completed_hook_script"),
             columns("mcp_servers", "name", "url", "headers_json"),
-            columns("token_usage_facts", "session_name_snapshot", "workspace_name_snapshot",
-                    "project_name_snapshot", "workspace_path_snapshot", "project_path_snapshot", "response_id",
-                    "response_model_id", "finish_reason", "provider_metadata_json"),
-            columns("token_usage_hourly", "session_name_snapshot", "workspace_name_snapshot",
-                    "project_name_snapshot", "workspace_path_snapshot", "project_path_snapshot"))
+            columns("token_usage_facts", "session_name_snapshot", "workspace_name_snapshot", "project_name_snapshot",
+                    "workspace_path_snapshot", "project_path_snapshot", "response_id", "response_model_id", "finish_reason",
+                    "provider_metadata_json"),
+            columns("token_usage_hourly", "session_name_snapshot", "workspace_name_snapshot", "project_name_snapshot",
+                    "workspace_path_snapshot", "project_path_snapshot"))
             .flatMap(List::stream)
             .toList();
 
-    private final JdbcTemplate jdbc;
-    private final TransactionTemplate transactions;
     private final TextEncryptor crypto;
 
-    private static List<ColumnDescriptor> columns(String table, String... names) {
-        return java.util.Arrays.stream(names)
-                .map(name -> new ColumnDescriptor(table, name))
-                .toList();
-    }
+    public void run(Connection connection) {
+        SingleConnectionDataSource dataSource = new SingleConnectionDataSource(connection, true);
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
-    @Override
-    public void run(ApplicationArguments args) {
-        boolean complete = executeWithBusyRetry(this::initializeVerifier);
+        boolean complete = executeWithBusyRetry(() -> initializeVerifier(jdbc, transactions));
         if (complete) {
             return;
         }
+
         for (ColumnDescriptor descriptor : COLUMNS) {
-            migrate(descriptor);
+            migrate(descriptor, jdbc, transactions);
         }
-        executeWithBusyRetry(this::markComplete);
+        executeWithBusyRetry(() -> markComplete(jdbc, transactions));
     }
 
-    private boolean initializeVerifier() {
+    private static List<ColumnDescriptor> columns(String table, String... names) {
+        return Arrays.stream(names).map(name -> new ColumnDescriptor(table, name)).toList();
+    }
+
+    private boolean initializeVerifier(JdbcTemplate jdbc, TransactionTemplate transactions) {
         return transactions.execute(status -> {
             List<Map<String, Object>> rows = jdbc.queryForList(
-                    "SELECT verifier, format_version, migration_complete FROM encryption_metadata WHERE id = ?", METADATA_ID);
+                    "SELECT verifier, format_version, migration_complete FROM encryption_metadata WHERE id = ?",
+                    METADATA_ID);
             if (rows.isEmpty()) {
                 jdbc.update("INSERT INTO encryption_metadata (id, verifier, format_version) VALUES (?, ?, ?)",
                         METADATA_ID, crypto.encrypt(VERIFIER, VERIFIER_AAD), CURRENT_FORMAT_VERSION);
@@ -91,17 +92,18 @@ public class EncryptionMigrationRunner implements ApplicationRunner {
         });
     }
 
-    private Void markComplete() {
-        transactions.executeWithoutResult(status -> jdbc.update(
-                "UPDATE encryption_metadata SET migration_complete = 1 WHERE id = ?", METADATA_ID));
+    private Void markComplete(JdbcTemplate jdbc, TransactionTemplate transactions) {
+        transactions.executeWithoutResult(status ->
+                jdbc.update("UPDATE encryption_metadata SET migration_complete = 1 WHERE id = ?", METADATA_ID));
         return null;
     }
 
-    private void migrate(ColumnDescriptor descriptor) {
+    private void migrate(ColumnDescriptor descriptor, JdbcTemplate jdbc, TransactionTemplate transactions) {
         long lastId = 0;
         while (true) {
             long position = lastId;
-            BatchResult result = executeWithBusyRetry(() -> migrateBatch(descriptor, position));
+            BatchResult result = executeWithBusyRetry(
+                    () -> migrateBatch(descriptor, position, jdbc, transactions));
             if (result.rows() == 0) {
                 return;
             }
@@ -109,26 +111,28 @@ public class EncryptionMigrationRunner implements ApplicationRunner {
         }
     }
 
-    private BatchResult migrateBatch(ColumnDescriptor descriptor, long lastId) {
+    private BatchResult migrateBatch(ColumnDescriptor descriptor, long lastId, JdbcTemplate jdbc,
+                                     TransactionTemplate transactions) {
         return transactions.execute(status -> {
             String sql = "SELECT id, \"" + descriptor.column() + "\" AS value FROM \""
                     + descriptor.table() + "\" WHERE id > ? ORDER BY id LIMIT ?";
             List<Map<String, Object>> rows = jdbc.queryForList(sql, lastId, BATCH_SIZE);
-            long newLastId = lastId;
+            long newestId = lastId;
             for (Map<String, Object> row : rows) {
                 long id = ((Number) row.get("id")).longValue();
-                newLastId = id;
-                migrateValue(descriptor, id, row.get("value"));
+                newestId = id;
+                migrateValue(descriptor, id, row.get("value"), jdbc);
             }
-            return new BatchResult(rows.size(), newLastId);
+            return new BatchResult(rows.size(), newestId);
         });
     }
 
-    private void migrateValue(ColumnDescriptor descriptor, long id, Object rawValue) {
-        if (rawValue == null) {
+    private void migrateValue(ColumnDescriptor descriptor, long id, Object raw, JdbcTemplate jdbc) {
+        if (raw == null) {
             return;
         }
-        String value = (String) rawValue;
+
+        String value = (String) raw;
         String aad = descriptor.table() + "." + descriptor.column();
         String plaintext;
         try {
@@ -140,17 +144,18 @@ public class EncryptionMigrationRunner implements ApplicationRunner {
         try {
             if (!TextEncryptor.isEncrypted(value)) {
                 jdbc.update("UPDATE \"" + descriptor.table() + "\" SET \"" + descriptor.column()
-                        + "\" = ? WHERE id = ?", crypto.encrypt(plaintext, aad), id);
+                                + "\" = ? WHERE id = ?",
+                        crypto.encrypt(plaintext, aad), id);
             }
             if (descriptor.isProjectPath()) {
-                updateProjectBlindIndex(id, plaintext);
+                updateProjectBlindIndex(id, plaintext, jdbc);
             }
         } catch (DataAccessException | TextEncryptor.EncryptionException exception) {
             throw applicationDataError(descriptor, id, exception);
         }
     }
 
-    private void updateProjectBlindIndex(long id, String plaintext) {
+    private void updateProjectBlindIndex(long id, String plaintext, JdbcTemplate jdbc) {
         String index = crypto.blindIndex(plaintext, "projects.normalized_path");
         Map<String, Object> row = jdbc.queryForMap(
                 "SELECT normalized_path_blind_index FROM projects WHERE id = ?", id);

@@ -29,8 +29,7 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import org.flywaydb.core.Flyway;
-import org.springframework.boot.DefaultApplicationArguments;
-import com.judepereira.jupiter.security.EncryptionMigrationRunner;
+import com.judepereira.jupiter.security.EncryptionMigrationService;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -86,11 +85,11 @@ public final class TestAppStateSupport {
         Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
         SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
         var jdbc = new org.springframework.jdbc.core.JdbcTemplate(dataSource);
-        try {
-            new EncryptionMigrationRunner(jdbc, new org.springframework.transaction.support.TransactionTemplate(
-                    new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource)),
-                    TestEncryptionSupport.encryptor()).run(new DefaultApplicationArguments());
-        } catch (Exception e) { throw new IllegalStateException("Failed to initialize encryption", e); }
+        try (var connection = dataSource.getConnection()) {
+            new EncryptionMigrationService(TestEncryptionSupport.encryptor()).run(connection);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to initialize encryption", e);
+        }
 
         AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource),
                 TestEncryptionSupport.encryptor(), new ObjectMapper());

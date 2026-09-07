@@ -2,18 +2,15 @@ package com.judepereira.jupiter.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.security.EncryptionKey;
-import com.judepereira.jupiter.security.EncryptionMigrationRunner;
+import com.judepereira.jupiter.security.EncryptionMigrationCallback;
+import com.judepereira.jupiter.security.EncryptionMigrationService;
 import com.judepereira.jupiter.security.TextEncryptor;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.DefaultApplicationArguments;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
 import java.nio.file.Files;
@@ -25,6 +22,26 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EncryptionMigrationIntegrationTests {
     private static final String KEY = TestEncryptionSupport.KEY;
+
+    @Test
+    void callbackMigratesRowsAfterV26AndCompletesMigration() throws Exception {
+        var dataSource = SQLiteTestSupport.fileBackedDataSource(
+                Files.createTempDirectory("jupiter-encryption-callback-").resolve("db.sqlite"));
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration")
+                .target("25").load().migrate();
+        var jdbc = new JdbcTemplate(dataSource);
+        jdbc.update("INSERT INTO projects (id,name,normalized_path,display_order) VALUES (1,?,?,1)",
+                "callback secret", "/tmp/callback-secret");
+
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration")
+                .callbacks(new EncryptionMigrationCallback(new EncryptionMigrationService(TestEncryptionSupport.encryptor())))
+                .load().migrate();
+
+        assertThat(jdbc.queryForObject("SELECT migration_complete FROM encryption_metadata WHERE id=1", Integer.class))
+                .isEqualTo(1);
+        assertEncryptedAndHidden(jdbc, "projects", "name", "callback secret");
+        assertEncryptedAndHidden(jdbc, "projects", "normalized_path", "/tmp/callback-secret");
+    }
 
     @Test
     void convertsLegacyRowsAndRepositoryReadsPlaintext() throws Exception {
@@ -83,7 +100,10 @@ class EncryptionMigrationIntegrationTests {
         assertThat(db.jdbc().queryForObject("SELECT name FROM projects WHERE id=1", String.class)).isEqualTo(ciphertext);
 
         TextEncryptor wrong = new TextEncryptor(EncryptionKey.fromBase64(Base64.getEncoder().encodeToString(new byte[32])));
-        assertThatThrownBy(() -> runner(db, wrong).run(new DefaultApplicationArguments()))
+        assertThatThrownBy(() -> {
+            try (var connection = db.dataSource().getConnection()) { migrationService(wrong).run(connection); }
+            catch (java.sql.SQLException e) { throw new IllegalStateException(e); }
+        })
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("JUPITER_ENCRYPTION_KEY does not match this database");
     }
@@ -109,10 +129,13 @@ class EncryptionMigrationIntegrationTests {
         return new TestDatabase(dataSource, new JdbcTemplate(dataSource));
     }
 
-    private static void run(TestDatabase db) { runner(db, TestEncryptionSupport.encryptor()).run(new DefaultApplicationArguments()); }
+    private static void run(TestDatabase db) {
+        try (var connection = db.dataSource().getConnection()) { migrationService(TestEncryptionSupport.encryptor()).run(connection); }
+        catch (java.sql.SQLException e) { throw new IllegalStateException(e); }
+    }
 
-    private static EncryptionMigrationRunner runner(TestDatabase db, TextEncryptor crypto) {
-        return new EncryptionMigrationRunner(db.jdbc(), new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())), crypto);
+    private static EncryptionMigrationService migrationService(TextEncryptor crypto) {
+        return new EncryptionMigrationService(crypto);
     }
 
     private static void assertEncryptedAndHidden(JdbcTemplate jdbc, String table, String column, String plaintext) {
