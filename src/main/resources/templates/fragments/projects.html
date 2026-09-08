@@ -221,6 +221,41 @@
     </section>
 </th:block>
 
+<th:block th:fragment="settingsCommands" th:with="commands=${customCommands == null ? T(java.util.List).of() : customCommands}, submitted=${submittedCommand}, submittedForAdd=${submittedCommandOperation == 'create' ? submittedCommand : null}">
+    <div id="settings-commands-content">
+        <div th:if="${commandSuccess != null}" class="alert alert-success" role="status" th:text="${commandSuccess}"></div>
+        <div th:if="${commandError != null}" class="alert alert-danger" role="alert" th:text="${commandError}"></div>
+        <section class="settings-section settings-command-section">
+            <div class="settings-section-header"><div><h5>Custom commands</h5><p class="settings-help-text">Commands discovered in your custom command folder. IDs use lower-case letters, numbers, hyphens, and underscores.</p></div></div>
+            <form class="settings-command-form settings-command-add" hx-post="/ui/settings/commands/create" hx-target="#settings-commands-content" hx-swap="outerHTML">
+                <h6>Add command</h6>
+                <div class="settings-command-grid">
+                    <label>ID<input name="id" required pattern="[a-z0-9][a-z0-9_-]*" th:value="${submittedForAdd == null ? '' : submittedForAdd.id}"></label>
+                    <label>Name<input name="name" required th:value="${submittedForAdd == null ? '' : submittedForAdd.name}"></label>
+                    <label>Type<select name="type" required><option value="prompt" th:selected="${submittedForAdd != null and submittedForAdd.type != null and submittedForAdd.type.name() == 'PROMPT'}">Prompt</option><option value="script" th:selected="${submittedForAdd != null and submittedForAdd.type != null and submittedForAdd.type.name() == 'SCRIPT'}">Script</option></select></label>
+                    <label>Description<input name="description" th:value="${submittedForAdd == null ? '' : submittedForAdd.description}"></label>
+                    <label>Working directory<input name="workingDir" th:value="${submittedForAdd == null ? '' : submittedForAdd.workingDir}"></label>
+                    <label>Timeout (seconds)<input name="timeoutSeconds" type="number" min="1" th:value="${submittedForAdd == null or submittedForAdd.timeoutSeconds == null ? '' : submittedForAdd.timeoutSeconds}"></label>
+                </div>
+                <label>Body<textarea name="body" rows="5" required th:text="${submittedForAdd == null ? '' : submittedForAdd.body}"></textarea></label>
+                <button class="btn btn-primary" type="submit">Add command</button>
+            </form>
+            <div th:if="${#lists.isEmpty(commands)}" class="settings-command-empty">No custom commands found.</div>
+            <div class="settings-command-list">
+                <article th:each="command : ${commands}" class="settings-command-card" th:with="editSubmitted=${submittedCommandOperation == 'update' and submittedCommandOriginalId == command.id ? submittedCommand : null}, editCommand=${editSubmitted == null ? command : editSubmitted}">
+                    <div class="settings-command-card-header"><div><strong th:text="${command.name}"></strong><code th:text="${command.id}"></code></div><span class="badge text-bg-secondary" th:text="${command.type}"></span></div>
+                    <form class="settings-command-form" th:attr="hx-post=@{/ui/settings/commands/{id}/update(id=${command.id})}, hx-target='#settings-commands-content', hx-swap='outerHTML'">
+                        <input type="hidden" name="originalId" th:value="${command.id}">
+                        <div class="settings-command-grid"><label>ID<input name="id" required pattern="[a-z0-9][a-z0-9_-]*" th:value="${editCommand.id}"></label><label>Name<input name="name" required th:value="${editCommand.name}"></label><label>Type<select name="type"><option value="prompt" th:selected="${editCommand.type != null and editCommand.type.name() == 'PROMPT'}">Prompt</option><option value="script" th:selected="${editCommand.type != null and editCommand.type.name() == 'SCRIPT'}">Script</option></select></label><label>Description<input name="description" th:value="${editCommand.description}"></label><label>Working directory<input name="workingDir" th:value="${editCommand.workingDir}"></label><label>Timeout (seconds)<input name="timeoutSeconds" type="number" min="1" th:value="${editCommand.timeoutSeconds}"></label></div>
+                        <label>Body<textarea name="body" rows="5" required th:text="${editCommand.body}"></textarea></label>
+                        <div class="settings-command-actions"><button class="btn btn-primary btn-sm" type="submit">Save changes</button><button class="btn btn-outline-danger btn-sm" type="submit" th:attr="hx-post=@{/ui/settings/commands/{id}/delete(id=${command.id})}, hx-confirm='Delete this custom command?'">Delete</button></div>
+                    </form>
+                </article>
+            </div>
+        </section>
+    </div>
+</th:block>
+
 <th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, commandEnvironmentAllowlistValue=${activeProject == null or activeProject.commandEnvironmentAllowlist == null ? '' : activeProject.commandEnvironmentAllowlist}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
     <div id="settings-modal" class="project-modal settings-modal">
         <div class="project-modal-backdrop"
@@ -242,6 +277,7 @@
                         <button class="nav-link" id="settings-mcp-servers-tab" data-bs-toggle="pill" data-bs-target="#settings-mcp-servers" type="button" role="tab" aria-controls="settings-mcp-servers" aria-selected="false">MCP Servers</button>
                         <button class="nav-link" id="settings-hooks-tab" data-bs-toggle="pill" data-bs-target="#settings-hooks" type="button" role="tab" aria-controls="settings-hooks" th:attr="aria-selected=${activeProject == null ? 'true' : 'false'}" th:classappend="${activeProject == null ? ' active' : ''}">Hooks</button>
                         <button class="nav-link" id="settings-model-providers-tab" data-bs-toggle="pill" data-bs-target="#settings-model-providers" type="button" role="tab" aria-controls="settings-model-providers" aria-selected="false">Model Providers</button>
+                        <button class="nav-link" id="settings-commands-tab" data-bs-toggle="pill" data-bs-target="#settings-commands" type="button" role="tab" aria-controls="settings-commands" aria-selected="false">Commands</button>
                         <button class="nav-link" id="settings-usage-tab" data-bs-toggle="pill" data-bs-target="#settings-usage" type="button" role="tab" aria-controls="settings-usage" aria-selected="false" data-settings-usage-tab>Usage</button>
                         <button class="nav-link" id="settings-help-tab" data-bs-toggle="pill" data-bs-target="#settings-help" type="button" role="tab" aria-controls="settings-help" aria-selected="false">Help</button>
                     </nav>
@@ -352,6 +388,8 @@
                                 </section>
                             </form>
                         </div>
+
+                        <div class="tab-pane fade" id="settings-commands" role="tabpanel" aria-labelledby="settings-commands-tab" tabindex="0"><th:block th:replace="~{fragments/projects :: settingsCommands}"></th:block></div>
 
                         <div class="tab-pane fade" id="settings-usage" role="tabpanel" aria-labelledby="settings-usage-tab" tabindex="0">
                             <div data-settings-usage-container hx-get="/ui/settings/usage?range=24h" hx-trigger="settings-usage-load" hx-target="this" hx-swap="innerHTML">

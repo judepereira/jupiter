@@ -5,6 +5,7 @@ import com.judepereira.jupiter.ui.UiController.Project;
 import com.judepereira.jupiter.ui.UiController.Session;
 import com.judepereira.jupiter.ui.UiController.UsagePoint;
 import com.judepereira.jupiter.ui.UiController.Workspace;
+import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.LifecycleHookSettings;
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
@@ -221,6 +222,22 @@ public class ProjectsTemplateRenderTest {
         assertThat(attribute).contains("&quot;", "&lt;");
         assertThat(new ObjectMapper().readTree(HtmlUtils.htmlUnescape(attribute)).get(0).get("modelKey").asText())
                 .isEqualTo("model\"key");
+    }
+
+    @Test
+    public void settingsCommandsRenderEndpointsFieldsAndEscapedCommandContent() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        CommandCatalogService.CommandDefinition command = new CommandCatalogService.CommandDefinition(
+                "unsafe-command", "<Unsafe name>", "<unsafe description>", CommandCatalogService.CommandKind.PROMPT,
+                "Body <script>alert(1)</script> & text", "/tmp", 15);
+        context.setVariable("customCommands", List.of(command));
+        String html = engine.process(new TemplateSpec("fragments/projects", Set.of("settingsCommands"), TemplateMode.HTML, null), context);
+
+        assertThat(html).contains("Custom commands", "unsafe-command", "name=\"id\"", "name=\"description\"", "name=\"body\"",
+                "hx-post=\"/ui/settings/commands/create\"", "/ui/settings/commands/unsafe-command/update", "/ui/settings/commands/unsafe-command/delete");
+        assertThat(html).contains("&lt;Unsafe name&gt;", "&lt;unsafe description&gt;", "Body &lt;script&gt;alert(1)&lt;/script&gt; &amp; text");
+        assertThat(html).doesNotContain("<Unsafe name>", "<unsafe description>", "<script>alert(1)</script>");
     }
 
     @Test
