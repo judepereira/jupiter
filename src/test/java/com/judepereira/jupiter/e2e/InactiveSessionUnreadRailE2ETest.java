@@ -57,12 +57,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
             openProject(page, "Alpha", projectDir);
 
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New session")).click();
-            assertThat(page.locator("#session-name-input")).isVisible();
-            page.locator("#session-name-input").fill("Session #2");
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
-                    () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
+            createSession(page, "Session #2");
 
             assertThat(page.locator(".session-row")).hasCount(2);
             Locator sessionOneRow = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #1"));
@@ -139,12 +134,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             openProject(page, "Alpha", projectDir);
             long sessionOneId = app.context().getBean(AppStateService.class).loadViewData().activeSession().id();
 
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New session")).click();
-            assertThat(page.locator("#session-name-input")).isVisible();
-            page.locator("#session-name-input").fill("Session #2");
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
-                    () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
+            createSession(page, "Session #2");
 
             long sessionTwoId = app.context().getBean(AppStateService.class).loadViewData().activeSession().id();
             JdbcTemplate jdbcTemplate = app.context().getBean(JdbcTemplate.class);

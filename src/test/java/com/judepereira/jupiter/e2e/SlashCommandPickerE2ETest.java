@@ -44,6 +44,14 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
             assertThat(dialog).isVisible();
             assertThat(page.locator(".command-modal-backdrop")).hasCount(0);
             page.locator(".command-modal-item").first().waitFor();
+            page.waitForFunction("""
+                    () => {
+                        const dialog = document.querySelector('[role="dialog"]');
+                        const textarea = document.querySelector('#chat-input');
+                        return dialog && textarea
+                                && dialog.getBoundingClientRect().bottom <= textarea.getBoundingClientRect().top + 4.0;
+                    }
+                    """);
 
             var textareaBox = page.locator("#chat-input").boundingBox();
             var dialogBox = dialog.boundingBox();
@@ -119,6 +127,14 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
             page.locator("#chat-input").fill("/");
             page.getByRole(AriaRole.DIALOG).waitFor();
             page.locator(".command-modal-item").first().waitFor();
+            page.waitForFunction("""
+                    () => {
+                        const dialog = document.querySelector('[role="dialog"]');
+                        const textarea = document.querySelector('#chat-input');
+                        return dialog && textarea
+                                && dialog.getBoundingClientRect().bottom <= textarea.getBoundingClientRect().top + 4.0;
+                    }
+                    """);
 
             Number initialTop = (Number) page.locator("#command-modal").evaluate("element => parseFloat(element.style.top)");
             page.evaluate("""

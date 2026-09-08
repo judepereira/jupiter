@@ -219,6 +219,7 @@ export function initChatComposer() {
                 openCommandPicker(textarea, textarea.value);
             });
             bindHtmxAfterOnLoadListener();
+            textarea.dataset.chatReady = '1';
         }
 
         requestAnimationFrame(() => resizeChatTextarea(textarea));

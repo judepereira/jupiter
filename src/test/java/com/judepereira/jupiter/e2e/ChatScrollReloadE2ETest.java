@@ -63,12 +63,7 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
             page.waitForLoadState();
             assertMixedHistoryAtBottom(page, PRIMARY_MARKER);
 
-            page.getByRole(com.microsoft.playwright.options.AriaRole.BUTTON,
-                    new Page.GetByRoleOptions().setName("New session")).click();
-            assertThat(page.locator("#session-name-input")).isVisible();
-            page.locator("#session-name-input").fill("Secondary");
-            page.waitForResponse(response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
-                    () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
+            createSession(page, "Secondary");
             long secondarySessionId = state.loadViewData().activeSession().id();
             insertMixedChatHistory(jdbc, state, agents, secondarySessionId, SECONDARY_MARKER, "Secondary");
             jdbc.queryForList("SELECT id, tool_name, machine_summary_json FROM tool_call_traces WHERE session_id = ?", secondarySessionId);

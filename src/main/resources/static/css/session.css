@@ -290,6 +290,16 @@
     border: 1px solid #c9d6ea !important;
 }
 
+.session-create-submit {
+    margin-top: 4px;
+    padding: 3px 8px;
+    border: 1px solid #c9d6ea;
+    border-radius: 4px;
+    background: #fff;
+    color: #17325b;
+    font-size: 12px;
+}
+
 .session-create-input::placeholder {
     color: #7a8ca8;
 }

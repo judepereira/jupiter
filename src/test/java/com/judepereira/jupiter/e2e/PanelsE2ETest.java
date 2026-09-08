@@ -5,8 +5,10 @@ import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -124,6 +126,9 @@ class PanelsE2ETest extends E2ETestSupport {
                 page.waitForResponse(
                         response -> response.url().contains("/ui/panel/terminal") && response.status() == 200,
                         () -> page.keyboard().press("Control+`"));
+                page.locator("#bottom-panel.closed").waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.ATTACHED));
+                assertThat(page.locator("#bottom-panel .terminal-closed")).hasCount(1);
+                assertThat(page.locator("#bottom-panel .terminal-shell")).hasCount(0);
                 assertThat(page.locator("#bottom-panel")).not().isVisible();
 
                 assertShortcutCyclesSelect(page, "#chat-agent-select", "Meta+.");
@@ -155,9 +160,13 @@ class PanelsE2ETest extends E2ETestSupport {
     }
 
     private void assertShortcutCyclesSelect(Page page, String selectSelector, String shortcut) {
-        @SuppressWarnings("unchecked")
-        List<String> values = (List<String>) page.locator(selectSelector + " option").evaluateAll("options => options.map(option => option.value)");
-        String currentValue = page.locator(selectSelector).inputValue();
+        Locator select = page.locator(selectSelector);
+        Locator options = select.locator("option");
+        options.first().waitFor(new Locator.WaitForOptions().setState(WaitForSelectorState.ATTACHED));
+        List<String> values = java.util.stream.IntStream.range(0, options.count())
+                .mapToObj(index -> options.nth(index).getAttribute("value"))
+                .toList();
+        String currentValue = select.inputValue();
         int currentIndex = values.indexOf(currentValue);
         assertTrue(currentIndex >= 0, () -> selectSelector + " current value not found in options: " + currentValue + " / " + values);
 

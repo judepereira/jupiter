@@ -219,6 +219,19 @@ abstract class E2ETestSupport {
                 .setFullPage(true));
     }
 
+    protected static void createSession(Page page, String name) {
+        page.getByRole(com.microsoft.playwright.options.AriaRole.BUTTON,
+                new Page.GetByRoleOptions().setName("New session")).click();
+        Locator form = page.locator("[data-session-create-form]");
+        assertThat(form).isVisible();
+        Locator nameInput = form.locator("#session-name-input");
+        assertThat(nameInput).isVisible();
+        nameInput.fill(name);
+        form.getByRole(com.microsoft.playwright.options.AriaRole.BUTTON,
+                new Locator.GetByRoleOptions().setName("Create")).click();
+        assertThat(page.locator(".session-item.active .session-label")).hasText(name);
+    }
+
     protected static Locator addTestBalloon(Page page, RunningApp app, String title, String body) {
         page.waitForFunction("() => window.__systemBalloonSource");
         page.waitForFunction("() => window.__systemBalloonSource.readyState === EventSource.OPEN");
@@ -272,6 +285,36 @@ abstract class E2ETestSupport {
         openProjectThroughModal(page, projectName, projectDir);
     }
 
+    protected static void waitForChatComposerReady(Page page) {
+        page.locator("#chat-input[data-chat-ready='1']").waitFor();
+    }
+
+    private static void installProjectOpenAfterSettleListener(Page page, String token) {
+        page.evaluate("""
+                token => {
+                    const listener = event => {
+                        const xhr = event.detail?.xhr;
+                        const requestUrl = xhr?.responseURL || event.detail?.requestConfig?.path;
+                        if (!requestUrl) {
+                            return;
+                        }
+                        let path;
+                        try {
+                            path = new URL(requestUrl, document.baseURI).pathname;
+                        } catch (_) {
+                            return;
+                        }
+                        if (path !== '/ui/projects/add') {
+                            return;
+                        }
+                        document.documentElement.dataset.e2eProjectOpenSettled = token;
+                        document.removeEventListener('htmx:afterSettle', listener);
+                    };
+                    document.addEventListener('htmx:afterSettle', listener);
+                }
+                """, token);
+    }
+
     protected static void openProjectThroughModal(Page page, String projectName, Path projectDir, Runnable afterDirectorySelected) {
         page.locator(".project-form-field input[name='name']").fill(projectName);
         page.getByRole(com.microsoft.playwright.options.AriaRole.BUTTON, new Page.GetByRoleOptions().setName(projectDir.getFileName().toString())).click();
@@ -279,8 +322,18 @@ abstract class E2ETestSupport {
         assertThat(page.locator("#project-path-input")).hasValue(projectDir.toAbsolutePath().normalize().toString());
         afterDirectorySelected.run();
         page.locator(".project-form-field input[name='name']").fill(projectName);
+        Locator chatContainer = page.locator("#chat-container");
+        String oldChatContainerToken = UUID.randomUUID().toString();
+        String projectOpenSettleToken = UUID.randomUUID().toString();
+        chatContainer.evaluate("(element, token) => element.dataset.e2eChatContainerToken = token", oldChatContainerToken);
+        installProjectOpenAfterSettleListener(page, projectOpenSettleToken);
         page.getByRole(com.microsoft.playwright.options.AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Open").setExact(true)).click();
+        page.locator("#chat-container[data-e2e-chat-container-token='" + oldChatContainerToken + "']")
+                .waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.DETACHED));
+        page.waitForFunction("token => document.documentElement.dataset.e2eProjectOpenSettled === token", projectOpenSettleToken);
+        page.evaluate("token => { if (document.documentElement.dataset.e2eProjectOpenSettled === token) delete document.documentElement.dataset.e2eProjectOpenSettled; }", projectOpenSettleToken);
         assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText(projectName);
+        waitForChatComposerReady(page);
     }
 
     protected static void createImageFile(Path projectDir, String relativePath) throws Exception {

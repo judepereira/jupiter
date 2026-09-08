@@ -38,18 +38,18 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
-
             page.navigate(app.baseUrl());
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
             openProject(page, "Alpha", projectDir);
 
+            int initialMessageCount = page.locator("#chat-messages-list li").count();
             page.locator("#chat-input").fill("hello there");
             page.locator("#chat-input").press("Enter");
 
-            assertThat(page.locator("#chat-messages-list li")).hasCount(3);
-            assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText("hello there");
-            assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
-            var assistantRow = page.locator("#chat-messages-list li").nth(2);
+            assertThat(page.locator("#chat-messages-list li")).hasCount(initialMessageCount + 2);
+            assertThat(page.locator("#chat-messages-list li").nth(initialMessageCount + 0).locator(".chat-message-text")).hasText("hello there");
+            var assistantRow = page.locator("#chat-messages-list li").nth(initialMessageCount + 1);
+            assertThat(assistantRow.locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
             var forkButton = assistantRow.locator(".chat-message-fork-button");
             assertThat(assistantRow.locator(".chat-message-subtitle")).containsText("Fork");
             org.assertj.core.api.Assertions.assertThat(forkButton.getAttribute("hx-post")).isEqualTo("/ui/chat/fork/" + assistantRow.getAttribute("data-id"));
