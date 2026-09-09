@@ -119,14 +119,14 @@ public class TaskToolAndSubagentServiceTests {
         TaskTool taskTool = new TaskTool(definitions, service);
 
         taskTool.execute(Map.of("agentId", "engineer", "requestSummary", "release", "task", "use $release", "expectedOutput", "done"),
-                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool-explicit", AgentMode.AGENT, "tool-explicit", Map.of(), ToolProgressSink.noop(), null));
+                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool-explicit", AgentMode.AGENT, "tool-explicit", Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null));
         assertThat(captured).hasSize(1);
         assertThat(captured.getFirst().getFirst().getContent()).contains("<available_skills>").contains("release workflow");
         assertThat(captured.getFirst()).anySatisfy(message -> assertThat(message.getContent()).contains("FULL RELEASE BODY"));
         assertThat(captured.getFirst()).anySatisfy(message -> assertThat(message.getContent()).contains("Primary task:\nuse $release"));
 
         taskTool.execute(Map.of("agentId", "engineer", "requestSummary", "metadata", "task", "inspect skills", "expectedOutput", "done"),
-                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool-metadata", AgentMode.AGENT, "tool-metadata", Map.of(), ToolProgressSink.noop(), null));
+                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool-metadata", AgentMode.AGENT, "tool-metadata", Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null));
         assertThat(captured).hasSize(2);
         assertThat(captured.get(1).getFirst().getContent()).contains("<available_skills>");
         assertThat(captured.get(1)).noneSatisfy(message -> assertThat(message.getContent()).contains("FULL RELEASE BODY"));
