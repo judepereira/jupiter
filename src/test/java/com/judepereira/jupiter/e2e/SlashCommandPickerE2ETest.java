@@ -3,6 +3,7 @@ package com.judepereira.jupiter.e2e;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.AriaRole;
 import com.microsoft.playwright.options.ViewportSize;
 import org.junit.jupiter.api.Test;
@@ -138,6 +139,50 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
             java.util.Map<String, Object> listenerCounts = (java.util.Map<String, Object>) page.evaluate("() => window.__commandPickerVisualViewportListenerCounts");
             assertThat(listenerCounts.get("resize")).isEqualTo(0);
             assertThat(listenerCounts.get("scroll")).isEqualTo(0);
+        } finally {
+            if (previousHome == null) {
+                System.clearProperty("user.home");
+            } else {
+                System.setProperty("user.home", previousHome);
+            }
+        }
+    }
+
+    @Test
+    void slashCommandPickerRefetchesCatalogAfterItIsReopened(@TempDir Path tempDir) throws Exception {
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        String previousHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile);
+             BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
+            int[] catalogRequests = {0};
+            page.route("**/ui/commands/catalog", route -> {
+                catalogRequests[0]++;
+                String id = catalogRequests[0] == 1 ? "first-command" : "second-command";
+                route.fulfill(new Route.FulfillOptions()
+                        .setContentType("application/json")
+                        .setBody("[{\"id\":\"" + id + "\",\"name\":\"" + id + "\"}]"));
+            });
+
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
+
+            page.locator("#chat-input").fill("/");
+            page.getByRole(AriaRole.DIALOG).waitFor();
+            assertThat(page.locator(".command-modal-item")).containsText("/first-command");
+            page.locator(".command-modal-input").press("Escape");
+
+            page.locator("#chat-input").fill("/");
+            page.getByRole(AriaRole.DIALOG).waitFor();
+            assertThat(page.locator(".command-modal-item")).containsText("/second-command");
+            assertThat(catalogRequests[0]).isEqualTo(2);
         } finally {
             if (previousHome == null) {
                 System.clearProperty("user.home");

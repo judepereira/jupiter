@@ -16,7 +16,7 @@ const commandPickerState = {
     repositionHandler: null,
     visualViewport: null,
     positionFrame: null,
-    fetchPromise: null
+    openRequestId: 0
 };
 
 let resizeChatTextarea = () => {};
@@ -42,6 +42,7 @@ function getCommandModalRoot() {
 
 export function closeCommandPicker() {
     if (!commandPickerState.open) return;
+    commandPickerState.openRequestId++;
     const textarea = commandPickerState.textarea;
     const root = getCommandModalRoot();
     if (root) root.innerHTML = '';
@@ -69,14 +70,14 @@ export function closeCommandPicker() {
 }
 
 function fetchCommandCatalog() {
-    if (!commandPickerState.fetchPromise) {
-        commandPickerState.fetchPromise = fetch('/ui/commands/catalog', {headers: {'HX-Request': 'true'}})
-            .then(response => {
-                if (!response.ok) throw new Error('Failed to load command catalog');
-                return response.json();
-            });
-    }
-    return commandPickerState.fetchPromise;
+    return fetch('/ui/commands/catalog', {
+        cache: 'no-store',
+        headers: {'HX-Request': 'true'}
+    })
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to load command catalog');
+            return response.json();
+        });
 }
 
 function commandMatchesQuery(command, query) {
@@ -239,6 +240,7 @@ function executeCommandAtIndex(index) {
 export function openCommandPicker(textarea, query) {
     const root = getCommandModalRoot();
     if (!root) return;
+    const requestId = ++commandPickerState.openRequestId;
     const value = query || textarea.value || '/';
     commandPickerState.open = true;
     commandPickerState.textarea = textarea;
@@ -328,6 +330,7 @@ export function openCommandPicker(textarea, query) {
 
     fetchCommandCatalog()
         .then(catalog => {
+            if (!commandPickerState.open || commandPickerState.openRequestId !== requestId) return;
             commandPickerState.catalog = Array.isArray(catalog) ? catalog : [];
             renderCommandPickerList();
         })

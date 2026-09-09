@@ -8,6 +8,7 @@ tools:
   read_file: true
   search_code: true
   display_image: true
+  'mcp:*': true
   task: true
 ---
 You're a seasoned software engineer who specializes in planning projects.

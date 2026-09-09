@@ -1,7 +1,9 @@
 package com.judepereira.jupiter.agent.harness;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
@@ -10,11 +12,16 @@ import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter.agent.llm.dto.ToolParameter;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
+import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
+import com.judepereira.jupiter.agent.mcp.McpProjectToolExecutor;
+import com.judepereira.jupiter.agent.mcp.McpProjectToolSnapshot;
 import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
+import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
 import org.junit.jupiter.api.Test;
@@ -27,11 +34,13 @@ import java.util.Map;
 import java.util.function.BiFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class CodingAgentHarnessAgentSelectionTest {
 
     @Test
-    public void planExposesOnlyReadToolsAndBlocksMutatingToolCalls(@TempDir Path tmp) {
+    public void planExposesMcpToolsButStillBlocksBuiltInMutations(@TempDir Path tmp) {
         RecordingTool listFiles = recordingTool("list_files");
         RecordingTool readFile = recordingTool("read_file");
         RecordingTool searchCode = recordingTool("search_code");
@@ -40,6 +49,7 @@ public class CodingAgentHarnessAgentSelectionTest {
         RecordingTool runCommand = recordingTool("run_command");
 
         RecordingModel model = new RecordingModel(List.of(
+                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "mcp__project__alpha", Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
                 new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "write_file",
                         Map.of("path", "blocked.txt", "content", "nope")), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
                 new ModelResponse("finished", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
@@ -47,30 +57,48 @@ public class CodingAgentHarnessAgentSelectionTest {
 
         AgentProperties props = properties(tmp, true, true);
         AgentDefinitionService agentDefinitions = new AgentDefinitionService(new ObjectMapper());
+        FakeMcpManager mcpManager = new FakeMcpManager("mcp__project__alpha", "mcp result");
+        AppStateService appStateService = mock(AppStateService.class);
+        when(appStateService.loadSessionProjectId(42L)).thenReturn(7L);
+        when(appStateService.loadSessionProjectEnvironmentVariables(42L)).thenReturn(Map.of());
+        AgentDefinition planAgent = agentDefinitions.getRequired("plan");
+        AgentDefinition mcpPlan = new AgentDefinition(planAgent.id(), planAgent.name(), planAgent.description(), planAgent.systemPrompt(),
+                planAgent.mode(), planAgent.defaultModel(), planAgent.defaultThinkingLevel(), planAgent.textVerbosity(), planAgent.allowWrite(),
+                planAgent.allowCommand(), List.of("list_files", "read_file", "search_code", "mcp:*", "task"));
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
-                agentDefinitions, ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(), appStateService, null, mcpManager,
+                new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()),
+                com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(),
+                com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(),
+                com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Plan.",
-                List.of(new Message(Message.Role.USER, "make changes", null, null)),
+                List.of(new Message(Message.Role.USER, "use tools", null, null)),
                 tmp.toString(),
                 "plan",
                 "openai/gpt-5.5",
-                ThinkingLevel.HIGH
-        , null, null));
+                ThinkingLevel.HIGH,
+                42L, null
+        ));
 
         assertThat(result.getFinalText()).isEqualTo("finished");
-        assertThat(model.capturedToolNames().get(0)).containsExactlyInAnyOrder("list_files", "read_file", "search_code");
+        assertThat(model.capturedToolNames().get(0)).containsExactlyInAnyOrder("list_files", "read_file", "search_code", "mcp__project__alpha");
+        assertThat(model.capturedToolNames().get(1)).containsExactlyInAnyOrder("list_files", "read_file", "search_code", "mcp__project__alpha");
         assertThat(model.capturedConversations().get(0).get(0).getContent())
                 .satisfies(system -> assertSystemPrompt(system, agentDefinitions.getRequired("plan").systemPrompt(), tmp));
         assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.5");
         assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(mcpManager.snapshotCalls).isEqualTo(1);
+        assertThat(mcpManager.executions).isEqualTo(1);
         assertThat(writeFile.executions).isZero();
         assertThat(applyPatch.executions).isZero();
         assertThat(runCommand.executions).isZero();
-        assertThat(result.getTraces()).hasSize(1);
-        assertThat(result.getTraces().get(0).getToolName()).isEqualTo("write_file");
-        assertThat(result.getTraces().get(0).isSuccess()).isFalse();
+        assertThat(result.getTraces()).hasSize(2);
+        assertThat(result.getTraces().get(0).getToolName()).isEqualTo("mcp__project__alpha");
+        assertThat(result.getTraces().get(0).isSuccess()).isTrue();
+        assertThat(result.getTraces().get(1).getToolName()).isEqualTo("write_file");
+        assertThat(result.getTraces().get(1).isSuccess()).isFalse();
         assertThat(tmp.resolve("blocked.txt")).doesNotExist();
     }
 
@@ -104,8 +132,10 @@ public class CodingAgentHarnessAgentSelectionTest {
                 tmp.toString(),
                 "engineer",
                 null,
+                null,
+                null,
                 null
-        , null, null));
+        ));
 
         assertThat(result.getFinalText()).isEqualTo("done");
         assertThat(model.capturedToolNames().get(0)).containsExactlyInAnyOrder(
@@ -129,6 +159,35 @@ public class CodingAgentHarnessAgentSelectionTest {
             @Override
             public AgentModelClient getClient() {
                 return client;
+            }
+        };
+    }
+
+    private static AgentDefinitionService agentService(AgentDefinition agent) {
+        return new AgentDefinitionService(new ObjectMapper()) {
+            @Override
+            public List<com.judepereira.jupiter.agent.catalog.AgentDefinition> list() {
+                return List.of(agent);
+            }
+
+            @Override
+            public List<com.judepereira.jupiter.agent.catalog.AgentDefinition> listPrimaryAgents() {
+                return agent.mode() == AgentMode.AGENT ? List.of(agent) : List.of();
+            }
+
+            @Override
+            public List<com.judepereira.jupiter.agent.catalog.AgentDefinition> listSubagents() {
+                return agent.mode() == AgentMode.SUBAGENT ? List.of(agent) : List.of();
+            }
+
+            @Override
+            public com.judepereira.jupiter.agent.catalog.AgentDefinition defaultAgent() {
+                return agent;
+            }
+
+            @Override
+            public com.judepereira.jupiter.agent.catalog.AgentDefinition getRequired(String id) {
+                return agent;
             }
         };
     }
@@ -240,6 +299,48 @@ public class CodingAgentHarnessAgentSelectionTest {
             executions++;
             lastContext = context;
             return executor.apply(args, context);
+        }
+    }
+
+    private static final class FakeMcpManager extends McpProjectMcpServerRuntimeManager {
+        private final String toolName;
+        private final String text;
+        private int snapshotCalls;
+        private int executions;
+
+        private FakeMcpManager(String toolName, String text) {
+            super(null, null, null);
+            this.toolName = toolName;
+            this.text = text;
+        }
+
+        @Override
+        public McpProjectToolSnapshot snapshot(long projectId) {
+            snapshotCalls++;
+            ToolDefinition definition = ToolDefinition.builtIn(toolName, "mcp tool", ToolSchema.object(ToolParameter.string("input", "input")));
+            McpProjectToolExecutor executor = new McpProjectToolExecutor() {
+                @Override
+                public String modelToolName() {
+                    return toolName;
+                }
+
+                @Override
+                public String serverSlug() {
+                    return "project";
+                }
+
+                @Override
+                public String toolSlug() {
+                    return "alpha";
+                }
+
+                @Override
+                public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) {
+                    executions++;
+                    return new ToolExecutionResult(true, text, Map.of("projectId", projectId));
+                }
+            };
+            return new McpProjectToolSnapshot(projectId, List.of(definition), Map.of(toolName, executor));
         }
     }
 }

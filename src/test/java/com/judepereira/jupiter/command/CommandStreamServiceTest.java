@@ -22,7 +22,7 @@ class CommandStreamServiceTest {
                 mock(CommandCatalogService.class), appState, new RunCommandTool(),
                 mock(ActiveStreamRegistryService.class), mock(ChatToolCallHtmlService.class));
 
-        service.queue(7L, "assistant", "command", ".", null);
+        service.queue(7L, "assistant", new CommandCatalogService.CommandDefinition("command", "Command", null, CommandCatalogService.CommandKind.SCRIPT, "echo hi", null, null), ".", null);
         allowlist.clear();
         allowlist.add("AFTER");
 

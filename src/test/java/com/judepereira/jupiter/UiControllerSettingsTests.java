@@ -6,6 +6,7 @@ import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
@@ -312,11 +313,57 @@ public class UiControllerSettingsTests {
         verify(context.mcpRuntimeManager(), times(1)).reloadProject(betaId);
     }
 
+    @Test
+    public void settingsModalIncludesCustomCommandsFromIsolatedRoot(@TempDir Path workspaceRoot, @TempDir Path commandRoot) {
+        TestContext context = newContext(workspaceRoot, new QueuedExecutor(), commandRoot);
+        context.commandCatalogService().create(new CommandCatalogService.CommandDefinition("custom-one", "Custom one", "A custom command", CommandCatalogService.CommandKind.PROMPT, "Do <thing>", null, null));
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().settingsModal(model)).isEqualTo("fragments/projects :: settingsModal");
+        assertThat(model.getAttribute("customCommands")).asList().extracting("id").containsExactly("custom-one");
+    }
+
+    @Test
+    public void createCommandWritesAndListsCustomCommand(@TempDir Path workspaceRoot, @TempDir Path commandRoot) {
+        TestContext context = newContext(workspaceRoot, new QueuedExecutor(), commandRoot);
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().createCommand("created", "Created", "Description", "script", "echo hi", "/tmp", "30", model))
+                .isEqualTo("fragments/projects :: settingsCommands");
+        assertThat(context.commandCatalogService().listCustom()).extracting(CommandCatalogService.CommandDefinition::id).containsExactly("created");
+        assertThat(context.commandCatalogService().getRequired("created").body()).isEqualTo("echo hi");
+    }
+
+    @Test
+    public void failedUpdateRendersSubmittedValuesWithoutChangingCatalog(@TempDir Path workspaceRoot, @TempDir Path commandRoot) {
+        TestContext context = newContext(workspaceRoot, new QueuedExecutor(), commandRoot);
+        CommandCatalogService.CommandDefinition original = new CommandCatalogService.CommandDefinition("original", "Original", "Original description", CommandCatalogService.CommandKind.PROMPT, "original body", null, null);
+        context.commandCatalogService().create(original);
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().updateCommand("original", "bad id", "Changed", "Changed description", "prompt", "changed body", "/work", "12", model))
+                .isEqualTo("fragments/projects :: settingsCommands");
+        assertThat(model.getAttribute("submittedCommand")).isEqualTo(new CommandCatalogService.CommandDefinition("bad id", "Changed", "Changed description", CommandCatalogService.CommandKind.PROMPT, "changed body", "/work", 12));
+        assertThat(model.getAttribute("submittedCommandOriginalId")).isEqualTo("original");
+        assertThat(model.getAttribute("submittedCommandOperation")).isEqualTo("update");
+        assertThat(context.commandCatalogService().listCustom()).containsExactly(original);
+    }
+
+    @Test
+    public void deleteCommandRemovesCustomCommand(@TempDir Path workspaceRoot, @TempDir Path commandRoot) {
+        TestContext context = newContext(workspaceRoot, new QueuedExecutor(), commandRoot);
+        context.commandCatalogService().create(new CommandCatalogService.CommandDefinition("to-delete", "Delete me", "", CommandCatalogService.CommandKind.SCRIPT, "echo", null, null));
+        assertThat(context.controller().deleteCommand("to-delete", new ConcurrentModel())).isEqualTo("fragments/projects :: settingsCommands");
+        assertThat(context.commandCatalogService().listCustom()).isEmpty();
+    }
+
     private static TestContext newContext(Path workspaceRoot) {
-        return newContext(workspaceRoot, new QueuedExecutor());
+        return newContext(workspaceRoot, new QueuedExecutor(), workspaceRoot.resolve("commands"));
     }
 
     private static TestContext newContext(Path workspaceRoot, QueuedExecutor executor) {
+        return newContext(workspaceRoot, executor, workspaceRoot.resolve("commands"));
+    }
+
+    private static TestContext newContext(Path workspaceRoot, QueuedExecutor executor, Path commandRoot) {
         AgentProperties properties = new AgentProperties();
         properties.setWorkspaceRoot(workspaceRoot.toAbsolutePath().normalize().toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
@@ -330,16 +377,17 @@ public class UiControllerSettingsTests {
         com.judepereira.jupiter.git.ManualGitPullCoordinator coordinator = new com.judepereira.jupiter.git.ManualGitPullCoordinator(
                 appStateService, gitAutoUpdateService, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), executor);
 
+        CommandCatalogService commandCatalogService = new CommandCatalogService(commandRoot.toString());
         return new TestContext(appStateService,
                 tokenUsageService,
                 openAiOAuthService,
                 mcpRuntimeManager,
                 gitAutoUpdateService,
                 executor,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), tokenUsageService, mock(CommandStreamService.class), mcpRuntimeManager, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), gitAutoUpdateService, coordinator, "test"));
+                new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), gitAutoUpdateService, coordinator, "test"), commandCatalogService);
     }
 
-    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor, UiController controller) {
+    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor, UiController controller, CommandCatalogService commandCatalogService) {
     }
 
     private static final class QueuedExecutor extends AbstractExecutorService {
