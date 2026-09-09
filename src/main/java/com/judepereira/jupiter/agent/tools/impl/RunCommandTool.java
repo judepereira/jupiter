@@ -63,14 +63,20 @@ public class RunCommandTool implements AgentTool {
             }
         }
         Path wd = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), working);
-        ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", cmd);
+        // ProcessBuilder encodes command-line arguments using the JVM's native encoding. On a
+        // POSIX locale that turns non-ASCII command text into '?', before the shell sees it.
+        // Put the script in a UTF-8 file so the shell reads the original command bytes instead.
+        Path commandScript = Files.createTempFile("jupiter-command", ".sh");
+        Files.writeString(commandScript, cmd, StandardCharsets.UTF_8);
+        ProcessBuilder pb = new ProcessBuilder("/bin/sh", commandScript.toString());
         pb.directory(wd.toFile());
         Map<String, String> environment = pb.environment();
         environment.clear();
         environment.putAll(buildCommandEnvironment(System.getenv(), context.getCommandEnvironmentAllowlist(), context.getEnvironmentVariables()));
         environment.put("LANG", "C.utf8");
         environment.put("LC_ALL", "C.utf8");
-        Process p = pb.start();
+        Process p;
+        p = pb.start();
         OutputCapture stdoutCapture = new OutputCapture("stdout");
         OutputCapture stderrCapture = new OutputCapture("stderr");
         Thread tOut = new Thread(() -> capture(p.getInputStream(), stdoutCapture));
@@ -92,6 +98,7 @@ public class RunCommandTool implements AgentTool {
                 } catch (InterruptedException ignored) {
                     Thread.currentThread().interrupt();
                 }
+                Files.deleteIfExists(commandScript);
                 throw new StreamCancelledException();
             }
             long remainingNanos = deadline - System.nanoTime();
@@ -113,6 +120,7 @@ public class RunCommandTool implements AgentTool {
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
             }
+            Files.deleteIfExists(commandScript);
             return new ToolExecutionResult(false, "command timed out", Map.of());
         }
         try {
@@ -128,6 +136,7 @@ public class RunCommandTool implements AgentTool {
         if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
             throw new StreamCancelledException();
         }
+        Files.deleteIfExists(commandScript);
         int code = p.exitValue();
 
         String stdout = formatOutput(stdoutCapture);
