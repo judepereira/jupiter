@@ -12,10 +12,14 @@ final class McpToolJson {
     }
 
     static String toJson(Map<String, Object> args) {
+        return toJsonValue(args == null ? Map.of() : args, "arguments");
+    }
+
+    static String toJsonValue(Object value, String description) {
         try {
-            return OBJECT_MAPPER.writeValueAsString(args == null ? Map.of() : args);
+            return OBJECT_MAPPER.writeValueAsString(value);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize MCP tool arguments", e);
+            throw new IllegalStateException("Failed to serialize MCP tool " + description, e);
         }
     }
 }

@@ -106,6 +106,7 @@
 
     function transportFailure() {
         state.probeShouldReloadOnHealthy = true;
+        setOverlayVisible(true);
         if (state.probeInFlight) return;
         if (state.overlayVisible) {
             scheduleProbe(0);

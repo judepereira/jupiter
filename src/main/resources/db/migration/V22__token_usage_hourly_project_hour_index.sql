@@ -1,0 +1,1 @@
+CREATE INDEX idx_token_usage_hourly_project_hour ON token_usage_hourly (project_id_snapshot, hour_start_utc);

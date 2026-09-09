@@ -16,6 +16,7 @@ import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.ui.UiController;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import org.junit.jupiter.api.Test;
@@ -65,7 +66,7 @@ public class UiControllerSubagentChatTests {
         assertThat(subagentModel.getAttribute("subagentAgentName")).isEqualTo("Engineer");
         assertThat(subagentModel.getAttribute("subagentAgentId")).isEqualTo("engineer");
         assertThat(subagentModel.getAttribute("subagentSessionId")).isEqualTo(childSessionId);
-        assertThat((List<UiController.ChatMessage>) subagentModel.getAttribute("chatMessages")).extracting(UiController.ChatMessage::text)
+        assertThat((List<ChatPresentationService.ChatMessage>) subagentModel.getAttribute("chatMessages")).extracting(ChatPresentationService.ChatMessage::text)
                 .contains("Primary task:\nwrite a file", "child final");
 
         Model backModel = new ConcurrentModel();
@@ -143,14 +144,12 @@ public class UiControllerSubagentChatTests {
         props.setWorkspaceRoot(workspaceRoot.toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
         TerminalStateService terminalStateService = new TerminalStateService();
-        CodingAgentHarness harness = new CodingAgentHarness(null, null, null);
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
         AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper());
         var modelCatalog = ModelCatalogTestSupport.modelCatalogService();
-        var balloonService = new SystemBalloonService(new ObjectMapper());
+        var balloonService = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
         var contextCompactionService = TestAppStateSupport.contextCompactionService(appStateService);
-        var openAiOAuthService = new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient());
-        return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, balloonService,
-                new WorkspaceRailRefreshService(), terminalManager, terminalStateService, openAiOAuthService,
-                contextCompactionService, mock(CommandStreamService.class), "test");
+        var openAiOAuthService = new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class));
+        return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, balloonService, new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, terminalStateService, openAiOAuthService, contextCompactionService, null, mock(CommandStreamService.class), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(com.judepereira.jupiter.git.GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "test");
     }
 }

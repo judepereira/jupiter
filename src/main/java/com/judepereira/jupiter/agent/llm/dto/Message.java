@@ -13,17 +13,7 @@ public class Message {
     private final String toolCallId;
     private final List<ToolCall> toolCalls;
 
-    public Message(Role role, String content) {
-        this(role, content, null, null);
-    }
 
-    public Message(Role role, String content, String toolCallId) {
-        this(role, content, toolCallId, null);
-    }
-
-    public Message(Role role, String content, List<ToolCall> toolCalls) {
-        this(role, content, null, toolCalls);
-    }
 
     public Message(Role role, String content, String toolCallId, List<ToolCall> toolCalls) {
         this.role = role;

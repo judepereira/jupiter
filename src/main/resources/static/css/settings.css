@@ -51,8 +51,15 @@
 }
 
 .settings-modal-grid {
-    display: grid;
-    gap: 16px;
+    --bs-gutter-y: 1rem;
+}
+
+.settings-nav {
+    gap: 4px;
+}
+
+.settings-tab-content {
+    min-width: 0;
 }
 
 .settings-section {
@@ -63,6 +70,37 @@
 
 .settings-section h5 {
     margin: 0;
+}
+
+.settings-usage-note {
+    color: var(--muted);
+    margin: 4px 0 0;
+    font-size: .85rem;
+}
+
+.settings-usage-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    color: var(--muted);
+}
+
+.settings-usage-summary strong {
+    color: var(--text);
+}
+
+.settings-usage-canvas-wrap {
+    height: min(42vh, 320px);
+    min-height: 220px;
+    position: relative;
+}
+
+.settings-usage-empty {
+    padding: 34px 12px;
+    text-align: center;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
 }
 
 .settings-section-header {
@@ -131,6 +169,18 @@
 .settings-app-section {
     padding-top: 4px;
     border-top: 1px solid #e6eef6;
+}
+
+.settings-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+
+.settings-toggle input {
+    width: 1.1rem;
+    height: 1.1rem;
 }
 
 .settings-mcp-section {
@@ -282,6 +332,30 @@
     font: inherit;
 }
 
+.settings-hooks-docs {
+    min-width: 0;
+}
+
+.settings-hooks-docs p {
+    margin: 0 0 8px;
+}
+
+.settings-hooks-docs p:last-of-type {
+    margin-bottom: 4px;
+}
+
+.settings-hooks-example {
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #f1f5f9;
+}
+
 .workspace-mode-field {
     border: 0;
     margin: 0;
@@ -400,28 +474,45 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 12px;
-    border-radius: 10px;
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    color: #7c2d12;
-}
-
-.workspace-close-status {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
-.workspace-close-status .danger {
-    color: #b45309;
+    padding-bottom: 20px;
 }
 
 .workspace-close-reasons {
     margin: 0;
-    padding-left: 20px;
+    margin-top: 12px;
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+@media (max-width: 767.98px) {
+    .settings-env-row,
+    .settings-mcp-header-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    }
+
+    .settings-env-row button,
+    .settings-mcp-header-row button {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .settings-mcp-card-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .settings-mcp-card-header button {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .settings-section-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .project-form-actions {
+        flex-wrap: wrap;
+    }
 }
 

@@ -1,19 +1,9 @@
 @media (max-width: 480px) {
     #system-balloon-root {
-        position: fixed;
-        top: calc(var(--topbar-height) + env(safe-area-inset-top) + 8px);
         right: calc(8px + env(safe-area-inset-right));
-        bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 8px);
         left: calc(8px + env(safe-area-inset-left));
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 10px;
         width: auto;
         max-width: none;
-        pointer-events: none;
-        overflow-y: auto;
-        overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
     }
 }

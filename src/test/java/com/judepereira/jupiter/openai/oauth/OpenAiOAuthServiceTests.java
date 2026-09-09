@@ -7,6 +7,8 @@ import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.flywaydb.core.Flyway;
+import com.judepereira.jupiter.security.EncryptionMigrationService;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -26,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 public class OpenAiOAuthServiceTests {
 
@@ -36,7 +39,8 @@ public class OpenAiOAuthServiceTests {
             properties.setIssuer(server.baseUrl());
             properties.setClientId("client-123");
 
-            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient());
+            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
+                    mock(AppStateRepository.class));
 
             OpenAiOAuthService.OpenAiOAuthView started = service.startDeviceAuthorization();
             assertThat(started.pending()).isTrue();
@@ -104,7 +108,8 @@ public class OpenAiOAuthServiceTests {
             properties.setIssuer(server.baseUrl());
             properties.setClientId("client-123");
 
-            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient());
+            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
+                    mock(AppStateRepository.class));
 
             service.startDeviceAuthorization();
             OpenAiOAuthService.OpenAiOAuthView pending = service.pollCurrentDeviceAuthorization();
@@ -122,7 +127,8 @@ public class OpenAiOAuthServiceTests {
     public void startFailsWhenClientIdIsMissing() {
         OpenAiOAuthProperties properties = new OpenAiOAuthProperties();
         properties.setClientId(" ");
-        OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient());
+        OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
+                mock(AppStateRepository.class));
 
         assertThatThrownBy(service::startDeviceAuthorization)
                 .isInstanceOf(IllegalStateException.class)
@@ -315,7 +321,13 @@ public class OpenAiOAuthServiceTests {
 
             Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
             SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
-            return new TestDatabase(new AppStateRepository(new NamedParameterJdbcTemplate(dataSource)));
+            try (var connection = dataSource.getConnection()) {
+                new EncryptionMigrationService(TestEncryptionSupport.encryptor()).run(connection);
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to initialize encryption", e);
+            }
+            return new TestDatabase(new AppStateRepository(new NamedParameterJdbcTemplate(dataSource),
+                    TestEncryptionSupport.encryptor(), new ObjectMapper()));
         }
 
         @Override

@@ -11,7 +11,7 @@
         <div id="chat-history" class="messages" aria-live="polite">
             <!-- Message list fragment: do not use polling; SSE binds to pending assistant rows -->
             <ul id="chat-messages-list" th:fragment="messages">
-                <th:block th:replace="~{fragments/chat-rows :: rows(messages=${chatMessages}, pendingStreamUrlPrefix=${pendingStreamUrlPrefix}, subagentView=${subagentView})}"></th:block>
+                <th:block th:replace="~{fragments/chat-rows :: rows(messages=${chatMessages}, pendingStreamUrlPrefix=${pendingStreamUrlPrefix}, subagentView=${subagentView}, fullMode=${false})}"></th:block>
             </ul>
         </div>
 

@@ -1,16 +1,17 @@
-    background: #0d2254bd;
-}
-
 #system-balloon-root {
     position: fixed;
-    top: calc(var(--topbar-height) + 12px);
+    top: var(--system-balloon-top-reservation);
     right: 12px;
+    bottom: var(--system-balloon-bottom-reservation);
     z-index: 4000;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 10px;
     width: min(360px, calc(100vw - 24px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     pointer-events: none;
 }
 
@@ -27,7 +28,7 @@
     display: flex;
     gap: 10px;
     align-items: flex-start;
-    transform: translateY(-8px);
+    transform: translateY(calc(-1 * var(--system-balloon-entry-offset)));
     opacity: 0;
     transition: opacity 140ms ease, transform 140ms ease;
 }
@@ -39,7 +40,7 @@
 
 .system-balloon.is-leaving {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(calc(-1 * var(--system-balloon-entry-offset)));
 }
 
 .system-balloon__content {

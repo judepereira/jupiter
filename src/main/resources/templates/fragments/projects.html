@@ -1,5 +1,5 @@
 <!doctype html>
-<th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, reviewPanelOpen=${reviewPanelOpen ?: false}">
+<th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, reviewPanelOpen=${reviewPanelOpen ?: false}">
     <header id="top-bar" class="top-bar" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
         <button type="button"
                 class="app-switcher"
@@ -7,7 +7,7 @@
                 aria-expanded="false"
                 aria-label="Toggle workspace rail"
                 title="Toggle workspace rail">
-            <img src="/favicon-32x32.png" alt="Jupiter" width="100%">
+            <img id="topbar-logo" src="/favicon-32x32.png" alt="Jupiter" width="100%">
         </button>
 
         <nav class="project-tabs" aria-label="Projects">
@@ -40,6 +40,7 @@
         </nav>
 
         <div class="top-bar-actions">
+            <th:block th:replace="~{fragments/projects :: gitPullControl(${activeWorkspaceView == null ? null : activeWorkspaceView.id}, ${gitPullBusy ?: false}, ${activeWorkspaceView != null})}"></th:block>
             <button type="button"
                     class="rail-btn topbar-rail-btn"
                     aria-label="Settings"
@@ -61,6 +62,18 @@
                 </button>
         </div>
     </header>
+</th:block>
+
+<th:block th:fragment="gitPullControl(workspaceId, busy, hasWorkspace)"
+          th:with="normalizedWorkspaceId=${workspaceId ?: null}, normalizedBusy=${busy ?: false}, normalizedHasWorkspace=${hasWorkspace != null ? hasWorkspace : normalizedWorkspaceId != null}">
+    <button id="git-pull-control" type="button"
+            class="rail-btn topbar-rail-btn topbar-git-pull-btn"
+            th:disabled="${!normalizedHasWorkspace or normalizedBusy}"
+            th:attr="aria-label=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, title=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, aria-busy=${normalizedBusy}, hx-post=${!normalizedBusy and normalizedHasWorkspace ? '/ui/workspaces/active/git/pull' : null}, hx-get=${normalizedBusy and normalizedWorkspaceId != null ? '/ui/workspaces/' + normalizedWorkspaceId + '/git/pull/status' : null}, hx-trigger=${normalizedBusy and normalizedWorkspaceId != null ? 'every 1s' : null}, hx-target='#git-pull-control', hx-swap='outerHTML'">
+        <span th:if="${normalizedBusy}" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        <span th:if="${normalizedBusy}" class="visually-hidden">Git pull in progress</span>
+        <i th:unless="${normalizedBusy}" class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
+    </button>
 </th:block>
 
 <th:block th:fragment="workspaceRail" th:with="shellRefreshFlag=${shellRefresh ?: false}, workspaceList=${workspaces ?: T(java.util.List).of()}, sessionList=${sessions ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, activeSessionView=${activeSession}">
@@ -188,7 +201,27 @@
     <div id="modal-root" hx-swap-oob="innerHTML"></div>
 </th:block>
 
-<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}">
+<th:block th:fragment="usageEmpty">
+    <section class="settings-section"><h5>Usage</h5><p class="text-muted">No active project is selected.</p></section>
+</th:block>
+
+<th:block th:fragment="settingsUsage">
+    <section class="settings-section settings-usage" data-settings-usage-chart th:attr="data-range=${usageRange}">
+        <div class="settings-section-header"><div><h5>Usage</h5><p class="settings-usage-note">Reported token metrics, hourly, UTC</p></div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Usage range">
+                <button th:each="option : ${ {'24h','7d','30d','60d'} }" type="button" class="btn btn-outline-primary" th:classappend="${usageRange == option ? ' active' : ''}" th:text="${option}" th:attr="data-usage-range=${option}"></button>
+            </div>
+        </div>
+        <div class="settings-usage-summary" aria-live="polite">
+            <span><strong data-usage-requests aria-label="Reported requests">0</strong> requests</span><span><strong data-usage-total aria-label="Unavailable">&mdash;</strong> reported total tokens</span><span><strong data-usage-input aria-label="Unavailable">&mdash;</strong> reported input tokens</span><span><strong data-usage-output aria-label="Unavailable">&mdash;</strong> reported output tokens</span>
+        </div>
+        <div class="settings-usage-empty" data-usage-empty hidden>No token usage in this range.</div>
+        <div class="settings-usage-canvas-wrap"><canvas data-usage-canvas aria-label="Token usage by hour and model"></canvas></div>
+        <div data-usage-data hidden th:attr="data-usage-data=${usageJson}"></div>
+    </section>
+</th:block>
+
+<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, commandEnvironmentAllowlistValue=${activeProject == null or activeProject.commandEnvironmentAllowlist == null ? '' : activeProject.commandEnvironmentAllowlist}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
     <div id="settings-modal" class="project-modal settings-modal">
         <div class="project-modal-backdrop"
              hx-get="/ui/projects/modal/close"
@@ -201,19 +234,34 @@
                 <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
             </div>
 
-            <div class="settings-modal-grid">
-                <form class="settings-form" hx-post="/ui/settings/apply" hx-target="#modal-root" hx-swap="innerHTML">
-                    <section class="settings-section">
-                        <h5>Current Project</h5>
-                        <div class="settings-project-meta">
-                            <div><strong>Name:</strong> <span th:text="${activeProject == null ? '' : activeProject.name}"></span></div>
-                            <div><strong>Path:</strong> <span th:text="${activeProject == null ? '' : activeProject.path}"></span></div>
-                        </div>
+            <div class="settings-modal-grid row g-4">
+                <div class="col-12 col-md-3">
+                    <nav class="nav nav-pills flex-md-column settings-nav" aria-label="Settings tabs" role="tablist">
+                        <button th:if="${activeProject != null}" class="nav-link active" id="settings-current-project-tab" data-bs-toggle="pill" data-bs-target="#settings-current-project" type="button" role="tab" aria-controls="settings-current-project" aria-selected="true">Current Project</button>
+                        <button class="nav-link" id="settings-application-tab" data-bs-toggle="pill" data-bs-target="#settings-application" type="button" role="tab" aria-controls="settings-application" aria-selected="false">Application</button>
+                        <button class="nav-link" id="settings-mcp-servers-tab" data-bs-toggle="pill" data-bs-target="#settings-mcp-servers" type="button" role="tab" aria-controls="settings-mcp-servers" aria-selected="false">MCP Servers</button>
+                        <button class="nav-link" id="settings-hooks-tab" data-bs-toggle="pill" data-bs-target="#settings-hooks" type="button" role="tab" aria-controls="settings-hooks" th:attr="aria-selected=${activeProject == null ? 'true' : 'false'}" th:classappend="${activeProject == null ? ' active' : ''}">Hooks</button>
+                        <button class="nav-link" id="settings-model-providers-tab" data-bs-toggle="pill" data-bs-target="#settings-model-providers" type="button" role="tab" aria-controls="settings-model-providers" aria-selected="false">Model Providers</button>
+                        <button class="nav-link" id="settings-usage-tab" data-bs-toggle="pill" data-bs-target="#settings-usage" type="button" role="tab" aria-controls="settings-usage" aria-selected="false" data-settings-usage-tab>Usage</button>
+                        <button class="nav-link" id="settings-help-tab" data-bs-toggle="pill" data-bs-target="#settings-help" type="button" role="tab" aria-controls="settings-help" aria-selected="false">Help</button>
+                    </nav>
+                </div>
 
-                        <div class="project-form-field settings-env-field" data-settings-env-field>
-                            <span>Environment variables</span>
-                            <div class="settings-env-list" data-settings-env-vars>
-                                <div th:if="${#lists.isEmpty(environmentVariablesValue)}" class="settings-env-row" data-settings-env-row>
+                <div class="col-12 col-md-9">
+                    <div class="tab-content settings-tab-content">
+                        <div th:if="${activeProject != null}" class="tab-pane fade show active" id="settings-current-project" role="tabpanel" aria-labelledby="settings-current-project-tab" tabindex="0">
+                            <form class="settings-form" hx-post="/ui/settings/apply" hx-target="#modal-root" hx-swap="innerHTML">
+                                <section class="settings-section">
+                                    <h5>Current Project</h5>
+                                    <div class="settings-project-meta">
+                                        <div><strong>Name:</strong> <span th:text="${activeProject == null ? '' : activeProject.name}"></span></div>
+                                        <div><strong>Path:</strong> <span th:text="${activeProject == null ? '' : activeProject.path}"></span></div>
+                                    </div>
+
+                                    <div class="project-form-field settings-env-field" data-settings-env-field>
+                                        <span>Environment variables</span>
+                                        <div class="settings-env-list" data-settings-env-vars>
+                                            <div th:if="${#lists.isEmpty(environmentVariablesValue)}" class="settings-env-row" data-settings-env-row>
                                     <input type="text"
                                            class="settings-env-name"
                                            name="environmentVariableNames"
@@ -260,6 +308,17 @@
                             <button type="button" class="btn btn-outline-primary btn-sm" data-settings-env-add>Add Variable</button>
                         </div>
 
+                        <label class="project-form-field">
+                            <span>Command environment allowlist</span>
+                            <input type="text"
+                                   name="commandEnvironmentAllowlist"
+                                   autocomplete="off"
+                                   placeholder="HOME, PATH, CI"
+                                   th:value="${commandEnvironmentAllowlistValue}"
+                                   aria-describedby="command-environment-allowlist-help">
+                            <small id="command-environment-allowlist-help">Comma-separated system environment variable names. This controls only the run command tool; leave blank for no system variables. Terminal sessions retain the normal system environment. Project environment variables remain separate.</small>
+                        </label>
+
                         <label class="project-form-field settings-commands-field">
                             <span>Workspace init commands</span>
                             <textarea class="settings-commands"
@@ -273,10 +332,35 @@
                             <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
                             <button type="submit" class="btn btn-primary">Save</button>
                         </div>
-                    </section>
-                </form>
+                                    </section>
+                            </form>
+                        </div>
 
-                <form class="settings-form settings-mcp-form" hx-post="/ui/settings/mcp/apply" hx-target="#modal-root" hx-swap="innerHTML" data-settings-mcp-form>
+                        <div class="tab-pane fade" id="settings-application" role="tabpanel" aria-labelledby="settings-application-tab" tabindex="0">
+                            <form class="settings-form" hx-post="/ui/settings/auto-git-update/apply" hx-target="#modal-root" hx-swap="innerHTML">
+                                <section class="settings-section settings-app-section">
+                                    <h5>Git updates</h5>
+                                    <label class="settings-toggle">
+                                        <input type="checkbox" name="enabled" value="true" th:checked="${autoGitUpdateEnabled}">
+                                        <span>Automatically pull Git updates</span>
+                                    </label>
+                                    <p class="settings-help-text">When enabled, Jupiter checks Git workspaces periodically. Manual pulls remain available from the top navigation.</p>
+                                    <div class="project-form-actions">
+                                        <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                                        <button type="submit" class="btn btn-primary">Save Git settings</button>
+                                    </div>
+                                </section>
+                            </form>
+                        </div>
+
+                        <div class="tab-pane fade" id="settings-usage" role="tabpanel" aria-labelledby="settings-usage-tab" tabindex="0">
+                            <div data-settings-usage-container hx-get="/ui/settings/usage?range=24h" hx-trigger="settings-usage-load" hx-target="this" hx-swap="innerHTML">
+                                <section class="settings-section"><h5>Usage</h5><p class="text-muted">Select Usage to load token activity for this project.</p></section>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="settings-mcp-servers" role="tabpanel" aria-labelledby="settings-mcp-servers-tab" tabindex="0">
+                            <form class="settings-form settings-mcp-form" hx-post="/ui/settings/mcp/apply" hx-target="#modal-root" hx-swap="innerHTML" data-settings-mcp-form>
                     <input type="hidden" name="mcpCatalogJson" value="">
                     <section class="settings-section settings-mcp-section" data-settings-mcp-field>
                         <div class="settings-section-header">
@@ -405,17 +489,65 @@
                     <div class="project-form-actions">
                         <button type="submit" class="btn btn-primary">Apply MCP Catalog</button>
                     </div>
-                </form>
+                            </form>
+                        </div>
 
-                <section class="settings-section settings-app-section">
-                    <h5>App</h5>
-                    <p>Made with &lt;3 in Amsterdam</p>
-                    <p>Version <strong th:text="${appVersion}"></strong></p>
-                    <div class="settings-openai-section">
-                        <h6>OpenAI subscription</h6>
-                        <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
+                        <div class="tab-pane fade" th:classappend="${activeProject == null ? ' show active' : ''}" id="settings-hooks" role="tabpanel" aria-labelledby="settings-hooks-tab" tabindex="0">
+                            <form class="settings-form" hx-post="/ui/settings/hooks/apply" hx-target="#modal-root" hx-swap="innerHTML">
+                                <section class="settings-section settings-app-section">
+                                    <h5>Lifecycle hooks</h5>
+                                    <div class="settings-hooks-docs">
+                                        <p class="settings-help-text">Hooks run asynchronously in Bash using <code>/bin/bash</code>, with <code>/tmp</code> as the working directory. A hook failure does not change the agent or subagent lifecycle result; the timeout applies to each hook.</p>
+                                        <p class="settings-help-text">These runtime variables are always available: <code>JUPITER_PROJECT_NAME</code> (project name), <code>JUPITER_WORKSPACE_NAME</code> (workspace name), and <code>JUPITER_SESSION_NAME</code> (session name). Project-configured environment variables are also passed and can be expanded normally, such as <code>"$WEBHOOK_URL"</code>. The three <code>JUPITER_*</code> values take precedence over project variables with matching names.</p>
+                                        <p class="settings-help-text">Example:</p>
+                                        <pre class="settings-hooks-example"><code>printf '%s | %s | %s\n' "$JUPITER_PROJECT_NAME" "$JUPITER_WORKSPACE_NAME" "$JUPITER_SESSION_NAME" &gt;&gt; /tmp/jupiter-hooks.log</code></pre>
+                                    </div>
+                                    <label class="project-form-field">
+                                        <span>Agent completion script</span>
+                                        <small id="agent-completion-help">Runs after the agent response completes.</small>
+                                        <textarea name="assistantCompletedScript" rows="6" spellcheck="false" aria-describedby="agent-completion-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantCompletedScript}"></textarea>
+                                    </label>
+                                    <label class="project-form-field">
+                                        <span>Agent error script</span>
+                                        <small id="agent-error-help">Runs when the agent execution fails.</small>
+                                        <textarea name="assistantErroredScript" rows="6" spellcheck="false" aria-describedby="agent-error-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantErroredScript}"></textarea>
+                                    </label>
+                                    <label class="project-form-field">
+                                        <span>Subagent completion script</span>
+                                        <small id="subagent-completion-help">Runs when a subagent completes, using the parent session's context.</small>
+                                        <textarea name="subagentCompletedScript" rows="6" spellcheck="false" aria-describedby="subagent-completion-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.subagentCompletedScript}"></textarea>
+                                    </label>
+                                    <label class="project-form-field">
+                                        <span>Timeout (seconds)</span>
+                                        <input type="number" name="timeoutSeconds" min="1" max="3600" required th:value="${lifecycleHookSettingsValue == null ? 30 : lifecycleHookSettingsValue.timeoutSeconds}">
+                                    </label>
+                                    <div class="project-form-actions">
+                                        <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+                                        <button type="submit" class="btn btn-primary">Save Hooks</button>
+                                    </div>
+                                </section>
+                            </form>
+                        </div>
+
+                        <div class="tab-pane fade" id="settings-model-providers" role="tabpanel" aria-labelledby="settings-model-providers-tab" tabindex="0">
+                            <section class="settings-section settings-app-section">
+                                <h5>Model Providers</h5>
+                                <div class="settings-openai-section">
+                                    <h6>OpenAI subscription</h6>
+                                    <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
+                                </div>
+                            </section>
+                        </div>
+
+                        <div class="tab-pane fade" id="settings-help" role="tabpanel" aria-labelledby="settings-help-tab" tabindex="0">
+                            <section class="settings-section settings-app-section">
+                                <h5>Help</h5>
+                                <p>Made with &lt;3 in Amsterdam</p>
+                                <p>Version <strong th:text="${appVersion}"></strong></p>
+                            </section>
+                        </div>
                     </div>
-                </section>
+                </div>
             </div>
         </div>
     </div>
@@ -562,17 +694,9 @@
                 <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
             </div>
 
-            <div class="workspace-close-summary">
-                <div><strong>Name:</strong> <span th:text="${workspaceName}"></span></div>
-                <div><strong>Path:</strong> <span th:text="${workspacePath}"></span></div>
-            </div>
+            <div>Are you sure you want to delete the workspace <code th:text="${workspaceName}"></code>?</div>
 
             <div class="workspace-close-warning">
-                <div class="workspace-close-status">
-                    <span th:classappend="${status.uncommittedChanges} ? ' danger' : ''">Uncommitted changes: <strong th:text="${status.uncommittedChanges} ? 'yes' : 'no'"></strong></span>
-                    <span th:classappend="${status.unpushedCommits} ? ' danger' : ''">Unpushed commits: <strong th:text="${status.unpushedCommits} ? 'yes' : 'no'"></strong></span>
-                </div>
-
                 <ul class="workspace-close-reasons">
                     <li th:each="reason : ${workspaceCloseReasons}" th:text="${reason}"></li>
                 </ul>
@@ -581,7 +705,7 @@
             <div class="project-form-actions">
                 <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
                 <button type="button"
-                        class="btn btn-primary"
+                        class="btn btn-danger"
                         th:attr="hx-post=@{/ui/workspaces/{id}/close/confirm(id=${workspaceId})}, hx-target='#shell', hx-swap='none'">Close workspace</button>
             </div>
         </div>

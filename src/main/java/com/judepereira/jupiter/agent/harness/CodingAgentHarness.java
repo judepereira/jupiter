@@ -24,6 +24,7 @@ import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.TokenUsageService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -44,34 +45,18 @@ public class CodingAgentHarness {
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
     private final AppStateService appStateService;
+    private final TokenUsageService tokenUsageService;
     private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
     private final SystemPromptComposer systemPromptComposer;
 
-    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props) {
-        this(modelFactory, registry, props, null, null, null, null, new SystemPromptComposer());
-    }
 
-    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
-                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, null, null, new SystemPromptComposer());
-    }
 
-    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
-                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                              AppStateService appStateService) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, null, new SystemPromptComposer());
-    }
-
-    public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
-                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                              AppStateService appStateService, McpProjectMcpServerRuntimeManager mcpRuntimeManager) {
-        this(modelFactory, registry, props, agentDefinitionService, modelCatalogService, appStateService, mcpRuntimeManager, new SystemPromptComposer());
-    }
 
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                              AppStateService appStateService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                              AppStateService appStateService, TokenUsageService tokenUsageService,
+                              McpProjectMcpServerRuntimeManager mcpRuntimeManager,
                               SystemPromptComposer systemPromptComposer) {
         this.modelFactory = modelFactory;
         this.registry = registry;
@@ -79,6 +64,7 @@ public class CodingAgentHarness {
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
         this.appStateService = appStateService;
+        this.tokenUsageService = tokenUsageService;
         this.mcpRuntimeManager = mcpRuntimeManager;
         this.systemPromptComposer = systemPromptComposer;
     }
@@ -107,6 +93,7 @@ public class CodingAgentHarness {
                 ? props.getWorkspaceRoot()
                 : request.getWorkspaceRoot();
         Map<String, String> environmentVariables = resolveEnvironmentVariables(request.getSessionId());
+        Set<String> commandEnvironmentAllowlist = resolveCommandEnvironmentAllowlist(request.getSessionId());
         ToolExecutionContext execCtxTemplate = new ToolExecutionContext(Path.of(workspaceRoot),
                 agent != null ? agent.allowWrite() : props.getTooling().isAllowWrite(),
                 agent != null ? agent.allowCommand() : props.getTooling().isAllowCommand(),
@@ -115,8 +102,8 @@ public class CodingAgentHarness {
                 request.getAgentId(),
                 agent == null ? null : agent.mode(),
                 null,
-                environmentVariables,
-                ToolProgressSink.noop());
+                environmentVariables, commandEnvironmentAllowlist,
+                ToolProgressSink.noop(), null);
 
         long projectId = resolveProjectId(request.getSessionId());
         McpProjectToolSnapshot mcpSnapshot = resolveMcpSnapshot(projectId);
@@ -143,6 +130,13 @@ public class CodingAgentHarness {
                         listener.onTextDelta(delta);
                     }
                 });
+                if (tokenUsageService != null && appStateService != null && request.getSessionId() != null) {
+                    String usageModelKey = modelOptions == null ? request.getModelId() : modelOptions.modelId();
+                    if (usageModelKey == null || usageModelKey.isBlank()) {
+                        usageModelKey = props.getModel();
+                    }
+                    tokenUsageService.recordModelResponse(request.getSessionId(), usageModelKey, "harness", resp);
+                }
 
                 ToolCall call = resp.getToolCall();
                 String assistantText = resp.getAssistantText();
@@ -160,12 +154,12 @@ public class CodingAgentHarness {
                     Map<String, Object> args = call.getArguments() == null ? Map.of() : call.getArguments();
                     String toolCallId = normalizeToolCallId(call.getToolCallId(), i, 0);
 
-                    convo.add(new Message(Message.Role.ASSISTANT, null,
+                    convo.add(new Message(Message.Role.ASSISTANT, null, null,
                             List.of(new ToolCall(toolCallId, resolvedToolName, args))));
 
                     if (toolName == null || toolName.isBlank()) {
                         String toolMsg = "[tool_error] Tool call missing tool name";
-                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
+                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId, null));
                         ToolCallTrace trace = new ToolCallTrace(toolCallId, resolvedToolName, args, false, toolMsg,
                                 Map.of("error", "tool name missing"));
                         traces.add(trace);
@@ -175,7 +169,7 @@ public class CodingAgentHarness {
                     }
                     if (!isToolAllowed(toolName, allowedTools)) {
                         String toolMsg = "[tool_error] Tool not allowed for selected agent: " + toolName;
-                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
+                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId, null));
                         ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg,
                                 Map.of("error", "tool not allowed"));
                         traces.add(trace);
@@ -195,12 +189,12 @@ public class CodingAgentHarness {
                                 execCtxTemplate.getAgentId(),
                                 execCtxTemplate.getAgentMode(),
                                 toolCallId,
-                                execCtxTemplate.getEnvironmentVariables(),
+                                execCtxTemplate.getEnvironmentVariables(), execCtxTemplate.getCommandEnvironmentAllowlist(),
                                 (eventName, payload) -> listener.onToolCallProgress(toolCallId, toolName, eventName, payload),
                                 cancellationToken);
                         ToolExecutionResult result = executeTool(toolName, args, execCtx, mcpSnapshot);
                         String toolText = result.getText() == null ? "" : result.getText();
-                        convo.add(new Message(Message.Role.TOOL, toolText, toolCallId));
+                        convo.add(new Message(Message.Role.TOOL, toolText, toolCallId, null));
                         ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, result.isSuccess(), result.getText(), result.getMachine());
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
@@ -209,14 +203,14 @@ public class CodingAgentHarness {
                         throw e;
                     } catch (IllegalArgumentException e) {
                         String toolMsg = "[tool_error] Unknown tool: " + toolName;
-                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
+                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId, null));
                         ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg, Map.of("error", e.getMessage()));
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_error:" + toolName);
                     } catch (Exception e) {
                         String toolMsg = "[tool_error] " + e.getMessage();
-                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId));
+                        convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId, null));
                         ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg, Map.of("exception", e.toString()));
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
@@ -302,7 +296,7 @@ public class CodingAgentHarness {
 
     private static List<Message> seedConversation(String systemPrompt, List<Message> conversation) {
         if (conversation.isEmpty()) {
-            return List.of(new Message(Message.Role.SYSTEM, systemPrompt));
+            return List.of(new Message(Message.Role.SYSTEM, systemPrompt, null, null));
         }
         Message first = conversation.getFirst();
         if (first.getRole() == Message.Role.SYSTEM) {
@@ -312,7 +306,7 @@ public class CodingAgentHarness {
             return conversation;
         }
         List<Message> seeded = new ArrayList<>(conversation.size() + 1);
-        seeded.add(new Message(Message.Role.SYSTEM, systemPrompt));
+        seeded.add(new Message(Message.Role.SYSTEM, systemPrompt, null, null));
         seeded.addAll(conversation);
         return seeded;
     }
@@ -389,6 +383,13 @@ public class CodingAgentHarness {
             return Map.of();
         }
         return appStateService.loadSessionProjectEnvironmentVariables(sessionId);
+    }
+
+    private Set<String> resolveCommandEnvironmentAllowlist(Long sessionId) {
+        if (sessionId == null || appStateService == null) {
+            return Set.of();
+        }
+        return appStateService.loadSessionProjectCommandEnvironmentAllowlist(sessionId);
     }
 
     private McpProjectToolSnapshot resolveMcpSnapshot(long projectId) {

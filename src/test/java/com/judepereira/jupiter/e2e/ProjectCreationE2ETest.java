@@ -4,11 +4,8 @@ import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,9 +33,9 @@ class ProjectCreationE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
+        try {
             try (RunningApp first = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = browser.newContext()) {
+                 BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(first.baseUrl());
@@ -56,20 +53,20 @@ class ProjectCreationE2ETest extends E2ETestSupport {
                 page.locator("#chat-input").fill(userMessage);
                 page.locator("#chat-send-btn").click();
 
-                assertThat(page.locator("#chat-messages-list li")).hasCount(3);
+                assertThat(page.locator("#chat-messages-list li:not([data-role='info'])")).hasCount(3);
                 assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText(userMessage);
                 assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
                 captureScreenshot(page, screenshotsDir, "05-chat-response.png");
             }
 
             try (RunningApp second = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = browser.newContext()) {
+                 BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(second.baseUrl());
 
                 assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText("Alpha");
-                assertThat(page.locator("#chat-messages-list li")).hasCount(3);
+                assertThat(page.locator("#chat-messages-list li:not([data-role='info'])")).hasCount(3);
                 assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText("hello there");
                 assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
                 captureScreenshot(page, screenshotsDir, "06-after-restart.png");
@@ -95,7 +92,7 @@ class ProjectCreationE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null);
+                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
             }
 
             @Override

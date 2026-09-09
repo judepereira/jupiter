@@ -22,6 +22,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -49,10 +50,10 @@ public class CodingAgentHarnessAgentSelectionTest {
         RecordingTool runCommand = recordingTool("run_command");
 
         RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall("mcp__project__alpha", Map.of())),
-                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall("write_file",
-                        Map.of("path", "blocked.txt", "content", "nope"))),
-                new ModelResponse("finished", null)
+                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "mcp__project__alpha", Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "write_file",
+                        Map.of("path", "blocked.txt", "content", "nope")), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse("finished", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
         ));
 
         AgentProperties props = properties(tmp, true, true);
@@ -66,16 +67,16 @@ public class CodingAgentHarnessAgentSelectionTest {
                 planAgent.mode(), planAgent.defaultModel(), planAgent.defaultThinkingLevel(), planAgent.textVerbosity(), planAgent.allowWrite(),
                 planAgent.allowCommand(), List.of("list_files", "read_file", "search_code", "mcp:*", "task"));
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
-                agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(), appStateService, mcpManager);
+                agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(), appStateService, null, mcpManager, new SystemPromptComposer());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Plan.",
-                List.of(new Message(Message.Role.USER, "use tools")),
+                List.of(new Message(Message.Role.USER, "use tools", null, null)),
                 tmp.toString(),
                 "plan",
                 "openai/gpt-5.5",
                 ThinkingLevel.HIGH,
-                42L
+                42L, null
         ));
 
         assertThat(result.getFinalText()).isEqualTo("finished");
@@ -112,19 +113,19 @@ public class CodingAgentHarnessAgentSelectionTest {
         ));
 
         RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall("run_command",
-                        Map.of("command", "echo hi"))),
-                new ModelResponse("done", null)
+                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "run_command",
+                        Map.of("command", "echo hi")), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
         ));
 
         AgentProperties props = properties(tmp, false, false);
         AgentDefinitionService agentDefinitions = new AgentDefinitionService(new ObjectMapper());
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
-                agentDefinitions, ModelCatalogTestSupport.modelCatalogService());
+                agentDefinitions, ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Engineer.",
-                List.of(new Message(Message.Role.USER, "run a command")),
+                List.of(new Message(Message.Role.USER, "run a command", null, null)),
                 tmp.toString(),
                 "engineer",
                 null,

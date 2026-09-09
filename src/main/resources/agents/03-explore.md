@@ -1,8 +1,8 @@
 ---
 description: A read-only exploration subagent that finds codebase context
 mode: subagent
-model: openai/gpt-5.4-mini
-reasoningEffort: high
+model: openai/gpt-5.6-luna
+reasoningEffort: medium
 textVerbosity: low
 tools:
   list_files: true

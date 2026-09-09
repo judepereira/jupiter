@@ -14,6 +14,6 @@
     <!-- in-band: only append the new rows to the existing messages list -->
     <!-- emit only the <li> rows so HTMX can append directly into #chat-messages-list -->
     <th:block th:fragment="newRows" th:with="pendingStreamUrlPrefix=${pendingStreamBaseUrl ?: '/ui/chat/stream'}">
-        <th:block th:if="${newChatMessages != null}" th:replace="~{fragments/chat-rows :: rows(messages=${newChatMessages}, pendingStreamUrlPrefix=${pendingStreamUrlPrefix}, subagentView=${subagentView})}"></th:block>
+        <th:block th:if="${newChatMessages != null}" th:replace="~{fragments/chat-rows :: rows(messages=${newChatMessages}, pendingStreamUrlPrefix=${pendingStreamUrlPrefix}, subagentView=${subagentView}, fullMode=${true})}"></th:block>
     </th:block>
 </th:block>

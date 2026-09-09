@@ -4,11 +4,8 @@ import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -24,7 +21,7 @@ import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertTha
 class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
 
     @Test
-    void cleanWorkspaceWithoutUpstreamClosesWithoutConfirmationModal(@TempDir Path tempDir) throws Exception {
+    void unpushedWorkspaceWithoutUpstreamShowsConfirmationModal(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = fakeHome.resolve("sample-repo");
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
@@ -35,9 +32,9 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
+        try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = browser.newContext()) {
+                 BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
@@ -59,9 +56,10 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
                 assertThat(closeButton).isVisible();
                 closeButton.click();
 
-                assertThat(page.locator("#workspace-close-modal")).hasCount(0);
-                assertThat(page.locator(".workspace-group")).hasCount(1);
-                assertThat(page.locator(".workspace-group .workspace-label")).hasText("Default Workspace");
+                assertThat(page.locator("#workspace-close-modal")).isVisible();
+                assertThat(page.locator("#workspace-close-modal")).containsText("Local commits detected, that haven't been pushed");
+                assertThat(page.locator(".workspace-group")).hasCount(2);
+                assertThat(page.locator(".workspace-group .workspace-label")).containsText(new String[]{"Default Workspace", "feature-clean-close"});
             }
         } finally {
             if (previousHome == null) {
@@ -78,7 +76,7 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null) {
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
                 @Override
                 public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                     AgentTurnResult result = new AgentTurnResult("Deterministic assistant reply", java.util.List.of());

@@ -16,12 +16,20 @@ import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.config.HttpAuthProperties;
+import com.judepereira.jupiter.config.PublicRequestScheme;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
+import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
+import com.judepereira.jupiter.persistence.TokenUsageService;
 import com.judepereira.jupiter.persistence.GitWorktreeException;
 import com.judepereira.jupiter.persistence.InvalidGitBranchNameException;
+import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.persistence.Persistence.*;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.terminal.TerminalHandle;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalPanelState;
@@ -40,6 +48,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
@@ -48,12 +57,17 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
+import com.judepereira.jupiter.ui.ChatPresentationService.ToolCallView;
 
 @Log4j2
 @Controller
@@ -68,6 +82,7 @@ public class UiController {
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
     private final ContextCompactionService contextCompactionService;
+    private final TokenUsageService tokenUsageService;
     private final CommandStreamService commandStreamService;
     private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
     private final TerminalManager terminalManager;
@@ -76,9 +91,19 @@ public class UiController {
     private final WorkspaceRailRefreshService workspaceRailRefreshService;
     private final ActiveStreamRegistryService activeStreamRegistryService;
     private final OpenAiOAuthService openAiOAuthService;
+    private final ChatPresentationService chatPresentationService;
+    private final ChatToolCallHtmlService chatToolCallHtmlService;
+    private final LifecycleHookService lifecycleHookService;
+    private final HttpAuthProperties httpAuthProperties;
+    private final GitAutoUpdateService gitAutoUpdateService;
+    private final ManualGitPullCoordinator manualGitPullCoordinator;
     private final String appVersion;
 
     private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
+
+    private ManualGitPullCoordinator manualGitPullCoordinator() {
+        return manualGitPullCoordinator;
+    }
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
@@ -87,8 +112,12 @@ public class UiController {
                         ActiveStreamRegistryService activeStreamRegistryService,
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+                        ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
+                        CommandStreamService commandStreamService,
+                        McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
+                        ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
+                        HttpAuthProperties httpAuthProperties,
+                        GitAutoUpdateService gitAutoUpdateService, ManualGitPullCoordinator manualGitPullCoordinator,
                         @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -96,6 +125,7 @@ public class UiController {
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
         this.contextCompactionService = contextCompactionService;
+        this.tokenUsageService = tokenUsageService;
         this.commandStreamService = commandStreamService;
         this.mcpRuntimeManager = mcpRuntimeManager;
         this.systemBalloonService = systemBalloonService;
@@ -104,45 +134,13 @@ public class UiController {
         this.terminalStateService = terminalStateService;
         this.workspaceRailRefreshService = workspaceRailRefreshService;
         this.openAiOAuthService = openAiOAuthService;
+        this.chatPresentationService = chatPresentationService;
+        this.chatToolCallHtmlService = chatToolCallHtmlService;
+        this.lifecycleHookService = lifecycleHookService;
+        this.httpAuthProperties = httpAuthProperties;
+        this.gitAutoUpdateService = gitAutoUpdateService;
+        this.manualGitPullCoordinator = manualGitPullCoordinator;
         this.appVersion = appVersion;
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        ActiveStreamRegistryService activeStreamRegistryService,
-                        TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, activeStreamRegistryService, terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, null, appVersion);
-    }
-
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, CommandStreamService commandStreamService,
-                        McpProjectMcpServerRuntimeManager mcpRuntimeManager,
-                        String appVersion) {
-        this(harness, agentProperties, appStateService, agentDefinitionService, modelCatalogService, systemBalloonService,
-                workspaceRailRefreshService, appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
-                openAiOAuthService, contextCompactionService, commandStreamService, mcpRuntimeManager, appVersion);
     }
 
     @GetMapping("/")
@@ -199,7 +197,7 @@ public class UiController {
 
             List<Message> conversationHistory = new ArrayList<>(appStateService.buildConversationHistory(session.id()));
             CancellationToken cancellationToken = new CancellationToken();
-            ActiveStream activeStream = new ActiveStream(new PendingStream(session.id(), workspaceRoot,
+            ActiveStream activeStream = ActiveStream.create(new PendingStream(session.id(), workspaceRoot,
                     new AgentTurnRequest(null, conversationHistory, workspaceRoot,
                             selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id(), cancellationToken)), cancellationToken);
             activeStreams.put(assistantId, activeStream);
@@ -304,6 +302,7 @@ public class UiController {
         }
 
         attachEmitter(active, emitter);
+        sendToolCallSnapshot(active, assistantId, emitter);
         if (active.started().compareAndSet(false, true)) {
             startActiveStream(assistantId, active, emitter);
         }
@@ -350,7 +349,17 @@ public class UiController {
 
             @Override
             public void onToolCallStarted(ToolCallTrace trace) {
-                broadcastEvent(active, assistantId, "tool_call_started", trace);
+                try {
+                    if (trace != null) {
+                        appStateService.startToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace));
+                        if (chatToolCallHtmlService != null) {
+                            broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.toolStarted(pending.sessionId(), assistantId));
+                        }
+                    }
+                    broadcastEvent(active, assistantId, "tool_call_started", trace);
+                } catch (Exception e) {
+                    onError(e);
+                }
             }
 
             @Override
@@ -361,12 +370,19 @@ public class UiController {
                         "eventName", eventName,
                         "payload", payload
                 ));
+                if ("subagent_started".equals(eventName) && chatToolCallHtmlService != null) {
+                    broadcastToolCallHtml(active, assistantId,
+                            chatToolCallHtmlService.subagentStarted(pending.sessionId(), assistantId, toolCallId));
+                }
             }
 
             @Override
             public void onToolCallTrace(ToolCallTrace trace) {
                 try {
-                    ToolCallView v = toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
+                    ToolCallView v = chatPresentationService.toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
+                    if (chatToolCallHtmlService != null) {
+                        broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.toolCompleted(pending.sessionId(), assistantId, trace.getToolCallId()));
+                    }
                     broadcastEvent(active, assistantId, "tool_call", v);
                 } catch (Exception e) {
                     onError(e);
@@ -403,6 +419,7 @@ public class UiController {
                     String finalText = result.getFinalText() == null ? "" : result.getFinalText();
                     List<ToolCallTraceInput> traces = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
                     ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
+                    dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, pending.sessionId());
                     processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
                     finalizeStreamSuccess(active, assistantId, completedMessage, completed);
                 } catch (Exception e) {
@@ -425,6 +442,7 @@ public class UiController {
                     }
                     String normalizedMessage = normalizeProviderErrorMessage(e);
                     ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+                    dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, pending.sessionId());
                     log.error("Execution failure!", e);
                     finalizeStreamError(active, assistantId, normalizedMessage, failedMessage, e, completed);
                 } catch (Exception ignored) {
@@ -448,7 +466,9 @@ public class UiController {
         try {
             String normalizedMessage = normalizeProviderErrorMessage(e);
             ChatMessageView failedMessage = appStateService.failAssistantMessage(active.pendingStream().sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+            dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, active.pendingStream().sessionId());
             log.error("Execution failure!", e);
+            broadcastToolCallHostSnapshot(active, assistantId);
             broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
         } catch (Exception ignored) {
         } finally {
@@ -470,6 +490,42 @@ public class UiController {
 
     private void detachEmitter(ActiveStream active, SseEmitter emitter) {
         active.emitters().remove(emitter);
+    }
+
+    private void sendToolCallSnapshot(ActiveStream active, String assistantId, SseEmitter emitter) {
+        if (chatToolCallHtmlService == null) {
+            return;
+        }
+        try {
+            sendEventToEmitter(active, assistantId, emitter, "tool_call_html",
+                    chatToolCallHtmlService.hostSnapshot(active.pendingStream().sessionId(), assistantId));
+        } catch (Exception e) {
+            log.error("Failed to send tool-call snapshot", e);
+        }
+    }
+
+    private void broadcastToolCallHtml(ActiveStream active, String assistantId, List<DomPatch> patches) {
+        if (chatToolCallHtmlService != null && !patches.isEmpty()) {
+            broadcastEvent(active, assistantId, "tool_call_html", patches);
+        }
+    }
+
+    private void dispatchLifecycleHook(LifecycleHookService.LifecycleEvent event, long sessionId) {
+        if (lifecycleHookService == null) {
+            return;
+        }
+        try {
+            lifecycleHookService.dispatch(event, sessionId);
+        } catch (Throwable e) {
+            log.warn("Failed to dispatch lifecycle hook: event={}, sessionId={}", event, sessionId, e);
+        }
+    }
+
+    private void broadcastToolCallHostSnapshot(ActiveStream active, String assistantId) {
+        if (chatToolCallHtmlService != null) {
+            broadcastToolCallHtml(active, assistantId,
+                    chatToolCallHtmlService.hostSnapshot(active.pendingStream().sessionId(), assistantId));
+        }
     }
 
     private void broadcastEvent(ActiveStream active, String assistantId, String name, Object payload) {
@@ -495,7 +551,8 @@ public class UiController {
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
-        broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls(), "completedTs", completedMessage.completedTs()));
+        broadcastToolCallHostSnapshot(active, assistantId);
+        broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "completedTs", completedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
     }
@@ -508,6 +565,7 @@ public class UiController {
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
+        broadcastToolCallHostSnapshot(active, assistantId);
         broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
@@ -521,6 +579,7 @@ public class UiController {
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
+        broadcastToolCallHostSnapshot(active, assistantId);
         broadcastEvent(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
@@ -540,6 +599,7 @@ public class UiController {
             active.finished().set(true);
             activeStreams.remove(assistantId, active);
             activeStreamRegistryService.unregister(assistantId);
+            broadcastToolCallHostSnapshot(active, assistantId);
             broadcastEvent(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
             completeEmitters(active);
             appStateService.publishWorkspaceRailRefresh();
@@ -610,6 +670,12 @@ public class UiController {
         return "fragments/chat :: chat";
     }
 
+    @GetMapping("/ui/chat/tool-call/{assistantPublicId}/{toolCallId}")
+    @ResponseBody
+    public String loadToolCallGroup(@PathVariable String assistantPublicId, @PathVariable String toolCallId) {
+        return chatToolCallHtmlService.lazyGroup(assistantPublicId, toolCallId);
+    }
+
     @GetMapping("/ui/chat/image/{sessionId}/{toolCallId}")
     ResponseEntity<byte[]> streamDisplayImage(@PathVariable long sessionId, @PathVariable String toolCallId) throws Exception {
         AppStateService.DisplayImageView view = appStateService.loadDisplayImageView(sessionId, toolCallId);
@@ -676,11 +742,20 @@ public class UiController {
         return "fragments/projects :: shellUpdates";
     }
 
-    @GetMapping("/ui/system-balloons/stream")
     public SseEmitter systemBalloonStream(@RequestParam(value = "shellId", required = false) String shellId) {
+        return systemBalloonStream(shellId, null);
+    }
+
+    @GetMapping("/ui/system-balloons/stream")
+    public SseEmitter systemBalloonStream(@RequestParam(value = "shellId", required = false) String shellId,
+                                           HttpServletRequest request) {
         SseEmitter emitter = systemBalloonService.connect();
         if (systemBalloonService.markShellInitialized(shellId)) {
             sendInitialMcpFailureBalloons(emitter);
+            if (httpAuthProperties.enabled() && request != null && !PublicRequestScheme.isHttps(request)) {
+                systemBalloonService.publishWarning(emitter, "Use HTTPS",
+                        "Jupiter HTTP Basic authentication is enabled, but this connection is not using HTTPS. Configure HTTPS at the public proxy.");
+            }
         }
         return emitter;
     }
@@ -850,21 +925,65 @@ public class UiController {
     @GetMapping("/ui/settings")
     public String settingsModal(Model model) {
         AppStateView view = appStateService.loadViewData();
-        if (view.activeProject() == null) {
-            return "fragments/projects :: modalClose";
-        }
-
         populateProjectModel(model, view);
+        model.addAttribute("lifecycleHookSettings", appStateService.loadLifecycleHookSettings());
+        model.addAttribute("autoGitUpdateEnabled", appStateService.loadAutoGitUpdateEnabled());
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
         return "fragments/projects :: settingsModal";
     }
 
+    @GetMapping("/ui/settings/usage")
+    public String settingsUsage(@RequestParam(name = "range", defaultValue = "24h") String range, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeProject() == null) {
+            return "fragments/projects :: usageEmpty";
+        }
+        long hours = switch (range) {
+            case "7d" -> 24L * 7;
+            case "30d" -> 24L * 30;
+            case "60d" -> 24L * 60;
+            default -> 24;
+        };
+        Instant to = Instant.now().truncatedTo(ChronoUnit.HOURS).plus(1, ChronoUnit.HOURS);
+        Instant from = to.minus(hours, ChronoUnit.HOURS);
+        List<UsagePoint> points = tokenUsageService.findProjectHourlyUsage(view.activeProject().id(), from, to).stream()
+                .map(row -> new UsagePoint(row.hourStartUtc().toString(), resolveModelLabel(row.modelKey()), row.modelKey(),
+                        row.requestCount(), row.inputTokenCount(), row.outputTokenCount(), row.totalTokenCount()))
+                .toList();
+        model.addAttribute("usageRange", range.equals("7d") || range.equals("30d") || range.equals("60d") ? range : "24h");
+        try {
+            model.addAttribute("usageJson", SseJson.writeValueAsString(points));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize usage data", e);
+        }
+        return "fragments/projects :: settingsUsage";
+    }
+
+    @PostMapping("/ui/settings/hooks/apply")
+    public String applyLifecycleHookSettings(
+            @RequestParam(name = "assistantCompletedScript", required = false) String assistantCompletedScript,
+            @RequestParam(name = "assistantErroredScript", required = false) String assistantErroredScript,
+            @RequestParam(name = "subagentCompletedScript", required = false) String subagentCompletedScript,
+            @RequestParam("timeoutSeconds") int timeoutSeconds,
+            Model model) {
+        appStateService.updateLifecycleHookSettings(new LifecycleHookSettings(assistantCompletedScript,
+                assistantErroredScript, subagentCompletedScript, timeoutSeconds));
+        return "fragments/projects :: modalClose";
+    }
+
+    @PostMapping("/ui/settings/auto-git-update/apply")
+    public String applyAutoGitUpdateSettings(@RequestParam(name = "enabled", defaultValue = "false") boolean enabled) {
+        appStateService.updateAutoGitUpdateEnabled(enabled);
+        return "fragments/projects :: modalClose";
+    }
+
     @PostMapping("/ui/settings/apply")
     public String applySettings(@RequestParam("workspaceInitCommands") String workspaceInitCommands,
+                                @RequestParam(name = "commandEnvironmentAllowlist", required = false) String commandEnvironmentAllowlist,
                                 @RequestParam(name = "environmentVariableNames", required = false) List<String> environmentVariableNames,
                                 @RequestParam(name = "environmentVariableValues", required = false) List<String> environmentVariableValues,
                                 Model model) {
-        return applySettingsInternal(workspaceInitCommands, environmentVariableNames, environmentVariableValues, model);
+        return applySettingsInternal(workspaceInitCommands, commandEnvironmentAllowlist, environmentVariableNames, environmentVariableValues, model);
     }
 
     @PostMapping("/ui/settings/mcp/apply")
@@ -873,6 +992,7 @@ public class UiController {
     }
 
     String applySettingsInternal(String workspaceInitCommands,
+                                 String commandEnvironmentAllowlist,
                                  List<String> environmentVariableNames,
                                  List<String> environmentVariableValues,
                                  Model model) {
@@ -889,8 +1009,8 @@ public class UiController {
             environmentVariables.add(new ProjectEnvironmentVariable(name, value));
         }
 
-        appStateService.updateProjectWorkspaceInitCommands(view.activeProject().id(), workspaceInitCommands);
-        appStateService.updateProjectEnvironmentVariables(view.activeProject().id(), environmentVariables);
+        appStateService.updateProjectSettings(view.activeProject().id(), workspaceInitCommands,
+                environmentVariables, commandEnvironmentAllowlist);
         reloadMcpRuntimeForProject(view.activeProject().id());
         return "fragments/projects :: modalClose";
     }
@@ -965,6 +1085,38 @@ public class UiController {
     public String openAiOAuthStatus(Model model) {
         model.addAttribute("openAiOAuthView", openAiOAuthService.pollCurrentDeviceAuthorization());
         return "fragments/projects :: openaiOAuthSection";
+    }
+
+    @PostMapping("/ui/workspaces/active/git/pull")
+    public String pullActiveWorkspace(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeWorkspace() == null) {
+            systemBalloonService.publishWarning("Git Pull", "No active workspace is selected.");
+            addGitPullModel(model, null);
+        } else {
+            ManualGitPullCoordinator.DispatchResult result = manualGitPullCoordinator().dispatch(view.activeWorkspace().id());
+            addGitPullModel(model, view.activeWorkspace(), result != ManualGitPullCoordinator.DispatchResult.FAILED);
+        }
+        return "fragments/projects :: gitPullControl";
+    }
+
+    @GetMapping("/ui/workspaces/{workspaceId}/git/pull/status")
+    public String gitPullStatus(@PathVariable long workspaceId, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        WorkspaceView workspace = view.activeWorkspace() != null && view.activeWorkspace().id() == workspaceId
+                ? view.activeWorkspace() : null;
+        addGitPullModel(model, workspace, workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
+        return "fragments/projects :: gitPullControl";
+    }
+
+    private void addGitPullModel(Model model, WorkspaceView workspace) {
+        addGitPullModel(model, workspace, workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
+    }
+
+    private void addGitPullModel(Model model, WorkspaceView workspace, boolean busy) {
+        model.addAttribute("workspaceId", workspace == null ? null : workspace.id());
+        model.addAttribute("gitPullBusy", workspace != null && busy);
+        model.addAttribute("hasWorkspace", workspace != null);
     }
 
     @PostMapping("/ui/projects/add")
@@ -1363,7 +1515,7 @@ public class UiController {
     }
 
     private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {
-        model.addAttribute("workspace", new Workspace(inspection.workspaceId(), inspection.workspaceName(), inspection.workspacePath()));
+        model.addAttribute("workspace", new Workspace(inspection.workspaceId(), inspection.workspaceName(), inspection.workspacePath(), false, RailStatus.NONE));
         model.addAttribute("workspaceId", inspection.workspaceId());
         model.addAttribute("workspaceName", inspection.workspaceName());
         model.addAttribute("workspacePath", inspection.workspacePath());
@@ -1406,6 +1558,7 @@ public class UiController {
         try {
             Path relForGit = FileUtils.relativizeWorkspacePath(root, resolved);
             ProcessBuilder pb = new ProcessBuilder("git", "diff", "--", relForGit.toString());
+            ProcessEnvironmentSanitizer.sanitize(pb);
             pb.directory(new File(root.toAbsolutePath().normalize().toString()));
             Process p = pb.start();
             StringBuilder out = new StringBuilder();
@@ -1501,21 +1654,17 @@ public class UiController {
     }
 
     private ChatMessage toChatMessage(ChatMessageView view) {
-        String modelLabel = view.metadata() == null ? null : resolveModelLabel(view.metadata().modelId());
-        return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.completedTs(), view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata(), modelLabel);
+        return chatPresentationService.toChatMessage(view, this::resolveModelLabel);
     }
 
-    private ToolCallView toToolCallView(com.judepereira.jupiter.persistence.Persistence.ToolCallView view) {
-        return new ToolCallView(view.toolCallId(), view.toolName(), view.success(), view.inputPreview(), view.outputPreview(), view.inputTruncated(), view.outputTruncated(),
-                view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(), view.status(), view.imageUrl(), view.imageAlt(), view.imagePath(), view.imageMediaType());
-    }
+    public record UsagePoint(String hour, String modelLabel, String modelKey, long requests, Long input, Long output, Long total) {}
 
     private ChangedFile toChangedFile(ChangedFileView view) {
         return view == null ? null : new ChangedFile(view.key(), view.source(), view.id(), view.path(), view.diff());
     }
 
     private Project toProject(ProjectView view) {
-        return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(), view.environmentVariables());
+        return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(), view.environmentVariables(), view.commandEnvironmentAllowlist());
     }
 
     private Map<String, String> activeProjectEnvironmentVariables(AppStateView view) {
@@ -1544,26 +1693,90 @@ public class UiController {
         return fileName == null ? path.toString() : fileName.toString();
     }
 
+    private static final String CHATGPT_SESSION_EXPIRED_MESSAGE = "Your ChatGPT/OpenAI session has expired. Please sign in again.";
+
     private String normalizeProviderErrorMessage(Exception e) {
-        String message = e == null ? null : e.getMessage();
-        if (message == null || message.isBlank()) {
+        if (e == null) {
             return "error";
         }
 
-        String rawJson = extractJsonObject(message);
-        if (rawJson != null) {
+        String fallbackMessage = plainMessage(e.getMessage());
+        String providerMessage = null;
+
+        for (Throwable current = e; current != null; current = current.getCause()) {
+            if (isAuthenticationExceptionWithTokenExpired(current)) {
+                return CHATGPT_SESSION_EXPIRED_MESSAGE;
+            }
+
+            String message = current.getMessage();
+            if (message == null || message.isBlank()) {
+                continue;
+            }
+
+            String rawJson = extractJsonObject(message);
+            if (rawJson == null) {
+                continue;
+            }
+
             try {
                 ProviderErrorPayload payload = SseJson.readValue(rawJson, ProviderErrorPayload.class);
+                if (isTokenExpired(payload)) {
+                    return CHATGPT_SESSION_EXPIRED_MESSAGE;
+                }
+
                 String errorMessage = payload.error() == null ? null : payload.error().message();
                 if (errorMessage != null && !errorMessage.isBlank()) {
-                    log.warn("Provider error payload: {}", rawJson);
-                    return errorMessage;
+                    providerMessage = errorMessage;
                 }
             } catch (Exception ignored) {
             }
         }
 
-        return message;
+        if (providerMessage != null) {
+            return providerMessage;
+        }
+
+        return fallbackMessage == null || fallbackMessage.isBlank() ? "error" : fallbackMessage;
+    }
+
+    private boolean isAuthenticationExceptionWithTokenExpired(Throwable throwable) {
+        if (throwable == null) {
+            return false;
+        }
+        String simpleName = throwable.getClass().getSimpleName();
+        if (!"AuthenticationException".equals(simpleName)) {
+            return false;
+        }
+        return containsTokenExpired(throwable);
+    }
+
+    private boolean containsTokenExpired(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            String message = current.getMessage();
+            if (message != null && message.contains("token_expired")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isTokenExpired(ProviderErrorPayload payload) {
+        if (payload == null) {
+            return false;
+        }
+        return isTokenExpired(payload.error()) || isTokenExpired(payload.detail());
+    }
+
+    private boolean isTokenExpired(ProviderError error) {
+        return error != null && "token_expired".equals(error.code());
+    }
+
+    private boolean isTokenExpired(ProviderDetail detail) {
+        return detail != null && "token_expired".equals(detail.code());
+    }
+
+    private String plainMessage(String message) {
+        return message == null || message.isBlank() || extractJsonObject(message) != null ? null : message;
     }
 
     private String extractJsonObject(String message) {
@@ -1621,204 +1834,21 @@ public class UiController {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderErrorPayload(ProviderError error) {}
+    private record ProviderErrorPayload(ProviderError error, ProviderDetail detail) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderError(String message) {}
+    private record ProviderError(String message, String code) {}
 
-    public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
-                                String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null);
-        }
-    }
-
-    public record ToolCallGroupView(String toolName, String displayLabel, boolean success, int count, List<ToolCallView> calls) {}
-
-    public record ToolCallBundleView(String summaryLabel, boolean success, List<ToolCallGroupView> groups) {}
-
-    public record ToolCallBlockView(ToolCallBundleView bundle, ToolCallGroupView group) {
-        public static ToolCallBlockView bundle(ToolCallBundleView bundle) {
-            return new ToolCallBlockView(bundle, null);
-        }
-
-        public static ToolCallBlockView group(ToolCallGroupView group) {
-            return new ToolCallBlockView(null, group);
-        }
-    }
-
-    public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata, String modelLabel) {
-        public ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
-            this(role, text, ts, pending, id, completedTs, toolCalls, metadata, null);
-        }
-
-        private static final Set<String> EXPLORATORY_TOOL_NAMES = Set.of("list_files", "read_file", "search_code");
-        private static final Set<String> SPECIAL_TOOL_NAMES = Set.of("task", "display_image");
-
-        public List<ToolCallGroupView> toolCallGroups() {
-            if (toolCalls.isEmpty()) {
-                return List.of();
-            }
-
-            List<ToolCallGroupView> groups = new ArrayList<>();
-            List<ToolCallView> currentCalls = new ArrayList<>();
-            for (ToolCallView call : toolCalls) {
-                if (currentCalls.isEmpty() || startsNewGroup(currentCalls.get(currentCalls.size() - 1), call)) {
-                    if (!currentCalls.isEmpty()) {
-                        groups.add(toGroup(currentCalls));
-                    }
-                    currentCalls = new ArrayList<>();
-                }
-
-                currentCalls.add(call);
-            }
-
-            if (!currentCalls.isEmpty()) {
-                groups.add(toGroup(currentCalls));
-            }
-
-            return List.copyOf(groups);
-        }
-
-        public List<ToolCallBlockView> toolCallBlocks() {
-            if (toolCalls.isEmpty()) {
-                return List.of();
-            }
-
-            List<ToolCallBlockView> blocks = new ArrayList<>();
-            List<ToolCallGroupView> currentBundleGroups = new ArrayList<>();
-            for (ToolCallGroupView group : toolCallGroups()) {
-                if (isSpecialStandalone(group.toolName())) {
-                    if (!currentBundleGroups.isEmpty()) {
-                        blocks.add(ToolCallBlockView.bundle(toBundle(currentBundleGroups)));
-                        currentBundleGroups = new ArrayList<>();
-                    }
-                    blocks.add(ToolCallBlockView.group(group));
-                    continue;
-                }
-
-                currentBundleGroups.add(group);
-            }
-
-            if (!currentBundleGroups.isEmpty()) {
-                blocks.add(ToolCallBlockView.bundle(toBundle(currentBundleGroups)));
-            }
-
-            return List.copyOf(blocks);
-        }
-
-        private ToolCallBundleView toBundle(List<ToolCallGroupView> groups) {
-            return new ToolCallBundleView(toolUsageSummaryLabel(groups), groups.stream().allMatch(ToolCallGroupView::success), List.copyOf(groups));
-        }
-
-        private String toolUsageSummaryLabel(List<ToolCallGroupView> groups) {
-            return "Used: " + toolUsageLabel(groups);
-        }
-
-        private boolean startsNewGroup(ToolCallView previous, ToolCallView current) {
-            if (isSpecialStandalone(previous.toolName()) || isSpecialStandalone(current.toolName())) {
-                return true;
-            }
-
-            if (isExploratory(previous.toolName()) && isExploratory(current.toolName())) {
-                return false;
-            }
-
-            return !previous.toolName().equals(current.toolName());
-        }
-
-        private boolean isExploratory(String toolName) {
-            return EXPLORATORY_TOOL_NAMES.contains(toolName);
-        }
-
-        private boolean isSpecialStandalone(String toolName) {
-            return SPECIAL_TOOL_NAMES.contains(toolName);
-        }
-
-        private ToolCallGroupView toGroup(List<ToolCallView> calls) {
-            ToolCallView first = calls.get(0);
-            return new ToolCallGroupView(first.toolName(), displayLabel(calls), calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
-        }
-
-        private String toolUsageLabel(List<ToolCallGroupView> groups) {
-            LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
-            for (ToolCallGroupView group : groups) {
-                for (ToolCallView call : group.calls()) {
-                    counts.merge(call.toolName(), 1, Integer::sum);
-                }
-            }
-            StringBuilder label = new StringBuilder();
-            for (var entry : counts.entrySet()) {
-                if (!label.isEmpty()) {
-                    label.append(", ");
-                }
-                label.append(entry.getKey());
-                if (entry.getValue() > 1) {
-                    label.append(" (").append(entry.getValue()).append(")");
-                }
-            }
-            return label.toString();
-        }
-
-        private String displayLabel(List<ToolCallView> calls) {
-            StringBuilder label = new StringBuilder();
-            String currentToolName = calls.get(0).toolName();
-            int currentCount = 1;
-
-            for (int i = 1; i < calls.size(); i++) {
-                String nextToolName = calls.get(i).toolName();
-                if (currentToolName.equals(nextToolName)) {
-                    currentCount++;
-                    continue;
-                }
-
-                appendDisplaySegment(label, currentToolName, currentCount);
-                currentToolName = nextToolName;
-                currentCount = 1;
-            }
-
-            appendDisplaySegment(label, currentToolName, currentCount);
-            return label.toString();
-        }
-
-        private void appendDisplaySegment(StringBuilder label, String toolName, int count) {
-            if (!label.isEmpty()) {
-                label.append(", ");
-            }
-            label.append(toolName);
-            if (count > 1) {
-                label.append(" (").append(count).append(")");
-            }
-        }
-    }
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ProviderDetail(String message, String code) {}
 
     public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
 
-    public record Project(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables) {
-        public Project(long id, String name, String path, String workspaceInitCommands) {
-            this(id, name, path, workspaceInitCommands, List.of());
-        }
+    public record Project(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables,
+                          String commandEnvironmentAllowlist) {
     }
 
     public record Workspace(long id, String name, String path, boolean unread, RailStatus railStatus) {
-        public Workspace(long id, String name, String path, boolean unread) {
-            this(id, name, path, unread, RailStatus.NONE);
-        }
-
-        public Workspace(long id, String name, String path, boolean unread, boolean inProgress) {
-            this(id, name, path, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
-        }
-
-        public Workspace(long id, String name, String path) {
-            this(id, name, path, false, RailStatus.NONE);
-        }
 
         public boolean inProgress() {
             return railStatus == RailStatus.IN_PROGRESS;
@@ -1832,17 +1862,6 @@ public class UiController {
     public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
 
     public record Session(long id, String name, boolean unread, RailStatus railStatus) {
-        public Session(long id, String name, boolean unread) {
-            this(id, name, unread, RailStatus.NONE);
-        }
-
-        public Session(long id, String name, boolean unread, boolean inProgress) {
-            this(id, name, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
-        }
-
-        public Session(long id, String name) {
-            this(id, name, false, RailStatus.NONE);
-        }
 
         public boolean inProgress() {
             return railStatus == RailStatus.IN_PROGRESS;
@@ -1863,8 +1882,8 @@ public class UiController {
     private record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean started,
                                 AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,
                                 CancellationToken cancellationToken, AtomicReference<StringBuilder> accumulatedText) {
-        private ActiveStream(PendingStream pendingStream, CancellationToken cancellationToken) {
-            this(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false),
+        private static ActiveStream create(PendingStream pendingStream, CancellationToken cancellationToken) {
+            return new ActiveStream(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false),
                     new AtomicBoolean(false), new AtomicReference<>(), cancellationToken, new AtomicReference<>(new StringBuilder()));
         }
     }

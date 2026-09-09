@@ -73,6 +73,16 @@
             });
         }
 
+        function scheduleInitialFocus(entry) {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (!mounts.has(entry.mount) || entry.hasFocused) return;
+                    entry.terminal.focus();
+                    entry.hasFocused = true;
+                });
+            });
+        }
+
         function syncTerminals() {
             syncQueued = false;
 
@@ -117,11 +127,12 @@
 
             const socket = new WebSocket(wsUrl);
             let expectedClose = false;
-            const entry = {mount, terminal, fitAddon, socket, resizeObserver: null, lastSentResizeSignature: ''};
+            const entry = {mount, terminal, fitAddon, socket, resizeObserver: null, lastSentResizeSignature: '', hasFocused: false};
             mounts.set(mount, entry);
 
             socket.addEventListener('open', () => {
                 scheduleInitialFit(entry);
+                scheduleInitialFocus(entry);
             });
 
             const resizeObserver = new ResizeObserver(() => queueSync());

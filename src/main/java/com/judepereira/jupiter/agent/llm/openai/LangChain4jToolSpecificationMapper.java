@@ -4,6 +4,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolParameter;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
 import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonBooleanSchema;
 import dev.langchain4j.model.chat.request.json.JsonEnumSchema;
 import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
@@ -24,11 +25,20 @@ public final class LangChain4jToolSpecificationMapper {
 
         List<ToolSpecification> specifications = new ArrayList<>(tools.size());
         for (ToolDefinition tool : tools) {
-            specifications.add(ToolSpecification.builder()
-                    .name(tool.getName())
-                    .description(tool.getDescription() == null ? "" : tool.getDescription())
-                    .parameters(toObjectSchema(tool.getSchema()))
-                    .build());
+            ToolSpecification nativeSpecification = tool.getNativeToolSpecification();
+            if (nativeSpecification != null) {
+                specifications.add(ToolSpecification.builder()
+                        .name(tool.getName())
+                        .description(nativeSpecification.description())
+                        .parameters(nativeSpecification.parameters())
+                        .build());
+            } else {
+                specifications.add(ToolSpecification.builder()
+                        .name(tool.getName())
+                        .description(tool.getDescription() == null ? "" : tool.getDescription())
+                        .parameters(toObjectSchema(tool.getSchema()))
+                        .build());
+            }
         }
         return specifications;
     }
@@ -88,6 +98,12 @@ public final class LangChain4jToolSpecificationMapper {
         }
         if (parameter instanceof ToolParameter.ObjectParameter objectParameter) {
             return toObjectSchema(objectParameter.schema(), objectParameter.description());
+        }
+        if (parameter instanceof ToolParameter.ArrayParameter arrayParameter) {
+            return JsonArraySchema.builder()
+                    .description(arrayParameter.description())
+                    .items(toSchemaElement(arrayParameter.items()))
+                    .build();
         }
 
         throw new IllegalStateException("Unsupported tool parameter type: " + parameter.getClass().getName());

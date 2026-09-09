@@ -7,6 +7,7 @@ import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.ui.UiController;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -231,7 +232,7 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
-    public void cleanNonDefaultWorkspaceWithoutAnUpstreamClosesWithoutAConfirmationModal(@TempDir Path projectPath) throws Exception {
+    public void unpushedNonDefaultWorkspaceWithoutAnUpstreamReturnsTheConfirmationModal(@TempDir Path projectPath) throws Exception {
         initGitRepo(projectPath);
         UiController controller = newController();
 
@@ -246,11 +247,12 @@ public class UiControllerProjectsAndDirectoryTests {
         ConcurrentModel close = new ConcurrentModel();
         String view = controller.closeWorkspace(featureWorkspace.id(), close);
 
-        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
-        assertThat(workspaces(close)).extracting(UiController.Workspace::path)
-                .containsExactly(projectPath.toAbsolutePath().normalize().toString());
-        assertThat(activeWorkspace(close).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
-        assertThat(Files.exists(Path.of(featureWorkspace.path()))).isFalse();
+        assertThat(view).isEqualTo("fragments/projects :: workspaceCloseModal");
+        assertThat(close.getAttribute("workspaceCloseStatus")).isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
+        AppStateService.WorkspaceCloseInspection inspection = (AppStateService.WorkspaceCloseInspection) close.getAttribute("workspaceCloseStatus");
+        assertThat(inspection.uncommittedChanges()).isFalse();
+        assertThat(inspection.unpushedCommits()).isTrue();
+        assertThat(inspection.reasons()).contains("Local commits detected, that haven't been pushed");
     }
 
     @Test
@@ -346,17 +348,17 @@ public class UiControllerProjectsAndDirectoryTests {
 
         ConcurrentModel firstHistory = new ConcurrentModel();
         controller.activateProject(firstProjectId, firstHistory);
-        assertThat(chatMessages(firstHistory)).extracting(UiController.ChatMessage::text)
+        assertThat(chatMessages(firstHistory)).extracting(ChatPresentationService.ChatMessage::text)
                 .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?", "alpha", "reply-1");
 
         ConcurrentModel secondHistory = new ConcurrentModel();
         controller.activateProject(secondProjectId, secondHistory);
-        assertThat(chatMessages(secondHistory)).extracting(UiController.ChatMessage::text)
+        assertThat(chatMessages(secondHistory)).extracting(ChatPresentationService.ChatMessage::text)
                 .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?", "beta", "reply-2");
     }
 
     private static UiController newController() {
-        return TestAppStateSupport.controller(new CodingAgentHarness(null, null, null) {
+        return TestAppStateSupport.controller(new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 AgentTurnResult result = new AgentTurnResult("reply", List.of());
@@ -415,8 +417,8 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<UiController.ChatMessage> chatMessages(ConcurrentModel model) {
-        return (List<UiController.ChatMessage>) model.getAttribute("chatMessages");
+    private static List<ChatPresentationService.ChatMessage> chatMessages(ConcurrentModel model) {
+        return (List<ChatPresentationService.ChatMessage>) model.getAttribute("chatMessages");
     }
 
     private static UiController.Project activeProject(ConcurrentModel model) {
@@ -432,7 +434,7 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     private static String assistantId(ConcurrentModel model) {
-        List<UiController.ChatMessage> messages = chatMessages(model);
+        List<ChatPresentationService.ChatMessage> messages = chatMessages(model);
         return messages.get(messages.size() - 1).id();
     }
 
@@ -446,7 +448,7 @@ public class UiControllerProjectsAndDirectoryTests {
         private final List<AgentTurnRequest> requests = new ArrayList<>();
 
         private RecordingHarness() {
-            super(null, null, null);
+            super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
         }
 
         @Override

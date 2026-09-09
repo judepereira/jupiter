@@ -4,7 +4,7 @@ import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
-import com.judepereira.jupiter.ui.UiController.ChatMessage;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
@@ -25,6 +25,7 @@ public class CommandController {
     private final CommandCatalogService commandCatalogService;
     private final CommandStreamService commandStreamService;
     private final AppStateService appStateService;
+    private final ChatPresentationService chatPresentationService;
 
     @GetMapping(value = "/catalog", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
@@ -51,10 +52,8 @@ public class CommandController {
                 appStateService.loadSessionProjectEnvironmentVariables(view.activeSession().id()));
 
         model.addAttribute("newChatMessages", List.of(
-                new ChatMessage(queuedTurn.userMessage().role(), queuedTurn.userMessage().text(), queuedTurn.userMessage().ts(), queuedTurn.userMessage().pending(),
-                        queuedTurn.userMessage().id(), queuedTurn.userMessage().completedTs(), List.of(), queuedTurn.userMessage().metadata()),
-                new ChatMessage(queuedTurn.assistantMessage().role(), queuedTurn.assistantMessage().text(), queuedTurn.assistantMessage().ts(), queuedTurn.assistantMessage().pending(),
-                        queuedTurn.assistantMessage().id(), queuedTurn.assistantMessage().completedTs(), List.of(), queuedTurn.assistantMessage().metadata())));
+                chatPresentationService.toChatMessage(queuedTurn.userMessage(), ignored -> null),
+                chatPresentationService.toChatMessage(queuedTurn.assistantMessage(), ignored -> null)));
         model.addAttribute("pendingStreamBaseUrl", "/ui/chat/stream");
         model.addAttribute("subagentView", false);
         return "fragments/chat-response :: newRows";

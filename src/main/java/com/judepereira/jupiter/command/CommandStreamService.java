@@ -11,7 +11,8 @@ import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
-import lombok.RequiredArgsConstructor;
+import com.judepereira.jupiter.ui.ChatToolCallHtmlService;
+import com.judepereira.jupiter.ui.DomPatch;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -19,6 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -27,7 +29,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Log4j2
 @Service
-@RequiredArgsConstructor
 public class CommandStreamService {
 
     private static final ObjectMapper SSE_JSON = new ObjectMapper();
@@ -36,14 +37,38 @@ public class CommandStreamService {
     private final AppStateService appStateService;
     private final RunCommandTool runCommandTool;
     private final ActiveStreamRegistryService activeStreamRegistryService;
+    private final ChatToolCallHtmlService chatToolCallHtmlService;
 
     private final ConcurrentMap<String, ActiveCommandStream> activeStreams = new ConcurrentHashMap<>();
 
+    public CommandStreamService(CommandCatalogService commandCatalogService, AppStateService appStateService, RunCommandTool runCommandTool,
+                                 ActiveStreamRegistryService activeStreamRegistryService, ChatToolCallHtmlService chatToolCallHtmlService) {
+        this.commandCatalogService = commandCatalogService;
+        this.appStateService = appStateService;
+        this.runCommandTool = runCommandTool;
+        this.activeStreamRegistryService = activeStreamRegistryService;
+        this.chatToolCallHtmlService = chatToolCallHtmlService;
+    }
+
     public void queue(long sessionId, String assistantId, String commandId, String workspaceRoot, Map<String, String> environmentVariables) {
-        activeStreams.put(assistantId, new ActiveCommandStream(new PendingCommand(sessionId, assistantId, commandId, workspaceRoot,
-                environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables))));
+        activeStreams.put(assistantId, new ActiveCommandStream(
+                new PendingCommand(sessionId, assistantId, commandId, workspaceRoot,
+                        environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables),
+                        appStateService.loadSessionProjectCommandEnvironmentAllowlist(sessionId)),
+                new CopyOnWriteArrayList<>(),
+                new AtomicBoolean(false),
+                new AtomicBoolean(false),
+                new AtomicBoolean(false),
+                new AtomicReference<>(),
+                new CancellationToken(),
+                new AtomicReference<>(new StringBuilder())));
         activeStreamRegistryService.register(assistantId, sessionId, workspaceRoot);
         appStateService.publishWorkspaceRailRefresh();
+    }
+
+    PendingCommand pendingCommand(String assistantId) {
+        ActiveCommandStream active = activeStreams.get(assistantId);
+        return active == null ? null : active.pendingCommand();
     }
 
     public SseEmitter tryConnect(String assistantId) {
@@ -54,6 +79,7 @@ public class CommandStreamService {
 
         SseEmitter emitter = new SseEmitter(0L);
         attachEmitter(active, emitter, assistantId);
+        sendToolCallSnapshot(active, assistantId, emitter);
         if (active.started().compareAndSet(false, true)) {
             startActiveStream(assistantId, active);
         }
@@ -90,13 +116,16 @@ public class CommandStreamService {
             CancellationToken cancellationToken = active.cancellationToken();
             ToolExecutionContext context = new ToolExecutionContext(Path.of(pending.workspaceRoot()), false, true,
                     timeoutSeconds == null ? 60 : timeoutSeconds, pending.sessionId(), null, null, assistantId,
-                    pending.environmentVariables(), (eventName, payload) -> broadcastEvent(active, assistantId, "tool_call_progress", Map.of(
+                    pending.environmentVariables(), pending.commandEnvironmentAllowlist(), (eventName, payload) -> broadcastEvent(active, assistantId, "tool_call_progress", Map.of(
                             "toolCallId", assistantId,
                             "toolName", "run_command",
                             "eventName", eventName,
                             "payload", payload
                     )), cancellationToken);
-            broadcastEvent(active, assistantId, "tool_call_started", new ToolCallTrace(assistantId, "run_command", toolArgs(command), false, "", Map.of()));
+            ToolCallTrace startTrace = new ToolCallTrace(assistantId, "run_command", toolArgs(command), false, "", Map.of());
+            appStateService.startToolCallTrace(pending.sessionId(), assistantId, new ToolCallTraceInput(startTrace.getToolCallId(), startTrace.getToolName(), startTrace.getArgs(), startTrace.isSuccess(), startTrace.getTextSummary(), startTrace.getMachineSummary()));
+            broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.toolStarted(pending.sessionId(), assistantId));
+            broadcastEvent(active, assistantId, "tool_call_started", startTrace);
 
             ToolExecutionResult result = runCommandTool.execute(toolArgs(command), context);
             cancellationToken.throwIfCancelled();
@@ -106,11 +135,13 @@ public class CommandStreamService {
             ToolCallTrace trace = new ToolCallTrace(assistantId, "run_command", toolArgs(command), result.isSuccess(), fullOutput, result.getMachine());
             ToolCallTraceInput traceInput = new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
             var storedCall = appStateService.appendToolCallTrace(pending.sessionId(), assistantId, traceInput);
+            broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.toolCompleted(pending.sessionId(), assistantId, trace.getToolCallId()));
             broadcastEvent(active, assistantId, "tool_call", storedCall);
 
             String finalText = summarizeOutput(fullOutput);
             var completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, List.of(traceInput));
-            broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "toolCalls", completedMessage.toolCalls(), "assistantMessageId", assistantId));
+            broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.hostSnapshot(pending.sessionId(), assistantId));
+            broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "assistantMessageId", assistantId));
             finish(active, assistantId, completed);
         } catch (StreamCancelledException e) {
             stopActiveStream(assistantId, active, accumulated.toString());
@@ -136,11 +167,19 @@ public class CommandStreamService {
             stopActiveStream(assistantId, active, active.accumulatedText().get().toString());
             return;
         }
+        ChatMessageView failedMessage;
         try {
-            appStateService.failAssistantMessage(active.pendingCommand().sessionId(), assistantId, "Command execution failed: " + normalizeMessage(e));
-        } catch (Exception ignored) {
+            failedMessage = appStateService.failAssistantMessage(active.pendingCommand().sessionId(), assistantId, "Command execution failed: " + normalizeMessage(e));
+        } catch (Exception persistenceFailure) {
+            log.error("Failed to persist command stream failure for assistant {}", assistantId, persistenceFailure);
+            broadcastEvent(active, assistantId, "error", Map.of("message", normalizeMessage(persistenceFailure)));
+            finish(active, assistantId, new AtomicBoolean());
+            return;
         }
-        broadcastEvent(active, assistantId, "error", Map.of("message", normalizeMessage(e)));
+        broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.hostSnapshot(active.pendingCommand().sessionId(), assistantId));
+        broadcastEvent(active, assistantId, "error", failedMessage == null
+                ? Map.of("message", normalizeMessage(e))
+                : Map.of("message", normalizeMessage(e), "completedTs", failedMessage.completedTs()));
         finish(active, assistantId, new AtomicBoolean());
         log.error("Command stream failed for assistant {}", assistantId, e);
     }
@@ -170,13 +209,21 @@ public class CommandStreamService {
         if (runner != null) {
             runner.interrupt();
         }
-        ChatMessageView stoppedMessage = null;
+        ChatMessageView stoppedMessage;
         try {
             stoppedMessage = appStateService.stopAssistantMessage(active.pendingCommand().sessionId(), assistantId, partialText);
-        } catch (Exception ignored) {
+            broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.hostSnapshot(active.pendingCommand().sessionId(), assistantId));
+        } catch (Exception e) {
+            log.error("Failed to persist stopped command stream for assistant {}", assistantId, e);
+            broadcastEvent(active, assistantId, "error", Map.of("message", normalizeMessage(e)));
+            active.finished().set(true);
+            activeStreams.remove(assistantId, active);
+            activeStreamRegistryService.unregister(assistantId);
+            completeEmitters(active);
+            return false;
         }
-        Object completedTs = stoppedMessage == null ? null : stoppedMessage.completedTs();
-        String message = stoppedMessage == null ? "Action Interrupted" : stoppedMessage.text();
+        Object completedTs = stoppedMessage.completedTs();
+        String message = stoppedMessage.text();
         broadcastEvent(active, assistantId, "stopped", completedTs == null ? Map.of("message", message) : Map.of("message", message, "completedTs", completedTs));
         active.finished().set(true);
         activeStreams.remove(assistantId, active);
@@ -196,6 +243,23 @@ public class CommandStreamService {
 
     private void detachEmitter(ActiveCommandStream active, SseEmitter emitter) {
         active.emitters().remove(emitter);
+    }
+
+    private void sendToolCallSnapshot(ActiveCommandStream active, String assistantId, SseEmitter emitter) {
+        try {
+            emitter.send(SseEmitter.event().name("tool_call_html").data(SSE_JSON.writeValueAsString(
+                    chatToolCallHtmlService.hostSnapshot(active.pendingCommand().sessionId(), assistantId))));
+        } catch (Exception e) {
+            log.debug("Dropping disconnected SSE subscriber for assistant {}", assistantId, e);
+            detachEmitter(active, emitter);
+        }
+    }
+
+    private void broadcastToolCallHtml(ActiveCommandStream active, String assistantId, List<DomPatch> patches) {
+        if (patches.isEmpty()) {
+            return;
+        }
+        broadcastEvent(active, assistantId, "tool_call_html", patches);
     }
 
     private void broadcastEvent(ActiveCommandStream active, String assistantId, String name, Object payload) {
@@ -229,7 +293,13 @@ public class CommandStreamService {
         return args;
     }
 
-    private record PendingCommand(long sessionId, String assistantId, String commandId, String workspaceRoot, Map<String, String> environmentVariables) {}
+    record PendingCommand(long sessionId, String assistantId, String commandId, String workspaceRoot,
+                          Map<String, String> environmentVariables, Set<String> commandEnvironmentAllowlist) {
+        PendingCommand {
+            environmentVariables = environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables);
+            commandEnvironmentAllowlist = commandEnvironmentAllowlist == null ? Set.of() : Set.copyOf(commandEnvironmentAllowlist);
+        }
+    }
 
     private record ActiveCommandStream(PendingCommand pendingCommand, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean started,
                                        AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,

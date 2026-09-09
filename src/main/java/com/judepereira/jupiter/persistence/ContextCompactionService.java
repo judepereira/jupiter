@@ -33,17 +33,15 @@ public class ContextCompactionService {
 
     private final AppStateService appStateService;
     private final AgentModelClientFactory modelClientFactory;
+    private final TokenUsageService tokenUsageService;
     private final SystemPromptComposer systemPromptComposer;
-
-    public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory) {
-        this(appStateService, modelClientFactory, new SystemPromptComposer());
-    }
 
     @Autowired
     public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory,
-                                    SystemPromptComposer systemPromptComposer) {
+                                    TokenUsageService tokenUsageService, SystemPromptComposer systemPromptComposer) {
         this.appStateService = appStateService;
         this.modelClientFactory = modelClientFactory;
+        this.tokenUsageService = tokenUsageService;
         this.systemPromptComposer = systemPromptComposer;
     }
 
@@ -78,13 +76,16 @@ public class ContextCompactionService {
         AgentModelOptions options = new AgentModelOptions(model.id(), model.apiModelId(), thinkingLevel, model.supportsReasoning(), agent.textVerbosity());
         StringBuilder streamedSummary = new StringBuilder();
         ModelResponse summaryResult = client.chatStreaming(List.of(
-                new Message(Message.Role.SYSTEM, SUMMARY_SYSTEM_PROMPT),
-                new Message(Message.Role.USER, transcript)
+                new Message(Message.Role.SYSTEM, SUMMARY_SYSTEM_PROMPT, null, null),
+                new Message(Message.Role.USER, transcript, null, null)
         ), List.of(), options, delta -> {
             if (delta != null) {
                 streamedSummary.append(delta);
             }
         });
+        if (tokenUsageService != null) {
+            tokenUsageService.recordModelResponse(sessionId, model.id(), "compaction", summaryResult);
+        }
 
         String summary = summaryResult.getAssistantText();
         if (summary == null || summary.isBlank()) {

@@ -1,7 +1,12 @@
 package com.judepereira.jupiter.persistence;
 
+import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 public final class Persistence {
 
@@ -19,9 +24,30 @@ public final class Persistence {
     private Persistence() {
     }
 
-    public record ProjectView(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables) {
-        public ProjectView(long id, String name, String path, String workspaceInitCommands) {
-            this(id, name, path, workspaceInitCommands, List.of());
+    public record ProjectView(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables,
+                              String commandEnvironmentAllowlist) {
+        private static final Pattern ENVIRONMENT_VARIABLE_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+        public Set<String> commandEnvironmentAllowlistNames() {
+            return parseCommandEnvironmentAllowlist(commandEnvironmentAllowlist);
+        }
+
+        public static Set<String> parseCommandEnvironmentAllowlist(String rawAllowlist) {
+            if (rawAllowlist == null || rawAllowlist.isBlank()) {
+                return Set.of();
+            }
+            LinkedHashSet<String> names = new LinkedHashSet<>();
+            for (String segment : rawAllowlist.split(",", -1)) {
+                String name = segment.trim();
+                if (name.isEmpty()) {
+                    continue;
+                }
+                if (!ENVIRONMENT_VARIABLE_NAME.matcher(name).matches()) {
+                    throw new IllegalArgumentException("Invalid command environment allowlist variable name: " + name);
+                }
+                names.add(name);
+            }
+            return Collections.unmodifiableSet(names);
         }
     }
 
@@ -32,23 +58,9 @@ public final class Persistence {
     }
 
     public record McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
-        public McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers) {
-            this(id, name, url, enabled, headers, List.of());
-        }
     }
 
     public record WorkspaceView(long id, String name, String path, boolean unread, RailStatus railStatus) {
-        public WorkspaceView(long id, String name, String path, boolean unread) {
-            this(id, name, path, unread, RailStatus.NONE);
-        }
-
-        public WorkspaceView(long id, String name, String path, boolean unread, boolean inProgress) {
-            this(id, name, path, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
-        }
-
-        public WorkspaceView(long id, String name, String path) {
-            this(id, name, path, false, RailStatus.NONE);
-        }
 
         public boolean inProgress() {
             return railStatus == RailStatus.IN_PROGRESS;
@@ -60,17 +72,6 @@ public final class Persistence {
     }
 
     public record SessionView(long id, String name, boolean unread, RailStatus railStatus) {
-        public SessionView(long id, String name, boolean unread) {
-            this(id, name, unread, RailStatus.NONE);
-        }
-
-        public SessionView(long id, String name, boolean unread, boolean inProgress) {
-            this(id, name, unread, inProgress ? RailStatus.IN_PROGRESS : RailStatus.NONE);
-        }
-
-        public SessionView(long id, String name) {
-            this(id, name, false, RailStatus.NONE);
-        }
 
         public boolean inProgress() {
             return railStatus == RailStatus.IN_PROGRESS;
@@ -83,16 +84,7 @@ public final class Persistence {
 
     public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
                                 Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
-                                String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, status, null, null, null, null);
-        }
-
-        public ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                            Long subagentSessionId, String subagentAgentId, String subagentAgentName) {
-            this(toolCallId, toolName, success, inputPreview, outputPreview, inputTruncated, outputTruncated, subagentSessionId, subagentAgentId, subagentAgentName, null, null, null, null, null);
-        }
+                                String imageUrl, String imageAlt, String imagePath, String imageMediaType, String taskBody) {
     }
 
     public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel) {
@@ -112,7 +104,22 @@ public final class Persistence {
                                             String subagentAgentId, String subagentAgentName) {
     }
 
-    public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail) {
+    public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail,
+                               boolean autoGitUpdateEnabled) {
+    }
+
+    public record AutoGitUpdateFailureState(boolean failureEpisodeActive, Instant failureStartedAt, Instant lastSuccessAt) {
+    }
+
+    public record AutoGitUpdateFailureNotification(boolean firstFailure) {
+    }
+
+    public record LifecycleHookSettings(String assistantCompletedScript, String assistantErroredScript,
+                                        String subagentCompletedScript, int timeoutSeconds) {
+    }
+
+    public record LifecycleHookContext(long sessionId, String projectName, String workspaceName, String sessionName,
+                                       Map<String, String> projectEnvironmentVariables) {
     }
 
     public record QueuedChatTurn(ChatMessageView userMessage, ChatMessageView assistantMessage) {
@@ -123,4 +130,19 @@ public final class Persistence {
 
     public record ToolCallTraceInput(String toolCallId, String toolName, Map<String, Object> args, boolean success, String textSummary, Map<String, Object> machineSummary) {
     }
+
+    public record TokenUsageFact(String sessionUsageKey, long sessionIdSnapshot, long workspaceIdSnapshot, long projectIdSnapshot,
+                                 String sessionNameSnapshot, String workspaceNameSnapshot, String projectNameSnapshot,
+                                 String workspacePathSnapshot, String projectPathSnapshot, Instant occurredAt, Instant hourStartUtc,
+                                 String modelKey, String operation, Integer inputTokenCount, Integer outputTokenCount, Integer totalTokenCount,
+                                 Integer cachedInputTokenCount, Integer cacheWriteTokenCount, Integer reasoningTokenCount, String responseId,
+                                 String responseModelId, String finishReason, Map<String, Object> providerMetadata) {}
+
+    public record TokenUsageHourly(String sessionUsageKey, Instant hourStartUtc, String modelKey,
+                                   long requestCount, Long inputTokenCount, Long outputTokenCount, Long totalTokenCount,
+                                   Long cachedInputTokenCount, Long cacheWriteTokenCount, Long reasoningTokenCount,
+                                   Instant lastOccurredAt) {}
+
+    public record ProjectTokenUsageHourly(Instant hourStartUtc, String modelKey, long requestCount,
+                                          Long inputTokenCount, Long outputTokenCount, Long totalTokenCount) {}
 }

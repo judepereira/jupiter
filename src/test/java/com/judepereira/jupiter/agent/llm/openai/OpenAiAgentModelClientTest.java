@@ -19,6 +19,8 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiTokenUsage;
+import dev.langchain4j.model.output.FinishReason;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -84,13 +86,17 @@ public class OpenAiAgentModelClientTest {
                             .name("read_file")
                             .arguments("{\"path\":\"notes.txt\"}")
                             .build())))
+                    .id("response-1")
+                    .modelName("per-turn-model")
+                    .tokenUsage(OpenAiTokenUsage.builder().inputTokenCount(12).outputTokenCount(8).totalTokenCount(20).build())
+                    .finishReason(FinishReason.TOOL_EXECUTION)
                     .build();
         });
 
         RecordingClient client = new RecordingClient(chatModel, null);
         var response = client.chat(
-                List.of(new Message(Message.Role.USER, "read it")),
-                List.of(new ToolDefinition("read_file", "Read a file", ToolSchema.object(string("path", "path")).required("path"))),
+                List.of(new Message(Message.Role.USER, "read it", null, null)),
+                List.of(ToolDefinition.builtIn("read_file", "Read a file", ToolSchema.object(string("path", "path")).required("path"))),
                 new AgentModelOptions("turn-model", "per-turn-model", ThinkingLevel.HIGH, true, null)
         );
 
@@ -101,6 +107,12 @@ public class OpenAiAgentModelClientTest {
         assertEquals(1, capturedRequest.get().toolSpecifications().size());
         assertEquals("read_file", capturedRequest.get().toolSpecifications().get(0).name());
         assertEquals("assistant", response.getAssistantText());
+        assertEquals(12, response.getMetadata().inputTokenCount());
+        assertEquals(8, response.getMetadata().outputTokenCount());
+        assertEquals(20, response.getMetadata().totalTokenCount());
+        assertEquals("response-1", response.getMetadata().responseId());
+        assertEquals("per-turn-model", response.getMetadata().modelId());
+        assertEquals("TOOL_EXECUTION", response.getMetadata().finishReason());
         assertNotNull(response.getToolCall());
         assertEquals("call-1", response.getToolCall().getToolCallId());
         assertEquals("read_file", response.getToolCall().getToolName());
@@ -119,7 +131,7 @@ public class OpenAiAgentModelClientTest {
 
         RecordingClient client = new RecordingClient(chatModel, null);
         var response = client.chat(
-                List.of(new Message(Message.Role.SYSTEM, "sys"), new Message(Message.Role.USER, "u")),
+                List.of(new Message(Message.Role.SYSTEM, "sys", null, null), new Message(Message.Role.USER, "u", null, null)),
                 List.of()
         );
 
@@ -159,10 +171,10 @@ public class OpenAiAgentModelClientTest {
         OAuthRecordingClient client = new OAuthRecordingClient();
         var response = client.chat(
                 List.of(
-                        new Message(Message.Role.SYSTEM, "sys-1"),
-                        new Message(Message.Role.USER, "u-1"),
-                        new Message(Message.Role.SYSTEM, "sys-2"),
-                        new Message(Message.Role.ASSISTANT, "a-1")
+                        new Message(Message.Role.SYSTEM, "sys-1", null, null),
+                        new Message(Message.Role.USER, "u-1", null, null),
+                        new Message(Message.Role.SYSTEM, "sys-2", null, null),
+                        new Message(Message.Role.ASSISTANT, "a-1", null, null)
                 ),
                 List.of()
         );
@@ -185,7 +197,7 @@ public class OpenAiAgentModelClientTest {
     public void base_overloads_construct_real_chat_and_streaming_models_without_recursing() {
         class DirectConstructionClient extends OpenAiAgentModelClient {
             private DirectConstructionClient() {
-                super(openAiProperties(), new AgentProperties());
+                super(openAiProperties(), new AgentProperties(), null);
             }
 
             private static OpenAiProperties openAiProperties() {
@@ -225,15 +237,21 @@ public class OpenAiAgentModelClientTest {
                     .name("write_file")
                     .arguments("{\"path\":\"out.txt\"}")
                     .build()));
-            handler.onCompleteResponse(ChatResponse.builder().aiMessage(AiMessage.from("done")).build());
+            handler.onCompleteResponse(ChatResponse.builder()
+                    .aiMessage(AiMessage.from("done"))
+                    .id("stream-response-1")
+                    .modelName("stream-model")
+                    .tokenUsage(OpenAiTokenUsage.builder().inputTokenCount(30).outputTokenCount(15).totalTokenCount(45).build())
+                    .finishReason(FinishReason.TOOL_EXECUTION)
+                    .build());
             return null;
         }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
 
         RecordingClient client = new RecordingClient(null, streamingModel);
         List<String> deltas = new ArrayList<>();
         var response = client.chatStreaming(
-                List.of(new Message(Message.Role.USER, "stream it")),
-                List.of(new ToolDefinition("write_file", "Write a file", ToolSchema.object(string("path", "path")).required("path"))),
+                List.of(new Message(Message.Role.USER, "stream it", null, null)),
+                List.of(ToolDefinition.builtIn("write_file", "Write a file", ToolSchema.object(string("path", "path")).required("path"))),
                 new AgentModelOptions("turn-model", "stream-model", ThinkingLevel.MEDIUM, true, null),
                 deltas::add
         );
@@ -244,6 +262,12 @@ public class OpenAiAgentModelClientTest {
         assertEquals("medium", ((OpenAiResponsesChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
         assertEquals(List.of("hel", "lo"), deltas);
         assertEquals("done", response.getAssistantText());
+        assertEquals(30, response.getMetadata().inputTokenCount());
+        assertEquals(15, response.getMetadata().outputTokenCount());
+        assertEquals(45, response.getMetadata().totalTokenCount());
+        assertEquals("stream-response-1", response.getMetadata().responseId());
+        assertEquals("stream-model", response.getMetadata().modelId());
+        assertEquals("TOOL_EXECUTION", response.getMetadata().finishReason());
         assertNotNull(response.getToolCall());
         assertEquals("stream-call", response.getToolCall().getToolCallId());
         assertEquals("write_file", response.getToolCall().getToolName());
@@ -264,8 +288,8 @@ public class OpenAiAgentModelClientTest {
 
         TrackingClient client = new TrackingClient(apiKeyModel, oauthModel, oauthService);
 
-        assertEquals("api-key", client.chat(List.of(new Message(Message.Role.USER, "first")), List.of()).getAssistantText());
-        assertEquals("oauth", client.chat(List.of(new Message(Message.Role.USER, "second")), List.of()).getAssistantText());
+        assertEquals("api-key", client.chat(List.of(new Message(Message.Role.USER, "first", null, null)), List.of()).getAssistantText());
+        assertEquals("oauth", client.chat(List.of(new Message(Message.Role.USER, "second", null, null)), List.of()).getAssistantText());
 
         assertEquals(List.of("gpt-5.4", "gpt-5.4"), client.chatModelNames());
         assertEquals(List.of("api-key-123", "oauth-access-token"), client.chatModelCredentials());
@@ -291,7 +315,7 @@ public class OpenAiAgentModelClientTest {
 
         RecordingClient client = new RecordingClient(chatModel, null, openAiProperties);
 
-        assertEquals("ok", client.chat(List.of(new Message(Message.Role.USER, "retry")), List.of()).getAssistantText());
+        assertEquals("ok", client.chat(List.of(new Message(Message.Role.USER, "retry", null, null)), List.of()).getAssistantText());
         assertEquals(2, attempts.get());
         verify(chatModel, times(2)).chat(any(ChatRequest.class));
     }
@@ -316,7 +340,7 @@ public class OpenAiAgentModelClientTest {
         RecordingClient client = new RecordingClient(null, streamingModel, openAiProperties);
         List<String> deltas = new ArrayList<>();
 
-        assertEquals("done", client.chatStreaming(List.of(new Message(Message.Role.USER, "stream")), List.of(), deltas::add).getAssistantText());
+        assertEquals("done", client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null)), List.of(), deltas::add).getAssistantText());
         assertEquals(List.of("he", "llo"), deltas);
         assertEquals(2, attempts.get());
         verify(streamingModel, times(2)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
@@ -339,7 +363,7 @@ public class OpenAiAgentModelClientTest {
         List<String> deltas = new ArrayList<>();
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
-                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream")), List.of(), deltas::add));
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null)), List.of(), deltas::add));
 
         assertEquals("OpenAI streaming request failed", exception.getMessage());
         assertEquals(List.of("he"), deltas);
@@ -360,7 +384,7 @@ public class OpenAiAgentModelClientTest {
         RecordingClient client = new RecordingClient(chatModel, null, openAiProperties);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
-                () -> client.chat(List.of(new Message(Message.Role.USER, "retry")), List.of()));
+                () -> client.chat(List.of(new Message(Message.Role.USER, "retry", null, null)), List.of()));
 
         assertEquals("OpenAI request failed", exception.getMessage());
         assertEquals(2, attempts.get());
@@ -378,7 +402,7 @@ public class OpenAiAgentModelClientTest {
         }
 
         private RecordingClient(ChatModel chatModel, StreamingChatModel streamingChatModel, OpenAiProperties openAiProperties) {
-            super(openAiProperties, new AgentProperties());
+            super(openAiProperties, new AgentProperties(), null);
             this.chatModel = chatModel;
             this.streamingChatModel = streamingChatModel;
         }

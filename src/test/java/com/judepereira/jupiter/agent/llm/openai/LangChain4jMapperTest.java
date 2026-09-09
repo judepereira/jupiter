@@ -16,9 +16,13 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiResponsesChatResponseMetadata;
+import dev.langchain4j.model.openai.OpenAiTokenUsage;
+import dev.langchain4j.model.output.FinishReason;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -49,10 +53,10 @@ public class LangChain4jMapperTest {
     @Test
     public void converts_conversation_with_tool_calls_and_tool_results() {
         List<ChatMessage> messages = messageMapper.toChatMessages(List.of(
-                new Message(Message.Role.SYSTEM, "sys"),
-                new Message(Message.Role.USER, "user"),
-                new Message(Message.Role.ASSISTANT, null, List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt")))),
-                new Message(Message.Role.TOOL, "written", "call-123")
+                new Message(Message.Role.SYSTEM, "sys", null, null),
+                new Message(Message.Role.USER, "user", null, null),
+                new Message(Message.Role.ASSISTANT, null, null, List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt")))),
+                new Message(Message.Role.TOOL, "written", "call-123", null)
         ));
 
         assertInstanceOf(SystemMessage.class, messages.get(0));
@@ -82,7 +86,7 @@ public class LangChain4jMapperTest {
         assertEquals(List.of("path"), schema.required());
 
         List<ToolSpecification> specs = toolSpecificationMapper.toToolSpecifications(List.of(
-                new ToolDefinition("read_file", "Read a file", schema)
+                ToolDefinition.builtIn("read_file", "Read a file", schema)
         ));
 
         assertEquals(1, specs.size());
@@ -92,6 +96,26 @@ public class LangChain4jMapperTest {
         JsonObjectSchema parameters = specs.get(0).parameters();
         assertInstanceOf(JsonStringSchema.class, parameters.properties().get("path"));
         assertInstanceOf(JsonObjectSchema.class, parameters.properties().get("options"));
+    }
+
+    @Test
+    public void converts_recursive_array_schemas_to_langchain4j() {
+        ToolParameter objectItem = ToolParameter.object(null, "item", ToolSchema.object(
+                string("label", "label"),
+                ToolParameter.array("children", "children", ToolParameter.integer(null, "child"))
+        ));
+        ToolSchema schema = ToolSchema.object(
+                ToolParameter.array("tags", "tags", string(null, "tag")),
+                ToolParameter.array("items", "items", objectItem)
+        );
+
+        JsonObjectSchema parameters = toolSpecificationMapper.toToolSpecifications(List.of(
+                ToolDefinition.builtIn("test", "test", schema))).getFirst().parameters();
+        JsonArraySchema tags = assertInstanceOf(JsonArraySchema.class, parameters.properties().get("tags"));
+        assertInstanceOf(JsonStringSchema.class, tags.items());
+        JsonArraySchema items = assertInstanceOf(JsonArraySchema.class, parameters.properties().get("items"));
+        JsonObjectSchema item = assertInstanceOf(JsonObjectSchema.class, items.items());
+        assertInstanceOf(JsonArraySchema.class, item.properties().get("children"));
     }
 
     @Test
@@ -110,6 +134,38 @@ public class LangChain4jMapperTest {
         assertNull(requestParametersMapper.toRequestParameters(
                 new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, false, null)
         ));
+    }
+
+    @Test
+    public void maps_openai_usage_and_response_metadata() {
+        ModelResponse response = messageMapper.toModelResponse(ChatResponse.builder()
+                .aiMessage(AiMessage.from("assistant"))
+                .metadata(OpenAiResponsesChatResponseMetadata.builder()
+                        .id("response-1")
+                        .modelName("gpt-5.4")
+                        .tokenUsage(OpenAiTokenUsage.builder()
+                                .inputTokenCount(100)
+                                .outputTokenCount(40)
+                                .totalTokenCount(140)
+                                .inputTokensDetails(OpenAiTokenUsage.InputTokensDetails.builder().cachedTokens(25).build())
+                                .outputTokensDetails(OpenAiTokenUsage.OutputTokensDetails.builder().reasoningTokens(10).build())
+                                .build())
+                        .finishReason(FinishReason.STOP)
+                        .createdAt(123L)
+                        .completedAt(456L)
+                        .serviceTier("default")
+                        .build())
+                .build());
+
+        assertEquals(100, response.getMetadata().inputTokenCount());
+        assertEquals(40, response.getMetadata().outputTokenCount());
+        assertEquals(140, response.getMetadata().totalTokenCount());
+        assertEquals(25, response.getMetadata().cachedInputTokenCount());
+        assertEquals(10, response.getMetadata().reasoningTokenCount());
+        assertEquals("response-1", response.getMetadata().responseId());
+        assertEquals("gpt-5.4", response.getMetadata().modelId());
+        assertEquals("STOP", response.getMetadata().finishReason());
+        assertEquals(Map.of("createdAt", 123L, "completedAt", 456L, "serviceTier", "default"), response.getMetadata().providerMetadata());
     }
 
     @Test
