@@ -26,7 +26,6 @@ import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -129,6 +128,8 @@ public class CodingAgentHarnessAgentSelectionTest {
                 tmp.toString(),
                 "engineer",
                 null,
+                null,
+                null,
                 null
         ));
 
@@ -137,9 +138,9 @@ public class CodingAgentHarnessAgentSelectionTest {
                 "list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command");
         assertThat(model.capturedConversations().get(0).get(0).getContent())
                 .satisfies(system -> assertSystemPrompt(system, agentDefinitions.getRequired("engineer").systemPrompt(), tmp));
-        assertThat(model.capturedOptions().get(0).modelId()).isEqualTo("openai/gpt-5.5");
-        assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.5");
-        assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(model.capturedOptions().get(0).modelId()).isEqualTo("openai/gpt-5.6-terra");
+        assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.6-terra");
+        assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.MEDIUM);
         assertThat(runCommand.executions).isEqualTo(1);
         assertThat(runCommand.lastContext).isNotNull();
         assertThat(runCommand.lastContext.isAllowWrite()).isTrue();
@@ -213,7 +214,7 @@ public class CodingAgentHarnessAgentSelectionTest {
     }
 
     private static RecordingTool recordingTool(String name, BiFunction<Map<String, Object>, ToolExecutionContext, ToolExecutionResult> executor) {
-        return new RecordingTool(name, new ToolDefinition(name, name + " tool", ToolSchema.object()), executor);
+        return new RecordingTool(name, ToolDefinition.builtIn(name, name + " tool", ToolSchema.object()), executor);
     }
 
     private static void assertSystemPrompt(String actual, String appendage, Path workspaceRoot) {
@@ -247,7 +248,7 @@ public class CodingAgentHarnessAgentSelectionTest {
             capturedToolDefinitions.add(List.copyOf(tools));
             capturedOptions.add(options);
             if (index >= responses.size()) {
-                return new ModelResponse("", null);
+                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
             }
             return responses.get(index++);
         }
@@ -312,7 +313,7 @@ public class CodingAgentHarnessAgentSelectionTest {
         @Override
         public McpProjectToolSnapshot snapshot(long projectId) {
             snapshotCalls++;
-            ToolDefinition definition = new ToolDefinition(toolName, "mcp tool", ToolSchema.object(ToolParameter.string("input", "input")));
+            ToolDefinition definition = ToolDefinition.builtIn(toolName, "mcp tool", ToolSchema.object(ToolParameter.string("input", "input")));
             McpProjectToolExecutor executor = new McpProjectToolExecutor() {
                 @Override
                 public String modelToolName() {
