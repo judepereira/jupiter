@@ -31,9 +31,6 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
         Files.createDirectories(sqliteDbFile.getParent());
         createImageFile(projectDir, "images/cat.png");
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
@@ -60,11 +57,6 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
             org.assertj.core.api.Assertions.assertThat((String) reloadedCall.locator(".tool-call-image-preview figcaption > span").evaluate("el => el.textContent")).isEqualTo("Cat");
             org.assertj.core.api.Assertions.assertThat((String) reloadedCall.locator(".tool-call-image-preview figcaption > small").evaluate("el => el.textContent")).isEqualTo("images/cat.png");
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

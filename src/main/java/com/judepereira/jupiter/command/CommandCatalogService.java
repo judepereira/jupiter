@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -30,8 +31,10 @@ public class CommandCatalogService {
 
     private final List<CommandDefinition> commands;
     private final Map<String, CommandDefinition> commandsById;
+    private final String configuredUserHome;
 
-    public CommandCatalogService() {
+    public CommandCatalogService(@Value("${jupiter.user-home:${user.home}}") String configuredUserHome) {
+        this.configuredUserHome = configuredUserHome;
         this.commands = loadCommands();
         this.commandsById = indexCommands(commands);
         if (commandsById.isEmpty()) {
@@ -62,7 +65,7 @@ public class CommandCatalogService {
         return command;
     }
 
-    private static List<CommandDefinition> loadCommands() {
+    private List<CommandDefinition> loadCommands() {
         try {
             List<CommandDefinition> bundled = loadClasspathCommands();
             List<CommandDefinition> user = loadUserCommands();
@@ -85,7 +88,7 @@ public class CommandCatalogService {
                 .toList();
     }
 
-    private static List<CommandDefinition> loadUserCommands() throws IOException {
+    private List<CommandDefinition> loadUserCommands() throws IOException {
         Path root = userCommandsRoot();
         if (!Files.isDirectory(root)) {
             return List.of();
@@ -259,8 +262,8 @@ public class CommandCatalogService {
         return resource.getDescription();
     }
 
-    private static Path userCommandsRoot() {
-        return Path.of(System.getProperty("user.home")).toAbsolutePath().normalize().resolve(".jupiter").resolve("commands");
+    private Path userCommandsRoot() {
+        return Path.of(configuredUserHome).toAbsolutePath().normalize().resolve(".jupiter").resolve("commands");
     }
 
     private record FrontMatterAndBody(String yaml, String body) {

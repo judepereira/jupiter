@@ -28,9 +28,6 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         RunningApp app = null;
         try (BrowserContext context = newBrowserContext()) {
             context.addInitScript("(() => { const key = 'connection-loss-reload-count'; const current = Number(sessionStorage.getItem(key) || '0'); sessionStorage.setItem(key, String(current + 1)); })();");
@@ -64,11 +61,6 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
         } finally {
             if (app != null) {
                 app.close();
-            }
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
             }
         }
     }

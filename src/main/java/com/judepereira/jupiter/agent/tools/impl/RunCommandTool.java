@@ -66,6 +66,10 @@ public class RunCommandTool implements AgentTool {
         Map<String, String> environment = pb.environment();
         environment.clear();
         environment.putAll(buildCommandEnvironment(System.getenv(), context.getCommandEnvironmentAllowlist(), context.getEnvironmentVariables()));
+        // Output is decoded as UTF-8 below; provide a UTF-8 locale without overriding an explicitly allowed one.
+        environment.putIfAbsent("LANG", "C.UTF-8");
+        environment.putIfAbsent("LC_ALL", "C.UTF-8");
+        ProcessEnvironmentSanitizer.sanitize(environment);
         Process p = pb.start();
         StringBuilder stdoutBuilder = new StringBuilder();
         StringBuilder stderrBuilder = new StringBuilder();
@@ -91,7 +95,7 @@ public class RunCommandTool implements AgentTool {
         boolean finished = false;
         while (!finished) {
             if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
-                p.destroyForcibly();
+                terminateProcess(p);
                 try {
                     tOut.join(200);
                 } catch (InterruptedException ignored) {
@@ -112,7 +116,7 @@ public class RunCommandTool implements AgentTool {
             finished = p.waitFor(waitMillis, TimeUnit.MILLISECONDS);
         }
         if (!finished) {
-            p.destroyForcibly();
+            terminateProcess(p);
             try {
                 tOut.join(200);
             } catch (InterruptedException ignored) {
@@ -148,6 +152,19 @@ public class RunCommandTool implements AgentTool {
                 "stderr", stderr);
         String text = "exitCode=" + code + "\n" + stdout + stderr;
         return new ToolExecutionResult(code == 0, text, machine);
+    }
+
+    private static void terminateProcess(Process process) {
+        if (!process.isAlive()) {
+            return;
+        }
+        process.toHandle().descendants().toList().reversed().forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
+        try {
+            process.waitFor(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     static Map<String, String> buildCommandEnvironment(Map<String, String> hostEnvironment,

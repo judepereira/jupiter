@@ -29,9 +29,6 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
 
         initGitRepoWithInitialCommit(projectDir);
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
@@ -62,11 +59,6 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
                 assertThat(page.locator(".workspace-group .workspace-label")).containsText(new String[]{"Default Workspace", "feature-clean-close"});
             }
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

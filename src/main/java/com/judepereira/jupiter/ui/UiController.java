@@ -98,6 +98,7 @@ public class UiController {
     private final GitAutoUpdateService gitAutoUpdateService;
     private final ManualGitPullCoordinator manualGitPullCoordinator;
     private final String appVersion;
+    private final String userHome;
 
     private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
 
@@ -118,7 +119,8 @@ public class UiController {
                         ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
                         HttpAuthProperties httpAuthProperties,
                         GitAutoUpdateService gitAutoUpdateService, ManualGitPullCoordinator manualGitPullCoordinator,
-                        @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
+                        @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion,
+                        @Value("${jupiter.user-home:${user.home}}") String userHome) {
         this.harness = harness;
         this.agentProperties = agentProperties;
         this.appStateService = appStateService;
@@ -141,6 +143,7 @@ public class UiController {
         this.gitAutoUpdateService = gitAutoUpdateService;
         this.manualGitPullCoordinator = manualGitPullCoordinator;
         this.appVersion = appVersion;
+        this.userHome = userHome;
     }
 
     @GetMapping("/")
@@ -873,7 +876,7 @@ public class UiController {
 
     @GetMapping("/ui/projects/new")
     public String newProjectModal(Model model) {
-        Path home = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
+        Path home = Path.of(userHome).toAbsolutePath().normalize();
         model.addAttribute("currentPath", home.toString());
         model.addAttribute("selectedPath", home.toString());
         model.addAttribute("startPath", home.toString());

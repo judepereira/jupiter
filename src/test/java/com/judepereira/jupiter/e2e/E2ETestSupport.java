@@ -32,7 +32,7 @@ import java.util.stream.Stream;
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
 @ExtendWith(E2ETestSupport.SharedBrowserExtension.class)
-abstract class E2ETestSupport {
+public abstract class E2ETestSupport {
 
     private static final ExtensionContext.Namespace PLAYWRIGHT_NAMESPACE =
             ExtensionContext.Namespace.create(E2ETestSupport.class);
@@ -44,7 +44,7 @@ abstract class E2ETestSupport {
         if (resource == null) {
             throw new IllegalStateException("The shared Playwright browser has not been initialized");
         }
-        return resource.browser;
+        return resource.browser();
     }
 
     protected static BrowserContext newBrowserContext() {
@@ -58,54 +58,39 @@ abstract class E2ETestSupport {
     static final class SharedBrowserExtension implements BeforeAllCallback {
         @Override
         public void beforeAll(ExtensionContext context) {
-            SharedBrowser resource = context.getRoot().getStore(PLAYWRIGHT_NAMESPACE)
+            sharedBrowser = context.getRoot().getStore(PLAYWRIGHT_NAMESPACE)
                     .getOrComputeIfAbsent(SHARED_BROWSER_RESOURCE, key -> new SharedBrowser(), SharedBrowser.class);
-            sharedBrowser = resource;
-            Assumptions.assumeTrue(resource.skipReason == null, resource.skipReason);
         }
     }
 
     private static final class SharedBrowser implements ExtensionContext.Store.CloseableResource {
-        private final Playwright playwright;
-        private final Browser browser;
-        private final String skipReason;
+        private Playwright playwright;
+        private Browser browser;
+        private String skipReason;
 
-        private SharedBrowser() {
-            Playwright createdPlaywright = null;
-            Browser launchedBrowser = null;
-            try {
-                createdPlaywright = Playwright.create();
-                launchedBrowser = createdPlaywright.chromium()
-                        .launch(new BrowserType.LaunchOptions().setHeadless(true));
-            } catch (Throwable throwable) {
-                if (launchedBrowser != null) {
-                    launchedBrowser.close();
-                }
-                if (createdPlaywright != null) {
-                    createdPlaywright.close();
-                }
-                String dependencySkipReason = playwrightDependencySkipReason(throwable);
-                if (dependencySkipReason != null) {
-                    playwright = null;
-                    browser = null;
-                    skipReason = dependencySkipReason;
-                    return;
-                }
-                throw unexpectedPlaywrightFailure(throwable);
+        synchronized Browser browser() {
+            if (skipReason != null) {
+                Assumptions.assumeTrue(false, skipReason);
             }
-            playwright = createdPlaywright;
-            browser = launchedBrowser;
-            skipReason = null;
+            if (browser == null) {
+                try {
+                    playwright = Playwright.create();
+                    browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+                } catch (Throwable throwable) {
+                    if (browser != null) browser.close();
+                    if (playwright != null) playwright.close();
+                    skipReason = playwrightDependencySkipReason(throwable);
+                    if (skipReason == null) throw unexpectedPlaywrightFailure(throwable);
+                    Assumptions.assumeTrue(false, skipReason);
+                }
+            }
+            return browser;
         }
 
         @Override
-        public void close() {
+        public synchronized void close() {
             if (browser != null) {
-                try {
-                    browser.close();
-                } finally {
-                    playwright.close();
-                }
+                try { browser.close(); } finally { playwright.close(); }
             } else if (playwright != null) {
                 playwright.close();
             }
@@ -163,7 +148,7 @@ abstract class E2ETestSupport {
         return newline >= 0 ? message.substring(0, newline) : message;
     }
 
-    protected static RunningApp startApp(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
+    public static RunningApp startApp(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
         return startApp(fakeHome, dbFile, Map.of(), testConfigClasses);
     }
 
@@ -171,11 +156,8 @@ abstract class E2ETestSupport {
         return startApp(fakeHome, dbFile, Map.of("server.port", Integer.toString(port)), testConfigClasses);
     }
 
-    protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {
+    public static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {
         String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize() + "?journal_mode=WAL&foreign_keys=on&busy_timeout=30000";
-        Map<String, String> previousProperties = new HashMap<>();
-        overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
-        additionalProperties.forEach((key, value) -> overrideSystemProperty(previousProperties, key, value));
         Class<?>[] sources = Stream.concat(Stream.of(Jupiter.class, TestEncryptionConfiguration.class), Arrays.stream(testConfigClasses)).toArray(Class<?>[]::new);
         Map<String, String> properties = new LinkedHashMap<>();
         properties.put("server.port", "0");
@@ -183,34 +165,22 @@ abstract class E2ETestSupport {
         properties.put("spring.datasource.driver-class-name", "org.sqlite.JDBC");
         properties.put("spring.flyway.enabled", "true");
         properties.put("agent.workspace-root", fakeHome.toAbsolutePath().normalize().toString());
+        properties.put("jupiter.user-home", fakeHome.toAbsolutePath().normalize().toString());
         properties.put("openai.api-key", "test");
         properties.putAll(additionalProperties);
+        String[] commandLineProperties = properties.entrySet().stream()
+                .map(entry -> "--" + entry.getKey() + "=" + entry.getValue())
+                .toArray(String[]::new);
         ConfigurableApplicationContext context = new SpringApplicationBuilder(sources)
                 .web(WebApplicationType.SERVLET)
-                .properties(properties.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new))
-                .run();
+                .run(commandLineProperties);
 
         Integer port = context.getEnvironment().getProperty("local.server.port", Integer.class);
         if (port == null) {
             throw new IllegalStateException("Missing local.server.port");
         }
         SQLiteTestSupport.assertWalAndForeignKeysEnabled(context.getBean(DataSource.class));
-        return new RunningApp(context, "http://localhost:" + port, () -> restoreSystemProperties(previousProperties));
-    }
-
-    private static void overrideSystemProperty(Map<String, String> previousProperties, String key, String value) {
-        previousProperties.put(key, System.getProperty(key));
-        System.setProperty(key, value);
-    }
-
-    private static void restoreSystemProperties(Map<String, String> previousProperties) {
-        previousProperties.forEach((key, value) -> {
-            if (value == null) {
-                System.clearProperty(key);
-            } else {
-                System.setProperty(key, value);
-            }
-        });
+        return new RunningApp(context, "http://localhost:" + port);
     }
 
     protected static void captureScreenshot(Page page, Path screenshotsDir, String fileName) {
@@ -342,17 +312,13 @@ abstract class E2ETestSupport {
         Files.write(image, new byte[] {(byte) 0x89, 'P', 'N', 'G'});
     }
 
-    protected record RunningApp(ConfigurableApplicationContext context, String baseUrl, Runnable cleanup) implements AutoCloseable {
+    public record RunningApp(ConfigurableApplicationContext context, String baseUrl) implements AutoCloseable {
         @Override
         public void close() {
-            try {
-                context.close();
-            } finally {
-                cleanup.run();
-            }
+            context.close();
         }
 
-        int port() {
+        public int port() {
             String value = baseUrl.substring(baseUrl.lastIndexOf(':') + 1);
             return Integer.parseInt(value);
         }

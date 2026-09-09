@@ -32,9 +32,6 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
 
         initGitRepoWithInitialCommit(projectDir);
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         String branchName = "feature-init-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String commands = "echo init-one\npwd\ntouch init-ran.txt";
         Path worktreeDir = fakeHome.resolve(".trees").resolve(projectDir.getFileName().toString()).resolve(branchName);
@@ -77,11 +74,6 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
                 assertTrue(Files.exists(worktreeDir.resolve("init-ran.txt")));
             }
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

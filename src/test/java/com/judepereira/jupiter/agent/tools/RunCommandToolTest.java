@@ -61,7 +61,7 @@ public class RunCommandToolTest {
     public void long_stdout_is_previewed_with_utf8_boundaries_and_written_to_file(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
         ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null);
-        String cmd = "i=0; while [ $i -lt 3000 ]; do printf '😀'; i=$((i+1)); done";
+        String cmd = "i=0; while [ $i -lt 3000 ]; do printf '\\360\\237\\230\\200'; i=$((i+1)); done";
 
         var res = t.execute(Map.of("command", cmd), ctx);
 
@@ -86,7 +86,7 @@ public class RunCommandToolTest {
     public void long_stderr_is_previewed_with_utf8_boundaries_and_written_to_file(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
         ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null);
-        String cmd = "for i in $(seq 1 3000); do printf '😀' 1>&2; done";
+        String cmd = "for i in $(seq 1 3000); do printf '\\360\\237\\230\\200' 1>&2; done";
 
         var res = t.execute(Map.of("command", cmd), ctx);
 

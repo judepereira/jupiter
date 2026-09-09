@@ -32,9 +32,6 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
@@ -57,11 +54,6 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
             assertThat(forkButton).hasAttribute("hx-swap", "none");
             assertThat(page.locator("#chat-input")).hasValue("");
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -71,9 +63,6 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
@@ -90,11 +79,6 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
             assertThat(page.locator("#chat-input")).hasValue("hello\n");
             assertThat(page.locator("#chat-messages-list li")).hasCount(initialMessageCount);
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -104,9 +88,6 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
@@ -128,11 +109,6 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
             assertThat(page.locator("#chat-input")).hasValue("hello\n");
             assertThat(page.locator("#chat-messages-list li")).hasCount(initialMessageCount);
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

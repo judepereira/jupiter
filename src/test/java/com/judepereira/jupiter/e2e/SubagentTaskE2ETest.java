@@ -37,9 +37,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
@@ -95,11 +92,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
         } finally {
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -112,9 +104,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
@@ -149,11 +138,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job", "[Error: no_job]");
         } finally {
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -166,9 +150,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
@@ -209,11 +190,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job", "[Error: no_job]");
         } finally {
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -227,9 +203,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
@@ -312,11 +285,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             TestAppConfig.awaitSubagentCompleted();
         } finally {
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -329,9 +297,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
@@ -390,11 +355,6 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
         } finally {
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

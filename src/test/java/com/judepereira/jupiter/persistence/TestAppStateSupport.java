@@ -102,7 +102,7 @@ public final class TestAppStateSupport {
                                       javax.sql.DataSource dataSource) {}
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
-        return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService(), null);
+        return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService(), null, System.getProperty("user.home"));
     }
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService) {
@@ -111,6 +111,11 @@ public final class TestAppStateSupport {
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService,
                                           LifecycleHookService lifecycleHookService) {
+        return controller(harness, properties, modelCatalogService, lifecycleHookService, System.getProperty("user.home"));
+    }
+
+    public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService,
+                                          LifecycleHookService lifecycleHookService, String userHome) {
         TerminalManager terminalManager = mock(TerminalManager.class);
         AtomicInteger sequence = new AtomicInteger();
         when(terminalManager.createTerminal(anyString(), anyMap())).thenAnswer(invocation -> {
@@ -135,7 +140,7 @@ public final class TestAppStateSupport {
         resolver.setTemplateMode(TemplateMode.HTML);
         resolver.setCacheable(false);
         templateEngine.setTemplateResolver(resolver);
-        return new UiController(harness, properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), modelCatalogService, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), activeStreamRegistryService, terminalManager, new TerminalStateService(), new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), context.repository()), contextCompactionService(appStateService), new TokenUsageService(context.repository(), new ObjectMapper()), mock(CommandStreamService.class), mock(McpProjectMcpServerRuntimeManager.class), new com.judepereira.jupiter.ui.ChatPresentationService(), new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService), lifecycleHookService, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+        return new UiController(harness, properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), modelCatalogService, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), activeStreamRegistryService, terminalManager, new TerminalStateService(), new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), context.repository()), contextCompactionService(appStateService), new TokenUsageService(context.repository(), new ObjectMapper()), mock(CommandStreamService.class), mock(McpProjectMcpServerRuntimeManager.class), new com.judepereira.jupiter.ui.ChatPresentationService(), new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService), lifecycleHookService, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {

@@ -40,9 +40,6 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         initGitRepoWithInitialCommit(projectDir);
         Files.writeString(projectDir.resolve("outside-git-only.txt"), "outside git change\n");
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
@@ -89,11 +86,6 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 captureScreenshot(page, screenshotsDir, "03-git-file-selected.png");
             }
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -105,9 +97,6 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         Files.createDirectories(sqliteDbFile.getParent());
 
         initGitRepoWithInitialCommit(projectDir);
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
@@ -174,11 +163,6 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 assertThat(page.locator("#diff-content")).hasCount(0);
             }
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

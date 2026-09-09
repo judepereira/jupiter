@@ -35,9 +35,6 @@ class PanelsE2ETest extends E2ETestSupport {
         Files.createDirectories(sqliteDbFile.getParent());
         Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "PanelsE2ETest"));
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
@@ -90,11 +87,6 @@ class PanelsE2ETest extends E2ETestSupport {
                 assertThat(page.locator("#bottom-panel")).not().isVisible();
             }
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -104,9 +96,6 @@ class PanelsE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
@@ -135,11 +124,6 @@ class PanelsE2ETest extends E2ETestSupport {
                 assertShortcutCyclesSelect(page, "#chat-thinking-select", "Meta+Shift+D");
             }
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

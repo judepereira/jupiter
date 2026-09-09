@@ -197,14 +197,30 @@ public class LifecycleHookService {
         if (!process.isAlive()) {
             return;
         }
-        long pid = process.pid();
-        signalProcessGroup("TERM", pid);
-        destroyDescendants(process, false);
-        waitBriefly(process);
-        signalProcessGroup("KILL", pid);
-        destroyDescendants(process, true);
-        process.destroyForcibly();
-        waitBriefly(process);
+        // Let the shell reap its children before terminating it. Killing the whole
+        // group first can orphan a child as a zombie on systems without a prompt
+        // PID 1 reaper, making ProcessHandle report it alive indefinitely.
+        List<ProcessHandle> descendants = process.toHandle().descendants().toList();
+        descendants.reversed().forEach(ProcessHandle::destroy);
+        waitForTermination(descendants);
+        if (process.isAlive()) {
+            process.destroy();
+            waitBriefly(process);
+        }
+        if (process.isAlive()) {
+            long pid = process.pid();
+            signalProcessGroup("KILL", pid);
+            descendants.reversed().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+            waitBriefly(process);
+        }
+    }
+
+    private void waitForTermination(List<ProcessHandle> processes) {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TERMINATION_GRACE_MILLIS);
+        while (System.nanoTime() < deadline && processes.stream().anyMatch(ProcessHandle::isAlive)) {
+            Thread.onSpinWait();
+        }
     }
 
     private void signalProcessGroup(String signal, long pid) {
@@ -213,7 +229,10 @@ public class LifecycleHookService {
             ProcessEnvironmentSanitizer.sanitize(signalBuilder);
             Process signalProcess = signalBuilder.start();
             signalProcess.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS);
-            signalProcess.destroyForcibly();
+            if (signalProcess.isAlive()) {
+                signalProcess.destroyForcibly();
+            }
+            signalProcess.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS);
         } catch (Exception ignored) {
             // ProcessHandle destruction below is still useful when kill is unavailable.
         }

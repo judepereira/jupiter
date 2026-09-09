@@ -30,9 +30,6 @@ class ProjectCreationE2ETest extends E2ETestSupport {
         Files.createDirectories(sqliteDbFile.getParent());
         Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "ProjectPersistencePlaywrightTest"));
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try {
             try (RunningApp first = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
@@ -72,11 +69,6 @@ class ProjectCreationE2ETest extends E2ETestSupport {
                 captureScreenshot(page, screenshotsDir, "06-after-restart.png");
             }
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

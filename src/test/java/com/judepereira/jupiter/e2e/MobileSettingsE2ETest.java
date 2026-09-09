@@ -24,9 +24,6 @@ class MobileSettingsE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (Playwright playwright = Playwright.create();
              Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
              RunningApp app = startApp(fakeHome, sqliteDbFile);
@@ -67,11 +64,6 @@ class MobileSettingsE2ETest extends E2ETestSupport {
             com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#settings-help")).isVisible();
             com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#settings-model-providers")).not().isVisible();
         } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 }
