@@ -16,6 +16,10 @@ import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.command.CommandCatalogService;
+import com.judepereira.jupiter.command.CommandCatalogService.CommandDefinition;
+import com.judepereira.jupiter.command.CommandCatalogService.CommandKind;
+import com.judepereira.jupiter.command.CommandCatalogService.CommandMutationException;
 import com.judepereira.jupiter.config.HttpAuthProperties;
 import com.judepereira.jupiter.config.PublicRequestScheme;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
@@ -84,6 +88,7 @@ public class UiController {
     private final ContextCompactionService contextCompactionService;
     private final TokenUsageService tokenUsageService;
     private final CommandStreamService commandStreamService;
+    private final CommandCatalogService commandCatalogService;
     private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
     private final TerminalManager terminalManager;
     private final TerminalStateService terminalStateService;
@@ -113,7 +118,7 @@ public class UiController {
                         TerminalManager terminalManager,
                         TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
                         ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
-                        CommandStreamService commandStreamService,
+                        CommandStreamService commandStreamService, CommandCatalogService commandCatalogService,
                         McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
                         ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
                         HttpAuthProperties httpAuthProperties,
@@ -127,6 +132,7 @@ public class UiController {
         this.contextCompactionService = contextCompactionService;
         this.tokenUsageService = tokenUsageService;
         this.commandStreamService = commandStreamService;
+        this.commandCatalogService = commandCatalogService;
         this.mcpRuntimeManager = mcpRuntimeManager;
         this.systemBalloonService = systemBalloonService;
         this.activeStreamRegistryService = activeStreamRegistryService;
@@ -929,7 +935,104 @@ public class UiController {
         model.addAttribute("lifecycleHookSettings", appStateService.loadLifecycleHookSettings());
         model.addAttribute("autoGitUpdateEnabled", appStateService.loadAutoGitUpdateEnabled());
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
+        model.addAttribute("customCommands", commandCatalogService.listCustom());
         return "fragments/projects :: settingsModal";
+    }
+
+    @PostMapping("/ui/settings/commands/create")
+    public String createCommand(@RequestParam(value = "id", required = false) String id,
+                                @RequestParam(value = "name", required = false) String name,
+                                @RequestParam(value = "description", required = false) String description,
+                                @RequestParam(value = "type", required = false) String type,
+                                @RequestParam(value = "body", required = false) String body,
+                                @RequestParam(value = "workingDir", required = false) String workingDir,
+                                @RequestParam(value = "timeoutSeconds", required = false) String timeout,
+                                Model model) {
+        return mutateCommand(model, null, id, name, description, type, body, workingDir, timeout, false);
+    }
+
+    @PostMapping("/ui/settings/commands/{originalId}/update")
+    public String updateCommand(@PathVariable String originalId,
+                                @RequestParam(value = "id", required = false) String id,
+                                @RequestParam(value = "name", required = false) String name,
+                                @RequestParam(value = "description", required = false) String description,
+                                @RequestParam(value = "type", required = false) String type,
+                                @RequestParam(value = "body", required = false) String body,
+                                @RequestParam(value = "workingDir", required = false) String workingDir,
+                                @RequestParam(value = "timeoutSeconds", required = false) String timeout,
+                                Model model) {
+        return mutateCommand(model, originalId, id, name, description, type, body, workingDir, timeout, true);
+    }
+
+    @PostMapping("/ui/settings/commands/{id}/delete")
+    public String deleteCommand(@PathVariable String id, Model model) {
+        String message;
+        try {
+            commandCatalogService.delete(id);
+            message = "Command deleted.";
+        } catch (CommandMutationException | IllegalArgumentException e) {
+            message = safeCommandError(e);
+        }
+        return renderCommands(model, message, null, null, null, null);
+    }
+
+    private String mutateCommand(Model model, String originalId, String id, String name, String description,
+                                 String type, String body, String workingDir, String timeout, boolean update) {
+        CommandDefinition submitted = null;
+        try {
+            CommandKind kind = parseKind(type);
+            Integer timeoutSeconds = parseTimeout(timeout);
+            submitted = new CommandDefinition(id, name, description, kind, body, workingDir, timeoutSeconds);
+            if (update) {
+                commandCatalogService.update(originalId, submitted);
+            } else {
+                commandCatalogService.create(submitted);
+            }
+            return renderCommands(model, update ? "Command updated." : "Command added.", null, null, null, null);
+        } catch (CommandMutationException | IllegalArgumentException e) {
+            // A null type is intentional when parsing failed: Thymeleaf can still render the submitted form safely.
+            if (submitted == null) {
+                submitted = new CommandDefinition(id, name, description, null, body, workingDir, null);
+            }
+            return renderCommands(model, null, safeCommandError(e), submitted, originalId, update ? "update" : "create");
+        }
+    }
+
+    private String renderCommands(Model model, String success, String error, CommandDefinition submitted,
+                                  String submittedOriginalId, String submittedOperation) {
+        model.addAttribute("customCommands", commandCatalogService.listCustom());
+        model.addAttribute("commandSuccess", success);
+        model.addAttribute("commandError", error);
+        model.addAttribute("submittedCommand", submitted);
+        model.addAttribute("submittedCommandOriginalId", submittedOriginalId);
+        model.addAttribute("submittedCommandOperation", submittedOperation);
+        return "fragments/projects :: settingsCommands";
+    }
+
+    private static CommandKind parseKind(String type) {
+        if (type == null) {
+            return null;
+        }
+        try {
+            return CommandKind.fromValue(type);
+        } catch (RuntimeException e) {
+            throw new CommandMutationException("Type must be prompt or script");
+        }
+    }
+
+    private static Integer parseTimeout(String timeout) {
+        if (timeout == null || timeout.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(timeout.trim());
+        } catch (NumberFormatException e) {
+            throw new CommandMutationException("Timeout must be a whole number of seconds");
+        }
+    }
+
+    private static String safeCommandError(Exception e) {
+        return e.getMessage() == null ? "Command change could not be saved." : e.getMessage();
     }
 
     @GetMapping("/ui/settings/usage")

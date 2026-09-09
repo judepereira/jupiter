@@ -50,9 +50,9 @@ public class CommandStreamService {
         this.chatToolCallHtmlService = chatToolCallHtmlService;
     }
 
-    public void queue(long sessionId, String assistantId, String commandId, String workspaceRoot, Map<String, String> environmentVariables) {
+    public void queue(long sessionId, String assistantId, CommandCatalogService.CommandDefinition command, String workspaceRoot, Map<String, String> environmentVariables) {
         activeStreams.put(assistantId, new ActiveCommandStream(
-                new PendingCommand(sessionId, assistantId, commandId, workspaceRoot,
+                new PendingCommand(sessionId, assistantId, command, workspaceRoot,
                         environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables),
                         appStateService.loadSessionProjectCommandEnvironmentAllowlist(sessionId)),
                 new CopyOnWriteArrayList<>(),
@@ -108,7 +108,7 @@ public class CommandStreamService {
     private void runActiveStream(String assistantId, ActiveCommandStream active) {
         PendingCommand pending = active.pendingCommand();
         AtomicBoolean completed = active.completed();
-        CommandCatalogService.CommandDefinition command = commandCatalogService.getRequiredScript(pending.commandId());
+        CommandCatalogService.CommandDefinition command = pending.command();
         StringBuilder accumulated = active.accumulatedText().get();
 
         try {
@@ -293,7 +293,7 @@ public class CommandStreamService {
         return args;
     }
 
-    record PendingCommand(long sessionId, String assistantId, String commandId, String workspaceRoot,
+    record PendingCommand(long sessionId, String assistantId, CommandCatalogService.CommandDefinition command, String workspaceRoot,
                           Map<String, String> environmentVariables, Set<String> commandEnvironmentAllowlist) {
         PendingCommand {
             environmentVariables = environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables);

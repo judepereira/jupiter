@@ -48,7 +48,7 @@ public class CommandController {
         String userId = java.util.UUID.randomUUID().toString();
         String assistantId = java.util.UUID.randomUUID().toString();
         var queuedTurn = appStateService.appendUserMessageAndPendingAssistant(view.activeSession().id(), userId, assistantId, "/" + command.id(), null);
-        commandStreamService.queue(view.activeSession().id(), assistantId, command.id(), view.activeSessionDetail().workspaceRoot(),
+        commandStreamService.queue(view.activeSession().id(), assistantId, command, view.activeSessionDetail().workspaceRoot(),
                 appStateService.loadSessionProjectEnvironmentVariables(view.activeSession().id()));
 
         model.addAttribute("newChatMessages", List.of(
