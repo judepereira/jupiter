@@ -2,7 +2,7 @@
 
 A project simply points Jupiter at an existing source directory. Jupiter doesn’t clone or invent a repository for you here.
 
-> TODO: add screenshot
+![Opening a project in Jupiter](images/projects.png)
 
 ## Adding one
 

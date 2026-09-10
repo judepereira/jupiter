@@ -2,7 +2,7 @@
 
 Project settings are where you tell Jupiter how a repository should behave once a workspace is created.
 
-> TODO: add screenshot
+![Project settings](images/project-settings.png)
 
 ## Workspace init commands
 

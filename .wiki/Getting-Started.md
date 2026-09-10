@@ -30,7 +30,7 @@ See [OpenAI Authentication](OpenAI-Authentication).
 
 Open **New project**, browse to an existing source directory, and add it.
 
-> TODO: add screenshot
+![Opening a project in Jupiter](images/projects.png)
 
 ## 6. Create a workspace
 

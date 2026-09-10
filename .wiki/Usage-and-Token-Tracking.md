@@ -2,7 +2,7 @@
 
 Jupiter keeps local token-usage history so you can answer a fairly basic question: which projects and models are actually consuming the tokens?
 
-> TODO: add screenshot
+![Token usage dashboard](images/usage-and-token-tracking.png)
 
 ## Time ranges
 

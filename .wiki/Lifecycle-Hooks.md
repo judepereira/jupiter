@@ -2,7 +2,7 @@
 
 Lifecycle hooks are small shell scripts Jupiter runs after selected agent events. They’re useful for glue: notifications, local automation, cleanup, and similar jobs.
 
-> TODO: add screenshot
+![Lifecycle hook settings](images/lifecycle-hooks.png)
 
 ## Available events
 

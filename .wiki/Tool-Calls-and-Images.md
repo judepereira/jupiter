@@ -2,7 +2,7 @@
 
 I don’t want an agent saying “done” while all of the interesting work is hidden somewhere else. Jupiter keeps tool execution visible during the turn and persists it afterwards.
 
-> TODO: add screenshot
+![Tool calls and inline images](images/tool-calls-and-images.png)
 
 ## Live tool state
 

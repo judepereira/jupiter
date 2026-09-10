@@ -2,7 +2,7 @@
 
 A session is a persisted coding conversation inside one workspace.
 
-> TODO: add screenshot
+![Jupiter sessions and chat](images/sessions-and-chat.png)
 
 ## More than one session
 

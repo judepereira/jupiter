@@ -16,7 +16,7 @@ The equivalent Spring property is `openai.api-key`.
 
 Open **Settings** and start the OpenAI connection flow.
 
-> TODO: add screenshot
+![OpenAI device authorisation](images/openai-authentication.png)
 
 Jupiter shows a user code and verification URL, then polls until the authorisation finishes.
 

@@ -2,7 +2,7 @@
 
 Slash commands are Markdown files with YAML frontmatter. They’re deliberately simple enough that adding one doesn’t require touching Java.
 
-> TODO: add screenshot
+![Slash command picker](images/slash-commands.png)
 
 ## Where commands come from
 

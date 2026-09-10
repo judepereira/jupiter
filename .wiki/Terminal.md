@@ -2,7 +2,7 @@
 
 The terminal in Jupiter is a real PTY, not a textarea pretending to be one.
 
-> TODO: add screenshot
+![Jupiter terminal](images/terminal.png)
 
 ## Shell
 

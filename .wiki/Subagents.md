@@ -2,7 +2,7 @@
 
 Subagents are how Jupiter delegates focused work without turning that work into a black box.
 
-> TODO: add screenshot
+![Inspecting a subagent session](images/subagent-session.png)
 
 ## What ships with v1?
 

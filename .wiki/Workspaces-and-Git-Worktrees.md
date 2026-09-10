@@ -2,7 +2,7 @@
 
 A Jupiter workspace is a Git worktree backed by a branch. This is one of the core design choices in Jupiter.
 
-> TODO: add screenshot
+![Creating a Git worktree workspace](images/workspaces.png)
 
 ## Creating a workspace
 

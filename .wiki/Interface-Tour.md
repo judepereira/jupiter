@@ -2,7 +2,7 @@
 
 I’ve tried to keep the normal development loop on one screen: project, workspace, chat, review, terminal.
 
-> TODO: add screenshot
+![Jupiter desktop interface](images/interface-desktop.png)
 
 ## Project bar
 
@@ -13,6 +13,8 @@ Projects sit across the top. Switching projects keeps you inside the same browse
 The left rail contains Git workspaces and their sessions. It also shows unread, running, and failed activity.
 
 On smaller screens this turns into the mobile navigation rail rather than squeezing the desktop layout into oblivion.
+
+![Jupiter mobile interface](images/interface-mobile.png)
 
 ## Chat
 

@@ -2,7 +2,7 @@
 
 Jupiter can attach remote MCP servers and expose their tools only to the projects you choose.
 
-> TODO: add screenshot
+![MCP server settings](images/mcp-servers.png)
 
 ## Server catalogue
 

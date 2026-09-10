@@ -41,3 +41,7 @@ fi
     -Ddocumentation.screenshots.output="$OUTPUT_DIR" \
     -Dtest=DocumentationScreenshotsTest \
     test
+
+echo
+echo "Generated documentation screenshot catalog:"
+find "$OUTPUT_DIR" -maxdepth 1 -type f -name '*.png' -print | LC_ALL=C sort

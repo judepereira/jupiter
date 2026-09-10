@@ -2,6 +2,7 @@ package com.judepereira.jupiter.persistence;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Deterministic application state used by documentation screenshots.
@@ -30,6 +31,14 @@ public final class DocumentationScreenshotFixture {
                 "Blue Cave", normalized(paths.blueCaveProject()), 2, BASE.minusSeconds(900));
         long websiteProjectId = repository.insertProject(
                 "Website", normalized(paths.websiteProject()), 3, BASE.minusSeconds(600));
+
+        repository.updateProjectWorkspaceInitCommands(jupiterProjectId, """
+                ./mvnw -q -DskipTests compile
+                ./mvnw -q test -DskipE2E=true
+                """.stripTrailing());
+        repository.updateProjectEnvironmentVariables(jupiterProjectId,
+                "[{\"name\":\"JAVA_HOME\",\"value\":\"/opt/jdk-25\"},{\"name\":\"JUPITER_PROFILE\",\"value\":\"docs\"}]");
+        repository.updateProjectCommandEnvironmentAllowlist(jupiterProjectId, "HOME, PATH, CI");
 
         long jupiterMainWorkspaceId = repository.insertWorkspace(
                 jupiterProjectId, "main", normalized(paths.jupiterProject()), 1, BASE.minusSeconds(1_000));
@@ -91,7 +100,72 @@ public final class DocumentationScreenshotFixture {
                 BASE.minusSeconds(560));
 
         seedPendingConversation(repository, mcpSessionId, BASE.minusSeconds(90));
-        seedActiveConversation(repository, activeSessionId);
+        ActiveConversation activeConversation = seedActiveConversation(repository, activeSessionId);
+
+        long subagentSessionId = repository.insertSession(
+                docsWorkspaceId,
+                "Subagent: Explore",
+                3,
+                BASE.minusSeconds(15),
+                false,
+                Persistence.ReviewSource.SESSION,
+                null,
+                true,
+                activeSessionId,
+                "task-catalog-1",
+                "explore",
+                "Explore",
+                activeConversation.toolAssistantMessageId());
+        seedSubagentConversation(repository, subagentSessionId);
+
+        repository.insertToolCallTrace(
+                activeSessionId,
+                activeConversation.toolAssistantMessageId(),
+                1,
+                "read-catalog-test",
+                "read_file",
+                true,
+                "{\"path\":\"src/test/java/com/judepereira/jupiter/e2e/DocumentationScreenshotsTest.java\"}",
+                "Read the documentation screenshot test.",
+                "{}",
+                BASE.plusSeconds(88),
+                BASE.plusSeconds(84));
+        repository.insertToolCallTrace(
+                activeSessionId,
+                activeConversation.toolAssistantMessageId(),
+                2,
+                "search-wiki-placeholders",
+                "search_code",
+                true,
+                "{\"query\":\"TODO: add screenshot\",\"path\":\".wiki\"}",
+                "Found the visual documentation pages that need captures.",
+                "{}",
+                BASE.plusSeconds(91),
+                BASE.plusSeconds(89));
+        repository.insertToolCallTrace(
+                activeSessionId,
+                activeConversation.toolAssistantMessageId(),
+                3,
+                "display-architecture",
+                "display_image",
+                true,
+                "{\"path\":\"docs/architecture.png\",\"alt\":\"Jupiter architecture fixture\"}",
+                "Rendered the deterministic architecture fixture.",
+                "{\"displayType\":\"image\",\"path\":\"docs/architecture.png\",\"alt\":\"Jupiter architecture fixture\",\"mediaType\":\"image/png\"}",
+                BASE.plusSeconds(95),
+                BASE.plusSeconds(92));
+        repository.insertToolCallTrace(
+                activeSessionId,
+                activeConversation.toolAssistantMessageId(),
+                4,
+                "task-catalog-1",
+                "task",
+                true,
+                "{\"agentId\":\"explore\",\"requestSummary\":\"Map the wiki screenshot coverage\",\"task\":\"Inspect the screenshot harness and make sure every visual wiki feature has a deterministic capture.\",\"expectedOutput\":\"A short coverage report.\"}",
+                "Mapped every visual wiki section to a deterministic capture.",
+                "{}",
+                BASE.plusSeconds(101),
+                BASE.plusSeconds(96));
 
         long screenshotTestFileId = repository.insertChangedFile(
                 activeSessionId,
@@ -101,12 +175,32 @@ public final class DocumentationScreenshotFixture {
                 BASE.plusSeconds(180));
         repository.insertChangedFile(
                 activeSessionId,
+                "src/test/java/com/judepereira/jupiter/persistence/DocumentationScreenshotFixture.java",
+                SCREENSHOT_FIXTURE_DIFF,
+                2,
+                BASE.plusSeconds(185));
+        repository.insertChangedFile(
+                activeSessionId,
                 "scripts/screenshots.sh",
                 SCREENSHOT_SCRIPT_DIFF,
-                2,
+                3,
                 BASE.plusSeconds(190));
         repository.updateSessionReviewState(
                 activeSessionId, true, Persistence.ReviewSource.SESSION, screenshotTestFileId);
+
+        repository.updateLifecycleHookSettings(
+                "printf '%s completed\\n' \"$JUPITER_SESSION_NAME\" >> /tmp/jupiter-hooks.log",
+                "printf '%s failed\\n' \"$JUPITER_SESSION_NAME\" >> /tmp/jupiter-hooks.log",
+                "printf '%s subagent-complete\\n' \"$JUPITER_SESSION_NAME\" >> /tmp/jupiter-hooks.log",
+                30);
+
+        long mcpServerId = repository.insertMcpServer(
+                "GitHub",
+                "https://mcp.example.test/github",
+                true,
+                "[{\"name\":\"Authorization\",\"value\":\"Bearer ${env.GITHUB_TOKEN}\"}]",
+                BASE.plusSeconds(30));
+        repository.replaceMcpServerProjectExposures(mcpServerId, List.of(jupiterProjectId, blueCaveProjectId));
 
         // Make the screenshot workspace/session the exact state the UI opens into.
         repository.updateProjectLastOpened(jupiterProjectId, BASE.plusSeconds(240));
@@ -114,10 +208,10 @@ public final class DocumentationScreenshotFixture {
         repository.updateSessionLastOpened(activeSessionId, BASE.plusSeconds(240));
         repository.updateAppState(jupiterProjectId, docsWorkspaceId, activeSessionId);
 
-        return new Fixture(jupiterProjectId, docsWorkspaceId, activeSessionId);
+        return new Fixture(jupiterProjectId, docsWorkspaceId, activeSessionId, subagentSessionId);
     }
 
-    private static void seedActiveConversation(AppStateRepository repository, long sessionId) {
+    private static ActiveConversation seedActiveConversation(AppStateRepository repository, long sessionId) {
         turn(repository, sessionId, 1, 1,
                 "Can we make the documentation screenshots reproducible? I want the same projects, workspaces and conversation every time.",
                 "Yes. I’m treating screenshots as a fixture, not as a manual browser session. The database, Git state, clock, viewport and rendering environment all need to be deterministic.",
@@ -133,15 +227,67 @@ public final class DocumentationScreenshotFixture {
                 "Two fixed profiles:\n\n```text\ndesktop: 1440 × 900 @ 2x\nmobile:   390 × 844 @ 3x\n```\n\nBoth use Playwright Chromium with a fixed clock, light mode and reduced motion. The resulting PNGs are 2880×1800 and 1170×2532.",
                 BASE.minusSeconds(48));
 
-        turn(repository, sessionId, 4, 7,
-                "Keep the review panel open in the desktop shot. It makes the coding workflow much clearer.",
-                "Done. The active session has a deterministic two-file change set, with this screenshot test selected in review. Mobile uses the same fixture but closes review before capture so the chat remains readable.",
+        long toolAssistantMessageId = turn(repository, sessionId, 4, 7,
+                "Can the catalog cover tool calls, images and subagents as well as the normal chat?",
+                "Yes. I’ve put those states into the fixture itself, so the catalog can photograph the real persisted projection rather than invoking a model during screenshot generation.",
                 BASE.minusSeconds(20));
 
         turn(repository, sessionId, 5, 9,
-                "Can we run this natively on macOS? I want the screenshots to use Jupiter’s real font stack.",
-                "Yes. The runner installs Playwright’s pinned Chromium build natively and leaves Jupiter’s CSS fonts alone. On macOS that means the normal SF Pro / system font rendering, while the 2x and 3x device scale factors keep the PNGs Retina-sharp.",
+                "And keep this native on macOS. I want Jupiter’s real font stack.",
+                "That stays unchanged. The runner installs Playwright’s pinned Chromium build natively and leaves Jupiter’s CSS fonts alone. The fixed 2x and 3x device scale factors keep the PNGs Retina-sharp.",
                 BASE.minusSeconds(8));
+
+        return new ActiveConversation(toolAssistantMessageId);
+    }
+
+    private static void seedSubagentConversation(AppStateRepository repository, long sessionId) {
+        repository.insertConversationMessage(
+                sessionId,
+                "subagent-user-1",
+                "user",
+                1,
+                1,
+                "Primary task:\nInspect the screenshot harness and make sure every visual wiki feature has a deterministic capture.\n\nExpected output:\nA short coverage report.",
+                null,
+                null,
+                true,
+                true,
+                false,
+                BASE.plusSeconds(76));
+
+        Instant assistantStartedAt = BASE.plusSeconds(77);
+        Instant assistantCompletedAt = BASE.plusSeconds(83);
+        long assistantMessageId = repository.insertConversationMessage(
+                sessionId,
+                "subagent-assistant-1",
+                "assistant",
+                1,
+                2,
+                "The catalog covers the main shell, projects, workspaces, sessions, review, terminal, settings, MCP, OAuth, usage, slash commands, tool calls and this subagent transcript. The mobile capture gets its own 390px state as well.",
+                null,
+                null,
+                true,
+                true,
+                false,
+                "explore",
+                "Explore",
+                "openai/gpt-5.6-luna",
+                "MEDIUM",
+                null,
+                assistantCompletedAt,
+                assistantStartedAt);
+        repository.insertToolCallTrace(
+                sessionId,
+                assistantMessageId,
+                1,
+                "subagent-read-runner",
+                "read_file",
+                true,
+                "{\"path\":\"scripts/screenshots.sh\"}",
+                "Read the native screenshot runner.",
+                "{}",
+                BASE.plusSeconds(82),
+                BASE.plusSeconds(79));
     }
 
     private static void seedShortConversation(AppStateRepository repository, long sessionId,
@@ -162,7 +308,7 @@ public final class DocumentationScreenshotFixture {
                 null, null, startedAt.plusSeconds(1));
     }
 
-    private static void turn(AppStateRepository repository, long sessionId, long turnId, long firstSequence,
+    private static long turn(AppStateRepository repository, long sessionId, long turnId, long firstSequence,
                              String userText, String assistantText, Instant startedAt) {
         repository.insertConversationMessage(
                 sessionId,
@@ -180,7 +326,7 @@ public final class DocumentationScreenshotFixture {
 
         Instant assistantStartedAt = startedAt.plusSeconds(1);
         Instant assistantCompletedAt = startedAt.plusSeconds(7);
-        repository.insertConversationMessage(
+        return repository.insertConversationMessage(
                 sessionId,
                 "session-" + sessionId + "-assistant-" + turnId,
                 "assistant",
@@ -209,22 +355,40 @@ public final class DocumentationScreenshotFixture {
                                Path blueCaveProject, Path websiteProject) {
     }
 
-    public record Fixture(long activeProjectId, long activeWorkspaceId, long activeSessionId) {
+    public record Fixture(long activeProjectId, long activeWorkspaceId, long activeSessionId,
+                          long subagentSessionId) {
+    }
+
+    private record ActiveConversation(long toolAssistantMessageId) {
     }
 
     private static final String SCREENSHOT_TEST_DIFF = """
             diff --git a/src/test/java/com/judepereira/jupiter/e2e/DocumentationScreenshotsTest.java b/src/test/java/com/judepereira/jupiter/e2e/DocumentationScreenshotsTest.java
             new file mode 100644
-            index 0000000..f47ac10
+            index 0000000..9d6fbd2
             --- /dev/null
             +++ b/src/test/java/com/judepereira/jupiter/e2e/DocumentationScreenshotsTest.java
-            @@ -0,0 +1,7 @@
+            @@ -0,0 +1,8 @@
             +class DocumentationScreenshotsTest {
             +    static final int DESKTOP_WIDTH = 1440;
             +    static final int DESKTOP_HEIGHT = 900;
             +    static final double DESKTOP_DPR = 2.0;
             +
-            +    // Capture from deterministic fixture state.
+            +    // Build the complete wiki screenshot catalog.
+            +    // Every capture starts from deterministic fixture state.
+            +}
+            """;
+
+    private static final String SCREENSHOT_FIXTURE_DIFF = """
+            diff --git a/src/test/java/com/judepereira/jupiter/persistence/DocumentationScreenshotFixture.java b/src/test/java/com/judepereira/jupiter/persistence/DocumentationScreenshotFixture.java
+            new file mode 100644
+            index 0000000..d71b6ae
+            --- /dev/null
+            +++ b/src/test/java/com/judepereira/jupiter/persistence/DocumentationScreenshotFixture.java
+            @@ -0,0 +1,5 @@
+            +final class DocumentationScreenshotFixture {
+            +    // Projects, worktrees, sessions, tool traces and settings all use
+            +    // fixed IDs-by-insertion-order and timestamps.
             +}
             """;
 

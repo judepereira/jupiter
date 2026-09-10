@@ -2,7 +2,7 @@
 
 Jupiter is the coding harness I wanted for remote development: run it where the code lives, then work from any browser.
 
-> TODO: add screenshot
+![Jupiter interface](images/interface-desktop.png)
 
 ## Start here
 

@@ -2,7 +2,7 @@
 
 There are two useful questions when reviewing agent work: “what did this session change?” and “what is actually different in Git?” Jupiter keeps both views.
 
-> TODO: add screenshot
+![Reviewing session changes](images/review-and-diffs.png)
 
 ## Session changes
 

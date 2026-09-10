@@ -2,7 +2,7 @@
 
 Agent and model are deliberately separate choices in Jupiter. An agent defines behaviour and tools; the model is what runs the turn.
 
-> TODO: add screenshot
+![Agent, model, and thinking controls](images/agents-models-thinking.png)
 
 ## Model catalogue
 

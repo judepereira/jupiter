@@ -4,7 +4,7 @@ I built Jupiter because I wanted a coding agent I could leave running on a serve
 
 It combines coding agents, Git worktrees, persistent sessions, a real terminal, diff review, MCP tools, and a web UI. There’s no desktop app or CLI to keep in sync. The browser is the client.
 
-> TODO: add screenshot
+![Jupiter interface](.wiki/images/interface-desktop.png)
 
 ## What makes Jupiter useful?
 
