@@ -104,9 +104,6 @@
 }
 
 .settings-command-form { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: #fbfdff; }
-.settings-command-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.settings-command-grid label, .settings-command-form > label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; font-weight: 600; }
-.settings-command-grid input, .settings-command-form textarea { width: 100%; font: inherit; font-weight: 400; }
 .settings-command-list { display: grid; gap: 12px; }
 .settings-command-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
 .settings-command-card-header, .settings-command-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

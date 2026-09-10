@@ -231,13 +231,24 @@ public class ProjectsTemplateRenderTest {
         CommandCatalogService.CommandDefinition command = new CommandCatalogService.CommandDefinition(
                 "unsafe-command", "<Unsafe name>", "<unsafe description>", CommandCatalogService.CommandKind.PROMPT,
                 "Body <script>alert(1)</script> & text", "/tmp", 15);
-        context.setVariable("customCommands", List.of(command));
+        CommandCatalogService.CommandDefinition secondCommand = new CommandCatalogService.CommandDefinition(
+                "second-command", "Second command", "Second description", CommandCatalogService.CommandKind.SCRIPT,
+                "echo second", "/var/tmp", 30);
+        context.setVariable("customCommands", List.of(command, secondCommand));
         String html = engine.process(new TemplateSpec("fragments/projects", Set.of("settingsCommands"), TemplateMode.HTML, null), context);
 
-        assertThat(html).contains("Custom commands", "unsafe-command", "name=\"id\"", "name=\"description\"", "name=\"body\"",
-                "hx-post=\"/ui/settings/commands/create\"", "/ui/settings/commands/unsafe-command/update", "/ui/settings/commands/unsafe-command/delete");
+        assertThat(html).contains("Custom commands", "unsafe-command", "second-command", "name=\"id\"", "name=\"description\"", "name=\"body\"",
+                "hx-post=\"/ui/settings/commands/create\"", "/ui/settings/commands/unsafe-command/update", "/ui/settings/commands/unsafe-command/delete",
+                "/ui/settings/commands/second-command/update", "/ui/settings/commands/second-command/delete",
+                "class=\"form-control\"", "class=\"form-select\"", "class=\"row g-3\"", "class=\"collapse\"",
+                "data-bs-toggle=\"collapse\"", "aria-expanded=\"false\"", "aria-controls=\"settings-command-edit-0\"",
+                "data-bs-target=\"#settings-command-edit-0\"", "id=\"settings-command-edit-0\"",
+                "aria-controls=\"settings-command-edit-1\"", "data-bs-target=\"#settings-command-edit-1\"",
+                "id=\"settings-command-edit-1\"");
         assertThat(html).contains("&lt;Unsafe name&gt;", "&lt;unsafe description&gt;", "Body &lt;script&gt;alert(1)&lt;/script&gt; &amp; text");
         assertThat(html).doesNotContain("<Unsafe name>", "<unsafe description>", "<script>alert(1)</script>");
+        assertThat(html.split("class=\"collapse\"", -1)).hasSize(3);
+        assertThat(html.split("data-bs-target=\"#settings-command-edit-", -1)).hasSize(3);
     }
 
     @Test
