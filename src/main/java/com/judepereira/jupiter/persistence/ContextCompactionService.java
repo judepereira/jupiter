@@ -4,6 +4,8 @@ import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
+import com.judepereira.jupiter.agent.skill.SkillCatalog;
+import com.judepereira.jupiter.agent.skill.SkillDiscoveryService;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
@@ -35,14 +37,17 @@ public class ContextCompactionService {
     private final AgentModelClientFactory modelClientFactory;
     private final TokenUsageService tokenUsageService;
     private final SystemPromptComposer systemPromptComposer;
+    private final SkillDiscoveryService skillDiscoveryService;
 
     @Autowired
     public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory,
-                                    TokenUsageService tokenUsageService, SystemPromptComposer systemPromptComposer) {
+                                    TokenUsageService tokenUsageService, SystemPromptComposer systemPromptComposer,
+                                    SkillDiscoveryService skillDiscoveryService) {
         this.appStateService = appStateService;
         this.modelClientFactory = modelClientFactory;
         this.tokenUsageService = tokenUsageService;
         this.systemPromptComposer = systemPromptComposer;
+        this.skillDiscoveryService = skillDiscoveryService;
     }
 
     @Transactional
@@ -153,7 +158,8 @@ public class ContextCompactionService {
     }
 
     private int estimateTurnTokens(AgentDefinition agent, ModelDefinition model, List<AppStateRepository.ConversationMessageRow> rows, String userText, String workspaceRoot) {
-        return estimatePromptTokens(systemPromptComposer.composeForAgent(agent, workspaceRoot))
+        return estimatePromptTokens(systemPromptComposer.composeForAgent(agent, workspaceRoot,
+                skillDiscoveryService.discover(java.nio.file.Path.of(workspaceRoot))))
                 + estimateRowsTokens(rows)
                 + estimateTextTokens(userText)
                 + toolSchemaTokens(agent)

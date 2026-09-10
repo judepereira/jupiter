@@ -28,7 +28,7 @@ public class UiControllerReviewFileTests {
         Files.writeString(workspaceRoot.resolve("alpha.txt"), "alpha\n");
 
         AgentProperties props = new AgentProperties();
-        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()), props);
+        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()), props);
         AppStateService appStateService = appStateService(controller);
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
@@ -65,7 +65,7 @@ public class UiControllerReviewFileTests {
         Files.writeString(workspaceRoot.resolve("alpha.txt"), "alpha\n");
 
         AgentProperties props = new AgentProperties();
-        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer()), props);
+        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()), props);
         AppStateService appStateService = appStateService(controller);
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());

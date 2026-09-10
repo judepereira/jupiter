@@ -37,7 +37,7 @@ class ContextCompactionServiceTests {
         }
 
         RecordingStreamingFactory factory = recordingStreamingFactory();
-        ContextCompactionService compactionService = new ContextCompactionService(service, factory, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
+        ContextCompactionService compactionService = new ContextCompactionService(service, factory, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery());
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true,
                 List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 50000, 32, null, null, null);
@@ -65,7 +65,7 @@ class ContextCompactionServiceTests {
         var secondTurn = service.appendUserMessageAndPendingAssistant(sessionId, "second turn " + "b".repeat(200));
         service.completeAssistantMessage(sessionId, secondTurn.assistantMessage().id(), "reply 2 " + "c".repeat(200), List.of());
 
-        ContextCompactionService compactionService = new ContextCompactionService(service, failIfUsedFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer());
+        ContextCompactionService compactionService = new ContextCompactionService(service, failIfUsedFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery());
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true,
                 List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 1200, 32, null, null, null);

@@ -197,19 +197,32 @@ public class LifecycleHookService {
         if (!process.isAlive()) {
             return;
         }
-        long pid = process.pid();
-        signalProcessGroup("TERM", pid);
-        destroyDescendants(process, false);
-        waitBriefly(process);
-        signalProcessGroup("KILL", pid);
-        destroyDescendants(process, true);
-        process.destroyForcibly();
-        waitBriefly(process);
+
+        // Take one immutable snapshot. Re-discovering descendants after killing the
+        // parent can race with re-parenting and, worse, with PID reuse.
+        ProcessHandle parent = process.toHandle();
+        List<ProcessHandle> descendants = parent.descendants().toList();
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TERMINATION_GRACE_MILLIS);
+        destroy(descendants, false);
+        waitForHandles(descendants, deadline);
+        parent.destroy();
+        waitForExit(process, descendants, deadline);
+
+        deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TERMINATION_GRACE_MILLIS);
+        destroy(descendants, true);
+        waitForHandles(descendants, deadline);
+        parent.destroyForcibly();
+        waitForExit(process, descendants, deadline);
     }
 
-    private void signalProcessGroup(String signal, long pid) {
+    private void signalProcessGroup(Process process, String signal) {
+        // Check the Process object, rather than looking up its PID again. This
+        // prevents a late cleanup from signalling an unrelated reused PID.
+        if (!process.isAlive()) {
+            return;
+        }
         try {
-            ProcessBuilder signalBuilder = new ProcessBuilder("/bin/kill", "-" + signal, "-" + pid);
+            ProcessBuilder signalBuilder = new ProcessBuilder("/bin/kill", "-" + signal, "-" + process.pid());
             ProcessEnvironmentSanitizer.sanitize(signalBuilder);
             Process signalProcess = signalBuilder.start();
             signalProcess.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS);
@@ -219,9 +232,11 @@ public class LifecycleHookService {
         }
     }
 
-    private void destroyDescendants(Process process, boolean forcibly) {
-        List<ProcessHandle> descendants = process.toHandle().descendants().toList();
-        descendants.reversed().forEach(handle -> {
+    private void destroy(List<ProcessHandle> handles, boolean forcibly) {
+        handles.reversed().forEach(handle -> {
+            if (!handle.isAlive()) {
+                return;
+            }
             if (forcibly) {
                 handle.destroyForcibly();
             } else {
@@ -230,11 +245,27 @@ public class LifecycleHookService {
         });
     }
 
-    private void waitBriefly(Process process) {
-        try {
-            process.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+    private void waitForHandles(List<ProcessHandle> handles, long deadline) {
+        while (handles.stream().anyMatch(ProcessHandle::isAlive)) {
+            if (System.nanoTime() >= deadline) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+    }
+
+    private void waitForExit(Process process, List<ProcessHandle> descendants, long deadline) {
+        while (process.isAlive() || descendants.stream().anyMatch(ProcessHandle::isAlive)) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) {
+                return;
+            }
+            try {
+                process.waitFor(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(25)), TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
     }
 

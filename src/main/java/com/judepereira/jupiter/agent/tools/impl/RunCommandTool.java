@@ -8,8 +8,10 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
@@ -61,30 +63,24 @@ public class RunCommandTool implements AgentTool {
             }
         }
         Path wd = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), working);
-        ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", cmd);
+        // ProcessBuilder encodes command-line arguments using the JVM's native encoding. On a
+        // POSIX locale that turns non-ASCII command text into '?', before the shell sees it.
+        // Put the script in a UTF-8 file so the shell reads the original command bytes instead.
+        Path commandScript = Files.createTempFile("jupiter-command", ".sh");
+        Files.writeString(commandScript, cmd, StandardCharsets.UTF_8);
+        ProcessBuilder pb = new ProcessBuilder("/bin/sh", commandScript.toString());
         pb.directory(wd.toFile());
         Map<String, String> environment = pb.environment();
         environment.clear();
         environment.putAll(buildCommandEnvironment(System.getenv(), context.getCommandEnvironmentAllowlist(), context.getEnvironmentVariables()));
-        Process p = pb.start();
-        StringBuilder stdoutBuilder = new StringBuilder();
-        StringBuilder stderrBuilder = new StringBuilder();
-        Thread tOut = new Thread(() -> {
-            try (var is = p.getInputStream(); var ir = new InputStreamReader(is, StandardCharsets.UTF_8);
-                 var br = new BufferedReader(ir)) {
-                br.lines().forEach(l -> stdoutBuilder.append(l).append('\n'));
-            } catch (Exception ignored) {
-                // ignore
-            }
-        });
-        Thread tErr = new Thread(() -> {
-            try (var is = p.getErrorStream(); var ir = new InputStreamReader(is, StandardCharsets.UTF_8);
-                 var br = new BufferedReader(ir)) {
-                br.lines().forEach(l -> stderrBuilder.append(l).append('\n'));
-            } catch (Exception ignored) {
-                // ignore
-            }
-        });
+        environment.put("LANG", "C.utf8");
+        environment.put("LC_ALL", "C.utf8");
+        Process p;
+        p = pb.start();
+        OutputCapture stdoutCapture = new OutputCapture("stdout");
+        OutputCapture stderrCapture = new OutputCapture("stderr");
+        Thread tOut = new Thread(() -> capture(p.getInputStream(), stdoutCapture));
+        Thread tErr = new Thread(() -> capture(p.getErrorStream(), stderrCapture));
         tOut.start();
         tErr.start();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(context.getCommandTimeoutSeconds());
@@ -102,6 +98,7 @@ public class RunCommandTool implements AgentTool {
                 } catch (InterruptedException ignored) {
                     Thread.currentThread().interrupt();
                 }
+                Files.deleteIfExists(commandScript);
                 throw new StreamCancelledException();
             }
             long remainingNanos = deadline - System.nanoTime();
@@ -123,6 +120,7 @@ public class RunCommandTool implements AgentTool {
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
             }
+            Files.deleteIfExists(commandScript);
             return new ToolExecutionResult(false, "command timed out", Map.of());
         }
         try {
@@ -138,10 +136,11 @@ public class RunCommandTool implements AgentTool {
         if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
             throw new StreamCancelledException();
         }
+        Files.deleteIfExists(commandScript);
         int code = p.exitValue();
 
-        String stdout = formatOutput("stdout", stdoutBuilder.toString());
-        String stderr = formatOutput("stderr", stderrBuilder.toString());
+        String stdout = formatOutput(stdoutCapture);
+        String stderr = formatOutput(stderrCapture);
         Map<String, Object> machine = Map.of(
                 "exitCode", code,
                 "stdout", stdout,
@@ -165,19 +164,70 @@ public class RunCommandTool implements AgentTool {
         return Map.copyOf(environment);
     }
 
-    private String formatOutput(String streamName, String output) throws Exception {
-        byte[] bytes = output.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length <= INLINE_OUTPUT_LIMIT_BYTES) {
-            return output;
+    private static void capture(InputStream input, OutputCapture capture) {
+        try (input; OutputStream output = Files.newOutputStream(capture.path)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+                capture.accept(buffer, read);
+            }
+            capture.finish(output);
+        } catch (IOException ignored) {
+            // The process may be forcibly terminated while its output is being read.
+        }
+    }
+
+    private String formatOutput(OutputCapture capture) throws Exception {
+        if (capture.size <= INLINE_OUTPUT_LIMIT_BYTES) {
+            return Files.readString(capture.path, StandardCharsets.UTF_8);
         }
 
-        Path fullOutput = Files.createTempFile(streamName, ".txt");
-        Files.writeString(fullOutput, output, StandardCharsets.UTF_8);
-        return utf8Prefix(bytes, PREVIEW_EDGE_BYTES)
+        return utf8Prefix(capture.prefix.toByteArray(), PREVIEW_EDGE_BYTES)
                 + "\n...\n...\n"
-                + utf8Suffix(bytes, PREVIEW_EDGE_BYTES)
+                + utf8Suffix(capture.suffixBytes(), PREVIEW_EDGE_BYTES)
                 + "\n\n"
-                + fullOutput;
+                + capture.path;
+    }
+
+    private static final class OutputCapture {
+        private final String streamName;
+        private final Path path;
+        private final ByteArrayOutputStream prefix = new ByteArrayOutputStream(PREVIEW_EDGE_BYTES);
+        private final byte[] suffix = new byte[PREVIEW_EDGE_BYTES];
+        private int suffixLength;
+        private long size;
+
+        private OutputCapture(String streamName) throws IOException {
+            this.streamName = streamName;
+            this.path = Files.createTempFile(streamName, ".capture");
+        }
+
+        private void accept(byte[] buffer, int length) throws IOException {
+            size += length;
+            int prefixLength = Math.min(length, PREVIEW_EDGE_BYTES - prefix.size());
+            prefix.write(buffer, 0, prefixLength);
+            for (int i = 0; i < length; i++) {
+                if (suffixLength < PREVIEW_EDGE_BYTES) {
+                    suffix[suffixLength++] = buffer[i];
+                } else {
+                    System.arraycopy(suffix, 1, suffix, 0, PREVIEW_EDGE_BYTES - 1);
+                    suffix[PREVIEW_EDGE_BYTES - 1] = buffer[i];
+                }
+            }
+        }
+
+        private void finish(OutputStream output) throws IOException {
+            if (size > 0 && suffix[suffixLength - 1] != '\n') {
+                output.write('\n');
+                accept(new byte[]{'\n'}, 1);
+            }
+            // Output is written by the capture loop.
+        }
+
+        private byte[] suffixBytes() {
+            return java.util.Arrays.copyOf(suffix, suffixLength);
+        }
     }
 
     private static String utf8Prefix(byte[] bytes, int maxBytes) throws CharacterCodingException {

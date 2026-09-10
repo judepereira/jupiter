@@ -66,7 +66,11 @@ public class CodingAgentHarnessAgentSelectionTest {
                 planAgent.mode(), planAgent.defaultModel(), planAgent.defaultThinkingLevel(), planAgent.textVerbosity(), planAgent.allowWrite(),
                 planAgent.allowCommand(), List.of("list_files", "read_file", "search_code", "mcp:*", "task"));
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
-                agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(), appStateService, null, mcpManager, new SystemPromptComposer());
+                agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(), appStateService, null, mcpManager,
+                new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()),
+                com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(),
+                com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(),
+                com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Plan.",
@@ -120,7 +124,7 @@ public class CodingAgentHarnessAgentSelectionTest {
         AgentProperties props = properties(tmp, false, false);
         AgentDefinitionService agentDefinitions = new AgentDefinitionService(new ObjectMapper());
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
-                agentDefinitions, ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer());
+                agentDefinitions, ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Engineer.",

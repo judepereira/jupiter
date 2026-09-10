@@ -83,6 +83,21 @@ public class RunCommandToolTest {
     }
 
     @Test
+    public void preserves_utf8_when_a_character_crosses_a_read_boundary(@TempDir Path tmp) throws Exception {
+        RunCommandTool t = new RunCommandTool();
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null);
+        String cmd = "head -c 8188 /dev/zero | tr '\\0' a; printf '\\360\\237\\230\\200'; printf '%05000d' 0";
+
+        var res = t.execute(Map.of("command", cmd), ctx);
+
+        assertTrue(res.isSuccess());
+        String stdout = (String) res.getMachine().get("stdout");
+        String fullOutputPath = stdout.substring(stdout.lastIndexOf("\n\n") + 2);
+        String fullText = Files.readString(Path.of(fullOutputPath), StandardCharsets.UTF_8);
+        assertThat(fullText).startsWith("a".repeat(8188) + "😀");
+    }
+
+    @Test
     public void long_stderr_is_previewed_with_utf8_boundaries_and_written_to_file(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
         ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null);
