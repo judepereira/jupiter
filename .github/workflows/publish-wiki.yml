@@ -1,0 +1,60 @@
+name: Publish wiki
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Publish .wiki to GitHub Wiki
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f .wiki/Home.md ]]; then
+            echo "::error::.wiki/Home.md is missing"
+            exit 1
+          fi
+
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          wiki_url="https://github.com/${GITHUB_REPOSITORY}.wiki.git"
+
+          if ! git -c http.extraHeader="Authorization: Basic $auth" clone "$wiki_url" .wiki-publish; then
+            echo "::error::Could not clone $wiki_url. Enable GitHub Wiki and create its first Home page once."
+            exit 1
+          fi
+
+          wiki_branch="$(git -C .wiki-publish branch --show-current)"
+          if [[ -z "$wiki_branch" ]]; then
+            echo "::error::Could not determine the wiki default branch"
+            exit 1
+          fi
+
+          rsync -a --delete --exclude='.git/' .wiki/ .wiki-publish/
+
+          git -C .wiki-publish add -A
+
+          if git -C .wiki-publish diff --cached --quiet; then
+            echo "Wiki is already current."
+            exit 0
+          fi
+
+          git -C .wiki-publish commit -m "Sync wiki from ${GITHUB_SHA}"
+          git -C .wiki-publish \
+            -c http.extraHeader="Authorization: Basic $auth" \
+            push --force origin "HEAD:${wiki_branch}"
