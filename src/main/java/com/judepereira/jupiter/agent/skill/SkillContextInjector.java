@@ -31,6 +31,13 @@ public final class SkillContextInjector {
         }
         if (index < 0) return List.copyOf(conversation);
         List<Message> result = new ArrayList<>(conversation);
+        result.addAll(index, prepareInjectionMessages(resolution));
+        return List.copyOf(result);
+    }
+
+    /** Prepares exactly the ephemeral messages that execution injects, including failures. */
+    public List<Message> prepareInjectionMessages(SkillInvocationResolver.Resolution resolution) {
+        if (resolution == null) return List.of();
         List<Message> additions = new ArrayList<>();
         for (SkillDefinition skill : resolution.skills()) {
             try {
@@ -40,8 +47,7 @@ public final class SkillContextInjector {
             }
         }
         for (String name : resolution.brokenSkills()) additions.add(failure(name));
-        result.addAll(index, additions);
-        return List.copyOf(result);
+        return List.copyOf(additions);
     }
 
     private String load(SkillDefinition skill) throws IOException {
