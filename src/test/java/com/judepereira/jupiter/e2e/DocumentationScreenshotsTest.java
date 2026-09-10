@@ -33,11 +33,11 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static final int DESKTOP_WIDTH = 1300;
     private static final int DESKTOP_HEIGHT = 744;
-    private static final double DESKTOP_DPR = 1.0;
+    private static final double DESKTOP_DPR = 2.0;
 
     private static final int MOBILE_WIDTH = 402;
     private static final int MOBILE_HEIGHT = 844;
-    private static final double MOBILE_DPR = 1.0;
+    private static final double MOBILE_DPR = 3.0;
 
     private static final String FIXED_BROWSER_TIME = "2026-09-08T09:45:00+02:00";
 
