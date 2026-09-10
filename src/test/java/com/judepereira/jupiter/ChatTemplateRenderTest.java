@@ -111,7 +111,11 @@ public class ChatTemplateRenderTest {
 
         String brokenRow = html.substring(html.indexOf("assistant-broken"), html.indexOf("</li>", html.indexOf("assistant-broken")));
         assertThat(brokenRow).doesNotContain("chat-message-fork-button", "hx-post=\"/ui/chat/fork/assistant-broken\"");
-        assertThat(html).contains("assistant-done", "Fork", "hx-post=\"/ui/chat/fork/assistant-done\"", "hx-target=\"#shell\"", "hx-swap=\"none\"");
+        assertThat(html).contains("assistant-done", "chat-message-copy-button", "bi-copy", "aria-label=\"Copy response\"", "Fork", "hx-post=\"/ui/chat/fork/assistant-done\"", "hx-target=\"#shell\"", "hx-swap=\"none\"");
+
+        context.setVariable("subagentView", true);
+        String subagentHtml = engine.process("fragments/chat", context);
+        assertThat(subagentHtml).doesNotContain("chat-message-copy-button", "chat-message-fork-button", "hx-post=\"/ui/chat/fork/assistant-done\"");
     }
 
     @Test

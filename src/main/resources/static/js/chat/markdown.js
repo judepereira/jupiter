@@ -3,7 +3,7 @@ import {getCurrentOpenSubagentSessionId, processHtmxElement} from './shared.js';
 export function getRawChatMarkdown(el) {
     try {
         if (!el) return '';
-        return (el.dataset && el.dataset.rawMarkdown != null && el.dataset.rawMarkdown !== '') ? el.dataset.rawMarkdown : (el.textContent || '');
+        return el.dataset && el.dataset.rawMarkdown != null ? el.dataset.rawMarkdown : (el.textContent || '');
     } catch (_) {
         return '';
     }
@@ -133,6 +133,53 @@ export function formatAllChatSubtitles(root) {
     }
 }
 
+export function bindChatMessageCopyButtons() {
+    try {
+        if (document.body.dataset.chatCopyButtonsBound === 'true') return;
+        document.body.dataset.chatCopyButtonsBound = 'true';
+        document.body.addEventListener('click', async event => {
+            const button = event.target && event.target.closest && event.target.closest('.chat-message-copy-button');
+            if (!button) return;
+            const row = button.closest('li[data-role="assistant"]');
+            const message = row && row.querySelector('.chat-message-text');
+            if (!message || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function' || button.dataset.copyPending === 'true') return;
+            button.dataset.copyPending = 'true';
+            try {
+                await navigator.clipboard.writeText(getRawChatMarkdown(message));
+                button.setAttribute('aria-label', 'Copied');
+                button.title = 'Copied';
+                window.setTimeout(() => {
+                    button.setAttribute('aria-label', 'Copy response');
+                    button.title = 'Copy response';
+                }, 1500);
+            } catch (error) {
+                button.setAttribute('aria-label', 'Copy failed');
+                button.title = 'Copy failed';
+                console.error('Unable to copy chat response', error);
+            } finally {
+                delete button.dataset.copyPending;
+            }
+        });
+    } catch (_) {
+    }
+}
+
+function ensureChatMessageCopyButton(row, subtitle) {
+    try {
+        if (!row || !subtitle || !row.dataset || row.dataset.role !== 'assistant') return;
+        if (!subtitle.querySelector('.chat-message-copy-button')) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'chat-message-copy-button btn btn-link';
+            button.setAttribute('aria-label', 'Copy response');
+            button.title = 'Copy response';
+            button.innerHTML = '<i class="bi bi-copy" aria-hidden="true"></i>';
+            subtitle.appendChild(button);
+        }
+    } catch (_) {
+    }
+}
+
 function ensureChatMessageForkButton(row, subtitle) {
     try {
         if (!row || !subtitle || !row.dataset || row.dataset.role !== 'assistant') return;
@@ -141,6 +188,7 @@ function ensureChatMessageForkButton(row, subtitle) {
         const assistantPublicId = row.dataset.id != null ? String(row.dataset.id).trim() : '';
         if (!assistantPublicId) return;
 
+        ensureChatMessageCopyButton(row, subtitle);
         let button = subtitle.querySelector('.chat-message-fork-button');
         if (!button) {
             button = document.createElement('button');
