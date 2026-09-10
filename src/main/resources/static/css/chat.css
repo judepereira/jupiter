@@ -405,6 +405,7 @@
     gap: 6px;
 }
 
+.chat-message-copy-button,
 .chat-message-fork-button {
     font-size: inherit;
     padding: 0;
