@@ -1,69 +1,108 @@
 # Jupiter
-Jupiter coding agent harness in the spirit of Claude Code, Codex, and opencode. It is model-agnostic / BYOM where API keys or a Codex subscription apply, remote-first for any browser, self-hostable on a server, and suited to private VPN access like Tailscale. There is no desktop app or CLI here — it is 100% focused on web and mobile browsers.
 
-| Jupiter | Claude Code | Codex | opencode |
-|---|---|---|---|
-| 🌐 Browser-first | 🧠 Agentic | 🪄 Strong coding flow | 🛠️ Hackable |
-| 🔐 Security-minded | 🤝 Familiar | 🔑 Subscription/API | ⚙️ Flexible |
-| 🏠 Self-hostable | 💻 Local-first | ☁️ Service-backed | 📦 DIY-friendly |
+I built Jupiter because I wanted a coding agent I could leave running on a server, then pick up from any browser — laptop, phone, whatever happens to be nearby.
 
-## Running locally
-Build the packaged jar and pass the mandatory, stable database encryption key through a short-lived anonymous stdin pipe:
+It combines coding agents, Git worktrees, persistent sessions, a real terminal, diff review, MCP tools, and a web UI. There’s no desktop app or CLI to keep in sync. The browser is the client.
+
+![Jupiter interface](.wiki/images/interface-desktop.png)
+
+## What makes Jupiter useful?
+
+- **It’s remote-first.** Run it where your code lives, and connect from a browser.
+- **Workspaces are Git worktrees.** Each branch gets its own working tree, so parallel work doesn’t turn into a checkout juggling act.
+- **Sessions survive the browser.** Chat history, drafts, tool traces, review state, and settings live on the server.
+- **Delegation is inspectable.** Subagents have their own persisted sessions; you can open them and see what actually happened.
+- **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are stripped from managed child processes.
+- **It’s extendable.** MCP servers and Markdown-based slash commands plug into the harness without changing the core application.
+
+Jupiter’s model layer has provider abstractions, but v1 currently exposes OpenAI GPT-5-family models.
+
+## Docker: the quickest way to run it
+
+Build the image:
+
+```bash
+docker build -t jupiter .
+```
+
+Generate an encryption key and keep it safe:
+
+```bash
+export JUPITER_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+```
+
+Then start Jupiter with persistent state:
+
+```bash
+mkdir -p .jupiter
+
+docker run --rm \
+  -p 7272:7272 \
+  -e JUPITER_ENCRYPTION_KEY="$JUPITER_ENCRYPTION_KEY" \
+  -v "$(pwd)/.jupiter:/home/jupiter/.jupiter" \
+  jupiter
+```
+
+Open `http://localhost:7272`.
+
+One important bit: **do not generate a new encryption key on every restart.** The database is tied to that key; lose it and the encrypted data is gone.
+
+## Running it natively
+
+You’ll need Java 25, Git, and ripgrep.
+
 ```bash
 ./mvnw package
 entered_key="$(openssl rand -base64 32)"
 exec {key_fd}< <(printf '%s\n' "$entered_key")
 unset entered_key
-env -u JUPITER_ENCRYPTION_KEY java -XX:+DisableAttachMechanism \
-  --enable-native-access=ALL-UNNAMED -Dserver.port=7272 \
-  -jar target/jupiter-0.0.1-SNAPSHOT.jar <&${key_fd}-
-```
-The key must be standard Base64 encoding of exactly 32 bytes. Keep it unchanged across restarts and back it up separately from the database: losing it makes encrypted data unrecoverable, and changing it causes startup failure. The JVM must never be launched with `JUPITER_ENCRYPTION_KEY` in its environment, arguments, or system properties; `env -u` ensures that here. Shell temporary copies are best-effort, and the pipe/process-substitution writer is short-lived. The native-access flag is required for Linux process dumpability hardening.
 
-`spring-boot:run` is not recommended for production or this bootstrap flow: Maven may consume or mediate stdin and its JVM argument forwarding is not a reliable way to enforce these launch flags. Use the packaged jar command above.
-
-For an interactive prompt without exporting the key or retaining it in a here-string:
-```bash
-read -r -s -p 'Encryption key: ' entered_key; printf '\n'
-exec {key_fd}< <(printf '%s\n' "$entered_key")
-unset entered_key
-env -u JUPITER_ENCRYPTION_KEY java -XX:+DisableAttachMechanism \
-  --enable-native-access=ALL-UNNAMED -Dserver.port=7272 \
+env -u JUPITER_ENCRYPTION_KEY java \
+  -XX:+DisableAttachMechanism \
+  --enable-native-access=ALL-UNNAMED \
+  -Dserver.port=7272 \
   -jar target/jupiter-0.0.1-SNAPSHOT.jar <&${key_fd}-
 ```
 
-On the first startup after upgrading, back up the database and key first. Existing plaintext data is migrated automatically before readiness; migration is one-way for older app versions. Database and key backups must be managed separately. App-level encryption protects values going forward, but old WAL/backups, deleted pages, and other external copies may still contain pre-migration plaintext unless securely handled.
+The key must be standard Base64 encoding of exactly 32 bytes.
 
-## Storage
-`~/.jupiter` is used to store persistent state. No state is stored in the browser :)
+The slightly unusual stdin dance is intentional: the normal native startup path keeps `JUPITER_ENCRYPTION_KEY` out of the JVM environment, arguments, and system properties.
 
-## Docker image
-Build a Docker image as usual:
+## Connecting OpenAI
+
+You have two options:
+
+- set `OPENAI_API_KEY`, or
+- use the OpenAI device authorisation flow in **Settings**.
+
+If you connect through the browser flow, Jupiter stores the resulting credentials in encrypted database fields.
+
+## Running Jupiter remotely
+
+This is what Jupiter is built for, but don’t casually throw port `7272` onto the public internet.
+
+My preferred setup is a private network such as Tailscale. If you do expose Jupiter publicly, set `JUPITER_HTTP_AUTH_PASSWORD`, put it behind HTTPS, and make sure your reverse proxy supports both SSE and WebSockets.
+
+Jupiter warns when Basic authentication is enabled but the public request still looks like plain HTTP.
+
+## Documentation
+
+The full documentation lives in the [GitHub Wiki](https://github.com/judepereira/jupiter/wiki). A good place to begin is [Getting Started](https://github.com/judepereira/jupiter/wiki/Getting-Started), followed by [Workspaces and Git Worktrees](https://github.com/judepereira/jupiter/wiki/Workspaces-and-Git-Worktrees) and [Security Model](https://github.com/judepereira/jupiter/wiki/Security-Model).
+
+The wiki source itself is checked into `.wiki/` and published by `.github/workflows/publish-wiki.yml`.
+
+## Storage and backups
+
+Jupiter keeps its state under `~/.jupiter`, including `jupiter.sqlite`.
+
+Back up the database and encryption key separately. You need both to recover encrypted state.
+
+## Hacking on Jupiter
+
+Run the test suite with:
 
 ```bash
-docker build -t jupiter .
-docker run --rm -p 7272:7272 \
-  -e JUPITER_ENCRYPTION_KEY="$(openssl rand -base64 32)" jupiter
-```
-Docker Compose similarly accepts the key as an environment variable only because `/entrypoint.sh` removes it before init scripts and pipes it once to Java; it is never present in the Java environment.
-
-Keep the same key for every restart; do not bake it into image layers.
-
-For persistence inside a container, mount the app user's `/home/<app-user>/.jupiter` directory:
-
-```bash
-docker run --rm -p 7272:7272 \
-  -e JUPITER_ENCRYPTION_KEY="$JUPITER_ENCRYPTION_KEY" \
-  -v "$(pwd)/.jupiter:/home/jupiter/.jupiter" jupiter
+./mvnw test
 ```
 
-## Defaults
-- `PORT` defaults to `7272`, so the app is available at http://localhost:7272
-
-## Public deployment
-Set `JUPITER_HTTP_AUTH_PASSWORD` to a nonblank value to enable HTTP Basic authentication. The username defaults to `jupiter` and can be changed with `JUPITER_HTTP_AUTH_USERNAME`. Only the implemented `GET /health` route is exempt; every other request, including `/error`, static files, SSE, and WebSocket handshakes, requires credentials. Passwords are read from the environment and are not passed as Java arguments or logged.
-
-Use HTTPS for every public deployment. If TLS terminates at a reverse proxy, configure it to pass the public scheme in `Forwarded` or `X-Forwarded-Proto`; the warning detection accepts common comma-separated proxy values. The reverse proxy must support long-lived SSE connections and WebSocket upgrades.
-
-## Contributing
-Contributions are welcome. For major changes, please open an issue first so we can discuss the direction.
+There are unit, integration, template-rendering, and Playwright browser tests. See [Development and Testing](https://github.com/judepereira/jupiter/wiki/Development-and-Testing) for the details.
