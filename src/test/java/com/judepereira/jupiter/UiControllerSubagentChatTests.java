@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 public class UiControllerSubagentChatTests {
@@ -66,6 +67,7 @@ public class UiControllerSubagentChatTests {
         assertThat(subagentModel.getAttribute("subagentAgentName")).isEqualTo("Engineer");
         assertThat(subagentModel.getAttribute("subagentAgentId")).isEqualTo("engineer");
         assertThat(subagentModel.getAttribute("subagentSessionId")).isEqualTo(childSessionId);
+        assertThat(((UiController.Session) subagentModel.getAttribute("activeSession")).id()).isEqualTo(parentSessionId);
         assertThat((List<ChatPresentationService.ChatMessage>) subagentModel.getAttribute("chatMessages")).extracting(ChatPresentationService.ChatMessage::text)
                 .contains("Primary task:\nwrite a file", "child final");
 
@@ -80,6 +82,65 @@ public class UiControllerSubagentChatTests {
         assertThat(backModel.getAttribute("subagentAgentName")).isNull();
         assertThat(backModel.getAttribute("subagentAgentId")).isNull();
         assertThat(backModel.getAttribute("subagentSessionId")).isNull();
+    }
+
+    @Test
+    public void restoreChatActivatesPrimaryAndRendersChildInOobShell(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long primarySessionId = appStateService.loadViewData().activeSession().id();
+        long otherSessionId = appStateService.createSession(appStateService.loadViewData().activeWorkspace().id(), "Other").id();
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent prompt", AgentMode.SUBAGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        long childSessionId = appStateService.createHiddenSubagentSession(primarySessionId, "tool-call", subagent);
+        QueuedChatTurn turn = appStateService.appendUserMessageAndPendingAssistant(childSessionId, "child task");
+        appStateService.completeAssistantMessage(childSessionId, turn.assistantMessage().id(), "child result", List.of());
+        appStateService.activateSession(otherSessionId);
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        String view = controller.restoreChat(primarySessionId, childSessionId, model);
+
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(appStateService.loadViewData().activeSession().id()).isEqualTo(primarySessionId);
+        assertThat(model.getAttribute("shellRefresh")).isEqualTo(true);
+        assertThat(model.getAttribute("includeChatContainer")).isEqualTo(true);
+        assertThat(model.getAttribute("subagentView")).isEqualTo(true);
+        assertThat(model.getAttribute("subagentSessionId")).isEqualTo(childSessionId);
+        assertThat((List<ChatPresentationService.ChatMessage>) model.getAttribute("chatMessages")).extracting(ChatPresentationService.ChatMessage::text)
+                .contains("child task", "child result");
+    }
+
+    @Test
+    public void restoreChatRejectsChildFromAnotherPrimary(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long primarySessionId = appStateService.loadViewData().activeSession().id();
+        long otherPrimaryId = appStateService.createSession(appStateService.loadViewData().activeWorkspace().id(), "Other").id();
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent prompt", AgentMode.SUBAGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        long childSessionId = appStateService.createHiddenSubagentSession(otherPrimaryId, "tool-call", subagent);
+        appStateService.activateSession(otherPrimaryId);
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        assertThatThrownBy(() -> controller.restoreChat(primarySessionId, childSessionId, new ConcurrentModel()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("does not belong");
+        assertThat(appStateService.loadViewData().activeSession().id()).isEqualTo(otherPrimaryId);
+    }
+
+    @Test
+    public void restoreChatRendersPrimaryWhenChildIsAbsent(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long primarySessionId = appStateService.loadViewData().activeSession().id();
+
+        Model model = new ConcurrentModel();
+        String view = controller(appStateService, workspaceRoot).restoreChat(primarySessionId, null, model);
+
+        assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
+        assertThat(model.getAttribute("subagentView")).isEqualTo(false);
+        assertThat(model.getAttribute("subagentSessionId")).isNull();
     }
 
     @Test

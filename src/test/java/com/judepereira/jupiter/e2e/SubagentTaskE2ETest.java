@@ -337,6 +337,12 @@ class SubagentTaskE2ETest extends E2ETestSupport {
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
+            List<String> pageErrors = new java.util.concurrent.CopyOnWriteArrayList<>();
+            List<String> consoleErrors = new java.util.concurrent.CopyOnWriteArrayList<>();
+            page.onPageError(pageErrors::add);
+            page.onConsoleMessage(message -> {
+                if (message.type().equals("error")) consoleErrors.add(message.text());
+            });
             page.navigate(app.baseUrl());
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
 
@@ -362,29 +368,53 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator(".subagent-bar").waitFor();
             assertThat(page.locator(".subagent-bar")).isVisible();
             assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).contains("Explore subagent");
+            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).contains("Primary task:", "Explore subagent");
+            String subagentSessionId = page.locator("#chat-container").getAttribute("data-subagent-session-id");
+            org.assertj.core.api.Assertions.assertThat(subagentSessionId).isNotBlank();
+            page.waitForFunction("() => history.state && history.state.chatNavigation && history.state.subagentSessionId && history.state.hasHistoryParent");
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/chat/restore/") && response.status() == 200,
+                    () -> page.evaluate("() => history.back()"));
+            page.locator("#chat-container").waitFor();
+            assertThat(page.locator("#chat-send-form")).isVisible();
+            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("Explore subagent");
 
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/chat/restore/") && response.status() == 200,
+                    () -> page.evaluate("() => history.forward()"));
+            page.locator("#chat-container").waitFor();
+            page.locator(".subagent-bar").waitFor();
+            assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
+            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).contains("Primary task:", "Explore subagent");
+
+            assertTrue(pageErrors.isEmpty(), () -> "Page errors during history navigation: " + pageErrors);
+            assertTrue(consoleErrors.isEmpty(), () -> "Console errors during history navigation: " + consoleErrors);
             page.locator(".subagent-back-button").click();
             page.locator("#chat-send-form").waitFor();
             assertThat(page.locator("#chat-send-form")).isVisible();
-            taskToolCall.waitFor();
-            assertThat(taskToolCall).isVisible();
-            org.assertj.core.api.Assertions.assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
+            var taskToolCallAfterBack = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            taskToolCallAfterBack.waitFor();
+            assertThat(taskToolCallAfterBack).isVisible();
+            var taskSubagentButtonAfterBack = taskToolCallAfterBack.locator(".tool-call-subagent-button");
+            taskSubagentButtonAfterBack.waitFor();
+            org.assertj.core.api.Assertions.assertThat((Number) taskSubagentButtonAfterBack
                     .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
                     .isEqualTo(1);
-            assertThat(taskToolCall.locator(".tool-call-subagent-button")).hasText("View Session");
+            assertThat(taskSubagentButtonAfterBack).hasText("View Session");
 
             TestAppConfig.releaseSubagentTurn();
             TestAppConfig.awaitSubagentCompleted();
 
-            org.assertj.core.api.Assertions.assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
+            var taskToolCallAfterCompletion = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            var taskSubagentButtonAfterCompletion = taskToolCallAfterCompletion.locator(".tool-call-subagent-button");
+            org.assertj.core.api.Assertions.assertThat((Number) taskSubagentButtonAfterCompletion
                     .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
                     .isEqualTo(1);
 
-            var taskToolCallSummary = taskToolCall.locator(":scope > summary.tool-call-summary");
+            var taskToolCallSummary = taskToolCallAfterCompletion.locator(":scope > summary.tool-call-summary");
             taskToolCallSummary.click();
-            assertThat(taskSubagentButton).isVisible();
-            taskSubagentButton.click();
+            assertThat(taskSubagentButtonAfterCompletion).isVisible();
+            taskSubagentButtonAfterCompletion.click();
             page.locator(".subagent-bar").waitFor();
             assertThat(page.locator(".subagent-bar")).isVisible();
             assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
@@ -429,6 +459,10 @@ class SubagentTaskE2ETest extends E2ETestSupport {
 
         static void releaseSubagentTurn() {
             subagentTurnControl.release.countDown();
+        }
+
+        static boolean hasSubagentTurnControl() {
+            return subagentTurnControl != null;
         }
 
         static boolean hasSubagentToolCallControl() {
