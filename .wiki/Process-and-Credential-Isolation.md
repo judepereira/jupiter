@@ -1,6 +1,6 @@
 # Process and Credential Isolation
 
-A coding harness launches a lot of child processes. I don’t want Jupiter’s own credentials casually appearing in every `env`, shell, Git process, or crash dump along the way.
+A coding harness launches a lot of child processes. Jupiter’s own credentials must not casually appear in every `env`, shell, Git process, or crash dump along the way.
 
 ## Linux hardening
 

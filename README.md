@@ -1,6 +1,6 @@
 # Jupiter
 
-I built Jupiter because I wanted a coding agent I could leave running on a server, then pick up from any browser — laptop, phone, whatever happens to be nearby.
+Jupiter is a coding agent designed to run on a server and remain available from any browser — laptop, phone, whatever happens to be nearby.
 
 It combines coding agents, Git worktrees, persistent sessions, a real terminal, diff review, MCP tools, and a web UI. There’s no desktop app or CLI to keep in sync. The browser is the client.
 
@@ -81,7 +81,7 @@ If you connect through the browser flow, Jupiter stores the resulting credential
 
 This is what Jupiter is built for, but don’t casually throw port `7272` onto the public internet.
 
-My preferred setup is a private network such as Tailscale. If you do expose Jupiter publicly, set `JUPITER_HTTP_AUTH_PASSWORD`, put it behind HTTPS, and make sure your reverse proxy supports both SSE and WebSockets.
+A private network such as Tailscale is the recommended setup. If you do expose Jupiter publicly, set `JUPITER_HTTP_AUTH_PASSWORD`, put it behind HTTPS, and make sure your reverse proxy supports both SSE and WebSockets.
 
 Jupiter warns when Basic authentication is enabled but the public request still looks like plain HTTP.
 

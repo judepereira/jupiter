@@ -1,6 +1,6 @@
 # Feature Inventory
 
-This is the boring-but-useful v1 checklist. If a user-visible feature lands, I want it represented here and on the closest task-oriented page — otherwise documentation drift is almost guaranteed.
+This is the boring-but-useful v1 checklist. When a user-visible feature lands, represent it here and on the closest task-oriented page — otherwise documentation drift is almost guaranteed.
 
 ## Development workflow
 

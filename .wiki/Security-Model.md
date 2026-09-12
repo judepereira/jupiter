@@ -1,6 +1,6 @@
 # Security Model
 
-Jupiter is powerful software running next to real source code. I’ve tried to keep credentials out of places they don’t belong, but it’s important not to confuse those protections with a sandbox.
+Jupiter is powerful software running next to real source code. Credentials are kept out of places they don’t belong, but it’s important not to confuse those protections with a sandbox.
 
 ## What Jupiter does protect
 

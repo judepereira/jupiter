@@ -24,4 +24,4 @@ When you return to a session, Jupiter tries to restore the most recent assistant
 
 ## Provider scope
 
-The harness has provider abstractions, but v1’s user-facing model discovery is OpenAI GPT-5-family only. I’d rather document what exists than claim provider support that isn’t exposed yet.
+The harness has provider abstractions, but v1’s user-facing model discovery is OpenAI GPT-5-family only. Documentation covers what exists rather than claiming provider support that isn’t exposed yet.

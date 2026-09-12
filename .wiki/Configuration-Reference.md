@@ -1,6 +1,6 @@
 # Configuration Reference
 
-This is the operator-facing configuration I’d expect to reach for most often in v1.
+This is the operator-facing configuration most likely to be useful in v1.
 
 ## Environment variables
 

@@ -22,7 +22,7 @@ They run during application startup.
 
 Encryption is handled at the repository boundary.
 
-That means application services work with normal plaintext domain values, while `AppStateRepository` takes care of encrypting and decrypting the persisted fields. I prefer that to leaking ciphertext concerns through every service layer.
+That means application services work with normal plaintext domain values, while `AppStateRepository` takes care of encrypting and decrypting the persisted fields. This keeps ciphertext concerns from leaking through every service layer.
 
 ## Upgrade caution
 

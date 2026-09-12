@@ -38,4 +38,4 @@ Choose a new branch or an existing one. Jupiter creates a Git worktree for it.
 
 That’s it. Create a session, give the agent some work, inspect the changes, and use the terminal when you need it.
 
-Next, I’d read [Interface Tour](Interface-Tour) and [Workspaces and Git Worktrees](Workspaces-and-Git-Worktrees).
+Next, read [Interface Tour](Interface-Tour) and [Workspaces and Git Worktrees](Workspaces-and-Git-Worktrees).
