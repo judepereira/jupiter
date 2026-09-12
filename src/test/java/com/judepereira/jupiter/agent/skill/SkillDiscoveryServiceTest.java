@@ -30,6 +30,23 @@ class SkillDiscoveryServiceTest {
     }
 
     @Test
+    void effectiveNamesDetermineRepositoryPrecedence() throws Exception {
+        Path workspace = Files.createDirectory(temp.resolve("workspace"));
+        Path home = Files.createDirectory(temp.resolve("home"));
+        Path repositorySkill = workspace.resolve(".agents/skills/repository-directory");
+        Files.createDirectories(repositorySkill);
+        Files.writeString(repositorySkill.resolve("SKILL.md"), "---\nname: shared-name\ndescription: repo\n---\n");
+        Path userSkill = home.resolve(".agents/skills/shared-name");
+        Files.createDirectories(userSkill);
+        Files.writeString(userSkill.resolve("SKILL.md"), "---\ndescription: user\n---\n");
+
+        var catalog = SkillTestSupport.components(home).discovery().discover(workspace);
+
+        assertEquals(java.util.List.of("shared-name"), catalog.skills().stream().map(SkillDefinition::name).toList());
+        assertEquals("repo", catalog.skills().getFirst().description());
+    }
+
+    @Test
     void ignoresNestedDirectoriesAndCollectsBrokenSkills() throws Exception {
         Path workspace = Files.createDirectory(temp.resolve("workspace"));
         write(workspace.resolve(".agents/skills/good"), "good", "ok");

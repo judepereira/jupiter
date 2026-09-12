@@ -19,7 +19,7 @@ class CommandStreamServiceTest {
         Set<String> allowlist = new java.util.HashSet<>(Set.of("BEFORE"));
         when(appState.loadSessionProjectCommandEnvironmentAllowlist(7L)).thenReturn(allowlist);
         CommandStreamService service = new CommandStreamService(
-                mock(CommandCatalogService.class), appState, new RunCommandTool(),
+                mock(CommandCatalogService.class), appState, new RunCommandTool(java.nio.file.Files::createTempFile),
                 mock(ActiveStreamRegistryService.class), mock(ChatToolCallHtmlService.class));
 
         service.queue(7L, "assistant", new CommandCatalogService.CommandDefinition("command", "Command", null, CommandCatalogService.CommandKind.SCRIPT, "echo hi", null, null), ".", null);

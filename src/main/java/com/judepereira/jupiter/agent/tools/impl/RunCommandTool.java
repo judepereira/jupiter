@@ -1,8 +1,8 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
-import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
@@ -18,8 +18,10 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
@@ -27,7 +29,6 @@ import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 public class RunCommandTool implements AgentTool {
     private static final int INLINE_OUTPUT_LIMIT_BYTES = 4 * 1024;
     private static final int PREVIEW_EDGE_BYTES = 2 * 1024;
-    private final List<String> forbidden = List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
     private static final ToolDefinition DEF = ToolDefinition.builtIn(
             "run_command",
             "Run a shell command in workspace (restricted)",
@@ -36,6 +37,13 @@ public class RunCommandTool implements AgentTool {
                     string("workingDir", "optional relative working directory")
             ).required("command")
     );
+
+    private final List<String> forbidden = List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
+    private final TempFileFactory tempFileFactory;
+
+    public RunCommandTool(TempFileFactory tempFileFactory) {
+        this.tempFileFactory = tempFileFactory;
+    }
 
     @Override
     public String name() {
@@ -57,100 +65,157 @@ public class RunCommandTool implements AgentTool {
         if (cmd == null) {
             return new ToolExecutionResult(false, "missing command", Map.of());
         }
-        for (String f : forbidden) {
-            if (cmd.contains(f)) {
+        for (String forbiddenCommand : forbidden) {
+            if (cmd.contains(forbiddenCommand)) {
                 return new ToolExecutionResult(false, "command denied by safety policy", Map.of());
             }
         }
-        Path wd = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), working);
-        // ProcessBuilder encodes command-line arguments using the JVM's native encoding. On a
-        // POSIX locale that turns non-ASCII command text into '?', before the shell sees it.
-        // Put the script in a UTF-8 file so the shell reads the original command bytes instead.
-        Path commandScript = Files.createTempFile("jupiter-command", ".sh");
-        Files.writeString(commandScript, cmd, StandardCharsets.UTF_8);
-        ProcessBuilder pb = new ProcessBuilder("/bin/sh", commandScript.toString());
-        pb.directory(wd.toFile());
-        Map<String, String> environment = pb.environment();
-        environment.clear();
-        environment.putAll(buildCommandEnvironment(System.getenv(), context.getCommandEnvironmentAllowlist(), context.getEnvironmentVariables()));
-        environment.put("LANG", "C.utf8");
-        environment.put("LC_ALL", "C.utf8");
-        Process p;
-        p = pb.start();
-        OutputCapture stdoutCapture = new OutputCapture("stdout");
-        OutputCapture stderrCapture = new OutputCapture("stderr");
-        Thread tOut = new Thread(() -> capture(p.getInputStream(), stdoutCapture));
-        Thread tErr = new Thread(() -> capture(p.getErrorStream(), stderrCapture));
-        tOut.start();
-        tErr.start();
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(context.getCommandTimeoutSeconds());
-        boolean finished = false;
-        while (!finished) {
-            if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
-                p.destroyForcibly();
-                try {
-                    tOut.join(200);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
+
+        Path commandScript = null;
+        OutputCapture stdoutCapture = null;
+        OutputCapture stderrCapture = null;
+        Process process = null;
+        Thread stdoutThread = null;
+        Thread stderrThread = null;
+        Set<Path> retained = new HashSet<>();
+        try {
+            Path workingDirectory = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), working);
+            commandScript = tempFileFactory.create("jupiter-command", ".sh");
+            Files.writeString(commandScript, cmd, StandardCharsets.UTF_8);
+            ProcessBuilder processBuilder = new ProcessBuilder("/bin/sh", commandScript.toString());
+            processBuilder.directory(workingDirectory.toFile());
+            Map<String, String> environment = processBuilder.environment();
+            environment.clear();
+            environment.putAll(buildCommandEnvironment(
+                    System.getenv(), context.getCommandEnvironmentAllowlist(), context.getEnvironmentVariables()));
+            environment.put("LANG", "C.utf8");
+            environment.put("LC_ALL", "C.utf8");
+            // Create both destinations before launching the child. If allocation fails, no child
+            // exists that could outlive this method while its pipes are not being drained.
+            stdoutCapture = new OutputCapture("stdout", tempFileFactory);
+            stderrCapture = new OutputCapture("stderr", tempFileFactory);
+            process = processBuilder.start();
+            OutputCapture stdout = stdoutCapture;
+            OutputCapture stderr = stderrCapture;
+            Process startedProcess = process;
+            stdoutThread = new Thread(() -> capture(startedProcess.getInputStream(), stdout),
+                    "run-command-stdout-" + startedProcess.pid());
+            stderrThread = new Thread(() -> capture(startedProcess.getErrorStream(), stderr),
+                    "run-command-stderr-" + startedProcess.pid());
+            stdoutThread.start();
+            stderrThread.start();
+
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(context.getCommandTimeoutSeconds());
+            boolean finished = false;
+            while (!finished) {
+                if (isCancelled(context)) {
+                    stop(process, stdoutThread, stderrThread);
+                    throw new StreamCancelledException();
                 }
-                try {
-                    tErr.join(200);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) {
+                    break;
                 }
-                Files.deleteIfExists(commandScript);
+                finished = process.waitFor(
+                        Math.max(1L, Math.min(TimeUnit.NANOSECONDS.toMillis(remaining), 100L)),
+                        TimeUnit.MILLISECONDS);
+            }
+            if (!finished) {
+                stop(process, stdoutThread, stderrThread);
+                return new ToolExecutionResult(false, "command timed out", Map.of());
+            }
+            join(stdoutThread);
+            join(stderrThread);
+            if (stdoutCapture.failure() != null) throw stdoutCapture.failure();
+            if (stderrCapture.failure() != null) throw stderrCapture.failure();
+            if (isCancelled(context)) {
                 throw new StreamCancelledException();
             }
-            long remainingNanos = deadline - System.nanoTime();
-            if (remainingNanos <= 0) {
-                break;
-            }
-            long waitMillis = Math.max(1L, Math.min(TimeUnit.NANOSECONDS.toMillis(remainingNanos), 100L));
-            finished = p.waitFor(waitMillis, TimeUnit.MILLISECONDS);
-        }
-        if (!finished) {
-            p.destroyForcibly();
-            try {
-                tOut.join(200);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-            try {
-                tErr.join(200);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-            Files.deleteIfExists(commandScript);
-            return new ToolExecutionResult(false, "command timed out", Map.of());
-        }
-        try {
-            tOut.join(1000);
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        }
-        try {
-            tErr.join(1000);
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        }
-        if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
-            throw new StreamCancelledException();
-        }
-        Files.deleteIfExists(commandScript);
-        int code = p.exitValue();
 
-        String stdout = formatOutput(stdoutCapture);
-        String stderr = formatOutput(stderrCapture);
-        Map<String, Object> machine = Map.of(
-                "exitCode", code,
-                "stdout", stdout,
-                "stderr", stderr);
-        String text = "exitCode=" + code + "\n" + stdout + stderr;
-        return new ToolExecutionResult(code == 0, text, machine);
+            int exitCode = process.exitValue();
+            String stdoutText = formatOutput(stdoutCapture);
+            String stderrText = formatOutput(stderrCapture);
+            if (stdoutCapture.isLarge()) {
+                retained.add(stdoutCapture.path);
+            }
+            if (stderrCapture.isLarge()) {
+                retained.add(stderrCapture.path);
+            }
+            Map<String, Object> machine = Map.of("exitCode", exitCode, "stdout", stdoutText, "stderr", stderrText);
+            return new ToolExecutionResult(exitCode == 0, "exitCode=" + exitCode + "\n" + stdoutText + stderrText, machine);
+        } finally {
+            if (process != null && (process.isAlive() || isAlive(stdoutThread) || isAlive(stderrThread))) {
+                stop(process, stdoutThread, stderrThread);
+            }
+            deleteIfUnretained(commandScript, retained);
+            if (stdoutCapture != null) {
+                deleteIfUnretained(stdoutCapture.path, retained);
+            }
+            if (stderrCapture != null) {
+                deleteIfUnretained(stderrCapture.path, retained);
+            }
+        }
+    }
+
+    private static boolean isCancelled(ToolExecutionContext context) {
+        return context.getCancellationToken() != null && context.getCancellationToken().isCancelled();
+    }
+
+    private static void stop(Process process, Thread stdoutThread, Thread stderrThread) {
+        process.destroyForcibly();
+        close(process.getInputStream());
+        close(process.getErrorStream());
+        joinUninterruptibly(stdoutThread);
+        joinUninterruptibly(stderrThread);
+    }
+
+    private static void join(Thread thread) throws InterruptedException {
+        if (thread != null) {
+            thread.join();
+        }
+    }
+
+    private static boolean isAlive(Thread thread) {
+        return thread != null && thread.isAlive();
+    }
+
+    private static void joinUninterruptibly(Thread thread) {
+        if (thread == null) {
+            return;
+        }
+        boolean interrupted = false;
+        while (thread.isAlive()) {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void close(InputStream stream) {
+        try {
+            stream.close();
+        } catch (IOException ignored) {
+            // The capture thread records its own failure; shutdown preserves the primary outcome.
+        }
+    }
+
+    private static void deleteIfUnretained(Path path, Set<Path> retained) {
+        if (path != null && !retained.contains(path)) {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException ignored) {
+                // Cleanup must not replace the command result or exception.
+            }
+        }
     }
 
     static Map<String, String> buildCommandEnvironment(Map<String, String> hostEnvironment,
-                                                        java.util.Set<String> allowlist,
+                                                        Set<String> allowlist,
                                                         Map<String, String> projectEnvironment) {
         Map<String, String> environment = new java.util.HashMap<>();
         for (String name : allowlist) {
@@ -173,16 +238,15 @@ public class RunCommandTool implements AgentTool {
                 capture.accept(buffer, read);
             }
             capture.finish(output);
-        } catch (IOException ignored) {
-            // The process may be forcibly terminated while its output is being read.
+        } catch (IOException e) {
+            capture.failure = e;
         }
     }
 
     private String formatOutput(OutputCapture capture) throws Exception {
-        if (capture.size <= INLINE_OUTPUT_LIMIT_BYTES) {
+        if (!capture.isLarge()) {
             return Files.readString(capture.path, StandardCharsets.UTF_8);
         }
-
         return utf8Prefix(capture.prefix.toByteArray(), PREVIEW_EDGE_BYTES)
                 + "\n...\n...\n"
                 + utf8Suffix(capture.suffixBytes(), PREVIEW_EDGE_BYTES)
@@ -190,43 +254,65 @@ public class RunCommandTool implements AgentTool {
                 + capture.path;
     }
 
+    @FunctionalInterface
+    public interface TempFileFactory {
+        Path create(String prefix, String suffix) throws IOException;
+    }
+
     private static final class OutputCapture {
-        private final String streamName;
         private final Path path;
         private final ByteArrayOutputStream prefix = new ByteArrayOutputStream(PREVIEW_EDGE_BYTES);
         private final byte[] suffix = new byte[PREVIEW_EDGE_BYTES];
+        private int suffixStart;
         private int suffixLength;
         private long size;
+        private IOException failure;
 
-        private OutputCapture(String streamName) throws IOException {
-            this.streamName = streamName;
-            this.path = Files.createTempFile(streamName, ".capture");
+        private OutputCapture(String streamName, TempFileFactory tempFileFactory) throws IOException {
+            path = tempFileFactory.create(streamName, ".capture");
+        }
+
+        private boolean isLarge() {
+            return size > INLINE_OUTPUT_LIMIT_BYTES;
         }
 
         private void accept(byte[] buffer, int length) throws IOException {
             size += length;
-            int prefixLength = Math.min(length, PREVIEW_EDGE_BYTES - prefix.size());
-            prefix.write(buffer, 0, prefixLength);
-            for (int i = 0; i < length; i++) {
-                if (suffixLength < PREVIEW_EDGE_BYTES) {
-                    suffix[suffixLength++] = buffer[i];
-                } else {
-                    System.arraycopy(suffix, 1, suffix, 0, PREVIEW_EDGE_BYTES - 1);
-                    suffix[PREVIEW_EDGE_BYTES - 1] = buffer[i];
-                }
+            prefix.write(buffer, 0, Math.min(length, PREVIEW_EDGE_BYTES - prefix.size()));
+            int copied = Math.min(length, suffix.length);
+            int end = (suffixStart + suffixLength) % suffix.length;
+            int first = Math.min(copied, suffix.length - end);
+            System.arraycopy(buffer, length - copied, suffix, end, first);
+            if (copied > first) {
+                System.arraycopy(buffer, length - copied + first, suffix, 0, copied - first);
             }
+            if (suffixLength + copied <= suffix.length) {
+                suffixLength += copied;
+            } else {
+                suffixStart = (suffixStart + suffixLength + copied - suffix.length) % suffix.length;
+                suffixLength = suffix.length;
+            }
+        }
+
+        private IOException failure() {
+            return failure;
         }
 
         private void finish(OutputStream output) throws IOException {
-            if (size > 0 && suffix[suffixLength - 1] != '\n') {
+            if (size > 0 && suffixBytes()[suffixLength - 1] != '\n') {
                 output.write('\n');
                 accept(new byte[]{'\n'}, 1);
             }
-            // Output is written by the capture loop.
         }
 
         private byte[] suffixBytes() {
-            return java.util.Arrays.copyOf(suffix, suffixLength);
+            byte[] result = new byte[suffixLength];
+            int first = Math.min(suffixLength, suffix.length - suffixStart);
+            System.arraycopy(suffix, suffixStart, result, 0, first);
+            if (suffixLength > first) {
+                System.arraycopy(suffix, 0, result, first, suffixLength - first);
+            }
+            return result;
         }
     }
 

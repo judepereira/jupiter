@@ -10,6 +10,8 @@ import com.judepereira.jupiter.agent.tools.impl.ToolsAutoRegister;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.nio.file.Files;
+
 @Configuration
 public class ToolingConfig {
 
@@ -20,7 +22,7 @@ public class ToolingConfig {
 
     @Bean
     public RunCommandTool runCommandTool() {
-        return new RunCommandTool();
+        return new RunCommandTool(Files::createTempFile);
     }
 
     @Bean
