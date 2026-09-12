@@ -15,7 +15,6 @@ import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.ReducedMotion;
 import com.microsoft.playwright.options.ScreenshotScale;
 import com.microsoft.playwright.options.ViewportSize;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -133,13 +132,10 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     @Test
     void captureDocumentationScreenshots() throws Exception {
-        Assumptions.assumeTrue(Boolean.getBoolean("documentation.screenshots"),
-                "Run scripts/screenshots.sh to generate documentation screenshots");
-
         Path repositoryRoot = Path.of("").toAbsolutePath().normalize();
         Path fixtureRoot = repositoryRoot.resolve("target/documentation-screenshot-fixture");
         Path outputDir = repositoryRoot.resolve(
-                System.getProperty("documentation.screenshots.output", ".wiki/images"));
+                System.getProperty("documentation.screenshots.output", "target/documentation-screenshots"));
 
         recreateDirectory(fixtureRoot);
         Files.createDirectories(outputDir);

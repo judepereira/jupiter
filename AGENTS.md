@@ -77,6 +77,11 @@ This section is intentionally stable: document the repository layout and long-li
 - Isolate external processes and environment-dependent integrations behind small injectable boundaries. Test their policies, no-op cases, failures, deduplication, and recovery transitions without requiring the external environment.
 - When a targeted test passes, run the full test suite afterward.
 
+### Documentation and wiki policy
+- Before completing changes, review `README.md`, `.wiki/Feature-Inventory.md`, `.wiki/_Sidebar.md`, and relevant task-oriented `.wiki/` pages for required updates.
+- Keep documentation accurate for behavior changes. Record clearly user-facing feature additions in `.wiki/Feature-Inventory.md` and the nearest relevant task-oriented page; update `.wiki/_Sidebar.md` when adding wiki pages.
+- Treat `.wiki/` as the source of truth for wiki content. Do not directly edit the published GitHub wiki.
+
 ## Principles
 1. Prefer the simplest existing end-to-end path (YAGNI, DRY, and KISS). Avoid parallel mechanisms for the same state or behavior, and remove superseded plumbing rather than preserving it.
 

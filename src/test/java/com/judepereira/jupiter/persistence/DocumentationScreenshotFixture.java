@@ -181,7 +181,7 @@ public final class DocumentationScreenshotFixture {
                 BASE.plusSeconds(185));
         repository.insertChangedFile(
                 activeSessionId,
-                "scripts/screenshots.sh",
+                "scripts/generate_screenshots.sh",
                 SCREENSHOT_SCRIPT_DIFF,
                 3,
                 BASE.plusSeconds(190));
@@ -283,7 +283,7 @@ public final class DocumentationScreenshotFixture {
                 "subagent-read-runner",
                 "read_file",
                 true,
-                "{\"path\":\"scripts/screenshots.sh\"}",
+                "{\"path\":\"scripts/generate_screenshots.sh\"}",
                 "Read the native screenshot runner.",
                 "{}",
                 BASE.plusSeconds(82),
@@ -393,11 +393,11 @@ public final class DocumentationScreenshotFixture {
             """;
 
     private static final String SCREENSHOT_SCRIPT_DIFF = """
-            diff --git a/scripts/screenshots.sh b/scripts/screenshots.sh
+            diff --git a/scripts/generate_screenshots.sh b/scripts/generate_screenshots.sh
             new file mode 100755
             index 0000000..94c3e4d
             --- /dev/null
-            +++ b/scripts/screenshots.sh
+            +++ b/scripts/generate_screenshots.sh
             @@ -0,0 +1,7 @@
             +#!/usr/bin/env bash
             +set -euo pipefail

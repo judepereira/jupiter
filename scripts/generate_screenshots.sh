@@ -37,7 +37,6 @@ fi
     -Dexec.args="$install_args"
 
 ./mvnw -B -ntp \
-    -Ddocumentation.screenshots=true \
     -Ddocumentation.screenshots.output="$OUTPUT_DIR" \
     -Dtest=DocumentationScreenshotsTest \
     test
