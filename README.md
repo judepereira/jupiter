@@ -105,4 +105,4 @@ Run the test suite with:
 ./mvnw test
 ```
 
-There are unit, integration, template-rendering, and Playwright browser tests. See [Development and Testing](https://github.com/judepereira/jupiter/wiki/Development-and-Testing) for the details.
+There are unit, integration, template-rendering, and Playwright browser tests. Normal Maven test and package runs also generate disposable documentation screenshots under `target/documentation-screenshots`; see [Development and Testing](https://github.com/judepereira/jupiter/wiki/Development-and-Testing) for how to refresh the tracked wiki image catalog.

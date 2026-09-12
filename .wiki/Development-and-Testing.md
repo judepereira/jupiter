@@ -22,7 +22,9 @@ There’s a fairly broad mix:
 - Git and lifecycle integration tests
 - Playwright browser E2E tests
 
-The Playwright tests cover the things I particularly don’t want silently breaking: project creation, workspace init, session rails, review sources, slash commands, subagents, OAuth, mobile settings, panels, and connection-loss behaviour.
+The Playwright tests cover the things I particularly don’t want silently breaking: project creation, workspace init, session rails, review sources, slash commands, subagents, OAuth, mobile settings, panels, connection-loss behaviour, and documentation screenshots. Normal `./mvnw test` and `./mvnw package` runs execute the documentation screenshot E2E; routine output is disposable under `target/documentation-screenshots`.
+
+To refresh the tracked wiki image catalog, install Java 25 and run `scripts/generate_screenshots.sh`. The script installs Chromium (or Chromium plus Linux dependencies when `PLAYWRIGHT_INSTALL_DEPS=1`) and intentionally writes `.wiki/images`. Maven itself does not install browsers.
 
 ## Docker CI
 
