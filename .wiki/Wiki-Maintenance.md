@@ -15,11 +15,13 @@ That first page initializes the separate wiki Git repository.
 
 ## Publishing
 
-`.github/workflows/publish-wiki.yml` runs on pushes to `main` and can also be started manually.
+`.github/workflows/publish-wiki.yml` runs on pushes to `main` and can also be started manually from `main` only. It runs on macOS so browser and font rendering match the intended screenshot environment.
 
-It checks out the main repository, clones the wiki repository, mirrors `.wiki/` with deletion semantics, commits only when something changed, and force-pushes the mirrored result.
+Before publishing, it generates screenshots in the ignored `target/wiki-generated-screenshots` directory. The Java synchronizer compares PNG dimensions and decoded pixels, so PNG metadata or encoding differences do not create commits. Genuine additions, removals, or pixel changes are copied into `.wiki/images` and committed to `main` by `github-actions[bot]`; no-op refreshes do not create a commit. The workflow checks that `origin/main` has not advanced and stages only `.wiki/images/*.png`, including deletions, before using a normal non-force push.
 
-The workflow uses the repository-scoped `GITHUB_TOKEN` with `contents: write`.
+After that possible commit, it clones the wiki repository, mirrors `.wiki/` with deletion semantics, commits only when something changed, and pushes the mirrored result with `--force-with-lease` so a concurrent wiki update fails rather than being erased. It resolves the actual current source commit for the wiki commit message rather than assuming the triggering SHA.
+
+The workflow uses the repository-scoped `GITHUB_TOKEN` with `contents: write` for the source commit/push and wiki publication. A push made with this token does not start another workflow run, and the main-only guard is defense in depth. Repository branch protection must permit the workflow token to push `main`; otherwise the screenshot commit fails and the wiki is not published from a stale tree.
 
 ## Don’t edit the rendered wiki directly
 
