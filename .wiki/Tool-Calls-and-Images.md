@@ -1,6 +1,6 @@
 # Tool Calls and Images
 
-I don’t want an agent saying “done” while all of the interesting work is hidden somewhere else. Jupiter keeps tool execution visible during the turn and persists it afterwards.
+An agent should not say “done” while all of the interesting work is hidden somewhere else. Jupiter keeps tool execution visible during the turn and persists it afterwards.
 
 ![Tool calls and inline images](images/tool-calls-and-images.png)
 

@@ -1,8 +1,8 @@
 # Remote Deployment
 
-Remote access is the main reason I built Jupiter, but there’s an important distinction between “remote” and “publicly exposed to the internet”.
+Remote access is a primary use case for Jupiter, but there’s an important distinction between “remote” and “publicly exposed to the internet”.
 
-## My preferred setup: a private network
+## Recommended setup: a private network
 
 Run Jupiter on the machine containing your repositories, then expose port `7272` only over a trusted network or VPN.
 

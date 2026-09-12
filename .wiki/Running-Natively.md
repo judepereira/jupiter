@@ -46,4 +46,4 @@ env -u JUPITER_ENCRYPTION_KEY java \
 
 ## Why not `spring-boot:run`?
 
-For production-like use I prefer the packaged JAR. It makes stdin ownership and the JVM hardening flags explicit instead of relying on Maven to mediate them correctly.
+For production-like use, the packaged JAR is recommended. It makes stdin ownership and the JVM hardening flags explicit instead of relying on Maven to mediate them correctly.

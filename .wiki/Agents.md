@@ -1,6 +1,6 @@
 # Agents
 
-Jupiter agents are just Markdown files with YAML frontmatter. I prefer this over hiding agent behaviour in Java configuration because it keeps the prompt, model, and tool permissions readable in one place.
+Jupiter agents are just Markdown files with YAML frontmatter. This keeps the prompt, model, and tool permissions readable in one place instead of hiding agent behaviour in Java configuration.
 
 ![Agent, model, and thinking controls](images/agents-models-thinking.png)
 

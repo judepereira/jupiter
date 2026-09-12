@@ -1,6 +1,6 @@
 # Interface Tour
 
-I’ve tried to keep the normal development loop on one screen: project, workspace, chat, review, terminal.
+The normal development loop stays on one screen: project, workspace, chat, review, terminal.
 
 ![Jupiter desktop interface](images/interface-desktop.png)
 

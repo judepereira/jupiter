@@ -40,4 +40,4 @@ MCP tools join the agent registry dynamically when `mcp:*` is allowed.
 
 If two connected servers produce the same effective tool name, Jupiter fails the collision instead of silently picking whichever happened to connect first.
 
-For secrets, I’d use project environment variables with `${env.*}` placeholders rather than hard-coding tokens into URLs.
+For secrets, use project environment variables with `${env.*}` placeholders rather than hard-coding tokens into URLs.
