@@ -47,6 +47,9 @@ jobs:
 
           rsync -a --delete --exclude='.git/' .wiki/ .wiki-publish/
 
+          git -C .wiki-publish config user.name "github-actions[bot]"
+          git -C .wiki-publish config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git -C .wiki-publish add -A
 
           if git -C .wiki-publish diff --cached --quiet; then
