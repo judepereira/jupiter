@@ -91,6 +91,10 @@ The full documentation lives in the [GitHub Wiki](https://github.com/judepereira
 
 The wiki source itself is checked into `.wiki/` and published by `.github/workflows/publish-wiki.yml`.
 
+## License
+
+Jupiter is licensed under the [MIT License](LICENSE).
+
 ## Storage and backups
 
 Jupiter keeps its state under `~/.jupiter`, including `jupiter.sqlite`.
