@@ -92,6 +92,11 @@
         </dependency>
         <dependency>
             <groupId>org.webjars.npm</groupId>
+            <artifactId>codemirror</artifactId>
+            <version>5.65.16</version>
+        </dependency>
+        <dependency>
+            <groupId>org.webjars.npm</groupId>
             <artifactId>chart.js</artifactId>
             <version>4.5.0</version>
         </dependency>
