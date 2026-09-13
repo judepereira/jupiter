@@ -16,7 +16,7 @@ class UiControllerModelLabelTests {
     void resolveModelLabelUsesDisplayNameAndFallsBackToRawId() {
         UiController controller = TestAppStateSupport.controller(mock(CodingAgentHarness.class), new AgentProperties(), ModelCatalogTestSupport.modelCatalogService());
 
-        assertThat(controller.resolveModelLabel("openai/gpt-5.5")).isEqualTo("GPT-5.5");
+        assertThat(controller.resolveModelLabel("openai/gpt-5.6-sol")).isEqualTo("GPT-5.6 Sol");
         assertThat(controller.resolveModelLabel("openai/stale-model")).isEqualTo("openai/stale-model");
         assertThat(controller.resolveModelLabel(null)).isNull();
     }

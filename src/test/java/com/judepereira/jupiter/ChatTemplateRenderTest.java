@@ -43,19 +43,19 @@ public class ChatTemplateRenderTest {
         context.setVariable("selectedFile", null);
         context.setVariable("chatMessages", List.of(
                 new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(),
-                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"), "GPT-5.5")
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH"), "GPT-5.6 Sol")
         ));
         context.setVariable("agents", agentService.listPrimaryAgents());
         context.setVariable("models", modelService.list());
         context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
         context.setVariable("selectedAgent", agentService.getRequired("plan"));
-        context.setVariable("selectedModel", modelService.getRequired("openai/gpt-5.5"));
+        context.setVariable("selectedModel", modelService.getRequired("openai/gpt-5.6-sol"));
         context.setVariable("selectedThinking", ThinkingLevel.HIGH);
 
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("id=\"chat-agent-select\"", "id=\"chat-model-select\"", "id=\"chat-thinking-select\"");
-        assertThat(html).contains("class=\"chat-message-subtitle\"", "data-agent-label=\"Plan\"", "data-agent-id=\"plan\"", "data-model-id=\"openai/gpt-5.5\"", "data-model-label=\"GPT-5.5\"", "data-thinking-level=\"HIGH\"");
+        assertThat(html).contains("class=\"chat-message-subtitle\"", "data-agent-label=\"Plan\"", "data-agent-id=\"plan\"", "data-model-id=\"openai/gpt-5.6-sol\"", "data-model-label=\"GPT-5.6 Sol\"", "data-thinking-level=\"HIGH\"");
         assertThat(html).doesNotContain("chat-message-meta", "chat-meta-chip", "Explore");
     }
 
@@ -74,14 +74,14 @@ public class ChatTemplateRenderTest {
         context.setVariable("selectedFile", null);
         context.setVariable("chatMessages", List.of(
                 new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-done", 2L, List.of(),
-                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"), "GPT-5.5"),
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH"), "GPT-5.6 Sol"),
                 new ChatPresentationService.ChatMessage("assistant", "Thinking…", 3L, true, "assistant-pending", null, List.of(), null, null)
         ));
 
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("data-completed-ts=\"2\"");
-        assertThat(html).contains("assistant-done", "data-model-id=\"openai/gpt-5.5\"", "data-model-label=\"GPT-5.5\"");
+        assertThat(html).contains("assistant-done", "data-model-id=\"openai/gpt-5.6-sol\"", "data-model-label=\"GPT-5.6 Sol\"");
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
         assertThat(html).contains("chat-message-subtitle");
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
@@ -102,9 +102,9 @@ public class ChatTemplateRenderTest {
         context.setVariable("selectedFile", null);
         context.setVariable("chatMessages", List.of(
                 new ChatPresentationService.ChatMessage("assistant", "Broken metadata row", 1L, false, "assistant-broken", null,
-                        List.of(), new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"), "GPT-5.5"),
+                        List.of(), new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH"), "GPT-5.6 Sol"),
                 new ChatPresentationService.ChatMessage("assistant", "Done", 3L, false, "assistant-done", 4L, List.of(),
-                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"), "GPT-5.5")
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH"), "GPT-5.6 Sol")
         ));
 
         String html = engine.process("fragments/chat", context);
@@ -182,8 +182,8 @@ public class ChatTemplateRenderTest {
         context.setVariable("messages", List.of(
                 new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-done", 2L,
                         List.of(new ChatPresentationService.ToolCallView("tool-call-1", "read_file", true, "input", "output", false, false, null, null, null, null, null, null, null, null, null)),
-                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.5", "HIGH"),
-                        "GPT-5.5")
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH"),
+                        "GPT-5.6 Sol")
         ));
         context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
         context.setVariable("subagentView", false);
@@ -191,7 +191,7 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat-rows", context);
 
         assertThat(html).containsSubsequence("class=\"tool-calls\"", "class=\"chat-message-text\"", "class=\"chat-message-subtitle\"");
-        assertThat(html).contains("data-completed-ts=\"2\"", "data-agent-label=\"Plan\"", "data-model-label=\"GPT-5.5\"");
+        assertThat(html).contains("data-completed-ts=\"2\"", "data-agent-label=\"Plan\"", "data-model-label=\"GPT-5.6 Sol\"");
     }
 
     @Test
@@ -414,7 +414,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("models", modelService.list());
         context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
         context.setVariable("selectedAgent", agentService.getRequired("plan"));
-        context.setVariable("selectedModel", modelService.getRequired("openai/gpt-5.5"));
+        context.setVariable("selectedModel", modelService.getRequired("openai/gpt-5.6-sol"));
         context.setVariable("selectedThinking", ThinkingLevel.HIGH);
 
         String html = engine.process("fragments/chat", context);
@@ -490,7 +490,7 @@ public class ChatTemplateRenderTest {
         context.setVariable("models", modelService.list());
         context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
         context.setVariable("selectedAgent", agentService.getRequired("plan"));
-        context.setVariable("selectedModel", modelService.getRequired("openai/gpt-5.5"));
+        context.setVariable("selectedModel", modelService.getRequired("openai/gpt-5.6-sol"));
         context.setVariable("selectedThinking", ThinkingLevel.HIGH);
 
         String html = engine.process("fragments/chat", context);

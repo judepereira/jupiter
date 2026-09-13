@@ -16,9 +16,9 @@ public final class ModelCatalogTestSupport {
     public static final String OPENAI_CATALOG_JSON = """
             {
               "models": {
-                "openai/gpt-5.5": {
-                  "id": "openai/gpt-5.5",
-                  "name": "GPT-5.5",
+                "openai/gpt-5.6-sol": {
+                  "id": "openai/gpt-5.6-sol",
+                  "name": "GPT-5.6 Sol",
                   "reasoning": true,
                   "tool_call": true,
                   "release_date": "2026-04-23",
@@ -38,6 +38,17 @@ public final class ModelCatalogTestSupport {
                     "output": 16000
                   }
                 },
+                "openai/gpt-5.60-preview": {
+                  "id": "openai/gpt-5.60-preview",
+                  "name": "GPT-5.60 Preview",
+                  "reasoning": true,
+                  "tool_call": true,
+                  "release_date": "2026-06-01",
+                  "limit": {
+                    "context": 1050000,
+                    "output": 128000
+                  }
+                },
                 "anthropic/claude-opus-4": {
                   "id": "anthropic/claude-opus-4",
                   "name": "Claude Opus 4",
@@ -49,9 +60,9 @@ public final class ModelCatalogTestSupport {
                     "output": 32000
                   }
                 },
-                "openai/gpt-5.5-pro": {
-                  "id": "openai/gpt-5.5-pro",
-                  "name": "GPT-5.5 Pro",
+                "openai/gpt-5.6-terra": {
+                  "id": "openai/gpt-5.6-terra",
+                  "name": "GPT-5.6 Terra",
                   "reasoning": true,
                   "tool_call": true,
                   "release_date": "2026-05-10",

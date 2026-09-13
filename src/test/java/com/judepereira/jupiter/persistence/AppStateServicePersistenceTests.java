@@ -1326,14 +1326,14 @@ public class AppStateServicePersistenceTests {
             service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(120), List.of());
         }
 
-        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "openai/gpt-5.5", ThinkingLevel.LOW, null, true, true,
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "openai/gpt-5.6-sol", ThinkingLevel.LOW, null, true, true,
                 List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command"));
         var modelCatalog = ModelCatalogTestSupport.modelCatalogService("https://models.dev/catalog.json", """
                 {
                   "models": {
-                    "openai/gpt-5.5": {
-                      "id": "openai/gpt-5.5",
-                      "name": "GPT-5.5",
+                    "openai/gpt-5.6-sol": {
+                      "id": "openai/gpt-5.6-sol",
+                      "name": "GPT-5.6 Sol",
                       "reasoning": true,
                       "tool_call": true,
                       "release_date": "2026-04-23",

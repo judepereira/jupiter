@@ -6,11 +6,11 @@ Agent and model are deliberately separate choices in Jupiter. An agent defines b
 
 ## Model catalogue
 
-v1 loads model metadata from the configured models.dev catalogue and keeps the OpenAI GPT-5-family entries.
+v1 loads model metadata from the configured models.dev catalogue and keeps only OpenAI GPT-5.6-series entries.
 
 Where available, Jupiter keeps the display name, context limit, output limit, reasoning support, tool-call support, and release date.
 
-The hardcoded fallback model ID is `openai/gpt-5.5`.
+The hardcoded fallback model ID is `openai/gpt-5.6-sol`.
 
 ## Agent defaults
 
@@ -24,4 +24,4 @@ When you return to a session, Jupiter tries to restore the most recent assistant
 
 ## Provider scope
 
-The harness has provider abstractions, but v1’s user-facing model discovery is OpenAI GPT-5-family only. Documentation covers what exists rather than claiming provider support that isn’t exposed yet.
+The harness has provider abstractions, but v1’s user-facing model discovery is limited to OpenAI GPT-5.6-series models. Documentation covers what exists rather than claiming provider support that isn’t exposed yet.
