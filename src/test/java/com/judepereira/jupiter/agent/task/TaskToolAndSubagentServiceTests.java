@@ -138,8 +138,8 @@ public class TaskToolAndSubagentServiceTests {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(1);
         props.setWorkspaceRoot(workspace.toString());
-        AgentModelClientFactory factory = new AgentModelClientFactory(null, props) {
-            @Override public AgentModelClient getClient() { return model; }
+        AgentModelClientFactory factory = new AgentModelClientFactory(null) {
+            @Override public AgentModelClient getClient(String provider) { return model; }
         };
         return new CodingAgentHarness(factory, new com.judepereira.jupiter.agent.tools.ToolRegistry(), props, null, null, null, null, null,
                 new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()),

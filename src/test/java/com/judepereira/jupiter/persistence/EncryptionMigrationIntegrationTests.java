@@ -38,7 +38,7 @@ class EncryptionMigrationIntegrationTests {
                 .migrate(flyway);
 
         assertThat(jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE installed_rank = (SELECT MAX(installed_rank) FROM flyway_schema_history)", String.class))
-                .isEqualTo("26");
+                .isEqualTo("27");
         assertThat(jdbc.queryForObject("SELECT migration_complete FROM encryption_metadata WHERE id=1", Integer.class))
                 .isEqualTo(1);
         assertEncryptedAndHidden(jdbc, "projects", "name", "strategy secret");

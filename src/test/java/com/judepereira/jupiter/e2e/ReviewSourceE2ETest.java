@@ -44,7 +44,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try {
-            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+            try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
@@ -110,7 +110,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try {
-            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+            try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
                 List<String> consoleErrors = new java.util.concurrent.CopyOnWriteArrayList<>();

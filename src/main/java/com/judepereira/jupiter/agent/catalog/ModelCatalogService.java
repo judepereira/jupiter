@@ -17,8 +17,8 @@ import java.util.stream.StreamSupport;
 public class ModelCatalogService {
 
     private static final String DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
-    private static final String OPENAI_PROVIDER = "openai";
     private static final String GPT_5_6_MODEL_PREFIX = "openai/gpt-5.6";
+    private static final String ANTHROPIC_MODEL_PREFIX = "anthropic/claude-";
 
     private final List<ModelDefinition> models;
     private final Map<String, ModelDefinition> modelsById;
@@ -62,7 +62,8 @@ public class ModelCatalogService {
             var modelsNode = root.path("models");
             var openAiModels = StreamSupport.stream(Spliterators.spliteratorUnknownSize(modelsNode.fields(), 0), false)
                     .filter(entry -> entry.getKey().equals(GPT_5_6_MODEL_PREFIX)
-                            || entry.getKey().startsWith(GPT_5_6_MODEL_PREFIX + "-"))
+                            || entry.getKey().startsWith(GPT_5_6_MODEL_PREFIX + "-")
+                            || entry.getKey().startsWith(ANTHROPIC_MODEL_PREFIX))
                     .map(Map.Entry::getValue)
                     .map(ModelCatalogService::toModelDefinition)
                     .toList();
@@ -76,12 +77,14 @@ public class ModelCatalogService {
     private static ModelDefinition toModelDefinition(JsonNode node) {
         var id = node.path("id").asText();
         var displayName = node.path("name").asText();
-        var apiModelId = id.startsWith(OPENAI_PROVIDER + "/") ? id.substring(OPENAI_PROVIDER.length() + 1) : id;
+        int separator = id.indexOf('/');
+        var provider = separator > 0 ? id.substring(0, separator) : id;
+        var apiModelId = separator > 0 ? id.substring(separator + 1) : id;
         var limit = node.path("limit");
         return new ModelDefinition(
                 id,
                 displayName,
-                OPENAI_PROVIDER,
+                provider,
                 apiModelId,
                 node.path("reasoning").asBoolean(),
                 node.path("tool_call").asBoolean(),

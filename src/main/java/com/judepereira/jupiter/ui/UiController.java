@@ -26,6 +26,7 @@ import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
+import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
 import com.judepereira.jupiter.persistence.TokenUsageService;
@@ -85,6 +86,10 @@ public class UiController {
     private final AppStateService appStateService;
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
+    private final ModelPickerService modelPickerService;
+    private final ModelPreferencesService modelPreferencesService;
+    private final ProviderAvailabilityService providerAvailabilityService;
+    private final AnthropicOAuthService anthropicOAuthService;
     private final ContextCompactionService contextCompactionService;
     private final TokenUsageService tokenUsageService;
     private final CommandStreamService commandStreamService;
@@ -113,6 +118,8 @@ public class UiController {
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        ModelPickerService modelPickerService, ModelPreferencesService modelPreferencesService,
+                        ProviderAvailabilityService providerAvailabilityService, AnthropicOAuthService anthropicOAuthService,
                         SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
                         ActiveStreamRegistryService activeStreamRegistryService,
                         TerminalManager terminalManager,
@@ -129,6 +136,10 @@ public class UiController {
         this.appStateService = appStateService;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
+        this.modelPickerService = modelPickerService;
+        this.modelPreferencesService = modelPreferencesService;
+        this.providerAvailabilityService = providerAvailabilityService;
+        this.anthropicOAuthService = anthropicOAuthService;
         this.contextCompactionService = contextCompactionService;
         this.tokenUsageService = tokenUsageService;
         this.commandStreamService = commandStreamService;
@@ -178,6 +189,9 @@ public class UiController {
         ChatSelection selected = resolveChatSelection(agentId, modelId, thinkingLevel);
 
         if (message != null && !message.isBlank()) {
+            if (modelPickerService != null && modelPickerService.listPickerModels().stream().noneMatch(candidate -> candidate.id().equals(selected.selectedModel().id()))) {
+                throw new IllegalArgumentException("That model is no longer available. Choose an available favourite model in Settings.");
+            }
             if (view.activeSession() != null && activeStreamRegistryService.hasActiveStreamForSession(view.activeSession().id())) {
                 throw new IllegalStateException("A chat stream is already active for the current session");
             }
@@ -932,11 +946,31 @@ public class UiController {
     public String settingsModal(Model model) {
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
+        populateSettingsModel(model);
+        return "fragments/projects :: settingsModal";
+    }
+
+    private void populateSettingsModel(Model model) {
         model.addAttribute("lifecycleHookSettings", appStateService.loadLifecycleHookSettings());
         model.addAttribute("autoGitUpdateEnabled", appStateService.loadAutoGitUpdateEnabled());
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
+        model.addAttribute("anthropicOAuthView", anthropicOAuthService.currentView());
         model.addAttribute("customCommands", commandCatalogService.listCustom());
-        return "fragments/projects :: settingsModal";
+        var modelGroups = modelCatalogService.list().stream().collect(java.util.stream.Collectors.groupingBy(
+                ModelDefinition::provider, LinkedHashMap::new, java.util.stream.Collectors.toList()));
+        model.addAttribute("modelGroups", modelGroups);
+        model.addAttribute("providerAvailability", modelGroups.keySet().stream().collect(java.util.stream.Collectors.toMap(
+                provider -> provider, providerAvailabilityService::isAvailable, (left, right) -> right, LinkedHashMap::new)));
+        model.addAttribute("favouriteModelIds", modelPreferencesService.favouriteModelIds());
+    }
+
+    @PostMapping("/ui/settings/models/favourite")
+    public String toggleModelFavourite(@RequestParam String modelId,
+                                       @RequestParam(defaultValue = "true") boolean favourite, Model model) {
+        modelCatalogService.getRequired(modelId);
+        modelPreferencesService.setFavourite(modelId, favourite);
+        populateSettingsModel(model);
+        return "fragments/projects :: settingsModels";
     }
 
     @PostMapping("/ui/settings/commands/create")
@@ -1176,6 +1210,24 @@ public class UiController {
     public String startOpenAiOAuth(Model model) {
         model.addAttribute("openAiOAuthView", openAiOAuthService.startDeviceAuthorization());
         return "fragments/projects :: openaiOAuthSection";
+    }
+
+    @PostMapping("/ui/settings/anthropic/start")
+    public String startAnthropicOAuth(Model model) {
+        model.addAttribute("anthropicOAuthView", anthropicOAuthService.startAuthorization());
+        return "fragments/projects :: anthropicOAuthSection";
+    }
+
+    @PostMapping("/ui/settings/anthropic/complete")
+    public String completeAnthropicOAuth(@RequestParam("code") String code, Model model) {
+        model.addAttribute("anthropicOAuthView", anthropicOAuthService.completeAuthorization(code));
+        return "fragments/projects :: anthropicOAuthSection";
+    }
+
+    @PostMapping("/ui/settings/anthropic/disconnect")
+    public String disconnectAnthropicOAuth(Model model) {
+        model.addAttribute("anthropicOAuthView", anthropicOAuthService.disconnect());
+        return "fragments/projects :: anthropicOAuthSection";
     }
 
     @PostMapping("/ui/settings/openai/logout")
@@ -1580,19 +1632,24 @@ public class UiController {
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {
         model.addAttribute("agents", agentDefinitionService.listPrimaryAgents());
-        model.addAttribute("models", modelCatalogService.list());
+        List<ModelDefinition> pickerModels = modelPickerService == null ? modelCatalogService.list() : modelPickerService.listPickerModels();
+        model.addAttribute("models", pickerModels);
+        model.addAttribute("pickerEmpty", pickerModels.isEmpty());
+        ModelDefinition renderedModel = pickerModels.stream().anyMatch(candidate -> candidate.id().equals(selection.selectedModel().id()))
+                ? selection.selectedModel() : pickerModels.stream().findFirst().orElse(selection.selectedModel());
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
         model.addAttribute("defaultModel", selection.defaultModel());
         model.addAttribute("defaultThinking", selection.defaultThinking());
         model.addAttribute("selectedAgent", selection.selectedAgent());
-        model.addAttribute("selectedModel", selection.selectedModel());
+        model.addAttribute("selectedModel", renderedModel);
         model.addAttribute("selectedThinking", selection.selectedThinking());
     }
 
     private ChatSelection defaultChatSelection() {
         AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-        ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
+        ModelDefinition defaultModel = (modelPickerService == null ? modelCatalogService.list() : modelPickerService.listPickerModels()).stream().findFirst()
+                .orElseGet(() -> modelCatalogService.resolveOrDefault(defaultAgent.defaultModel()));
         return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
     }
 

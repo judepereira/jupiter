@@ -166,6 +166,10 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                     git.blueCaveProject(),
                     git.websiteProject()));
 
+            // The model picker only exposes catalog favourites for connected providers. Establish
+            // that state through the same mocked device flow used by the OAuth E2E coverage.
+            connectOpenAi(app, fixture);
+
             captureInterfaceDesktop(app, fixture, outputDir);
             captureInterfaceMobile(app, fixture, outputDir);
             captureProjects(app, fixture, git.sampleProject(), outputDir);
@@ -190,6 +194,25 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             } else {
                 System.setProperty("user.home", previousHome);
             }
+        }
+    }
+
+    private static void connectOpenAi(RunningApp app, Fixture fixture) throws Exception {
+        Page page = newBrowserContext().newPage();
+        try {
+            page.navigate(app.baseUrl());
+            page.locator("#chat-container[data-session-id='" + fixture.activeSessionId() + "']").waitFor();
+            openSettings(page);
+            page.locator("#settings-model-providers-tab").click();
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/settings/openai/start") && response.status() == 200,
+                    () -> page.getByRole(AriaRole.BUTTON,
+                            new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")).click());
+            page.locator("#openai-oauth-section").waitFor();
+            page.waitForFunction("() => document.querySelector('#openai-oauth-section')?.textContent.includes('Status: Connected')", null,
+                    new Page.WaitForFunctionOptions().setTimeout(120000));
+        } finally {
+            page.context().close();
         }
     }
 
@@ -308,6 +331,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     }
 
     private static void captureOpenAiAuthentication(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
+        app.context().getBean(com.judepereira.jupiter.openai.oauth.OpenAiOAuthService.class).resetConnectionState();
         captureDesktop(app, fixture, false, outputDir.resolve("openai-authentication.png"), page -> {
             openSettings(page);
             page.locator("#settings-model-providers-tab").click();
@@ -623,11 +647,24 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                     {
                       "device_auth_id": "docs-device-1",
                       "user_code": "JUPI-TER7",
-                      "interval": 60,
+                      "interval": 1,
                       "expires": 600
                     }
                     """));
-            server.createContext("/api/accounts/deviceauth/token", exchange -> respond(exchange, 403, ""));
+            server.createContext("/api/accounts/deviceauth/token", exchange -> respond(exchange, 200, """
+                    {
+                      "authorization_code": "docs-authorization-code",
+                      "code_challenge": "docs-code-challenge",
+                      "code_verifier": "docs-code-verifier"
+                    }
+                    """));
+            server.createContext("/oauth/token", exchange -> respond(exchange, 200, """
+                    {
+                      "access_token": "docs-access-token",
+                      "refresh_token": "docs-refresh-token",
+                      "id_token": "eyJhbGciOiJub25lIn0.eyJzdWIiOiJkb2NzLXVzZXIifQ."
+                    }
+                    """));
             server.createContext("/codex/device", exchange -> respond(exchange, 200, "ok"));
             server.start();
             return fixture;

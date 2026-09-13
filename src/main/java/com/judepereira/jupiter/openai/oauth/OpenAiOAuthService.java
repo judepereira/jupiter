@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.persistence.AppStateRepository;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import com.judepereira.jupiter.agent.catalog.ProviderConnectedEvent;
 
 import java.io.IOException;
 import java.util.Base64;
@@ -19,6 +21,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 @Log4j2
 @Service
@@ -30,15 +33,17 @@ public class OpenAiOAuthService {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final AppStateRepository appStateRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     private State state = State.empty();
 
     public OpenAiOAuthService(OpenAiOAuthProperties properties, ObjectMapper objectMapper, HttpClient httpClient,
-                              AppStateRepository appStateRepository) {
+                              AppStateRepository appStateRepository, ApplicationEventPublisher eventPublisher) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
         this.appStateRepository = appStateRepository;
+        this.eventPublisher = eventPublisher;
         loadPersistedState();
     }
 
@@ -147,6 +152,7 @@ public class OpenAiOAuthService {
         persistConnectedState(token.accessToken(), token.refreshToken(), token.idToken(), accountId.orElse(null), expiresAt);
         state = new State(null, new Tokens(token.accessToken(), token.refreshToken(), token.idToken(), accountId, expiresAt),
                 "OpenAI connected.");
+        if (eventPublisher != null) eventPublisher.publishEvent(new ProviderConnectedEvent("openai"));
         return toView(state);
     }
 

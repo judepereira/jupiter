@@ -30,7 +30,8 @@
 
                 <label>
                     <span class="chat-control-label">Model</span>
-                    <select id="chat-model-select" name="modelId" class="form-select">
+                    <select id="chat-model-select" name="modelId" class="form-select" th:disabled="${pickerEmpty}">
+                        <option th:if="${pickerEmpty}" value="">No models available</option>
                         <option th:each="modelDef : ${models}"
                                 th:value="${modelDef.id}"
                                 th:selected="${selectedModel != null and selectedModel.id == modelDef.id}"
@@ -49,10 +50,12 @@
                 </label>
             </div>
 
+            <p th:if="${pickerEmpty}" class="chat-picker-empty">No models available. <a href="#settings-modal" hx-get="/ui/settings" hx-target="#modal-root" hx-swap="innerHTML">Connect a provider or choose favourite models in Settings.</a></p>
+
             <div class="chat-compose-row">
                 <label for="chat-input" class="sr-only">Message</label>
                 <textarea id="chat-input" name="message" rows="1" autocomplete="off" th:text="${chatDraft ?: ''}"></textarea>
-                <button id="chat-send-btn" type="submit" class="btn btn-outline-primary"><i class="bi bi-send"></i> Send</button>
+                <button id="chat-send-btn" type="submit" class="btn btn-outline-primary" th:disabled="${pickerEmpty}"><i class="bi bi-send"></i> Send</button>
             </div>
         </form>
     </section>

@@ -3,6 +3,7 @@ package com.judepereira.jupiter.e2e;
 import com.judepereira.jupiter.Jupiter;
 import com.judepereira.jupiter.testsupport.TestEncryptionConfiguration;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
+import com.judepereira.jupiter.persistence.AppStateRepository;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
@@ -169,6 +170,20 @@ abstract class E2ETestSupport {
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, int port, Class<?>... testConfigClasses) {
         return startApp(fakeHome, dbFile, Map.of("server.port", Integer.toString(port)), testConfigClasses);
+    }
+
+    /** Starts an app with the same persisted state produced by a successful OpenAI OAuth connection. */
+    protected static RunningApp startAppWithConnectedOpenAi(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
+        RunningApp bootstrap = startApp(fakeHome, dbFile, testConfigClasses);
+        try {
+            AppStateRepository repository = bootstrap.context().getBean(AppStateRepository.class);
+            repository.updateOpenAiOAuthState("e2e-access-token", "e2e-refresh-token", "e2e-id-token", "e2e-account", java.time.Instant.now().plusSeconds(3600));
+            repository.updateProviderInitialized("openai", true);
+            repository.updateFavouriteModelIds(java.util.List.of("openai/gpt-5.6-sol"));
+        } finally {
+            bootstrap.close();
+        }
+        return startApp(fakeHome, dbFile, testConfigClasses);
     }
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {

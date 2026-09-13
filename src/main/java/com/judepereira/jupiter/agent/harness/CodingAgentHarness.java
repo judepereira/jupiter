@@ -82,14 +82,13 @@ public class CodingAgentHarness {
     }
 
     public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-        AgentModelClient model = modelFactory.getClient();
-
         String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
                 ? props.getWorkspaceRoot() : request.getWorkspaceRoot();
         Path workspace = Path.of(workspaceRoot);
         SkillCatalog skillCatalog = skillDiscoveryService.discover(workspace);
         AgentDefinition agent = resolveAgent(request);
         ModelDefinition selectedModel = resolveModel(request, agent);
+        AgentModelClient model = modelFactory.getClient(selectedModel == null ? props.getProvider() : selectedModel.provider());
         ThinkingLevel thinkingLevel = resolveThinkingLevel(request, agent);
         AgentModelOptions modelOptions = selectedModel == null ? null : new AgentModelOptions(
                 selectedModel.id(), selectedModel.apiModelId(), thinkingLevel, selectedModel.supportsReasoning(),

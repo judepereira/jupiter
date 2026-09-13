@@ -20,11 +20,11 @@ Pick either [Running with Docker](Running-with-Docker) or [Running Natively](Run
 
 The default port is `7272`.
 
-## 4. Connect OpenAI
+## 4. Connect a model provider
 
-Either set `OPENAI_API_KEY`, or open **Settings** and use the OpenAI device authorisation flow.
+Either set `OPENAI_API_KEY`, use the OpenAI device authorisation flow, or connect Claude through the hosted OAuth copy/paste-code flow in **Settings → Model Providers**.
 
-See [OpenAI Authentication](OpenAI-Authentication).
+See [OpenAI Authentication](OpenAI-Authentication) and [Anthropic Authentication](Anthropic-Authentication).
 
 ## 5. Add a project
 

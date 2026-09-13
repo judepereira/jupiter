@@ -1348,9 +1348,9 @@ public class AppStateServicePersistenceTests {
 
         RecordingSummaryClient client = new RecordingSummaryClient();
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter.agent.config.AgentProperties()) {
+                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
                     @Override
-                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
+                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) {
                         return client;
                     }
                 }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
@@ -1410,9 +1410,9 @@ public class AppStateServicePersistenceTests {
         }
 
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter.agent.config.AgentProperties()) {
+                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
                     @Override
-                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
+                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) {
                         return new RecordingSummaryClient();
                     }
                 }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
@@ -1468,9 +1468,9 @@ public class AppStateServicePersistenceTests {
         service.appendToolCallTrace(sessionId, toolTurn.assistantMessage().id(), trace);
 
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter.agent.config.AgentProperties()) {
+                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
                     @Override
-                    public AgentModelClient getClient() {
+                    public AgentModelClient getClient(String provider) {
                         return new RecordingSummaryClient();
                     }
                 }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
@@ -1502,9 +1502,9 @@ public class AppStateServicePersistenceTests {
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
-        return new AgentModelClientFactory(null, new com.judepereira.jupiter.agent.config.AgentProperties()) {
+        return new AgentModelClientFactory(null) {
             @Override
-            public AgentModelClient getClient() {
+            public AgentModelClient getClient(String provider) {
                 return client;
             }
         };

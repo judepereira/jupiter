@@ -25,7 +25,11 @@ This is the boring-but-useful v1 checklist. When a user-visible feature lands, r
 - primary Plan and Engineer agents
 - Explore, Apprentice, and Test subagents
 - per-turn agent, model, and thinking controls
-- dynamically loaded OpenAI GPT-5.6-series model catalogue
+- dynamic models.dev catalogue for OpenAI GPT-5.6-series and Anthropic Claude models
+- global ordered model favourites
+- provider-aware chat picker with empty state
+- model-derived provider routing
+- historical unavailable-model handling
 - native tool allowlists
 - `list_files`, `read_file`, `search_code`, `write_file`, `apply_patch`, `display_image`, `run_command`, and `task`
 - persisted subagent child sessions
@@ -35,6 +39,14 @@ This is the boring-but-useful v1 checklist. When a user-visible feature lands, r
 - MCP server catalogue and per-project exposure
 - MCP headers and `${env.NAME}` templates
 - dynamic MCP tool refresh and collision detection
+
+## Authentication and providers
+
+- OpenAI API-key and device authorisation flows
+- Claude Code hosted OAuth copy/paste-code flow
+- encrypted OAuth restart persistence, refresh, and disconnect semantics
+- provider connection filtering for model favourites
+- provider tests without live credentials
 
 ## Extensibility and automation
 

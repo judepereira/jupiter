@@ -99,9 +99,9 @@ class ContextCompactionServiceTests {
             }
         };
 
-        return new AgentModelClientFactory(null, new AgentProperties()) {
+        return new AgentModelClientFactory(null) {
             @Override
-            public AgentModelClient getClient() {
+            public AgentModelClient getClient(String provider) {
                 return client;
             }
         };
@@ -111,11 +111,11 @@ class ContextCompactionServiceTests {
         private final RecordingStreamingClient client = new RecordingStreamingClient();
 
         private RecordingStreamingFactory() {
-            super(null, new AgentProperties());
+            super(null);
         }
 
         @Override
-        public AgentModelClient getClient() {
+        public AgentModelClient getClient(String provider) {
             return client;
         }
     }

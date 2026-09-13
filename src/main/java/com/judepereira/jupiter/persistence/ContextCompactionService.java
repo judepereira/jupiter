@@ -77,7 +77,7 @@ public class ContextCompactionService {
         }
 
         String transcript = buildTranscript(compactableGroups);
-        AgentModelClient client = modelClientFactory.getClient();
+        AgentModelClient client = modelClientFactory.getClient(model.provider());
         AgentModelOptions options = new AgentModelOptions(model.id(), model.apiModelId(), thinkingLevel, model.supportsReasoning(), agent.textVerbosity());
         StringBuilder streamedSummary = new StringBuilder();
         ModelResponse summaryResult = client.chatStreaming(List.of(

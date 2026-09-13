@@ -101,9 +101,10 @@ class TokenUsageLifecycleAndHarnessTests {
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient model) {
-        return new AgentModelClientFactory(null, new AgentProperties()) {
+        return new AgentModelClientFactory(null) {
+
             @Override
-            public AgentModelClient getClient() {
+            public AgentModelClient getClient(String provider) {
                 return model;
             }
         };

@@ -41,7 +41,7 @@ class ToolCallBundleLiveLabelE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = browser.newContext()) {
 
             Page page = context.newPage();

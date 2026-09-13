@@ -17,7 +17,7 @@ There’s a fairly broad mix:
 - service and utility unit tests
 - SQLite integration tests
 - Spring MVC and template-rendering tests
-- agent harness and OpenAI-client tests
+- agent harness and OpenAI/Anthropic-client tests
 - MCP tests
 - Git and lifecycle integration tests
 - Playwright browser E2E tests

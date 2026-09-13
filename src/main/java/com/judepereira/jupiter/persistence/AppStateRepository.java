@@ -313,6 +313,54 @@ public class AppStateRepository {
                 new MapSqlParameterSource());
     }
 
+    public Optional<AnthropicOAuthStateRow> loadAnthropicOAuthState() {
+        return queryOne("SELECT anthropic_access_token, anthropic_refresh_token, anthropic_expires_at, anthropic_scopes, anthropic_account_json FROM app_state WHERE id = 1",
+                new MapSqlParameterSource(), this::mapAnthropicOAuthState);
+    }
+
+    public void updateAnthropicOAuthState(String accessToken, String refreshToken, Instant expiresAt,
+                                          String scopes, String accountJson) {
+        jdbc.update("UPDATE app_state SET anthropic_access_token = :accessToken, anthropic_refresh_token = :refreshToken, anthropic_expires_at = :expiresAt, anthropic_scopes = :scopes, anthropic_account_json = :accountJson WHERE id = 1",
+                new MapSqlParameterSource()
+                        .addValue("accessToken", enc("app_state", "anthropic_access_token", accessToken))
+                        .addValue("refreshToken", enc("app_state", "anthropic_refresh_token", refreshToken))
+                        .addValue("expiresAt", expiresAt == null ? null : Timestamp.from(expiresAt))
+                        .addValue("scopes", enc("app_state", "anthropic_scopes", scopes))
+                        .addValue("accountJson", enc("app_state", "anthropic_account_json", accountJson)));
+    }
+
+    public void clearAnthropicOAuthState() {
+        jdbc.update("UPDATE app_state SET anthropic_access_token = NULL, anthropic_refresh_token = NULL, anthropic_expires_at = NULL, anthropic_scopes = NULL, anthropic_account_json = NULL WHERE id = 1",
+                new MapSqlParameterSource());
+    }
+
+    public List<String> loadFavouriteModelIds() {
+        String json = jdbc.queryForObject("SELECT favourite_model_ids_json FROM app_state WHERE id = 1", new MapSqlParameterSource(), String.class);
+        if (json == null) return List.of();
+        try { return List.copyOf(objectMapper.readValue(dec("app_state", "favourite_model_ids_json", json), objectMapper.getTypeFactory().constructCollectionType(List.class, String.class))); }
+        catch (Exception e) { throw new IllegalStateException("Invalid favourite model ids", e); }
+    }
+
+    public void updateFavouriteModelIds(List<String> modelIds) {
+        try {
+            String json = objectMapper.writeValueAsString(modelIds);
+            jdbc.update("UPDATE app_state SET favourite_model_ids_json = :ids WHERE id = 1", new MapSqlParameterSource("ids", enc("app_state", "favourite_model_ids_json", json)));
+        } catch (Exception e) { throw new IllegalStateException("Could not serialize favourite model ids", e); }
+    }
+
+    public boolean isProviderInitialized(String provider) {
+        String column = providerColumn(provider);
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT " + column + " FROM app_state WHERE id = 1", new MapSqlParameterSource(), Boolean.class));
+    }
+
+    public void updateProviderInitialized(String provider, boolean initialized) {
+        jdbc.update("UPDATE app_state SET " + providerColumn(provider) + " = :initialized WHERE id = 1", new MapSqlParameterSource("initialized", initialized));
+    }
+
+    private static String providerColumn(String provider) {
+        return switch (provider) { case "openai" -> "openai_initialized"; case "anthropic" -> "anthropic_initialized"; default -> throw new IllegalArgumentException("Unknown provider: " + provider); };
+    }
+
     void updateAppState(Long projectId, Long workspaceId, Long sessionId) {
         jdbc.update("UPDATE app_state SET active_project_id = :projectId, active_workspace_id = :workspaceId, active_session_id = :sessionId WHERE id = 1",
                 new MapSqlParameterSource()
@@ -1300,6 +1348,12 @@ public class AppStateRepository {
                 dec("app_state", "openai_account_id", rs.getString("openai_account_id")), timestampToInstant(rs.getTimestamp("openai_expires_at")));
     }
 
+    private AnthropicOAuthStateRow mapAnthropicOAuthState(ResultSet rs, int rowNum) throws SQLException {
+        return new AnthropicOAuthStateRow(dec("app_state", "anthropic_access_token", rs.getString("anthropic_access_token")),
+                dec("app_state", "anthropic_refresh_token", rs.getString("anthropic_refresh_token")), timestampToInstant(rs.getTimestamp("anthropic_expires_at")),
+                dec("app_state", "anthropic_scopes", rs.getString("anthropic_scopes")), dec("app_state", "anthropic_account_json", rs.getString("anthropic_account_json")));
+    }
+
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
         return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"), rs.getLong("sequence"), rs.getString("tool_call_id"),
                 rs.getString("tool_name"), nullableBoolean(rs, "success"), dec("tool_call_traces", "args_json", rs.getString("args_json")), dec("tool_call_traces", "text_summary", rs.getString("text_summary")), dec("tool_call_traces", "machine_summary_json", rs.getString("machine_summary_json")),
@@ -1335,6 +1389,7 @@ public class AppStateRepository {
     record WorkspaceAutoGitUpdateStateRow(long workspaceId, boolean failureEpisodeActive, Instant failureStartedAt,
                                           Instant lastSuccessAt) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
+    public record AnthropicOAuthStateRow(String accessToken, String refreshToken, Instant expiresAt, String scopes, String accountJson) {}
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt,
                       String workspaceInitCommands, String environmentVariables, String commandEnvironmentAllowlist) {}
     record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt, List<Long> exposedProjectIds) {}

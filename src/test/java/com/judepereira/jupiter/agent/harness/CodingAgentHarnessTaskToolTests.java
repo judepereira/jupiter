@@ -104,9 +104,9 @@ public class CodingAgentHarnessTaskToolTests {
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
-        return new AgentModelClientFactory(null, new AgentProperties()) {
+        return new AgentModelClientFactory(null) {
             @Override
-            public AgentModelClient getClient() {
+            public AgentModelClient getClient(String provider) {
                 return client;
             }
         };

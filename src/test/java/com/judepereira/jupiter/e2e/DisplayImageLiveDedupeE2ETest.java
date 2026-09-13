@@ -34,7 +34,7 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();

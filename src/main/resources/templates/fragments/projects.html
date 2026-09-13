@@ -575,6 +575,11 @@
                                     <h6>OpenAI subscription</h6>
                                     <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
                                 </div>
+                                <div class="settings-anthropic-section">
+                                    <h6>Anthropic</h6>
+                                    <div th:replace="~{fragments/projects :: anthropicOAuthSection}"></div>
+                                </div>
+                                <div id="settings-models" th:replace="~{fragments/projects :: settingsModels}"></div>
                             </section>
                         </div>
 
@@ -622,6 +627,45 @@
                     hx-swap="outerHTML">Connect ChatGPT/OpenAI subscription</button>
         </div>
     </div>
+</th:block>
+
+<th:block th:fragment="anthropicOAuthSection">
+    <div th:if="${anthropicOAuthView != null}" id="anthropic-oauth-section" class="settings-openai-oauth" th:with="view=${anthropicOAuthView}">
+        <p th:text="${view.message}"></p>
+        <p th:if="${view.status.name() == 'NOT_CONNECTED'}">Not connected</p>
+        <p th:if="${view.status.name() == 'AUTHENTICATION_PENDING'}">Authentication pending</p>
+        <p th:if="${view.status.name() == 'CONNECTED'}">Connected</p>
+        <p th:if="${view.status.name() == 'REFRESH_FAILED'}">Refresh failed</p>
+        <p th:if="${view.pending}"><a class="settings-anthropic-authorization" target="_blank" rel="noreferrer" th:href="${view.authorizationUrl}">Open Claude authentication</a></p>
+        <form th:if="${view.pending}" hx-post="/ui/settings/anthropic/complete" hx-target="#anthropic-oauth-section" hx-swap="outerHTML">
+            <label>Paste authentication code <input name="code" type="text" autocomplete="off" required></label>
+            <button class="btn btn-primary" type="submit">Complete authentication</button>
+        </form>
+        <div class="project-form-actions">
+            <button th:if="${view.status.name() == 'NOT_CONNECTED' or view.status.name() == 'REFRESH_FAILED'}" type="button" class="btn btn-primary" hx-post="/ui/settings/anthropic/start" hx-target="#anthropic-oauth-section" hx-swap="outerHTML">Connect Claude</button>
+            <button th:if="${view.connected or view.status.name() == 'REFRESH_FAILED'}" type="button" class="btn btn-outline-danger" hx-post="/ui/settings/anthropic/disconnect" hx-target="#anthropic-oauth-section" hx-swap="outerHTML">Disconnect</button>
+        </div>
+    </div>
+    <div th:unless="${anthropicOAuthView != null}" id="anthropic-oauth-section" class="settings-openai-oauth">
+        <p>Anthropic is not connected.</p>
+    </div>
+</th:block>
+
+<th:block th:fragment="settingsModels" th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, favourites=${favouriteModelIds == null ? T(java.util.List).of() : favouriteModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}">
+    <section id="settings-models" class="settings-section">
+        <h6>Models</h6>
+        <div th:each="group : ${groups.entrySet()}">
+            <strong th:text="${group.key}"></strong>
+            <span class="settings-provider-status" th:text="${availability[group.key] == true ? 'Connected' : 'Not connected'}"></span>
+            <div th:each="modelDef : ${group.value}" class="settings-model-row">
+                <button type="button" class="btn btn-link" hx-post="/ui/settings/models/favourite" th:attr="hx-vals=|{&quot;modelId&quot;:&quot;${modelDef.id}&quot;,&quot;favourite&quot;:${!favourites.contains(modelDef.id)}}|, hx-target='#settings-models', hx-swap='outerHTML'" th:text="${favourites.contains(modelDef.id) ? '★' : '☆'}" aria-label="Toggle favourite"></button>
+                <span class="settings-model-provider" th:text="${modelDef.provider}"></span>
+                <span class="settings-model-status" th:text="${availability[modelDef.provider] == true ? 'Connected' : 'Not connected'}"></span>
+                <span th:text="${modelDef.displayName}"></span>
+                <small th:text="${modelDef.contextTokens() > 0 ? modelDef.contextTokens() + ' context' : ''}"></small>
+            </div>
+        </div>
+    </section>
 </th:block>
 
 <th:block th:fragment="modal" th:with="selectedPathValue=${selectedPath ?: ''}, currentPathValue=${currentPath ?: ''}, directoryEntries=${directoryEntries ?: T(java.util.List).of()}">
