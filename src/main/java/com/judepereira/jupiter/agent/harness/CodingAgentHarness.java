@@ -95,7 +95,7 @@ public class CodingAgentHarness {
                 selectedModel.id(), selectedModel.apiModelId(), thinkingLevel, selectedModel.supportsReasoning(),
                 agent == null ? null : agent.textVerbosity());
 
-        String systemPrompt = resolveSystemPrompt(request, agent, skillCatalog);
+        String systemPrompt = resolveSystemPrompt(request, agent, skillCatalog, selectedModel);
         List<Message> convo = new ArrayList<>(seedConversation(systemPrompt, request.getConversationHistory()));
         Message newestUser = convo.stream().filter(message -> message.getRole() == Message.Role.USER).reduce((a, b) -> b).orElse(null);
         if (newestUser != null) {
@@ -295,17 +295,17 @@ public class CodingAgentHarness {
         return agent == null ? null : agent.defaultThinkingLevel();
     }
 
-    private String resolveSystemPrompt(AgentTurnRequest request, AgentDefinition agent, SkillCatalog catalog) {
+    private String resolveSystemPrompt(AgentTurnRequest request, AgentDefinition agent, SkillCatalog catalog, ModelDefinition model) {
         if (agent == null) {
             String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
                     ? props.getWorkspaceRoot()
                     : request.getWorkspaceRoot();
-            return systemPromptComposer.compose(request.getSystemPrompt(), workspaceRoot, catalog);
+            return systemPromptComposer.compose(request.getSystemPrompt(), workspaceRoot, catalog, model);
         }
         String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
                 ? props.getWorkspaceRoot()
                 : request.getWorkspaceRoot();
-        return systemPromptComposer.composeForAgent(agent, workspaceRoot, catalog);
+        return systemPromptComposer.composeForAgent(agent, workspaceRoot, catalog, model);
     }
 
     private static List<Message> seedConversation(String systemPrompt, List<Message> conversation) {

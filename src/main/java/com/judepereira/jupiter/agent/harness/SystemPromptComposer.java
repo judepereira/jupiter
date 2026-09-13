@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.agent.harness;
 
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
+import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.skill.SkillCatalog;
 import com.judepereira.jupiter.agent.skill.SkillCatalogRenderer;
 import org.springframework.stereotype.Service;
@@ -22,14 +23,14 @@ public class SystemPromptComposer {
         this.skillCatalogRenderer = skillCatalogRenderer;
     }
 
-    public String composeForAgent(AgentDefinition agent, String workspaceRoot, SkillCatalog catalog) {
-        return compose(requireNonBlank(agent.systemPrompt(), "agent system prompt appendage: " + agent.id()), workspaceRoot, catalog);
+    public String composeForAgent(AgentDefinition agent, String workspaceRoot, SkillCatalog catalog, ModelDefinition model) {
+        return compose(requireNonBlank(agent.systemPrompt(), "agent system prompt appendage: " + agent.id()), workspaceRoot, catalog, model);
     }
 
-    public String compose(String appendage, String workspaceRoot, SkillCatalog catalog) {
+    public String compose(String appendage, String workspaceRoot, SkillCatalog catalog, ModelDefinition model) {
         String defaultPrompt = requireNonBlank(defaultSystemPrompt, "default system prompt resource");
         String resolvedWorkspaceRoot = requireNonBlank(workspaceRoot, "workspace root");
-        String renderedCatalog = skillCatalogRenderer.render(catalog);
+        String renderedCatalog = skillCatalogRenderer.render(catalog, model);
         java.util.List<String> sections = new java.util.ArrayList<>(java.util.List.of(defaultPrompt));
         if (appendage != null && !appendage.isBlank()) sections.add(appendage);
         if (!renderedCatalog.isBlank()) sections.add(renderedCatalog);

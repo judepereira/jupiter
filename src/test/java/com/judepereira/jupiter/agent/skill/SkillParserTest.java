@@ -32,6 +32,38 @@ class SkillParserTest {
     }
 
     @Test
+    void derivesNameFromDirectoryWhenNameIsAbsent() throws Exception {
+        Path directory = Files.createDirectory(temp.resolve("codex-skill"));
+        Files.writeString(directory.resolve("SKILL.md"), "---\ndescription: A demo\n---\n");
+
+        var result = new SkillParser().parse(directory.resolve("SKILL.md"), SkillScope.REPOSITORY);
+
+        assertEquals("codex-skill", result.definition().orElseThrow().name());
+    }
+
+    @Test
+    void acceptsExplicitNameDifferentFromDirectory() throws Exception {
+        Path directory = Files.createDirectory(temp.resolve("directory-name"));
+        Files.writeString(directory.resolve("SKILL.md"), "---\nname: effective-name\ndescription: A demo\n---\n");
+
+        var result = new SkillParser().parse(directory.resolve("SKILL.md"), SkillScope.REPOSITORY);
+
+        assertEquals("effective-name", result.definition().orElseThrow().name());
+    }
+
+    @Test
+    void rejectsInvalidDerivedAndExplicitNames() throws Exception {
+        Path invalidDirectory = Files.createDirectory(temp.resolve("Invalid_Directory"));
+        Files.writeString(invalidDirectory.resolve("SKILL.md"), "---\ndescription: A demo\n---\n");
+        Path invalidExplicit = Files.createDirectory(temp.resolve("valid-directory"));
+        Files.writeString(invalidExplicit.resolve("SKILL.md"), "---\nname: 42\ndescription: A demo\n---\n");
+
+        var parser = new SkillParser();
+        assertTrue(parser.parse(invalidDirectory.resolve("SKILL.md"), SkillScope.REPOSITORY).error().isPresent());
+        assertTrue(parser.parse(invalidExplicit.resolve("SKILL.md"), SkillScope.REPOSITORY).error().isPresent());
+    }
+
+    @Test
     void rejectsBlankDescription() throws Exception {
         Path directory = Files.createDirectory(temp.resolve("blank-description"));
         Files.writeString(directory.resolve("SKILL.md"), "---\nname: blank-description\ndescription: \"   \\t\"\n---\n");

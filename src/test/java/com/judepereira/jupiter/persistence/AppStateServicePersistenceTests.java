@@ -1353,7 +1353,7 @@ public class AppStateServicePersistenceTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return client;
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                          ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
@@ -1415,7 +1415,7 @@ public class AppStateServicePersistenceTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return new RecordingSummaryClient();
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                        ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
@@ -1473,7 +1473,7 @@ public class AppStateServicePersistenceTests {
                     public AgentModelClient getClient() {
                         return new RecordingSummaryClient();
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                        ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {

@@ -15,6 +15,26 @@ class SkillContextInjectorTest {
     @TempDir Path temp;
 
     @Test
+    void preparedMessagesAreExactlyThoseInsertedIncludingFailedRevalidation() throws Exception {
+        Path workspace = Files.createDirectory(temp.resolve("workspace"));
+        Path skillFile = writeSkill(workspace, "deploy", "SAFE BODY");
+        var skills = SkillTestSupport.components(temp.resolve("home"));
+        SkillDefinition discovered = skills.discovery().discover(workspace).skills().getFirst();
+        var resolution = skills.resolver().resolveExplicit("$deploy", SkillTestSupport.catalog(discovered));
+        Files.writeString(skillFile, "---\nname: deploy\ndescription: changed\n---\nREPLACED BODY");
+
+        List<Message> conversation = List.of(new Message(Message.Role.USER, "$deploy", null, null));
+        List<Message> prepared = skills.injector().prepareInjectionMessages(resolution);
+
+        List<Message> inserted = skills.injector().injectBeforeNewestUser(conversation, resolution);
+        assertThat(inserted).hasSize(2);
+        assertThat(inserted.get(0).getRole()).isEqualTo(prepared.getFirst().getRole());
+        assertThat(inserted.get(0).getContent()).isEqualTo(prepared.getFirst().getContent());
+        assertThat(inserted.get(1)).isSameAs(conversation.getFirst());
+        assertThat(prepared.getFirst().getContent()).contains("could not be loaded").doesNotContain("REPLACED BODY");
+    }
+
+    @Test
     void doesNotReadExternalBodyWhenSkillFileIsReplacedWithSymlink() throws Exception {
         Path workspace = Files.createDirectory(temp.resolve("workspace"));
         Path external = Files.writeString(temp.resolve("external.md"), "EXTERNAL SECRET BODY");

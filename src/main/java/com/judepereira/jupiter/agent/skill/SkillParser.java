@@ -44,18 +44,20 @@ public final class SkillParser {
             if (metadata == null || !metadata.isObject()) return ParseResult.error(skillFile, "frontmatter must be a YAML object");
             JsonNode nameNode = metadata.get("name");
             JsonNode descriptionNode = metadata.get("description");
-            if (nameNode == null || !nameNode.isTextual() || !NAME.matcher(nameNode.textValue()).matches()) {
-                return ParseResult.error(skillFile, "name must match [a-z0-9-]{1,64}");
-            }
             Path directory = canonicalFile.getParent();
-            if (directory == null || !directory.getFileName().toString().equals(nameNode.textValue())) {
-                return ParseResult.error(skillFile, "directory name must equal name");
+            if (directory == null || directory.getFileName() == null) {
+                return ParseResult.error(skillFile, "skill directory must have a name");
+            }
+            String effectiveName = nameNode == null ? directory.getFileName().toString() : nameNode.isTextual()
+                    ? nameNode.textValue() : null;
+            if (effectiveName == null || !NAME.matcher(effectiveName).matches()) {
+                return ParseResult.error(skillFile, "name must match [a-z0-9-]{1,64}");
             }
             if (descriptionNode == null || !descriptionNode.isTextual() || descriptionNode.textValue().isBlank()
                     || descriptionNode.textValue().length() > 1024) {
                 return ParseResult.error(skillFile, "description must be nonempty and at most 1024 characters");
             }
-            return ParseResult.success(new SkillDefinition(nameNode.textValue(), descriptionNode.textValue(), directory, canonicalFile, scope));
+            return ParseResult.success(new SkillDefinition(effectiveName, descriptionNode.textValue(), directory, canonicalFile, scope));
         } catch (CharacterCodingException e) {
             return ParseResult.error(skillFile, "file is not valid UTF-8");
         } catch (JsonProcessingException e) {

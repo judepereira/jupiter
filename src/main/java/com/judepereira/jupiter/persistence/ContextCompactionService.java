@@ -5,7 +5,9 @@ import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.skill.SkillCatalog;
+import com.judepereira.jupiter.agent.skill.SkillContextInjector;
 import com.judepereira.jupiter.agent.skill.SkillDiscoveryService;
+import com.judepereira.jupiter.agent.skill.SkillInvocationResolver;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
@@ -38,16 +40,21 @@ public class ContextCompactionService {
     private final TokenUsageService tokenUsageService;
     private final SystemPromptComposer systemPromptComposer;
     private final SkillDiscoveryService skillDiscoveryService;
+    private final SkillInvocationResolver skillInvocationResolver;
+    private final SkillContextInjector skillContextInjector;
 
     @Autowired
     public ContextCompactionService(AppStateService appStateService, AgentModelClientFactory modelClientFactory,
                                     TokenUsageService tokenUsageService, SystemPromptComposer systemPromptComposer,
-                                    SkillDiscoveryService skillDiscoveryService) {
+                                    SkillDiscoveryService skillDiscoveryService, SkillInvocationResolver skillInvocationResolver,
+                                    SkillContextInjector skillContextInjector) {
         this.appStateService = appStateService;
         this.modelClientFactory = modelClientFactory;
         this.tokenUsageService = tokenUsageService;
         this.systemPromptComposer = systemPromptComposer;
         this.skillDiscoveryService = skillDiscoveryService;
+        this.skillInvocationResolver = skillInvocationResolver;
+        this.skillContextInjector = skillContextInjector;
     }
 
     @Transactional
@@ -55,7 +62,9 @@ public class ContextCompactionService {
                                                       ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
         List<AppStateRepository.ConversationMessageRow> rows = includedCompletedRows(sessionId);
         int budget = availableInputBudget(model);
-        int estimatedBefore = estimateTurnTokens(agent, model, rows, upcomingUserText, workspaceRoot);
+        SkillCatalog skillCatalog = skillDiscoveryService.discover(java.nio.file.Path.of(workspaceRoot));
+        var skillResolution = skillInvocationResolver.resolveExplicit(upcomingUserText, skillCatalog);
+        int estimatedBefore = estimateTurnTokens(agent, model, rows, upcomingUserText, workspaceRoot, skillCatalog, skillResolution);
 
         if (estimatedBefore <= compactThreshold(budget)) {
             return Optional.empty();
@@ -105,7 +114,7 @@ public class ContextCompactionService {
         appStateService.markTurnsIncludeInModelFalse(sessionId, compactedThroughTurnId);
         ChatMessageView summaryMessage = appStateService.appendVisibleSystemMessage(sessionId, summary, compactedThroughTurnId);
 
-        int estimatedAfter = estimateTurnTokens(agent, model, includedCompletedRows(sessionId), upcomingUserText, workspaceRoot);
+        int estimatedAfter = estimateTurnTokens(agent, model, includedCompletedRows(sessionId), upcomingUserText, workspaceRoot, skillCatalog, skillResolution);
         if (estimatedAfter > budget) {
             throw new IllegalStateException("Conversation still does not fit after compaction for " + model.id()
                     + ": estimated " + estimatedAfter + " tokens for budget " + budget);
@@ -157,13 +166,14 @@ public class ContextCompactionService {
                 + model.outputTokens();
     }
 
-    private int estimateTurnTokens(AgentDefinition agent, ModelDefinition model, List<AppStateRepository.ConversationMessageRow> rows, String userText, String workspaceRoot) {
-        return estimatePromptTokens(systemPromptComposer.composeForAgent(agent, workspaceRoot,
-                skillDiscoveryService.discover(java.nio.file.Path.of(workspaceRoot))))
-                + estimateRowsTokens(rows)
-                + estimateTextTokens(userText)
-                + toolSchemaTokens(agent)
-                + model.outputTokens();
+    private int estimateTurnTokens(AgentDefinition agent, ModelDefinition model, List<AppStateRepository.ConversationMessageRow> rows,
+                                   String userText, String workspaceRoot, SkillCatalog skillCatalog,
+                                   SkillInvocationResolver.Resolution skillResolution) {
+        int skillMessages = skillContextInjector.prepareInjectionMessages(skillResolution).stream()
+                .mapToInt(message -> MESSAGE_OVERHEAD_TOKENS + estimateTextTokens(message.getContent())).sum();
+        return estimatePromptTokens(systemPromptComposer.composeForAgent(agent, workspaceRoot, skillCatalog, model))
+                + estimateRowsTokens(rows) + estimateTextTokens(userText) + skillMessages
+                + toolSchemaTokens(agent) + model.outputTokens();
     }
 
     private int estimateRowsTokens(List<AppStateRepository.ConversationMessageRow> rows) {

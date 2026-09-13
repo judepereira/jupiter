@@ -54,7 +54,7 @@ class UiControllerDisplayImageTests {
                         (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class)),
-                new com.judepereira.jupiter.persistence.ContextCompactionService(appStateService, mock(AgentModelClientFactory.class), null, promptComposer, skillComponents.discovery()),
+                new com.judepereira.jupiter.persistence.ContextCompactionService(appStateService, mock(AgentModelClientFactory.class), null, promptComposer, skillComponents.discovery(), skillComponents.resolver(), skillComponents.injector()),
                 null, mock(CommandStreamService.class), new com.judepereira.jupiter.command.CommandCatalogService(""), null,
                 new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(),
                 mock(com.judepereira.jupiter.git.GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");

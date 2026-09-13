@@ -27,7 +27,7 @@ public class ToolGuardrailsTest {
 
     @Test
     public void run_command_blocked_when_allow_command_false(@TempDir Path tmp) throws Exception {
-        RunCommandTool t = new RunCommandTool();
+        RunCommandTool t = new RunCommandTool(java.nio.file.Files::createTempFile);
         ToolExecutionContext ctx = new ToolExecutionContext(tmp, false, false, 1, null, null, null, null, null, java.util.Set.of(), null, null);
         ToolExecutionResult res = t.execute(Map.of("command", "echo hi"), ctx);
         assertFalse(res.isSuccess());

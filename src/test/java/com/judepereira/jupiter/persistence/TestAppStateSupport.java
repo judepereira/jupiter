@@ -196,7 +196,7 @@ public final class TestAppStateSupport {
     }
 
     public static ContextCompactionService contextCompactionService(AppStateService appStateService) {
-        return new ContextCompactionService(appStateService, summaryClientFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery());
+        return new ContextCompactionService(appStateService, summaryClientFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
     }
 
     private static AgentModelClientFactory summaryClientFactory() {

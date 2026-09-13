@@ -15,6 +15,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +38,8 @@ class ContextCompactionServiceTests {
         }
 
         RecordingStreamingFactory factory = recordingStreamingFactory();
-        ContextCompactionService compactionService = new ContextCompactionService(service, factory, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery());
+        var skills = com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents();
+        ContextCompactionService compactionService = new ContextCompactionService(service, factory, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(skills.renderer()), skills.discovery(), skills.resolver(), skills.injector());
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true,
                 List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 50000, 32, null, null, null);
@@ -48,6 +50,29 @@ class ContextCompactionServiceTests {
         assertThat(summary.text()).isEqualTo("streamed summary");
         assertThat(factory.client.conversations).hasSize(1);
         assertThat(factory.client.streamed).isTrue();
+    }
+
+    @Test
+    void explicitSkillBodyChangesTwoTurnCompactionDecision(@TempDir Path projectPath) throws Exception {
+        Files.createDirectories(projectPath.resolve(".agents/skills/large"));
+        Files.writeString(projectPath.resolve(".agents/skills/large/SKILL.md"),
+                "---\nname: large\ndescription: large skill\n---\n" + "x".repeat(50_000));
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+        var turn = service.appendUserMessageAndPendingAssistant(sessionId, "small");
+        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "small", List.of());
+        var second = service.appendUserMessageAndPendingAssistant(sessionId, "small");
+        service.completeAssistantMessage(sessionId, second.assistantMessage().id(), "small", List.of());
+        var skills = com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents();
+        ContextCompactionService compaction = new ContextCompactionService(service, failIfUsedFactory(), null,
+                new com.judepereira.jupiter.agent.harness.SystemPromptComposer(skills.renderer()), skills.discovery(), skills.resolver(), skills.injector());
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true, List.of());
+        ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 12000, 32, null, null, null);
+
+        assertThat(compaction.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(), "next")).isEmpty();
+        assertThatThrownBy(() -> compaction.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(), "$large"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("even before compaction");
     }
 
     @Test
@@ -65,7 +90,7 @@ class ContextCompactionServiceTests {
         var secondTurn = service.appendUserMessageAndPendingAssistant(sessionId, "second turn " + "b".repeat(200));
         service.completeAssistantMessage(sessionId, secondTurn.assistantMessage().id(), "reply 2 " + "c".repeat(200), List.of());
 
-        ContextCompactionService compactionService = new ContextCompactionService(service, failIfUsedFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery());
+        ContextCompactionService compactionService = new ContextCompactionService(service, failIfUsedFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true,
                 List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 1200, 32, null, null, null);

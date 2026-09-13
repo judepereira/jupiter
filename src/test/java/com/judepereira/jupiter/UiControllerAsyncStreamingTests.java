@@ -244,7 +244,7 @@ public class UiControllerAsyncStreamingTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return null;
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public java.util.Optional<com.judepereira.jupiter.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
                                                                                                                        com.judepereira.jupiter.agent.catalog.ModelDefinition model,
@@ -391,7 +391,7 @@ public class UiControllerAsyncStreamingTests {
                     public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
                         return null;
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
             @Override
             public java.util.Optional<com.judepereira.jupiter.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
                                                                                                                        com.judepereira.jupiter.agent.catalog.ModelDefinition model,
