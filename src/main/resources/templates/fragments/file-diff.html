@@ -1,6 +1,6 @@
 <!doctype html>
 <div th:fragment="diff" class="file-diff-container">
-    <div class="file-diff">
-        <pre id="diff-content" th:text="${selectedFile != null ? selectedFile.diff : ''}"></pre>
+    <div class="file-diff" role="region" aria-label="File diff">
+        <pre id="diff-content" class="diff-source" tabindex="0" aria-label="Read-only file diff" th:text="${selectedFile != null ? selectedFile.diff : ''}"></pre>
     </div>
 </div>

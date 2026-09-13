@@ -150,13 +150,14 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                         response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         firstFileButton::click);
                 assertReviewFileButtonActiveState(firstFileButton, true);
-                assertThat(page.locator("#diff-content")).containsText("first file diff");
+                assertDiffViewer(page, "first file diff\n");
 
                 page.waitForResponse(
                         response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         firstFileButton::click);
                 assertReviewFileButtonActiveState(firstFileButton, false);
                 assertThat(page.locator("#diff-content")).hasCount(0);
+                assertThat(page.locator(".diff-viewer")).hasCount(0);
 
                 consoleErrors.clear();
 
@@ -164,7 +165,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                         response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         secondFileButton::click);
                 assertReviewFileButtonActiveState(secondFileButton, true);
-                assertThat(page.locator("#diff-content")).containsText("second file diff");
+                assertDiffViewer(page, "second file diff\n");
                 assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
 
                 page.waitForResponse(
@@ -172,6 +173,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                         secondFileButton::click);
                 assertReviewFileButtonActiveState(secondFileButton, false);
                 assertThat(page.locator("#diff-content")).hasCount(0);
+                assertThat(page.locator(".diff-viewer")).hasCount(0);
             }
         } finally {
             if (previousHome == null) {
@@ -180,6 +182,19 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 System.setProperty("user.home", previousHome);
             }
         }
+    }
+
+    private static void assertDiffViewer(Page page, String expectedDiff) {
+        Locator source = page.locator("#diff-content");
+        assertThat(source).hasCount(1);
+        assertThat(source).hasText(expectedDiff.trim());
+        assertTrue(expectedDiff.equals(source.textContent()));
+        assertThat(source).hasAttribute("aria-label", "Read-only file diff");
+        assertThat(page.locator(".diff-viewer")).hasCount(1);
+        assertThat(page.locator(".diff-viewer")).hasAttribute("role", "presentation");
+        assertThat(page.locator(".diff-viewer textarea")).hasCount(1);
+        assertTrue((Boolean) page.locator(".diff-viewer textarea").evaluate("textarea => textarea.readOnly"));
+        assertThat(page.locator(".diff-viewer .CodeMirror-code")).containsText(expectedDiff.trim());
     }
 
     private static void assertReviewFileButtonActiveState(Locator fileButton, boolean active) {

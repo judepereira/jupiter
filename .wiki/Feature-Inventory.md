@@ -60,6 +60,7 @@ This is the boring-but-useful v1 checklist. When a user-visible feature lands, r
 - desktop and mobile layouts
 - connection-loss overlay
 - resizable panels
+- read-only, line-numbered unified diff viewer
 - global keyboard shortcuts
 
 ## Security and deployment

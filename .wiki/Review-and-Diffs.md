@@ -20,4 +20,4 @@ This is the broader truth and will also catch edits made outside the agent trace
 
 The selected review source, selected file, and panel visibility are persisted with the session.
 
-The panel is deliberately just a diff inspection surface. Git history and external code-review tooling still do what they do best.
+The panel is deliberately just a diff inspection surface. Git history and external code-review tooling still do what they do best. Diffs are shown in a read-only, scrollable CodeMirror viewer with line numbers and syntax-aware colors; the original `#diff-content` text remains available for accessible and automated text inspection.

@@ -1,0 +1,43 @@
+.file-diff {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.file-diff .CodeMirror {
+    height: min(62vh, 680px);
+    min-height: 180px;
+    overflow: auto;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    background: #fff;
+    color: #1f2933;
+    font: 0.82rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.file-diff .CodeMirror-lines {
+    padding: 8px 0;
+}
+
+.file-diff .CodeMirror pre.CodeMirror-line,
+.file-diff .CodeMirror pre.CodeMirror-line-like {
+    padding-left: 8px;
+}
+
+.file-diff .CodeMirror-gutters {
+    border-right: 1px solid #d9dee5;
+    background: #f4f6f8;
+}
+
+.file-diff .CodeMirror-linenumber {
+    color: #697586;
+    padding: 0 9px 0 7px;
+}
+
+.file-diff .cm-meta { color: #175cd3; font-weight: 600; }
+.file-diff .cm-positive { color: #146c2e; background: #eaf7ee; }
+.file-diff .cm-negative { color: #b42318; background: #fff0ef; }
+.file-diff .cm-header { color: #6941c6; font-weight: 600; }
+
+@media (max-width: 700px) {
+    .file-diff .CodeMirror { height: 55vh; font-size: 0.75rem; }
+}
