@@ -23,11 +23,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SubagentTaskE2ETest extends E2ETestSupport {
+
+    private static void assertStatusIcon(com.microsoft.playwright.Locator status, String iconClass, String accessibleStatus) {
+        assertThat(status).isVisible();
+        assertThat(status).hasAttribute("aria-label", accessibleStatus);
+        assertThat(status.locator("i.bi")).hasClass(Pattern.compile("(^|\\s)" + iconClass + "(\\s|$)"));
+        assertThat(status.locator(":scope > .visually-hidden")).hasText(accessibleStatus);
+        assertThat(status.locator(":scope > span:not(.visually-hidden)")).hasCount(0);
+    }
 
     @Test
     void taskTraceShowsSubagentStreamingPanelAndOpensTranscript(@TempDir Path tempDir) throws Exception {
@@ -62,8 +71,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             assertThat(taskToolCall.locator(":scope > .tool-call-detail")).not().isVisible();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
             var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
-            assertThat(statusBadge).hasText("success");
-            assertThat(statusBadge).isVisible();
+            assertStatusIcon(statusBadge, "bi-check-circle-fill", "success");
             var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
             assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
             assertThat(taskSummaryBody).isVisible();
@@ -186,8 +194,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             taskToolCall.waitFor();
             assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
             var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
-            assertThat(statusBadge).hasText("running");
-            assertThat(statusBadge).isVisible();
+            assertStatusIcon(statusBadge, "bi-arrow-repeat", "running");
             var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
             assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
             assertThat(taskSummaryBody).isVisible();
@@ -283,8 +290,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                 taskToolCallAfterReload.waitFor();
                 assertThat(taskToolCallAfterReload).isVisible();
                 var taskStatusAfterReload = taskToolCallAfterReload.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
-                assertThat(taskStatusAfterReload).hasText("running");
-                assertThat(taskStatusAfterReload).isVisible();
+                assertStatusIcon(taskStatusAfterReload, "bi-arrow-repeat", "running");
                 var taskSummaryBodyAfterReload = taskToolCallAfterReload.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
                 assertThat(taskSummaryBodyAfterReload).isVisible();
                 assertThat(taskSummaryBodyAfterReload).hasText("Inspect the task flow and report back.");
@@ -349,8 +355,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
             var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
-            assertThat(statusBadge).hasText("running");
-            assertThat(statusBadge).isVisible();
+            assertStatusIcon(statusBadge, "bi-arrow-repeat", "running");
             var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
             assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
             assertThat(taskSummaryBody).isVisible();

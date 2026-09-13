@@ -515,14 +515,15 @@
 }
 
 .tool-call-name {
-    margin-right: 8px;
+    min-width: 0;
 }
 
 .tool-call-status {
-    font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 999px;
-    display: inline-block;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 .tool-call-status-success {

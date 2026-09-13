@@ -254,8 +254,8 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-rows", context);
 
-        assertThat(html).contains("data-tool-call-state=\"running\"", ">running<");
-        assertThat(html).doesNotContain("tool-call-status-failure");
+        assertThat(html).contains("data-tool-call-state=\"running\"", "bi-arrow-repeat", "aria-label=\"running\"", "visually-hidden");
+        assertThat(html).doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*running\\s*</span>.*").doesNotContain("tool-call-status-failure");
     }
 
     @Test
@@ -449,7 +449,8 @@ public class ChatTemplateRenderTest {
         String pageHtml = engine.process("fragments/chat-rows", pageContext);
 
         String summaryId = "assistant-tool-group-assistant-1-task-1-summary";
-        assertThat(groupHtml).contains("tool-call-summary-task", "Engineer", ">success<", "View Session");
+        assertThat(groupHtml).contains("tool-call-summary-task", "Engineer", "bi-check-circle-fill", "aria-label=\"success\"", "visually-hidden", "View Session");
+        assertThat(groupHtml).doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*success\\s*</span>.*");
         assertThat(groupHtml).contains("id=\"" + summaryId + "\"");
         assertThat(groupHtml).doesNotContain("<span class=\"tool-call-name\">task</span>");
         assertThat(groupHtml.split("<summary\\b", -1).length - 1).isEqualTo(1);
@@ -457,6 +458,26 @@ public class ChatTemplateRenderTest {
         assertThat(blockHtml).contains("tool-call-summary-task", "Engineer", "id=\"" + summaryId + "\"");
         assertThat(pageHtml.split("<summary\\b", -1).length - 1).isEqualTo(1);
         assertThat(pageHtml).contains("id=\"" + summaryId + "\"", "Engineer", "Inspect the task flow");
+    }
+
+    @Test
+    public void chatToolCallStatusIconsRenderFailureAndUnknownFallback() {
+        SpringTemplateEngine engine = engine();
+        ChatPresentationService.ToolCallView failureCall = new ChatPresentationService.ToolCallView("failure-1", "read_file", false, null, null, false, false, null, null, null, "failure", null, null, null, null, null);
+        ChatPresentationService.ToolCallGroupView failureGroup = new ChatPresentationService.ToolCallGroupView("read_file", "Read file", "failure", false, 1, List.of(failureCall));
+        WebContext failureContext = webContext();
+        failureContext.setVariable("group", failureGroup);
+        failureContext.setVariable("assistantId", "assistant-1");
+        String failureHtml = engine.process("fragments/chat-tool-calls", Set.of("group"), failureContext);
+
+        ChatPresentationService.ToolCallGroupView unknownGroup = new ChatPresentationService.ToolCallGroupView("read_file", "Read file", "paused", false, 1, List.of(failureCall));
+        WebContext unknownContext = webContext();
+        unknownContext.setVariable("group", unknownGroup);
+        unknownContext.setVariable("assistantId", "assistant-1");
+        String unknownHtml = engine.process("fragments/chat-tool-calls", Set.of("group"), unknownContext);
+
+        assertThat(failureHtml).contains("bi-x-circle-fill", "aria-label=\"failure\"", "tool-call-status-failure").doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*failure\\s*</span>.*");
+        assertThat(unknownHtml).contains("bi-question-circle", "aria-label=\"paused\"", "visually-hidden").doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*paused\\s*</span>.*");
     }
 
     @Test

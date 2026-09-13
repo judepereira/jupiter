@@ -47,19 +47,25 @@
     </details>
 </th:block>
 
+<th:block th:fragment="statusIcon(status, success)" th:with="effectiveStatus=${status ?: (success ? 'success' : 'failure')}, iconClass=${effectiveStatus == 'running' ? 'bi-arrow-repeat' : (effectiveStatus == 'success' ? 'bi-check-circle-fill' : (effectiveStatus == 'failure' ? 'bi-x-circle-fill' : 'bi-question-circle'))}, statusText=${effectiveStatus == 'running' ? 'running' : (effectiveStatus == 'success' ? 'success' : (effectiveStatus == 'failure' ? 'failure' : effectiveStatus))}">
+    <span class="tool-call-status" th:classappend="${effectiveStatus == 'success' ? ' tool-call-status-success' : (effectiveStatus == 'failure' ? ' tool-call-status-failure' : '')}" th:attr="aria-label=${statusText}">
+        <i class="bi" th:classappend="${' ' + iconClass}" aria-hidden="true"></i><span class="visually-hidden" th:text="${statusText}"></span>
+    </span>
+</th:block>
+
 <th:block th:fragment="groupSummary(group, assistantId)" th:if="${group != null and group.toolName != 'task'}">
     <summary class="tool-call-summary" th:id="${group.summaryDomId(assistantId)}">
         <span class="tool-call-name" th:text="${group.displayLabel}"></span>
-        <span class="tool-call-status" th:classappend="${group.status == 'running' ? '' : (group.success ? ' tool-call-status-success' : ' tool-call-status-failure')}" th:text="${group.status == 'running' ? 'running' : (group.success ? 'success' : 'failure')}"></span>
+        <th:block th:replace="~{fragments/chat-tool-calls :: statusIcon(status=${group.status}, success=${group.success})}"></th:block>
     </summary>
 </th:block>
 
-<th:block th:fragment="taskSummary(group, assistantId)" th:if="${group != null and group.toolName == 'task'}" th:with="taskCall=${!#lists.isEmpty(group.calls) ? group.calls[0] : null}">
+<th:block th:fragment="taskSummary(group, assistantId)" th:if="${group != null and group.toolName == 'task'}" th:with="taskCall=${!#lists.isEmpty(group.calls) ? group.calls[0] : null}, taskStatus=${taskCall != null and taskCall.status != null ? taskCall.status : (group.success ? 'success' : 'failure')}">
     <summary class="tool-call-summary tool-call-summary-task" th:id="${group.summaryDomId(assistantId)}">
         <div class="tool-call-summary-main">
             <div class="tool-call-summary-head">
                 <span class="tool-call-name" th:text="${taskCall != null and taskCall.subagentAgentName != null ? taskCall.subagentAgentName : group.displayLabel}"></span>
-                <span class="tool-call-status" th:classappend="${taskCall != null and taskCall.status != null ? (taskCall.status == 'running' ? '' : (group.success ? ' tool-call-status-success' : ' tool-call-status-failure')) : (group.success ? ' tool-call-status-success' : ' tool-call-status-failure')}" th:text="${taskCall != null and taskCall.status != null ? taskCall.status : (group.success ? 'success' : 'failure')}"></span>
+                <th:block th:replace="~{fragments/chat-tool-calls :: statusIcon(status=${taskStatus}, success=${group.success})}"></th:block>
             </div>
             <div class="tool-call-summary-task-body" th:if="${taskCall != null and taskCall.taskBody != null}" th:text="${taskCall.taskBody}"></div>
         </div>
