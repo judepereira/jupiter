@@ -252,7 +252,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     private static void captureReviewAndDiffs(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
         captureDesktop(app, fixture, true, outputDir.resolve("review-and-diffs.png"), page -> {
             page.locator("#review-panel").waitFor();
-            page.locator("#review-panel pre").first().waitFor();
+            page.locator("#review-panel .diff-viewer").first().waitFor();
             settlePage(page);
         });
     }

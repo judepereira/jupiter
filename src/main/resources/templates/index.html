@@ -7,6 +7,8 @@
     <link href="/webjars/bootstrap/5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/webjars/bootstrap-icons/1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="/webjars/xterm/5.3.0/css/xterm.css">
+    <link rel="stylesheet" href="/webjars/codemirror/5.65.16/lib/codemirror.css">
+    <link rel="stylesheet" th:href="@{/css/diff-viewer.css}">
     <link rel="stylesheet" th:href="@{/css/tokens.css}">
     <link rel="stylesheet" th:href="@{/css/base.css}">
     <link rel="stylesheet" th:href="@{/css/projects.css}">
@@ -89,7 +91,10 @@
 <script src="/webjars/marked/18.0.5/lib/marked.umd.js"></script>
 <script src="/webjars/xterm/5.3.0/lib/xterm.js"></script>
     <script src="/webjars/xterm-addon-fit/0.8.0/lib/xterm-addon-fit.js"></script>
+<script src="/webjars/codemirror/5.65.16/lib/codemirror.js"></script>
+<script src="/webjars/codemirror/5.65.16/mode/diff/diff.js"></script>
 <script type="module" th:src="@{/js/connection-loss-monitor.js}"></script>
+<script type="module" th:src="@{/js/diff-viewer.js}"></script>
 <script type="module" th:src="@{/js/system-balloons.js}"></script>
 <script type="module" th:src="@{/js/workspace-branch-sanitizer.js}"></script>
 <script type="module" th:src="@{/js/left-rail-divider.js}"></script>
