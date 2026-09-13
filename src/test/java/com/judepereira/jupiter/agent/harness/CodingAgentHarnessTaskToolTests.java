@@ -34,7 +34,7 @@ public class CodingAgentHarnessTaskToolTests {
     @Test
     public void primaryAgentCanExposeTaskToolAndInvokeIt(@TempDir Path tmp) {
         AgentDefinition primary = new AgentDefinition("primary", "Primary", "", "Primary system prompt", AgentMode.AGENT,
-                "openai/gpt-5.5", ThinkingLevel.HIGH, null, false, false, List.of("task"));
+                "openai/gpt-5.6-sol", ThinkingLevel.HIGH, null, false, false, List.of("task"));
 
         RecordingTool taskTool = recordingTool("task");
         RecordingModel model = new RecordingModel(List.of(
@@ -70,7 +70,7 @@ public class CodingAgentHarnessTaskToolTests {
     @Test
     public void subagentDoesNotReceiveTaskToolAndBlockedTaskCallsFail(@TempDir Path tmp) {
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent system prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("task"));
+                "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true, List.of("task"));
 
         RecordingTool taskTool = recordingTool("task");
         RecordingModel model = new RecordingModel(List.of(

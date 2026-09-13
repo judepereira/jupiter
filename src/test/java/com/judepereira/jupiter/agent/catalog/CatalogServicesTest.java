@@ -139,20 +139,20 @@ public class CatalogServicesTest {
     }
 
     @Test
-    public void modelCatalogFiltersOpenAiModelsFromFetchedJson() {
+    public void modelCatalogIncludesOnlyOpenAiGpt56SeriesFromFetchedJson() {
         ModelCatalogService service = ModelCatalogTestSupport.modelCatalogService();
 
-        assertThat(service.defaultModelId()).isEqualTo("openai/gpt-5.5");
+        assertThat(service.defaultModelId()).isEqualTo("openai/gpt-5.6-sol");
         assertThat(service.list()).extracting(ModelDefinition::id)
-                .containsExactly("openai/gpt-5.5", "openai/gpt-5.5-pro", "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
+                .containsExactly("openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
         assertThat(service.list()).extracting(ModelDefinition::id)
-                .doesNotContain("openai/gpt-4.1");
+                .doesNotContain("openai/gpt-4.1", "openai/gpt-5.5", "openai/gpt-5.5-pro", "openai/gpt-5.60-preview");
         assertThat(service.list()).extracting(ModelDefinition::provider)
                 .containsOnly("openai");
 
-        ModelDefinition model = service.getRequired("openai/gpt-5.5-pro");
+        ModelDefinition model = service.getRequired("openai/gpt-5.6-terra");
         assertThat(model.provider()).isEqualTo("openai");
-        assertThat(model.apiModelId()).isEqualTo("gpt-5.5-pro");
+        assertThat(model.apiModelId()).isEqualTo("gpt-5.6-terra");
     }
 
     @Test
@@ -160,7 +160,7 @@ public class CatalogServicesTest {
         String json = """
                 {
                   "models": {
-                    "openai/gpt-5.5-bad": {
+                    "openai/gpt-5.6-bad": {
                       "id": "",
                       "name": "Bad Model",
                       "reasoning": true,

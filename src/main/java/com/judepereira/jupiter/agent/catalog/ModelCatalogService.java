@@ -16,9 +16,9 @@ import java.util.stream.StreamSupport;
 @Service
 public class ModelCatalogService {
 
-    private static final String DEFAULT_MODEL_ID = "openai/gpt-5.5";
+    private static final String DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
     private static final String OPENAI_PROVIDER = "openai";
-    private static final String GPT_5_MODEL_PREFIX = "openai/gpt-5";
+    private static final String GPT_5_6_MODEL_PREFIX = "openai/gpt-5.6";
 
     private final List<ModelDefinition> models;
     private final Map<String, ModelDefinition> modelsById;
@@ -61,7 +61,8 @@ public class ModelCatalogService {
             var root = objectMapper.readTree(body);
             var modelsNode = root.path("models");
             var openAiModels = StreamSupport.stream(Spliterators.spliteratorUnknownSize(modelsNode.fields(), 0), false)
-                    .filter(entry -> entry.getKey().startsWith(GPT_5_MODEL_PREFIX))
+                    .filter(entry -> entry.getKey().equals(GPT_5_6_MODEL_PREFIX)
+                            || entry.getKey().startsWith(GPT_5_6_MODEL_PREFIX + "-"))
                     .map(Map.Entry::getValue)
                     .map(ModelCatalogService::toModelDefinition)
                     .toList();

@@ -15,7 +15,7 @@ It combines coding agents, Git worktrees, persistent sessions, a real terminal, 
 - **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are stripped from managed child processes.
 - **It’s extendable.** MCP servers and Markdown-based slash commands plug into the harness without changing the core application.
 
-Jupiter’s model layer has provider abstractions, but v1 currently exposes OpenAI GPT-5-family models.
+Jupiter’s model layer has provider abstractions, but v1 currently exposes OpenAI GPT-5.6-series models.
 
 ## Docker: the quickest way to run it
 

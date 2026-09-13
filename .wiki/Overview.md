@@ -18,7 +18,7 @@ Chat and UI events use Server-Sent Events; terminals use WebSockets.
 
 ## Models
 
-v1 discovers OpenAI GPT-5-family models from the configured model catalogue. The harness has provider abstractions, but the current user-facing implementation is OpenAI-only.
+v1 discovers OpenAI GPT-5.6-series models from the configured model catalogue. The harness has provider abstractions, but the current user-facing implementation is OpenAI-only.
 
 ## One important security point
 

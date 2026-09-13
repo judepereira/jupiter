@@ -25,7 +25,7 @@ This is the boring-but-useful v1 checklist. When a user-visible feature lands, r
 - primary Plan and Engineer agents
 - Explore, Apprentice, and Test subagents
 - per-turn agent, model, and thinking controls
-- dynamically loaded OpenAI GPT-5-family model catalogue
+- dynamically loaded OpenAI GPT-5.6-series model catalogue
 - native tool allowlists
 - `list_files`, `read_file`, `search_code`, `write_file`, `apply_patch`, `display_image`, `run_command`, and `task`
 - persisted subagent child sessions

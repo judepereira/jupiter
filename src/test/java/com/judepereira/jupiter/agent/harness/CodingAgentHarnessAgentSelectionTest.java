@@ -77,7 +77,7 @@ public class CodingAgentHarnessAgentSelectionTest {
                 List.of(new Message(Message.Role.USER, "use tools", null, null)),
                 tmp.toString(),
                 "plan",
-                "openai/gpt-5.5",
+                "openai/gpt-5.6-sol",
                 ThinkingLevel.HIGH,
                 42L, null
         ));
@@ -87,7 +87,7 @@ public class CodingAgentHarnessAgentSelectionTest {
         assertThat(model.capturedToolNames().get(1)).containsExactlyInAnyOrder("list_files", "read_file", "search_code", "mcp__project__alpha");
         assertThat(model.capturedConversations().get(0).get(0).getContent())
                 .satisfies(system -> assertSystemPrompt(system, agentDefinitions.getRequired("plan").systemPrompt(), tmp));
-        assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.5");
+        assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.6-sol");
         assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(mcpManager.snapshotCalls).isEqualTo(1);
         assertThat(mcpManager.executions).isEqualTo(1);

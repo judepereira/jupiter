@@ -241,7 +241,7 @@ public class UiControllerSettingsTests {
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long sessionId = context.appStateService().loadViewData().activeSession().id();
         Instant hour = Instant.now().truncatedTo(ChronoUnit.HOURS);
-        context.tokenUsageService().recordModelResponse(sessionId, "openai/gpt-5.5", "chat",
+        context.tokenUsageService().recordModelResponse(sessionId, "openai/gpt-5.6-sol", "chat",
                 new ModelResponse("ok", null, new ModelResponseMetadata(10, 5, 15, null, null, null, null, null, null, Map.of())));
         context.tokenUsageService().recordModelResponse(sessionId, "stale-model", "chat",
                 new ModelResponse("ok", null, new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of())));
@@ -250,7 +250,7 @@ public class UiControllerSettingsTests {
         assertThat(context.controller().settingsUsage("7d", model)).isEqualTo("fragments/projects :: settingsUsage");
         assertThat((String) model.getAttribute("usageRange")).isEqualTo("7d");
         String json = (String) model.getAttribute("usageJson");
-        assertThat(json).contains("GPT-5.5").contains("stale-model").contains("\"input\":10").contains("\"input\":null");
+        assertThat(json).contains("GPT-5.6 Sol").contains("stale-model").contains("\"input\":10").contains("\"input\":null");
     }
 
     @Test

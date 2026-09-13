@@ -40,7 +40,7 @@ public class UiControllerSubagentChatTests {
         long parentSessionId = appStateService.loadViewData().activeSession().id();
 
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+                "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long childSessionId = appStateService.createHiddenSubagentSession(parentSessionId, "parent-tool-call", subagent);
         QueuedChatTurn turn = appStateService.appendUserMessageAndPendingAssistant(childSessionId, "Primary task:\nwrite a file");
         appStateService.completeAssistantMessage(childSessionId, turn.assistantMessage().id(), "child final", List.of());
@@ -107,7 +107,7 @@ public class UiControllerSubagentChatTests {
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5-pro", "HIGH");
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH");
         appStateService.appendVisibleSystemMessage(sessionId, "summary one");
         appStateService.appendVisibleSystemMessage(sessionId, "summary two");
         appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
@@ -127,7 +127,7 @@ public class UiControllerSubagentChatTests {
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5-pro", "HIGH");
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH");
         appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
         appStateService.completeAssistantMessage(sessionId, "assistant-1", "done", List.of());
 
@@ -136,7 +136,7 @@ public class UiControllerSubagentChatTests {
         controller.index(model);
 
         assertThat(((com.judepereira.jupiter.agent.catalog.AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
-        assertThat(((com.judepereira.jupiter.agent.catalog.ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.5-pro");
+        assertThat(((com.judepereira.jupiter.agent.catalog.ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
     }
 
     private static UiController controller(AppStateService appStateService, Path workspaceRoot) {
