@@ -29,7 +29,7 @@ public class EncryptionMigrationService {
             columns("projects", "workspace_init_commands", "environment_variables", "command_environment_allowlist"),
             columns("workspaces", "name", "normalized_path"),
             columns("sessions", "name", "chat_draft", "subagent_agent_id", "subagent_agent_name"),
-            columns("conversation_messages", "content", "tool_calls_json", "agent_id", "agent_name", "model_id", "thinking_level", "preferred_model_id"),
+            columns("conversation_messages", "content", "tool_calls_json", "agent_id", "agent_name", "model_id", "thinking_level"),
             columns("tool_call_traces", "args_json", "text_summary", "machine_summary_json"),
             columns("changed_files", "path", "diff"),
             columns("app_state", "openai_access_token", "openai_refresh_token", "openai_id_token", "openai_account_id",
