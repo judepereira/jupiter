@@ -32,6 +32,10 @@
     </scm>
     <properties>
         <java.version>25</java.version>
+        <spotless.version>3.10.2</spotless.version>
+        <eclipse-jdt.version>4.39</eclipse-jdt.version>
+        <biome.version>2.5.1</biome.version>
+        <git-build-hook.version>3.6.0</git-build-hook.version>
     </properties>
     <dependencies>
         <dependency>
@@ -205,6 +209,60 @@
         </resources>
         <plugins>
             <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <shortenFullyQualifiedTypes/>
+                        <importOrder/>
+                        <removeUnusedImports/>
+                        <eclipse>
+                            <version>${eclipse-jdt.version}</version>
+                            <file>${project.basedir}/eclipse-formatter.xml</file>
+                        </eclipse>
+                    </java>
+                    <formats>
+                        <format>
+                            <includes>
+                                <include>src/**/*.css</include>
+                                <include>src/**/*.html</include>
+                                <include>src/**/*.js</include>
+                                <include>src/**/*.jsx</include>
+                                <include>src/**/*.json</include>
+                                <include>src/**/*.ts</include>
+                                <include>src/**/*.tsx</include>
+                            </includes>
+                            <biome>
+                                <version>${biome.version}</version>
+                                <configPath>${project.basedir}</configPath>
+                            </biome>
+                        </format>
+                        <format>
+                            <includes>
+                                <include>src/**/*.webmanifest</include>
+                            </includes>
+                            <biome>
+                                <version>${biome.version}</version>
+                                <configPath>${project.basedir}</configPath>
+                                <language>json</language>
+                            </biome>
+                        </format>
+                    </formats>
+                    <markdown>
+                        <includes>
+                            <include>**/*.md</include>
+                        </includes>
+                        <excludes>
+                            <exclude>target/**</exclude>
+                        </excludes>
+                        <flexmark>
+                            <emulationProfile>COMMONMARK</emulationProfile>
+                        </flexmark>
+                    </markdown>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
@@ -294,4 +352,35 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>git-hooks</id>
+            <activation>
+                <file>
+                    <exists>.git</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.rudikershaw.gitbuildhook</groupId>
+                        <artifactId>git-build-hook-maven-plugin</artifactId>
+                        <version>${git-build-hook.version}</version>
+                        <configuration>
+                            <gitConfig>
+                                <core.hooksPath>.githooks</core.hooksPath>
+                            </gitConfig>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>configure</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
