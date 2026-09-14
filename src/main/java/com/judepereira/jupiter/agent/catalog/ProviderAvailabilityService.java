@@ -3,10 +3,9 @@ package com.judepereira.jupiter.agent.catalog;
 import com.judepereira.jupiter.agent.config.OpenAiProperties;
 import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
-import org.springframework.stereotype.Service;
-
 import java.util.LinkedHashSet;
 import java.util.Set;
+import org.springframework.stereotype.Service;
 
 @Service
 public class ProviderAvailabilityService {
@@ -14,8 +13,10 @@ public class ProviderAvailabilityService {
     private final AnthropicOAuthService anthropic;
     private final OpenAiProperties openAiProperties;
 
-    public ProviderAvailabilityService(OpenAiOAuthService openAi, AnthropicOAuthService anthropic,
-                                       OpenAiProperties openAiProperties) {
+    public ProviderAvailabilityService(
+            OpenAiOAuthService openAi,
+            AnthropicOAuthService anthropic,
+            OpenAiProperties openAiProperties) {
         this.openAi = openAi;
         this.anthropic = anthropic;
         this.openAiProperties = openAiProperties;

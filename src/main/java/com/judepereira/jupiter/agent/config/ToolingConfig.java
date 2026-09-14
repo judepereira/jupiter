@@ -14,7 +14,9 @@ import org.springframework.context.annotation.Configuration;
 public class ToolingConfig {
 
     @Bean
-    public TaskTool taskTool(AgentDefinitionService agentDefinitionService, SubagentTaskService subagentTaskService) {
+    public TaskTool taskTool(
+            AgentDefinitionService agentDefinitionService,
+            SubagentTaskService subagentTaskService) {
         return new TaskTool(agentDefinitionService, subagentTaskService);
     }
 
@@ -24,7 +26,10 @@ public class ToolingConfig {
     }
 
     @Bean
-    public ToolRegistry toolRegistry(TaskTool taskTool, RunCommandTool runCommandTool, RipgrepToolSupport ripgrepToolSupport) {
+    public ToolRegistry toolRegistry(
+            TaskTool taskTool,
+            RunCommandTool runCommandTool,
+            RipgrepToolSupport ripgrepToolSupport) {
         ToolRegistry registry = new ToolRegistry();
         ToolsAutoRegister.registerAll(registry, runCommandTool, ripgrepToolSupport);
         registry.register(taskTool);

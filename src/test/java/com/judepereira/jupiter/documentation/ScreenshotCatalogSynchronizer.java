@@ -1,6 +1,5 @@
 package com.judepereira.jupiter.documentation;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -10,19 +9,21 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
+import javax.imageio.ImageIO;
 
 /** Synchronizes direct catalog PNGs using decoded pixels rather than file bytes. */
 public final class ScreenshotCatalogSynchronizer {
-    private ScreenshotCatalogSynchronizer() {
-    }
+    private ScreenshotCatalogSynchronizer() {}
 
     public static void main(String[] args) {
         if (args.length != 2) {
-            throw new IllegalArgumentException("Usage: ScreenshotCatalogSynchronizer <generated-catalog> <tracked-catalog>");
+            throw new IllegalArgumentException(
+                    "Usage: ScreenshotCatalogSynchronizer <generated-catalog> <tracked-catalog>");
         }
         Path repository = Path.of("").toAbsolutePath().normalize();
         Summary summary = synchronize(repository, Path.of(args[0]), Path.of(args[1]));
-        System.out.printf("Screenshot catalog synchronized: %d unchanged, %d updated, %d added, %d removed%n",
+        System.out.printf(
+                "Screenshot catalog synchronized: %d unchanged, %d updated, %d added, %d removed%n",
                 summary.unchanged(), summary.updated(), summary.added(), summary.removed());
     }
 
@@ -32,7 +33,8 @@ public final class ScreenshotCatalogSynchronizer {
         Path trackedDirectory = safePath(root, tracked, "tracked catalog");
         try {
             requireDirectory(generatedDirectory, "Generated catalog");
-            CatalogFiles generatedFiles = directPngFiles(generatedDirectory, "generated catalog", true);
+            CatalogFiles generatedFiles =
+                    directPngFiles(generatedDirectory, "generated catalog", true);
             generatedFiles.validateImages();
 
             CatalogFiles trackedFiles;
@@ -72,13 +74,16 @@ public final class ScreenshotCatalogSynchronizer {
             }
             return new Summary(unchanged, updated, added, removed);
         } catch (IOException | RuntimeException exception) {
-            throw new IllegalStateException("Failed to synchronize screenshot catalogs: " + exception.getMessage(), exception);
+            throw new IllegalStateException(
+                    "Failed to synchronize screenshot catalogs: " + exception.getMessage(),
+                    exception);
         }
     }
 
     private static Path safePath(Path root, Path path, String description) {
         if (path.isAbsolute()) {
-            throw new IllegalArgumentException(description + " must be relative to the repository: " + path);
+            throw new IllegalArgumentException(
+                    description + " must be relative to the repository: " + path);
         }
         Path resolved = root.resolve(path).normalize();
         if (!resolved.startsWith(root)) {
@@ -89,19 +94,22 @@ public final class ScreenshotCatalogSynchronizer {
         for (Path part : relative) {
             current = current.resolve(part);
             if (Files.isSymbolicLink(current)) {
-                throw new IllegalArgumentException(description + " must not contain symbolic links: " + path);
+                throw new IllegalArgumentException(
+                        description + " must not contain symbolic links: " + path);
             }
         }
         return resolved;
     }
 
     private static void requireDirectory(Path path, String description) throws IOException {
-        if (Files.isSymbolicLink(path) || !Files.isDirectory(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        if (Files.isSymbolicLink(path)
+                || !Files.isDirectory(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException(description + " is not a directory: " + path);
         }
     }
 
-    private static CatalogFiles directPngFiles(Path directory, String description, boolean generated) throws IOException {
+    private static CatalogFiles directPngFiles(
+            Path directory, String description, boolean generated) throws IOException {
         CatalogFiles files = new CatalogFiles(directory);
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory)) {
             for (Path path : entries) {
@@ -110,7 +118,8 @@ public final class ScreenshotCatalogSynchronizer {
                 }
                 if (Files.isDirectory(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
                     if (generated) {
-                        throw new IOException(description + " contains a nested directory: " + path);
+                        throw new IOException(
+                                description + " contains a nested directory: " + path);
                     }
                     continue;
                 }
@@ -157,11 +166,17 @@ public final class ScreenshotCatalogSynchronizer {
         if (Files.isSymbolicLink(destination)) {
             throw new IOException("Destination must not be a symbolic link: " + destination);
         }
-        Path temporary = Files.createTempFile(destination.getParent(), "." + destination.getFileName(), ".tmp");
+        Path temporary =
+                Files.createTempFile(
+                        destination.getParent(), "." + destination.getFileName(), ".tmp");
         try {
             Files.copy(source, temporary, StandardCopyOption.REPLACE_EXISTING);
             try {
-                Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                Files.move(
+                        temporary,
+                        destination,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException exception) {
                 Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
             }
@@ -170,8 +185,7 @@ public final class ScreenshotCatalogSynchronizer {
         }
     }
 
-    public record Summary(int unchanged, int updated, int added, int removed) {
-    }
+    public record Summary(int unchanged, int updated, int added, int removed) {}
 
     private static final class CatalogFiles {
         private final Path directory;

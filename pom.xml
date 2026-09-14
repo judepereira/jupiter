@@ -205,6 +205,102 @@
         </resources>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>validate-markdown-columns</id>
+                        <phase>validate</phase>
+                        <goals><goal>run</goal></goals>
+                        <configuration>
+                            <target>
+                                <mkdir dir="${project.build.directory}/markdown-validator"/>
+                                <javac srcdir="${project.basedir}/scripts" destdir="${project.build.directory}/markdown-validator" includeantruntime="false"/>
+                                <java classname="MarkdownColumnValidator" fork="true" failonerror="true">
+                                    <classpath><pathelement location="${project.build.directory}/markdown-validator"/></classpath>
+                                    <arg value="${project.basedir}"/>
+                                </java>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>2.46.1</version>
+                <configuration>
+                    <java>
+                        <includes>
+                            <include>src/main/java/**/*.java</include>
+                            <include>src/test/java/**/*.java</include>
+                            <include>scripts/MarkdownColumnValidator.java</include>
+                        </includes>
+                        <googleJavaFormat>
+                            <version>1.28.0</version>
+                            <style>AOSP</style>
+                        </googleJavaFormat>
+                    </java>
+                    <markdown>
+                        <includes>
+                            <include>*.md</include>
+                            <include>.wiki/**/*.md</include>
+                        </includes>
+                        <flexmark>
+                            <version>0.64.8</version>
+                        </flexmark>
+                        <replaceRegex>
+                            <name>Canonical trailing newline</name>
+                            <searchRegex>\n+\z</searchRegex>
+                            <replacement>\n</replacement>
+                        </replaceRegex>
+                    </markdown>
+                    <javascript>
+                        <includes>
+                            <include>src/main/resources/static/**/*.js</include>
+                        </includes>
+                        <biome>
+                            <version>2.5.13</version>
+                        </biome>
+                    </javascript>
+                    <formats>
+                        <format>
+                            <includes>
+                                <include>src/main/resources/templates/**/*.html</include>
+                            </includes>
+                            <eclipseWtp>
+                                <type>HTML</type>
+                                <version>4.21.0</version>
+                            </eclipseWtp>
+                            <toggleOffOn>
+                                <off>spotless:off</off>
+                                <on>spotless:on</on>
+                            </toggleOffOn>
+                        </format>
+                        <format>
+                            <includes>
+                                <include>src/main/resources/static/**/*.css</include>
+                            </includes>
+                            <biome>
+                                <version>2.5.13</version>
+                                <configPath>${project.basedir}/biome.json</configPath>
+                                <language>css</language>
+                            </biome>
+                        </format>
+                    </formats>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>

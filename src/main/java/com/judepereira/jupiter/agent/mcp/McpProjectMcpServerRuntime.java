@@ -2,11 +2,9 @@ package com.judepereira.jupiter.agent.mcp;
 
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.persistence.Persistence;
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.McpClientListener;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,14 +18,18 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     private final McpRuntimeListener runtimeListener;
     private final String serverSlug;
     private volatile McpClient client;
-    private volatile McpRuntimeEvents.ConnectionStatus status = McpRuntimeEvents.ConnectionStatus.CONNECTING;
+    private volatile McpRuntimeEvents.ConnectionStatus status =
+            McpRuntimeEvents.ConnectionStatus.CONNECTING;
     private volatile String statusMessage = "connecting";
     private volatile List<ToolDefinition> toolDefinitions = List.of();
     private volatile Map<String, McpProjectToolExecutor> executors = Map.of();
 
-    private McpProjectMcpServerRuntime(Persistence.McpServerView server, Map<String, String> projectEnvironmentVariables,
-                                       McpTemplateResolver templateResolver, McpClientFactory clientFactory,
-                                       McpRuntimeListener runtimeListener) {
+    private McpProjectMcpServerRuntime(
+            Persistence.McpServerView server,
+            Map<String, String> projectEnvironmentVariables,
+            McpTemplateResolver templateResolver,
+            McpClientFactory clientFactory,
+            McpRuntimeListener runtimeListener) {
         this.server = server;
         this.projectEnvironmentVariables = projectEnvironmentVariables;
         this.templateResolver = templateResolver;
@@ -36,15 +38,25 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
         this.serverSlug = templateResolver.slugify(server.name());
     }
 
-    static McpProjectMcpServerRuntime connect(Persistence.McpServerView server, Map<String, String> projectEnvironmentVariables,
-                                              McpTemplateResolver templateResolver, McpClientFactory clientFactory,
-                                              McpRuntimeListener runtimeListener) {
-        McpProjectMcpServerRuntime runtime = new McpProjectMcpServerRuntime(server, projectEnvironmentVariables, templateResolver, clientFactory, runtimeListener);
+    static McpProjectMcpServerRuntime connect(
+            Persistence.McpServerView server,
+            Map<String, String> projectEnvironmentVariables,
+            McpTemplateResolver templateResolver,
+            McpClientFactory clientFactory,
+            McpRuntimeListener runtimeListener) {
+        McpProjectMcpServerRuntime runtime =
+                new McpProjectMcpServerRuntime(
+                        server,
+                        projectEnvironmentVariables,
+                        templateResolver,
+                        clientFactory,
+                        runtimeListener);
         runtime.reconnect();
         return runtime;
     }
 
-    synchronized void updateProjectEnvironmentVariables(Map<String, String> projectEnvironmentVariables) {
+    synchronized void updateProjectEnvironmentVariables(
+            Map<String, String> projectEnvironmentVariables) {
         this.projectEnvironmentVariables = projectEnvironmentVariables;
     }
 
@@ -52,9 +64,14 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
         closeClient();
         updateStatus(McpRuntimeEvents.ConnectionStatus.CONNECTING, "connecting");
         try {
-            String resolvedUrl = templateResolver.resolve("MCP server URL", server.url(), projectEnvironmentVariables);
-            Map<String, String> resolvedHeaders = templateResolver.resolveHeaders(server.headers(), projectEnvironmentVariables);
-            client = clientFactory.create(server.name(), resolvedUrl, resolvedHeaders, new Listener());
+            String resolvedUrl =
+                    templateResolver.resolve(
+                            "MCP server URL", server.url(), projectEnvironmentVariables);
+            Map<String, String> resolvedHeaders =
+                    templateResolver.resolveHeaders(server.headers(), projectEnvironmentVariables);
+            client =
+                    clientFactory.create(
+                            server.name(), resolvedUrl, resolvedHeaders, new Listener());
             refreshTools();
             updateStatus(McpRuntimeEvents.ConnectionStatus.READY, "ready");
         } catch (McpToolCollisionException e) {
@@ -79,9 +96,11 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
             Map<String, McpProjectToolExecutor> nextExecutors = new LinkedHashMap<>();
             List<ToolDefinition> nextDefinitions = new ArrayList<>(remoteTools.size());
             for (ToolSpecification specification : remoteTools) {
-                McpToolAdapter adapter = McpToolAdapter.from(currentClient, serverSlug, specification);
+                McpToolAdapter adapter =
+                        McpToolAdapter.from(currentClient, serverSlug, specification);
                 if (nextExecutors.putIfAbsent(adapter.modelToolName(), adapter) != null) {
-                    throw new McpToolCollisionException("MCP tool name collision: " + adapter.modelToolName());
+                    throw new McpToolCollisionException(
+                            "MCP tool name collision: " + adapter.modelToolName());
                 }
                 nextDefinitions.add(adapter.definition());
             }
@@ -159,7 +178,8 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     }
 
     interface McpRuntimeListener {
-        void onStatusChanged(long serverId, McpRuntimeEvents.ConnectionStatus status, String message);
+        void onStatusChanged(
+                long serverId, McpRuntimeEvents.ConnectionStatus status, String message);
 
         void onToolsChanged(long serverId);
     }

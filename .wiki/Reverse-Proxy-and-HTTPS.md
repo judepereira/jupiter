@@ -1,6 +1,7 @@
 # Reverse Proxy and HTTPS
 
-Jupiter works behind a TLS-terminating reverse proxy, but the proxy needs to understand that not every request is a short-lived HTML response.
+Jupiter works behind a TLS-terminating reverse proxy, but the proxy needs to understand that not
+every request is a short-lived HTML response.
 
 ## Three things the proxy must support
 
@@ -14,16 +15,20 @@ Avoid aggressive response buffering and short idle timeouts on streaming routes.
 
 When Basic authentication is enabled, Jupiter warns if the request appears to be plain HTTP.
 
-If TLS ends at your reverse proxy, forward the original scheme using `Forwarded` or `X-Forwarded-Proto`.
+If TLS ends at your reverse proxy, forward the original scheme using `Forwarded` or
+`X-Forwarded-Proto`.
 
-Jupiter understands the usual comma-separated proxy-header form when deciding whether the public request was HTTPS.
+Jupiter understands the usual comma-separated proxy-header form when deciding whether the public
+request was HTTPS.
 
 ## Basic auth still needs TLS
 
-Credentials are sent on every protected request, including static resources, SSE connections, and the WebSocket handshake.
+Credentials are sent on every protected request, including static resources, SSE connections, and
+the WebSocket handshake.
 
 Basic auth does not encrypt any of that. Use HTTPS outside a trusted local network.
 
 ## Health checks
 
-`GET /health` is deliberately unauthenticated, which makes it suitable for reverse-proxy and orchestration probes.
+`GET /health` is deliberately unauthenticated, which makes it suitable for reverse-proxy and
+orchestration probes.

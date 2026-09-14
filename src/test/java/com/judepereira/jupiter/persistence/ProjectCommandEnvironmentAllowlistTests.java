@@ -1,19 +1,21 @@
 package com.judepereira.jupiter.persistence;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 import java.util.Set;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
 
 class ProjectCommandEnvironmentAllowlistTests {
 
     @Test
     void parsesTrimmedUniqueNamesInInputOrder() {
-        assertEquals(List.of("PATH", "HOME", "_JUPITER"),
-                List.copyOf(Persistence.ProjectView.parseCommandEnvironmentAllowlist(" PATH, HOME,PATH,, _JUPITER ")));
+        assertEquals(
+                List.of("PATH", "HOME", "_JUPITER"),
+                List.copyOf(
+                        Persistence.ProjectView.parseCommandEnvironmentAllowlist(
+                                " PATH, HOME,PATH,, _JUPITER ")));
     }
 
     @Test
@@ -24,7 +26,8 @@ class ProjectCommandEnvironmentAllowlistTests {
 
     @Test
     void rejectsMalformedNames() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> Persistence.ProjectView.parseCommandEnvironmentAllowlist("PATH, bad-name"));
     }
 }

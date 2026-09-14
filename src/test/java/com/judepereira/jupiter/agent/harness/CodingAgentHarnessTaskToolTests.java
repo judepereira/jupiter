@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.agent.harness;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
@@ -18,46 +20,90 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class CodingAgentHarnessTaskToolTests {
 
     @Test
     public void primaryAgentCanExposeTaskToolAndInvokeIt(@TempDir Path tmp) {
-        AgentDefinition primary = new AgentDefinition("primary", "Primary", "", "Primary system prompt", AgentMode.AGENT,
-                "openai/gpt-5.6-sol", ThinkingLevel.HIGH, null, false, false, List.of("task"));
+        AgentDefinition primary =
+                new AgentDefinition(
+                        "primary",
+                        "Primary",
+                        "",
+                        "Primary system prompt",
+                        AgentMode.AGENT,
+                        "openai/gpt-5.6-sol",
+                        ThinkingLevel.HIGH,
+                        null,
+                        false,
+                        false,
+                        List.of("task"));
 
         RecordingTool taskTool = recordingTool("task");
-        RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new ToolCall(null, "task", Map.of(
-                        "agentId", "engineer",
-                        "requestSummary", "Do the thing",
-                        "task", "do the thing",
-                        "expectedOutput", "done"
-                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
-                new ModelResponse("primary complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null)
-        ));
+        RecordingModel model =
+                new RecordingModel(
+                        List.of(
+                                new ModelResponse(
+                                        null,
+                                        new ToolCall(
+                                                null,
+                                                "task",
+                                                Map.of(
+                                                        "agentId", "engineer",
+                                                        "requestSummary", "Do the thing",
+                                                        "task", "do the thing",
+                                                        "expectedOutput", "done")),
+                                        com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata
+                                                .empty(),
+                                        null),
+                                new ModelResponse(
+                                        "primary complete",
+                                        null,
+                                        com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata
+                                                .empty(),
+                                        null)));
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp), agentService(primary),
-                ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness =
+                new CodingAgentHarness(
+                        fakeFactory(model),
+                        registry(taskTool),
+                        properties(tmp),
+                        agentService(primary),
+                        ModelCatalogTestSupport.modelCatalogService(),
+                        com.judepereira.jupiter.testsupport.ModelCatalogTestSupport
+                                .resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                        null,
+                        null,
+                        null,
+                        new SystemPromptComposer(
+                                com.judepereira.jupiter.testsupport.SkillTestSupport
+                                        .defaultComponents()
+                                        .renderer()),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .discovery(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .resolver(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .injector());
 
-        AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
-                "Primary system prompt",
-                List.of(new Message(Message.Role.USER, "hello", null, null, null)),
-                tmp.toString(),
-                "primary",
-                null,
-                null
-        , null, null));
+        AgentTurnResult result =
+                harness.runTurn(
+                        new AgentTurnRequest(
+                                "Primary system prompt",
+                                List.of(new Message(Message.Role.USER, "hello", null, null, null)),
+                                tmp.toString(),
+                                "primary",
+                                null,
+                                null,
+                                null,
+                                null));
 
         assertThat(model.capturedToolNames()).hasSize(2).allMatch(names -> names.contains("task"));
         assertThat(taskTool.executions).isEqualTo(1);
@@ -69,31 +115,78 @@ public class CodingAgentHarnessTaskToolTests {
 
     @Test
     public void subagentDoesNotReceiveTaskToolAndBlockedTaskCallsFail(@TempDir Path tmp) {
-        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent system prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true, List.of("task"));
+        AgentDefinition subagent =
+                new AgentDefinition(
+                        "engineer",
+                        "Engineer",
+                        "",
+                        "Subagent system prompt",
+                        AgentMode.SUBAGENT,
+                        "openai/gpt-5.6-sol",
+                        ThinkingLevel.MEDIUM,
+                        "low",
+                        true,
+                        true,
+                        List.of("task"));
 
         RecordingTool taskTool = recordingTool("task");
-        RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new ToolCall(null, "task", Map.of(
-                        "agentId", "explore",
-                        "requestSummary", "Recursively call task",
-                        "task", "recursively call task",
-                        "expectedOutput", "never"
-                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
-                new ModelResponse("subagent complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null)
-        ));
+        RecordingModel model =
+                new RecordingModel(
+                        List.of(
+                                new ModelResponse(
+                                        null,
+                                        new ToolCall(
+                                                null,
+                                                "task",
+                                                Map.of(
+                                                        "agentId", "explore",
+                                                        "requestSummary", "Recursively call task",
+                                                        "task", "recursively call task",
+                                                        "expectedOutput", "never")),
+                                        com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata
+                                                .empty(),
+                                        null),
+                                new ModelResponse(
+                                        "subagent complete",
+                                        null,
+                                        com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata
+                                                .empty(),
+                                        null)));
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp), agentService(subagent),
-                ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness =
+                new CodingAgentHarness(
+                        fakeFactory(model),
+                        registry(taskTool),
+                        properties(tmp),
+                        agentService(subagent),
+                        ModelCatalogTestSupport.modelCatalogService(),
+                        com.judepereira.jupiter.testsupport.ModelCatalogTestSupport
+                                .resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                        null,
+                        null,
+                        null,
+                        new SystemPromptComposer(
+                                com.judepereira.jupiter.testsupport.SkillTestSupport
+                                        .defaultComponents()
+                                        .renderer()),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .discovery(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .resolver(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .injector());
 
-        AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
-                "Subagent system prompt",
-                List.of(new Message(Message.Role.USER, "hello", null, null, null)),
-                tmp.toString(),
-                "engineer",
-                null,
-                null
-        , null, null));
+        AgentTurnResult result =
+                harness.runTurn(
+                        new AgentTurnRequest(
+                                "Subagent system prompt",
+                                List.of(new Message(Message.Role.USER, "hello", null, null, null)),
+                                tmp.toString(),
+                                "engineer",
+                                null,
+                                null,
+                                null,
+                                null));
 
         assertThat(model.capturedToolNames()).hasSize(2).allMatch(List::isEmpty);
         assertThat(taskTool.executions).isZero();
@@ -126,7 +219,12 @@ public class CodingAgentHarnessTaskToolTests {
     }
 
     private static RecordingTool recordingTool(String name) {
-        return new RecordingTool(name, ToolDefinition.builtIn(name, name + " tool", com.judepereira.jupiter.agent.llm.dto.ToolSchema.object()),
+        return new RecordingTool(
+                name,
+                ToolDefinition.builtIn(
+                        name,
+                        name + " tool",
+                        com.judepereira.jupiter.agent.llm.dto.ToolSchema.object()),
                 (args, context) -> new ToolExecutionResult(true, name + " executed", Map.of()));
     }
 
@@ -175,8 +273,11 @@ public class CodingAgentHarnessTaskToolTests {
         }
 
         @Override
-        public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
-                                           java.util.function.Consumer<String> onDelta) {
+        public ModelResponse chatStreaming(
+                List<Message> conversation,
+                List<ToolDefinition> tools,
+                AgentModelOptions options,
+                java.util.function.Consumer<String> onDelta) {
             return next(conversation, tools);
         }
 
@@ -184,24 +285,34 @@ public class CodingAgentHarnessTaskToolTests {
             capturedConversations.add(List.copyOf(conversation));
             capturedToolDefinitions.add(List.copyOf(tools));
             if (index >= responses.size()) {
-                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
+                return new ModelResponse(
+                        "",
+                        null,
+                        com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(),
+                        null);
             }
             return responses.get(index++);
         }
 
         private List<List<String>> capturedToolNames() {
-            return capturedToolDefinitions.stream().map(defs -> defs.stream().map(ToolDefinition::getName).toList()).toList();
+            return capturedToolDefinitions.stream()
+                    .map(defs -> defs.stream().map(ToolDefinition::getName).toList())
+                    .toList();
         }
     }
 
     private static final class RecordingTool implements AgentTool {
         private final String name;
         private final ToolDefinition definition;
-        private final BiFunction<Map<String, Object>, ToolExecutionContext, ToolExecutionResult> executor;
+        private final BiFunction<Map<String, Object>, ToolExecutionContext, ToolExecutionResult>
+                executor;
         private int executions;
 
-        private RecordingTool(String name, ToolDefinition definition,
-                              BiFunction<Map<String, Object>, ToolExecutionContext, ToolExecutionResult> executor) {
+        private RecordingTool(
+                String name,
+                ToolDefinition definition,
+                BiFunction<Map<String, Object>, ToolExecutionContext, ToolExecutionResult>
+                        executor) {
             this.name = name;
             this.definition = definition;
             this.executor = executor;

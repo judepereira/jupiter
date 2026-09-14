@@ -1,8 +1,7 @@
 package com.judepereira.jupiter.agent.mcp;
 
 public final class McpRuntimeEvents {
-    private McpRuntimeEvents() {
-    }
+    private McpRuntimeEvents() {}
 
     public enum ConnectionStatus {
         CONNECTING,
@@ -11,12 +10,14 @@ public final class McpRuntimeEvents {
         CLOSED
     }
 
-    public record ProjectMcpRuntimeChanged(long projectId) {
-    }
+    public record ProjectMcpRuntimeChanged(long projectId) {}
 
-    public record ProjectMcpToolsChanged(long projectId) {
-    }
+    public record ProjectMcpToolsChanged(long projectId) {}
 
-    public record ProjectMcpServerStatusChanged(long projectId, long serverId, String serverName, ConnectionStatus status, String message) {
-    }
+    public record ProjectMcpServerStatusChanged(
+            long projectId,
+            long serverId,
+            String serverName,
+            ConnectionStatus status,
+            String message) {}
 }

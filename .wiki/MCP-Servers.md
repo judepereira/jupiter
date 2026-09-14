@@ -26,18 +26,23 @@ ${env.VARIABLE_NAME}
 
 Jupiter checks project environment variables first, then the Jupiter process environment.
 
-Missing values fail resolution. Resolved URLs and headers are also rejected if they contain line breaks.
+Missing values fail resolution. Resolved URLs and headers are also rejected if they contain line
+breaks.
 
 ## Runtime behaviour
 
-Enabled servers connect for exposed projects. Changing the configuration reloads affected project runtimes.
+Enabled servers connect for exposed projects. Changing the configuration reloads affected project
+runtimes.
 
-Connection failures surface as system balloons, and Jupiter refreshes tools when a server announces that its tool set changed.
+Connection failures surface as system balloons, and Jupiter refreshes tools when a server announces
+that its tool set changed.
 
 ## Tool-name collisions
 
 MCP tools join the agent registry dynamically when `mcp:*` is allowed.
 
-If two connected servers produce the same effective tool name, Jupiter fails the collision instead of silently picking whichever happened to connect first.
+If two connected servers produce the same effective tool name, Jupiter fails the collision instead
+of silently picking whichever happened to connect first.
 
-For secrets, use project environment variables with `${env.*}` placeholders rather than hard-coding tokens into URLs.
+For secrets, use project environment variables with `${env.*}` placeholders rather than hard-coding
+tokens into URLs.

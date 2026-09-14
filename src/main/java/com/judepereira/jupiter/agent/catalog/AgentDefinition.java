@@ -13,8 +13,7 @@ public record AgentDefinition(
         String textVerbosity,
         boolean allowWrite,
         boolean allowCommand,
-        List<String> allowedTools
-) {
+        List<String> allowedTools) {
     public AgentDefinition {
         modelIds = modelIds == null ? List.of() : List.copyOf(modelIds);
     }
@@ -24,10 +23,29 @@ public record AgentDefinition(
         return modelIds.isEmpty() ? null : modelIds.getFirst();
     }
 
-    public AgentDefinition(String id, String name, String description, String systemPrompt, AgentMode mode,
-                           String model, ThinkingLevel thinking, String textVerbosity, boolean allowWrite,
-                           boolean allowCommand, List<String> allowedTools) {
-        this(id, name, description, systemPrompt, mode, List.of(model), thinking, textVerbosity,
-                allowWrite, allowCommand, allowedTools);
+    public AgentDefinition(
+            String id,
+            String name,
+            String description,
+            String systemPrompt,
+            AgentMode mode,
+            String model,
+            ThinkingLevel thinking,
+            String textVerbosity,
+            boolean allowWrite,
+            boolean allowCommand,
+            List<String> allowedTools) {
+        this(
+                id,
+                name,
+                description,
+                systemPrompt,
+                mode,
+                List.of(model),
+                thinking,
+                textVerbosity,
+                allowWrite,
+                allowCommand,
+                allowedTools);
     }
 }

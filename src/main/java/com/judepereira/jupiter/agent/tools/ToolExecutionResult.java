@@ -1,9 +1,8 @@
 package com.judepereira.jupiter.agent.tools;
 
+import java.util.Map;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-
-import java.util.Map;
 
 @Getter
 @RequiredArgsConstructor

@@ -4,8 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 public final class PublicRequestScheme {
 
-    private PublicRequestScheme() {
-    }
+    private PublicRequestScheme() {}
 
     public static boolean isHttps(HttpServletRequest request) {
         String forwarded = firstForwardedProto(request.getHeader("Forwarded"));
@@ -26,7 +25,8 @@ public final class PublicRequestScheme {
         }
         for (String parameter : firstElement.split(";")) {
             int separator = parameter.indexOf('=');
-            if (separator > 0 && "proto".equalsIgnoreCase(parameter.substring(0, separator).trim())) {
+            if (separator > 0
+                    && "proto".equalsIgnoreCase(parameter.substring(0, separator).trim())) {
                 return stripQuotes(parameter.substring(separator + 1).trim());
             }
         }
@@ -43,6 +43,7 @@ public final class PublicRequestScheme {
 
     private static String stripQuotes(String value) {
         return value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")
-                ? value.substring(1, value.length() - 1) : value;
+                ? value.substring(1, value.length() - 1)
+                : value;
     }
 }

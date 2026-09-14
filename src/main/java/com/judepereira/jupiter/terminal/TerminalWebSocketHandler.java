@@ -2,13 +2,12 @@ package com.judepereira.jupiter.terminal;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
-
-import java.util.Map;
 
 @Log4j2
 public class TerminalWebSocketHandler extends TextWebSocketHandler {
@@ -32,7 +31,8 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+    protected void handleTextMessage(WebSocketSession session, TextMessage message)
+            throws Exception {
         String terminalId = terminalId(session);
         if (terminalId == null || !terminalManager.hasTerminal(terminalId)) {
             sendErrorAndClose(session, "Unknown terminal");
@@ -41,7 +41,8 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
         TerminalSocketMessage socketMessage;
         try {
-            socketMessage = objectMapper.readValue(message.getPayload(), TerminalSocketMessage.class);
+            socketMessage =
+                    objectMapper.readValue(message.getPayload(), TerminalSocketMessage.class);
         } catch (Exception e) {
             sendErrorAndClose(session, "Invalid terminal message");
             return;
@@ -53,7 +54,9 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
         try {
             switch (socketMessage.type) {
-                case "input" -> terminalManager.write(terminalId, socketMessage.data == null ? "" : socketMessage.data);
+                case "input" ->
+                        terminalManager.write(
+                                terminalId, socketMessage.data == null ? "" : socketMessage.data);
                 case "resize" -> {
                     if (socketMessage.cols == null || socketMessage.rows == null) {
                         sendErrorAndClose(session, "Missing terminal size");
@@ -65,7 +68,8 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
             }
         } catch (Exception e) {
             log.error("Terminal websocket command failed", e);
-            sendErrorAndClose(session, e.getMessage() == null ? "Terminal command failed" : e.getMessage());
+            sendErrorAndClose(
+                    session, e.getMessage() == null ? "Terminal command failed" : e.getMessage());
         }
     }
 
@@ -79,7 +83,10 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
     private void sendErrorAndClose(WebSocketSession session, String message) {
         try {
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(Map.of("type", "error", "message", message))));
+            session.sendMessage(
+                    new TextMessage(
+                            objectMapper.writeValueAsString(
+                                    Map.of("type", "error", "message", message))));
         } catch (Exception e) {
             log.error("Failed to send websocket error", e);
         }

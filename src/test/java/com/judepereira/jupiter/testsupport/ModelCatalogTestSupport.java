@@ -1,25 +1,25 @@
 package com.judepereira.jupiter.testsupport;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.judepereira.jupiter.agent.catalog.AgentModelResolutionService;
-import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
-import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
-
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import com.judepereira.jupiter.agent.config.ModelCatalogProperties;
-import org.springframework.http.MediaType;
-import org.springframework.web.client.RestClient;
-import org.springframework.test.web.client.MockRestServiceServer;
-
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentModelResolutionService;
+import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
+import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
+import com.judepereira.jupiter.agent.config.ModelCatalogProperties;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
+
 public final class ModelCatalogTestSupport {
 
-    public static final String OPENAI_CATALOG_JSON = """
+    public static final String OPENAI_CATALOG_JSON =
+            """
             {
               "models": {
                 "openai/gpt-5.6-sol": {
@@ -124,8 +124,7 @@ public final class ModelCatalogTestSupport {
 
     private static final String DEFAULT_URL = "https://models.dev/catalog.json";
 
-    private ModelCatalogTestSupport() {
-    }
+    private ModelCatalogTestSupport() {}
 
     public static AgentModelResolutionService resolutionService(ModelCatalogService catalog) {
         ProviderAvailabilityService availability = mock(ProviderAvailabilityService.class);
@@ -149,7 +148,8 @@ public final class ModelCatalogTestSupport {
         server.expect(requestTo(catalogUrl))
                 .andExpect(method(org.springframework.http.HttpMethod.GET))
                 .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
-        ModelCatalogService service = new ModelCatalogService(new ObjectMapper(), builder, properties);
+        ModelCatalogService service =
+                new ModelCatalogService(new ObjectMapper(), builder, properties);
         server.verify();
         return service;
     }

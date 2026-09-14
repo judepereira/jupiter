@@ -9,7 +9,7 @@ GET /health
 A healthy response is:
 
 ```json
-{"status":"UP"}
+{ "status": "UP" }
 ```
 
 ## Caching
@@ -20,7 +20,8 @@ The response disables caching with `Cache-Control: no-store` and related headers
 
 `GET /health` is the only route exempt from Jupiter’s optional Basic-auth filter.
 
-That makes it suitable for reverse proxies and orchestration probes without teaching those systems your Jupiter password.
+That makes it suitable for reverse proxies and orchestration probes without teaching those systems
+your Jupiter password.
 
 ## What does “UP” mean?
 

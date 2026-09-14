@@ -7,7 +7,6 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -58,7 +57,9 @@ public class HttpBasicAuthFilter implements Filter {
             if (separator < 0) {
                 return false;
             }
-            byte[] expected = (properties.getUsername() + ":" + properties.getPassword()).getBytes(StandardCharsets.UTF_8);
+            byte[] expected =
+                    (properties.getUsername() + ":" + properties.getPassword())
+                            .getBytes(StandardCharsets.UTF_8);
             return MessageDigest.isEqual(expected, credentials.getBytes(StandardCharsets.UTF_8));
         } catch (IllegalArgumentException e) {
             return false;
@@ -67,6 +68,7 @@ public class HttpBasicAuthFilter implements Filter {
 
     private static boolean isHealthGet(ServletRequest request) {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
-        return "GET".equals(httpRequest.getMethod()) && "/health".equals(httpRequest.getRequestURI());
+        return "GET".equals(httpRequest.getMethod())
+                && "/health".equals(httpRequest.getRequestURI());
     }
 }

@@ -1,47 +1,55 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+
+import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.persistence.AppStateService;
-import com.judepereira.jupiter.ui.UiController;
-import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ui.ConcurrentModel;
-
+import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.UiController;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ui.ConcurrentModel;
 
 public class UiControllerProjectsAndDirectoryTests {
 
     @Test
-    public void addProjectCreatesActiveProjectWorkspaceAndDefaultSession(@TempDir Path projectPath) {
+    public void addProjectCreatesActiveProjectWorkspaceAndDefaultSession(
+            @TempDir Path projectPath) {
         UiController controller = newController();
 
         ConcurrentModel model = new ConcurrentModel();
         String view = controller.addProject("Alpha", projectPath.toString(), model);
 
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
-        assertThat(projects(model)).extracting(UiController.Project::name, UiController.Project::path)
-                .containsExactly(tuple("Alpha", projectPath.toAbsolutePath().normalize().toString()));
+        assertThat(projects(model))
+                .extracting(UiController.Project::name, UiController.Project::path)
+                .containsExactly(
+                        tuple("Alpha", projectPath.toAbsolutePath().normalize().toString()));
         assertThat(activeProject(model)).isNotNull();
         assertThat(activeProject(model).name()).isEqualTo("Alpha");
-        assertThat(workspaces(model)).extracting(UiController.Workspace::name, UiController.Workspace::path)
-                .containsExactly(tuple("Default Workspace", projectPath.toAbsolutePath().normalize().toString()));
+        assertThat(workspaces(model))
+                .extracting(UiController.Workspace::name, UiController.Workspace::path)
+                .containsExactly(
+                        tuple(
+                                "Default Workspace",
+                                projectPath.toAbsolutePath().normalize().toString()));
         assertThat(activeWorkspace(model)).isNotNull();
-        assertThat(activeWorkspace(model).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
-        assertThat(sessions(model)).extracting(UiController.Session::name)
+        assertThat(activeWorkspace(model).path())
+                .isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(sessions(model))
+                .extracting(UiController.Session::name)
                 .containsExactly("Session #1");
         assertThat(activeSession(model)).isNotNull();
         assertThat(activeSession(model).name()).isEqualTo("Session #1");
@@ -49,17 +57,22 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat((List<?>) model.getAttribute("agents")).isNotEmpty();
         assertThat((List<?>) model.getAttribute("models")).isNotEmpty();
         assertThat(model.getAttribute("thinkingLevels")).isEqualTo(List.of(ThinkingLevel.values()));
-        assertThat(model.getAttribute("selectedAgent")).isEqualTo(model.getAttribute("defaultAgent"));
-        assertThat(model.getAttribute("selectedModel")).isEqualTo(model.getAttribute("defaultModel"));
-        assertThat(model.getAttribute("selectedThinking")).isEqualTo(model.getAttribute("defaultThinking"));
+        assertThat(model.getAttribute("selectedAgent"))
+                .isEqualTo(model.getAttribute("defaultAgent"));
+        assertThat(model.getAttribute("selectedModel"))
+                .isEqualTo(model.getAttribute("defaultModel"));
+        assertThat(model.getAttribute("selectedThinking"))
+                .isEqualTo(model.getAttribute("defaultThinking"));
         assertThat(model.getAttribute("terminalOob")).isEqualTo(true);
         assertThat((List<?>) model.getAttribute("terminalTabs")).isEmpty();
         assertThat(model.getAttribute("bottomPanelOpen")).isEqualTo(false);
-        assertThat(model.getAttribute("workspaceRoot")).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(model.getAttribute("workspaceRoot"))
+                .isEqualTo(projectPath.toAbsolutePath().normalize().toString());
     }
 
     @Test
-    public void addSessionMakesMultipleSessionsVisibleAndActivatesTheNewOne(@TempDir Path projectPath) {
+    public void addSessionMakesMultipleSessionsVisibleAndActivatesTheNewOne(
+            @TempDir Path projectPath) {
         UiController controller = newController();
 
         ConcurrentModel addProject = new ConcurrentModel();
@@ -70,17 +83,20 @@ public class UiControllerProjectsAndDirectoryTests {
         String view = controller.addSession("Feature work", addSession);
 
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
-        assertThat(sessions(addSession)).extracting(UiController.Session::name)
+        assertThat(sessions(addSession))
+                .extracting(UiController.Session::name)
                 .containsExactly("Session #1", "Feature work");
         assertThat(activeSession(addSession).name()).isEqualTo("Feature work");
         assertThat(activeSession(addSession).id()).isNotEqualTo(sessionOneId);
-        assertThat(activeWorkspace(addSession).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(activeWorkspace(addSession).path())
+                .isEqualTo(projectPath.toAbsolutePath().normalize().toString());
         assertThat(addSession.getAttribute("terminalOob")).isEqualTo(true);
         assertThat((List<?>) addSession.getAttribute("terminalTabs")).isEmpty();
     }
 
     @Test
-    public void collapseWorkspaceClearsTheActiveWorkspaceAndSessionWhileKeepingTheProjectSelected(@TempDir Path projectPath) {
+    public void collapseWorkspaceClearsTheActiveWorkspaceAndSessionWhileKeepingTheProjectSelected(
+            @TempDir Path projectPath) {
         UiController controller = newController();
 
         ConcurrentModel addProject = new ConcurrentModel();
@@ -92,7 +108,8 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
         assertThat(activeProject(collapse)).isNotNull();
         assertThat(activeProject(collapse).name()).isEqualTo("Alpha");
-        assertThat(workspaces(collapse)).extracting(UiController.Workspace::name)
+        assertThat(workspaces(collapse))
+                .extracting(UiController.Workspace::name)
                 .containsExactly("Default Workspace");
         assertThat(activeWorkspace(collapse)).isNull();
         assertThat(sessions(collapse)).isEmpty();
@@ -100,8 +117,8 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
-    public void indexExposesProjectTabsAndActiveWorkspaceSessionData(@TempDir Path firstProject,
-                                                                     @TempDir Path secondProject) {
+    public void indexExposesProjectTabsAndActiveWorkspaceSessionData(
+            @TempDir Path firstProject, @TempDir Path secondProject) {
         UiController controller = newController();
 
         ConcurrentModel addOne = new ConcurrentModel();
@@ -115,18 +132,22 @@ public class UiControllerProjectsAndDirectoryTests {
         ConcurrentModel model = new ConcurrentModel();
         controller.index(model);
 
-        assertThat(projects(model)).extracting(UiController.Project::name)
+        assertThat(projects(model))
+                .extracting(UiController.Project::name)
                 .containsExactly("First", "Second");
         assertThat(activeProject(model).id()).isEqualTo(secondProjectId);
-        assertThat(workspaces(model)).extracting(UiController.Workspace::path)
+        assertThat(workspaces(model))
+                .extracting(UiController.Workspace::path)
                 .containsExactly(secondProject.toAbsolutePath().normalize().toString());
-        assertThat(sessions(model)).extracting(UiController.Session::name)
+        assertThat(sessions(model))
+                .extracting(UiController.Session::name)
                 .containsExactly("Session #1");
 
         ConcurrentModel switched = new ConcurrentModel();
         controller.activateProject(firstProjectId, switched);
         assertThat(activeProject(switched).id()).isEqualTo(firstProjectId);
-        assertThat(workspaces(switched)).extracting(UiController.Workspace::path)
+        assertThat(workspaces(switched))
+                .extracting(UiController.Workspace::path)
                 .containsExactly(firstProject.toAbsolutePath().normalize().toString());
     }
 
@@ -146,7 +167,8 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
-    public void directoryBrowserStartsAtUserHomeAndListsDirectoriesLazily(@TempDir Path tempDir) throws Exception {
+    public void directoryBrowserStartsAtUserHomeAndListsDirectoriesLazily(@TempDir Path tempDir)
+            throws Exception {
         UiController controller = newController();
 
         ConcurrentModel modal = new ConcurrentModel();
@@ -154,7 +176,8 @@ public class UiControllerProjectsAndDirectoryTests {
 
         Path homePath = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
         String home = homePath.toString();
-        String selectedName = homePath.getFileName() == null ? home : homePath.getFileName().toString();
+        String selectedName =
+                homePath.getFileName() == null ? home : homePath.getFileName().toString();
         assertThat(modal.getAttribute("currentPath")).isEqualTo(home);
         assertThat(modal.getAttribute("selectedPath")).isEqualTo(home);
         assertThat(modal.getAttribute("startPath")).isEqualTo(home);
@@ -169,15 +192,19 @@ public class UiControllerProjectsAndDirectoryTests {
 
         assertThat(view).isEqualTo("fragments/directory-list :: nodeResponse");
         assertThat(listing.getAttribute("name")).isEqualTo("visible-dir");
-        assertThat(listing.getAttribute("path")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
+        assertThat(listing.getAttribute("path"))
+                .isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
         assertThat(listing.getAttribute("expanded")).isEqualTo(true);
-        assertThat(listing.getAttribute("selectedPath")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
+        assertThat(listing.getAttribute("selectedPath"))
+                .isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
         assertThat(listing.getAttribute("selectedName")).isEqualTo("visible-dir");
-        assertThat(directoryEntries(listing)).extracting("name")
-                .containsExactly("nested-dir");
-        assertThat(directoryEntries(listing)).allSatisfy(entry -> assertThat(entry).extracting("directory").isEqualTo(true));
-        assertThat(directoryEntries(listing)).extracting("path")
-                .containsExactly(visibleDir.resolve("nested-dir").toAbsolutePath().normalize().toString());
+        assertThat(directoryEntries(listing)).extracting("name").containsExactly("nested-dir");
+        assertThat(directoryEntries(listing))
+                .allSatisfy(entry -> assertThat(entry).extracting("directory").isEqualTo(true));
+        assertThat(directoryEntries(listing))
+                .extracting("path")
+                .containsExactly(
+                        visibleDir.resolve("nested-dir").toAbsolutePath().normalize().toString());
     }
 
     @Test
@@ -193,12 +220,14 @@ public class UiControllerProjectsAndDirectoryTests {
         ConcurrentModel listing = new ConcurrentModel();
         controller.listDirectory(tempDir.toString(), listing);
 
-        assertThat(directoryEntries(listing)).extracting("name")
+        assertThat(directoryEntries(listing))
+                .extracting("name")
                 .containsExactly("alpha", "beta", ".cache", ".config");
     }
 
     @Test
-    public void directoryBrowserCollapseReturnsCollapsedNodeAndKeepsSelectionConsistent(@TempDir Path tempDir) throws Exception {
+    public void directoryBrowserCollapseReturnsCollapsedNodeAndKeepsSelectionConsistent(
+            @TempDir Path tempDir) throws Exception {
         UiController controller = newController();
 
         Path visibleDir = Files.createDirectory(tempDir.resolve("visible-dir"));
@@ -209,9 +238,11 @@ public class UiControllerProjectsAndDirectoryTests {
 
         assertThat(view).isEqualTo("fragments/directory-list :: nodeResponse");
         assertThat(collapse.getAttribute("name")).isEqualTo("visible-dir");
-        assertThat(collapse.getAttribute("path")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
+        assertThat(collapse.getAttribute("path"))
+                .isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
         assertThat(collapse.getAttribute("expanded")).isEqualTo(false);
-        assertThat(collapse.getAttribute("selectedPath")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
+        assertThat(collapse.getAttribute("selectedPath"))
+                .isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
         assertThat(collapse.getAttribute("selectedName")).isEqualTo("visible-dir");
     }
 
@@ -232,7 +263,8 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
-    public void unpushedNonDefaultWorkspaceWithoutAnUpstreamReturnsTheConfirmationModal(@TempDir Path projectPath) throws Exception {
+    public void unpushedNonDefaultWorkspaceWithoutAnUpstreamReturnsTheConfirmationModal(
+            @TempDir Path projectPath) throws Exception {
         initGitRepo(projectPath);
         UiController controller = newController();
 
@@ -240,7 +272,8 @@ public class UiControllerProjectsAndDirectoryTests {
         controller.addProject("Alpha", projectPath.toString(), addProject);
 
         ConcurrentModel addWorkspace = new ConcurrentModel();
-        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String branchName =
+                "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         controller.addWorkspace(branchName, "create", addWorkspace);
         UiController.Workspace featureWorkspace = activeWorkspace(addWorkspace);
 
@@ -248,15 +281,20 @@ public class UiControllerProjectsAndDirectoryTests {
         String view = controller.closeWorkspace(featureWorkspace.id(), close);
 
         assertThat(view).isEqualTo("fragments/projects :: workspaceCloseModal");
-        assertThat(close.getAttribute("workspaceCloseStatus")).isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
-        AppStateService.WorkspaceCloseInspection inspection = (AppStateService.WorkspaceCloseInspection) close.getAttribute("workspaceCloseStatus");
+        assertThat(close.getAttribute("workspaceCloseStatus"))
+                .isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
+        AppStateService.WorkspaceCloseInspection inspection =
+                (AppStateService.WorkspaceCloseInspection)
+                        close.getAttribute("workspaceCloseStatus");
         assertThat(inspection.uncommittedChanges()).isFalse();
         assertThat(inspection.unpushedCommits()).isTrue();
-        assertThat(inspection.reasons()).contains("Local commits detected, that haven't been pushed");
+        assertThat(inspection.reasons())
+                .contains("Local commits detected, that haven't been pushed");
     }
 
     @Test
-    public void dirtyNonDefaultWorkspaceCloseReturnsTheConfirmationModal(@TempDir Path projectPath) throws Exception {
+    public void dirtyNonDefaultWorkspaceCloseReturnsTheConfirmationModal(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
         UiController controller = newController();
 
@@ -264,7 +302,8 @@ public class UiControllerProjectsAndDirectoryTests {
         controller.addProject("Alpha", projectPath.toString(), addProject);
 
         ConcurrentModel addWorkspace = new ConcurrentModel();
-        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String branchName =
+                "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         controller.addWorkspace(branchName, "create", addWorkspace);
         UiController.Workspace featureWorkspace = activeWorkspace(addWorkspace);
         Path featurePath = Path.of(featureWorkspace.path());
@@ -274,12 +313,18 @@ public class UiControllerProjectsAndDirectoryTests {
         String view = controller.closeWorkspace(featureWorkspace.id(), close);
 
         assertThat(view).isEqualTo("fragments/projects :: workspaceCloseModal");
-        assertThat(close.getAttribute("workspaceCloseStatus")).isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
-        assertThat(((AppStateService.WorkspaceCloseInspection) close.getAttribute("workspaceCloseStatus")).uncommittedChanges()).isTrue();
+        assertThat(close.getAttribute("workspaceCloseStatus"))
+                .isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
+        assertThat(
+                        ((AppStateService.WorkspaceCloseInspection)
+                                        close.getAttribute("workspaceCloseStatus"))
+                                .uncommittedChanges())
+                .isTrue();
     }
 
     @Test
-    public void confirmedDirtyWorkspaceCloseForceRemovesTheWorktreeAndReturnsShellUpdates(@TempDir Path projectPath) throws Exception {
+    public void confirmedDirtyWorkspaceCloseForceRemovesTheWorktreeAndReturnsShellUpdates(
+            @TempDir Path projectPath) throws Exception {
         initGitRepo(projectPath);
         UiController controller = newController();
 
@@ -287,7 +332,8 @@ public class UiControllerProjectsAndDirectoryTests {
         controller.addProject("Alpha", projectPath.toString(), addProject);
 
         ConcurrentModel addWorkspace = new ConcurrentModel();
-        String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String branchName =
+                "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         controller.addWorkspace(branchName, "create", addWorkspace);
         UiController.Workspace featureWorkspace = activeWorkspace(addWorkspace);
         Path featurePath = Path.of(featureWorkspace.path());
@@ -298,10 +344,14 @@ public class UiControllerProjectsAndDirectoryTests {
 
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
         assertThat(Files.exists(featurePath)).isFalse();
-        assertThat(workspaces(confirm)).extracting(UiController.Workspace::path)
+        assertThat(workspaces(confirm))
+                .extracting(UiController.Workspace::path)
                 .containsExactly(projectPath.toAbsolutePath().normalize().toString());
-        assertThat(activeWorkspace(confirm).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
-        assertThat(sessions(confirm)).extracting(UiController.Session::name).containsExactly("Session #1");
+        assertThat(activeWorkspace(confirm).path())
+                .isEqualTo(projectPath.toAbsolutePath().normalize().toString());
+        assertThat(sessions(confirm))
+                .extracting(UiController.Session::name)
+                .containsExactly("Session #1");
         assertThat(activeSession(confirm).name()).isEqualTo("Session #1");
     }
 
@@ -309,12 +359,13 @@ public class UiControllerProjectsAndDirectoryTests {
     public void newSessionButtonEndpointReturnsTheButtonFragment() {
         UiController controller = newController();
 
-        assertThat(controller.newSessionButton()).isEqualTo("fragments/projects :: newSessionButton");
+        assertThat(controller.newSessionButton())
+                .isEqualTo("fragments/projects :: newSessionButton");
     }
 
     @Test
-    public void chatMessagesStayScopedToTheActiveProjectAndSession(@TempDir Path firstProject,
-                                                                 @TempDir Path secondProject) {
+    public void chatMessagesStayScopedToTheActiveProjectAndSession(
+            @TempDir Path firstProject, @TempDir Path secondProject) {
         RecordingHarness harness = new RecordingHarness();
         UiController controller = TestAppStateSupport.controller(harness, agentProperties());
 
@@ -348,28 +399,59 @@ public class UiControllerProjectsAndDirectoryTests {
 
         ConcurrentModel firstHistory = new ConcurrentModel();
         controller.activateProject(firstProjectId, firstHistory);
-        assertThat(chatMessages(firstHistory)).extracting(ChatPresentationService.ChatMessage::text)
-                .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?", "alpha", "reply-1");
+        assertThat(chatMessages(firstHistory))
+                .extracting(ChatPresentationService.ChatMessage::text)
+                .containsExactly(
+                        "Welcome to Jupiter. Let's get started - what's on your mind?",
+                        "alpha",
+                        "reply-1");
 
         ConcurrentModel secondHistory = new ConcurrentModel();
         controller.activateProject(secondProjectId, secondHistory);
-        assertThat(chatMessages(secondHistory)).extracting(ChatPresentationService.ChatMessage::text)
-                .containsExactly("Welcome to Jupiter. Let's get started - what's on your mind?", "beta", "reply-2");
+        assertThat(chatMessages(secondHistory))
+                .extracting(ChatPresentationService.ChatMessage::text)
+                .containsExactly(
+                        "Welcome to Jupiter. Let's get started - what's on your mind?",
+                        "beta",
+                        "reply-2");
     }
 
     private static UiController newController() {
-        return TestAppStateSupport.controller(new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
-            @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                AgentTurnResult result = new AgentTurnResult("reply", List.of());
-                listener.onComplete(result);
-                return result;
-            }
-        }, agentProperties());
+        return TestAppStateSupport.controller(
+                new CodingAgentHarness(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        new com.judepereira.jupiter.agent.harness.SystemPromptComposer(
+                                com.judepereira.jupiter.testsupport.SkillTestSupport
+                                        .defaultComponents()
+                                        .renderer()),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .discovery(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .resolver(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .injector()) {
+                    @Override
+                    public AgentTurnResult runTurnStreaming(
+                            AgentTurnRequest request, AgentStreamListener listener) {
+                        AgentTurnResult result = new AgentTurnResult("reply", List.of());
+                        listener.onComplete(result);
+                        return result;
+                    }
+                },
+                agentProperties());
     }
 
     private static com.judepereira.jupiter.agent.config.AgentProperties agentProperties() {
-        com.judepereira.jupiter.agent.config.AgentProperties props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        com.judepereira.jupiter.agent.config.AgentProperties props =
+                new com.judepereira.jupiter.agent.config.AgentProperties();
         props.setWorkspaceRoot(".");
         return props;
     }
@@ -384,15 +466,18 @@ public class UiControllerProjectsAndDirectoryTests {
         runGit(projectPath, "git", "commit", "-m", "init");
     }
 
-    private static void runGit(Path workingDirectory, String... command) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command)
-                .directory(workingDirectory.toFile())
-                .redirectErrorStream(true)
-                .start();
+    private static void runGit(Path workingDirectory, String... command)
+            throws IOException, InterruptedException {
+        Process process =
+                new ProcessBuilder(command)
+                        .directory(workingDirectory.toFile())
+                        .redirectErrorStream(true)
+                        .start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
             String output = new String(process.getInputStream().readAllBytes());
-            throw new IllegalStateException("git command failed: " + String.join(" ", command) + "\n" + output);
+            throw new IllegalStateException(
+                    "git command failed: " + String.join(" ", command) + "\n" + output);
         }
     }
 
@@ -448,11 +533,30 @@ public class UiControllerProjectsAndDirectoryTests {
         private final List<AgentTurnRequest> requests = new ArrayList<>();
 
         private RecordingHarness() {
-            super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+            super(
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    new com.judepereira.jupiter.agent.harness.SystemPromptComposer(
+                            com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                    .renderer()),
+                    com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                            .discovery(),
+                    com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                            .resolver(),
+                    com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                            .injector());
         }
 
         @Override
-        public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+        public AgentTurnResult runTurnStreaming(
+                AgentTurnRequest request, AgentStreamListener listener) {
             requests.add(request);
             AgentTurnResult result = new AgentTurnResult("reply-" + requests.size(), List.of());
             listener.onComplete(result);

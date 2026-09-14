@@ -5,6 +5,7 @@ import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
@@ -14,8 +15,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
-
-import java.util.List;
 
 @Controller
 @RequiredArgsConstructor
@@ -35,7 +34,8 @@ public class CommandController {
 
     @PostMapping(value = "/{commandId}/execute")
     public String execute(@PathVariable String commandId, Model model) {
-        CommandCatalogService.CommandDefinition command = commandCatalogService.getRequired(commandId);
+        CommandCatalogService.CommandDefinition command =
+                commandCatalogService.getRequired(commandId);
         if (command.type() != CommandCatalogService.CommandKind.SCRIPT) {
             throw new IllegalStateException("Command is not executable: " + commandId);
         }
@@ -47,13 +47,23 @@ public class CommandController {
 
         String userId = java.util.UUID.randomUUID().toString();
         String assistantId = java.util.UUID.randomUUID().toString();
-        var queuedTurn = appStateService.appendUserMessageAndPendingAssistant(view.activeSession().id(), userId, assistantId, "/" + command.id(), null);
-        commandStreamService.queue(view.activeSession().id(), assistantId, command, view.activeSessionDetail().workspaceRoot(),
+        var queuedTurn =
+                appStateService.appendUserMessageAndPendingAssistant(
+                        view.activeSession().id(), userId, assistantId, "/" + command.id(), null);
+        commandStreamService.queue(
+                view.activeSession().id(),
+                assistantId,
+                command,
+                view.activeSessionDetail().workspaceRoot(),
                 appStateService.loadSessionProjectEnvironmentVariables(view.activeSession().id()));
 
-        model.addAttribute("newChatMessages", List.of(
-                chatPresentationService.toChatMessage(queuedTurn.userMessage(), ignored -> null),
-                chatPresentationService.toChatMessage(queuedTurn.assistantMessage(), ignored -> null)));
+        model.addAttribute(
+                "newChatMessages",
+                List.of(
+                        chatPresentationService.toChatMessage(
+                                queuedTurn.userMessage(), ignored -> null),
+                        chatPresentationService.toChatMessage(
+                                queuedTurn.assistantMessage(), ignored -> null)));
         model.addAttribute("pendingStreamBaseUrl", "/ui/chat/stream");
         model.addAttribute("subagentView", false);
         return "fragments/chat-response :: newRows";

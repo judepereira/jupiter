@@ -1,181 +1,186 @@
 .top-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: var(--topbar-height);
-    z-index: 1500;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 0 15px;
-    box-sizing: border-box;
-    background: var(--rail-bg);
-    color: var(--rail-fg);
-    border-bottom: 1px solid var(--outline-colour);
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: var(--topbar-height);
+	z-index: 1500;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 0 15px;
+	box-sizing: border-box;
+	background: var(--rail-bg);
+	color: var(--rail-fg);
+	border-bottom: 1px solid var(--outline-colour);
 }
 
 .project-add-button {
-    border: 0;
-    background: #1269ff;
-    color: #ffffff;
-    border-radius: 5px;
-    height: 29px;
-    padding: 0 13px;
-    cursor: pointer;
-    white-space: nowrap;
-    box-shadow: 0 6px 14px rgba(18, 105, 255, 0.32);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex: 0 0 auto;
+	border: 0;
+	background: #1269ff;
+	color: #ffffff;
+	border-radius: 5px;
+	height: 29px;
+	padding: 0 13px;
+	cursor: pointer;
+	white-space: nowrap;
+	box-shadow: 0 6px 14px rgba(18, 105, 255, 0.32);
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
 }
 
 .project-add-button:hover,
 .project-tab-group:hover {
-    filter: brightness(50%);
-    background: var(--bg-hover-in-rails);
+	filter: brightness(50%);
+	background: var(--bg-hover-in-rails);
 }
 
 .project-tab-group.active:hover {
-    filter: inherit;
-    background: white;
+	filter: inherit;
+	background: white;
 }
 
 .project-tab-add:hover {
-    color: black;
+	color: black;
 }
 
 .project-tab-close:hover {
-    color: black;
+	color: black;
 }
 
-input:focus, textarea:focus {
-    border: 1px solid var(--accent) !important;
-    outline: none;
+input:focus,
+textarea:focus {
+	border: 1px solid var(--accent) !important;
+	outline: none;
 }
 
 .app-switcher {
-    width: 22px;
-    height: 22px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #ffffff;
-    cursor: pointer;
+	width: 22px;
+	height: 22px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: #ffffff;
+	cursor: pointer;
 }
 
 .project-tabs {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    min-width: 0;
-    overflow-x: auto;
-    flex: 1 1 auto;
-    margin-left: 6px;
-    scrollbar-width: none;
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	min-width: 0;
+	overflow-x: auto;
+	flex: 1 1 auto;
+	margin-left: 6px;
+	scrollbar-width: none;
 }
 
 .project-tabs::-webkit-scrollbar {
-    display: none;
+	display: none;
 }
 
 .project-tab-group,
 .project-tab-add {
-    height: var(--topbar-height);
-    color: var(--muted);
-    cursor: pointer;
-    white-space: nowrap;
+	height: var(--topbar-height);
+	color: var(--muted);
+	cursor: pointer;
+	white-space: nowrap;
 }
 
 .project-tab-group {
-    display: inline-flex;
-    align-items: center;
-    min-width: 0;
-    max-width: min(260px, 32vw);
-    overflow: hidden;
-    transition: background-color 120ms ease, border-color 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	max-width: min(260px, 32vw);
+	overflow: hidden;
+	transition:
+		background-color 120ms ease,
+		border-color 120ms ease,
+		filter 120ms ease,
+		box-shadow 120ms ease;
 }
 
 .project-tab-group.active {
-    background: white;
-    border-top: 3px solid transparent;
-    border-bottom: 3px solid var(--accent);
-    color: var(--accent);
+	background: white;
+	border-top: 3px solid transparent;
+	border-bottom: 3px solid var(--accent);
+	color: var(--accent);
 }
 
 .project-tab {
-    padding: 0 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 11px;
-    min-width: 0;
-    flex: 1 1 auto;
-    color: inherit;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
+	padding: 0 10px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 11px;
+	min-width: 0;
+	flex: 1 1 auto;
+	color: inherit;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .project-tab-label {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .project-tab-close {
-    height: 100%;
-    width: 22px;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: left;
-    padding: 0;
+	height: 100%;
+	width: 22px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: left;
+	padding: 0;
 }
 
 .project-tab-empty {
-    opacity: 0.7;
-    cursor: default;
+	opacity: 0.7;
+	cursor: default;
 }
 
 .project-tab-add {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    font-size: 17px;
-    background: transparent;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	font-size: 17px;
+	background: transparent;
 }
 
 .top-bar-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: 0;
-    flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 0;
+	flex: 0 0 auto;
 }
 
 .top-bar-actions .rail-btn,
 .top-bar-actions .topbar-rail-btn {
-    width: 40px;
-    height: var(--topbar-height);
-    background: none;
-    color: var(--accent);
-    border: none;
-    box-shadow: none;
+	width: 40px;
+	height: var(--topbar-height);
+	background: none;
+	color: var(--accent);
+	border: none;
+	box-shadow: none;
 }
 
 .top-bar-actions .rail-btn:hover,
 .top-bar-actions .topbar-rail-btn:hover {
-    background: var(--bg-hover-in-rails);
+	background: var(--bg-hover-in-rails);
 }

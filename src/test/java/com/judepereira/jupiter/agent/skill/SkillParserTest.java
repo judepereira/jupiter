@@ -1,13 +1,12 @@
 package com.judepereira.jupiter.agent.skill;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class SkillParserTest {
     @TempDir Path temp;
@@ -15,7 +14,9 @@ class SkillParserTest {
     @Test
     void parsesOnlyFrontmatterAndIgnoresUnknownMetadata() throws Exception {
         Path directory = Files.createDirectory(temp.resolve("demo-skill"));
-        Files.writeString(directory.resolve("SKILL.md"), "---\nname: demo-skill\ndescription: A demo\nunknown: value\n---\n# Body\n");
+        Files.writeString(
+                directory.resolve("SKILL.md"),
+                "---\nname: demo-skill\ndescription: A demo\nunknown: value\n---\n# Body\n");
 
         var result = new SkillParser().parse(directory.resolve("SKILL.md"), SkillScope.REPOSITORY);
 
@@ -34,7 +35,9 @@ class SkillParserTest {
     @Test
     void rejectsBlankDescription() throws Exception {
         Path directory = Files.createDirectory(temp.resolve("blank-description"));
-        Files.writeString(directory.resolve("SKILL.md"), "---\nname: blank-description\ndescription: \"   \\t\"\n---\n");
+        Files.writeString(
+                directory.resolve("SKILL.md"),
+                "---\nname: blank-description\ndescription: \"   \\t\"\n---\n");
 
         var result = new SkillParser().parse(directory.resolve("SKILL.md"), SkillScope.REPOSITORY);
 
@@ -46,7 +49,7 @@ class SkillParserTest {
     void rejectsInvalidUtf8AndOversizedFiles() throws Exception {
         Path directory = Files.createDirectory(temp.resolve("bad"));
         Path file = directory.resolve("SKILL.md");
-        Files.write(file, new byte[]{(byte) 0xc3, 0x28});
+        Files.write(file, new byte[] {(byte) 0xc3, 0x28});
         assertTrue(new SkillParser().parse(directory, SkillScope.REPOSITORY).error().isPresent());
         Files.write(file, new byte[256 * 1024 + 1]);
         assertTrue(new SkillParser().parse(directory, SkillScope.REPOSITORY).error().isPresent());

@@ -8,5 +8,6 @@ public interface AgentTool {
 
     ToolDefinition definition();
 
-    ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception;
+    ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context)
+            throws Exception;
 }

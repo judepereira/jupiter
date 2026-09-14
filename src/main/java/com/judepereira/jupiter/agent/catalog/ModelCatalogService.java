@@ -1,20 +1,19 @@
 package com.judepereira.jupiter.agent.catalog;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.ModelCatalogProperties;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-
-import java.util.Collections;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.net.URI;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Spliterators;
 import java.util.stream.StreamSupport;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 @Service
 public class ModelCatalogService {
@@ -26,8 +25,12 @@ public class ModelCatalogService {
     private final List<ModelDefinition> models;
     private final Map<String, ModelDefinition> modelsById;
 
-    public ModelCatalogService(ObjectMapper objectMapper, RestClient.Builder restClientBuilder, ModelCatalogProperties properties) {
-        this.models = loadModels(objectMapper, restClientBuilder.build(), properties.getCatalogUrl());
+    public ModelCatalogService(
+            ObjectMapper objectMapper,
+            RestClient.Builder restClientBuilder,
+            ModelCatalogProperties properties) {
+        this.models =
+                loadModels(objectMapper, restClientBuilder.build(), properties.getCatalogUrl());
         this.modelsById = indexModels(models);
         getRequired(DEFAULT_MODEL_ID);
     }
@@ -67,7 +70,8 @@ public class ModelCatalogService {
         return DEFAULT_MODEL_ID;
     }
 
-    private static List<ModelDefinition> loadModels(ObjectMapper objectMapper, RestClient restClient, String catalogUrl) {
+    private static List<ModelDefinition> loadModels(
+            ObjectMapper objectMapper, RestClient restClient, String catalogUrl) {
         try {
             String body;
             if (catalogUrl.startsWith("file:")) {
@@ -77,17 +81,25 @@ public class ModelCatalogService {
             }
             var root = objectMapper.readTree(body);
             var modelsNode = root.path("models");
-            var openAiModels = StreamSupport.stream(Spliterators.spliteratorUnknownSize(modelsNode.fields(), 0), false)
-                    .filter(entry -> entry.getKey().equals(GPT_5_6_MODEL_PREFIX)
-                            || entry.getKey().startsWith(GPT_5_6_MODEL_PREFIX + "-")
-                            || entry.getKey().startsWith(ANTHROPIC_MODEL_PREFIX))
-                    .map(Map.Entry::getValue)
-                    .map(ModelCatalogService::toModelDefinition)
-                    .toList();
+            var openAiModels =
+                    StreamSupport.stream(
+                                    Spliterators.spliteratorUnknownSize(modelsNode.fields(), 0),
+                                    false)
+                            .filter(
+                                    entry ->
+                                            entry.getKey().equals(GPT_5_6_MODEL_PREFIX)
+                                                    || entry.getKey()
+                                                            .startsWith(GPT_5_6_MODEL_PREFIX + "-")
+                                                    || entry.getKey()
+                                                            .startsWith(ANTHROPIC_MODEL_PREFIX))
+                            .map(Map.Entry::getValue)
+                            .map(ModelCatalogService::toModelDefinition)
+                            .toList();
             validateModels(openAiModels);
             return List.copyOf(openAiModels);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to load model catalog from models.dev: " + catalogUrl, e);
+            throw new IllegalStateException(
+                    "Failed to load model catalog from models.dev: " + catalogUrl, e);
         }
     }
 
@@ -109,8 +121,7 @@ public class ModelCatalogService {
                 limit.path("output").asInt(),
                 null,
                 null,
-                node.path("release_date").asText(null)
-        );
+                node.path("release_date").asText(null));
     }
 
     private static Map<String, ModelDefinition> indexModels(List<ModelDefinition> models) {

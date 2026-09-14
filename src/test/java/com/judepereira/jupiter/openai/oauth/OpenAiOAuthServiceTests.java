@@ -1,20 +1,18 @@
 package com.judepereira.jupiter.openai.oauth;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.persistence.AppStateRepository;
-import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.flywaydb.core.Flyway;
 import com.judepereira.jupiter.security.EncryptionMigrationService;
+import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -25,10 +23,10 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 public class OpenAiOAuthServiceTests {
 
@@ -39,8 +37,13 @@ public class OpenAiOAuthServiceTests {
             properties.setIssuer(server.baseUrl());
             properties.setClientId("client-123");
 
-            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
-                    mock(AppStateRepository.class), null);
+            OpenAiOAuthService service =
+                    new OpenAiOAuthService(
+                            properties,
+                            new ObjectMapper(),
+                            HttpClient.newHttpClient(),
+                            mock(AppStateRepository.class),
+                            null);
 
             OpenAiOAuthService.OpenAiOAuthView started = service.startDeviceAuthorization();
             assertThat(started.pending()).isTrue();
@@ -74,18 +77,32 @@ public class OpenAiOAuthServiceTests {
     }
 
     @Test
-    public void persistsConnectedStateAndReloadsItInAFreshServiceInstance(@TempDir Path tempDir) throws Exception {
-        try (TestServer server = TestServer.start(); TestDatabase database = TestDatabase.open(tempDir)) {
+    public void persistsConnectedStateAndReloadsItInAFreshServiceInstance(@TempDir Path tempDir)
+            throws Exception {
+        try (TestServer server = TestServer.start();
+                TestDatabase database = TestDatabase.open(tempDir)) {
             OpenAiOAuthProperties properties = new OpenAiOAuthProperties();
             properties.setIssuer(server.baseUrl());
             properties.setClientId("client-123");
 
-            OpenAiOAuthService first = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository(), null);
+            OpenAiOAuthService first =
+                    new OpenAiOAuthService(
+                            properties,
+                            new ObjectMapper(),
+                            HttpClient.newHttpClient(),
+                            database.repository(),
+                            null);
             first.startDeviceAuthorization();
             first.pollCurrentDeviceAuthorization();
             first.pollCurrentDeviceAuthorization();
 
-            OpenAiOAuthService fresh = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository(), null);
+            OpenAiOAuthService fresh =
+                    new OpenAiOAuthService(
+                            properties,
+                            new ObjectMapper(),
+                            HttpClient.newHttpClient(),
+                            database.repository(),
+                            null);
             assertThat(fresh.currentView().connected()).isTrue();
             assertThat(fresh.currentView().pending()).isFalse();
             assertThat(fresh.currentAccessToken()).contains("access-123");
@@ -93,7 +110,13 @@ public class OpenAiOAuthServiceTests {
 
             fresh.resetConnectionState();
 
-            OpenAiOAuthService afterLogout = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository(), null);
+            OpenAiOAuthService afterLogout =
+                    new OpenAiOAuthService(
+                            properties,
+                            new ObjectMapper(),
+                            HttpClient.newHttpClient(),
+                            database.repository(),
+                            null);
             assertThat(afterLogout.currentView().connected()).isFalse();
             assertThat(afterLogout.currentView().pending()).isFalse();
             assertThat(afterLogout.currentAccessToken()).isEmpty();
@@ -108,8 +131,13 @@ public class OpenAiOAuthServiceTests {
             properties.setIssuer(server.baseUrl());
             properties.setClientId("client-123");
 
-            OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
-                    mock(AppStateRepository.class), null);
+            OpenAiOAuthService service =
+                    new OpenAiOAuthService(
+                            properties,
+                            new ObjectMapper(),
+                            HttpClient.newHttpClient(),
+                            mock(AppStateRepository.class),
+                            null);
 
             service.startDeviceAuthorization();
             OpenAiOAuthService.OpenAiOAuthView pending = service.pollCurrentDeviceAuthorization();
@@ -127,8 +155,13 @@ public class OpenAiOAuthServiceTests {
     public void startFailsWhenClientIdIsMissing() {
         OpenAiOAuthProperties properties = new OpenAiOAuthProperties();
         properties.setClientId(" ");
-        OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
-                mock(AppStateRepository.class), null);
+        OpenAiOAuthService service =
+                new OpenAiOAuthService(
+                        properties,
+                        new ObjectMapper(),
+                        HttpClient.newHttpClient(),
+                        mock(AppStateRepository.class),
+                        null);
 
         assertThatThrownBy(service::startDeviceAuthorization)
                 .isInstanceOf(IllegalStateException.class)
@@ -159,9 +192,11 @@ public class OpenAiOAuthServiceTests {
             HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
             TestServer testServer = new TestServer(server, rateLimitFirstPoll);
             server.createContext("/api/accounts/deviceauth/usercode", testServer.deviceHandler());
-            server.createContext("/api/accounts/deviceauth/token", testServer.authorizationHandler());
+            server.createContext(
+                    "/api/accounts/deviceauth/token", testServer.authorizationHandler());
             server.createContext("/oauth/token", testServer.tokenHandler());
-            server.createContext("/codex/device", exchange -> respond(exchange, 200, Map.of("ok", true)));
+            server.createContext(
+                    "/codex/device", exchange -> respond(exchange, 200, Map.of("ok", true)));
             server.start();
             return testServer;
         }
@@ -177,16 +212,20 @@ public class OpenAiOAuthServiceTests {
         private HttpHandler deviceHandler() {
             return exchange -> {
                 assertThat(exchange.getRequestMethod()).isEqualTo("POST");
-                assertThat(exchange.getRequestHeaders().getFirst("Content-Type")).contains("application/json");
-                assertThat(exchange.getRequestHeaders().getFirst("Accept")).contains("application/json");
+                assertThat(exchange.getRequestHeaders().getFirst("Content-Type"))
+                        .contains("application/json");
+                assertThat(exchange.getRequestHeaders().getFirst("Accept"))
+                        .contains("application/json");
                 Map<String, Object> body = readJsonBody(exchange);
                 assertThat(body).containsEntry("client_id", "client-123");
-                respond(exchange, 200, Map.of(
-                        "device_auth_id", "device-123",
-                        "user_code", "ABCD-EFGH",
-                        "interval", "1",
-                        "expires", 600
-                ));
+                respond(
+                        exchange,
+                        200,
+                        Map.of(
+                                "device_auth_id", "device-123",
+                                "user_code", "ABCD-EFGH",
+                                "interval", "1",
+                                "expires", 600));
             };
         }
 
@@ -194,7 +233,8 @@ public class OpenAiOAuthServiceTests {
             return exchange -> {
                 authorizationCalls.incrementAndGet();
                 assertThat(exchange.getRequestMethod()).isEqualTo("POST");
-                assertThat(exchange.getRequestHeaders().getFirst("Content-Type")).contains("application/json");
+                assertThat(exchange.getRequestHeaders().getFirst("Content-Type"))
+                        .contains("application/json");
                 Map<String, Object> body = readJsonBody(exchange);
                 assertThat(body).containsEntry("device_auth_id", "device-123");
                 assertThat(body).containsEntry("user_code", "ABCD-EFGH");
@@ -205,11 +245,13 @@ public class OpenAiOAuthServiceTests {
                     exchange.sendResponseHeaders(404, -1);
                     exchange.close();
                 } else {
-                    respond(exchange, 200, Map.of(
-                            "authorization_code", "auth-123",
-                            "code_challenge", "challenge-123",
-                            "code_verifier", "verifier-456"
-                    ));
+                    respond(
+                            exchange,
+                            200,
+                            Map.of(
+                                    "authorization_code", "auth-123",
+                                    "code_challenge", "challenge-123",
+                                    "code_verifier", "verifier-456"));
                 }
             };
         }
@@ -218,22 +260,28 @@ public class OpenAiOAuthServiceTests {
             return exchange -> {
                 int call = tokenCalls.incrementAndGet();
                 assertThat(exchange.getRequestMethod()).isEqualTo("POST");
-                assertThat(exchange.getRequestHeaders().getFirst("Content-Type")).contains("application/x-www-form-urlencoded");
-                assertThat(exchange.getRequestHeaders().getFirst("Accept")).contains("application/json");
+                assertThat(exchange.getRequestHeaders().getFirst("Content-Type"))
+                        .contains("application/x-www-form-urlencoded");
+                assertThat(exchange.getRequestHeaders().getFirst("Accept"))
+                        .contains("application/json");
                 String body = readBody(exchange);
                 if (call == 1) {
-                    assertThat(body).isEqualTo(encodedFormBody(Map.of(
-                            "grant_type", "authorization_code",
-                            "code", "auth-123",
-                            "redirect_uri", url("/deviceauth/callback"),
-                            "client_id", "client-123",
-                            "code_verifier", "verifier-456"
-                    )));
-                    respond(exchange, 200, Map.of(
-                            "access_token", "access-123",
-                            "refresh_token", "refresh-456",
-                            "id_token", jwtWithAccountId("acct-123")
-                    ));
+                    assertThat(body)
+                            .isEqualTo(
+                                    encodedFormBody(
+                                            Map.of(
+                                                    "grant_type", "authorization_code",
+                                                    "code", "auth-123",
+                                                    "redirect_uri", url("/deviceauth/callback"),
+                                                    "client_id", "client-123",
+                                                    "code_verifier", "verifier-456")));
+                    respond(
+                            exchange,
+                            200,
+                            Map.of(
+                                    "access_token", "access-123",
+                                    "refresh_token", "refresh-456",
+                                    "id_token", jwtWithAccountId("acct-123")));
                 } else {
                     respond(exchange, 500, Map.of("error", "unexpected token exchange"));
                 }
@@ -242,12 +290,17 @@ public class OpenAiOAuthServiceTests {
 
         private String jwtWithAccountId(String accountId) throws IOException {
             String header = base64Url("{\"alg\":\"none\",\"typ\":\"JWT\"}");
-            String payload = base64Url(objectMapper.writeValueAsString(Map.of("chatgpt_account_id", accountId)));
+            String payload =
+                    base64Url(
+                            objectMapper.writeValueAsString(
+                                    Map.of("chatgpt_account_id", accountId)));
             return header + "." + payload + ".signature";
         }
 
         private String base64Url(String value) {
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(value.getBytes(StandardCharsets.UTF_8));
         }
 
         private Map<String, Object> readJsonBody(HttpExchange exchange) throws IOException {
@@ -301,7 +354,8 @@ public class OpenAiOAuthServiceTests {
             return java.net.URLDecoder.decode(value, StandardCharsets.UTF_8);
         }
 
-        private static void respond(HttpExchange exchange, int status, Map<String, Object> payload) throws IOException {
+        private static void respond(HttpExchange exchange, int status, Map<String, Object> payload)
+                throws IOException {
             byte[] body = new ObjectMapper().writeValueAsBytes(payload);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, body.length);
@@ -317,21 +371,29 @@ public class OpenAiOAuthServiceTests {
 
     private record TestDatabase(AppStateRepository repository) implements AutoCloseable {
         static TestDatabase open(Path tempDir) {
-            var dataSource = SQLiteTestSupport.fileBackedDataSource(tempDir.resolve("sqlite-db/openai-oauth.db"));
+            var dataSource =
+                    SQLiteTestSupport.fileBackedDataSource(
+                            tempDir.resolve("sqlite-db/openai-oauth.db"));
 
-            Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+            Flyway.configure()
+                    .dataSource(dataSource)
+                    .locations("classpath:db/migration")
+                    .load()
+                    .migrate();
             SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
             try (var connection = dataSource.getConnection()) {
                 new EncryptionMigrationService(TestEncryptionSupport.encryptor()).run(connection);
             } catch (Exception e) {
                 throw new IllegalStateException("Failed to initialize encryption", e);
             }
-            return new TestDatabase(new AppStateRepository(new NamedParameterJdbcTemplate(dataSource),
-                    TestEncryptionSupport.encryptor(), new ObjectMapper()));
+            return new TestDatabase(
+                    new AppStateRepository(
+                            new NamedParameterJdbcTemplate(dataSource),
+                            TestEncryptionSupport.encryptor(),
+                            new ObjectMapper()));
         }
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
 }

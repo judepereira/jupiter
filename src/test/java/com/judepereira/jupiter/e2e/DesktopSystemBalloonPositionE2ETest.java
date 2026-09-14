@@ -1,23 +1,23 @@
 package com.judepereira.jupiter.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ViewportSize;
 import com.microsoft.playwright.options.WaitForSelectorState;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class DesktopSystemBalloonPositionE2ETest extends E2ETestSupport {
 
     @Test
-    void desktopSystemBalloonStaysBetweenTopBarAndBottomRail(@TempDir Path tempDir) throws Exception {
+    void desktopSystemBalloonStaysBetweenTopBarAndBottomRail(@TempDir Path tempDir)
+            throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
@@ -26,19 +26,30 @@ class DesktopSystemBalloonPositionE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile);
-             BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
-                     .setViewportSize(new ViewportSize(1280, 720)))) {
+                BrowserContext context =
+                        newBrowserContext(
+                                new Browser.NewContextOptions()
+                                        .setViewportSize(new ViewportSize(1280, 720)))) {
             Page page = context.newPage();
 
             page.navigate(app.baseUrl());
             page.waitForLoadState();
-            page.locator("#system-balloon-root").waitFor(new com.microsoft.playwright.Locator.WaitForOptions()
-                    .setState(WaitForSelectorState.ATTACHED));
-            var balloon = addTestBalloon(page, app, "Desktop system balloon",
-                    "Verify the shared desktop top and bottom reservations.");
+            page.locator("#system-balloon-root")
+                    .waitFor(
+                            new com.microsoft.playwright.Locator.WaitForOptions()
+                                    .setState(WaitForSelectorState.ATTACHED));
+            var balloon =
+                    addTestBalloon(
+                            page,
+                            app,
+                            "Desktop system balloon",
+                            "Verify the shared desktop top and bottom reservations.");
 
             @SuppressWarnings("unchecked")
-            Map<String, Object> geometry = (Map<String, Object>) balloon.evaluate("""
+            Map<String, Object> geometry =
+                    (Map<String, Object>)
+                            balloon.evaluate(
+                                    """
                     balloon => {
                         const root = document.getElementById('system-balloon-root');
                         const rootRect = root.getBoundingClientRect();

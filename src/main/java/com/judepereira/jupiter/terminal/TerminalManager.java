@@ -6,11 +6,6 @@ import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import com.pty4j.WinSize;
 import jakarta.annotation.PreDestroy;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.stereotype.Service;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -26,6 +21,10 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.stereotype.Service;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
 
 @Log4j2
 @Service
@@ -38,16 +37,22 @@ public class TerminalManager {
     private final ConcurrentMap<String, TerminalRuntime> terminals = new ConcurrentHashMap<>();
     private final AtomicInteger terminalSequence = new AtomicInteger(1);
 
-    public TerminalManager(ObjectMapper objectMapper, List<TerminalLifecycleListener> lifecycleListeners) {
+    public TerminalManager(
+            ObjectMapper objectMapper, List<TerminalLifecycleListener> lifecycleListeners) {
         this.objectMapper = objectMapper;
         this.lifecycleListeners = lifecycleListeners;
     }
 
-    public TerminalHandle createTerminal(String workspaceRoot, Map<String, String> environmentVariables) {
-        return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement(), environmentVariables);
+    public TerminalHandle createTerminal(
+            String workspaceRoot, Map<String, String> environmentVariables) {
+        return createTerminal(
+                workspaceRoot,
+                "Terminal " + terminalSequence.getAndIncrement(),
+                environmentVariables);
     }
 
-    public TerminalHandle createTerminal(String workspaceRoot, String title, Map<String, String> projectEnvironmentVariables) {
+    public TerminalHandle createTerminal(
+            String workspaceRoot, String title, Map<String, String> projectEnvironmentVariables) {
         String terminalId = UUID.randomUUID().toString();
         PtyProcess process = startProcess(workspaceRoot, projectEnvironmentVariables);
         TerminalRuntime runtime = new TerminalRuntime(terminalId, title, process);
@@ -94,18 +99,23 @@ public class TerminalManager {
         }
     }
 
-    private PtyProcess startProcess(String workspaceRoot, Map<String, String> environmentVariables) {
+    private PtyProcess startProcess(
+            String workspaceRoot, Map<String, String> environmentVariables) {
         try {
-            String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank()).orElse("/bin/bash");
+            String shell =
+                    Optional.ofNullable(System.getenv("SHELL"))
+                            .filter(value -> !value.isBlank())
+                            .orElse("/bin/bash");
             Map<String, String> env = terminalEnvironment(environmentVariables);
             env.put("TERM", "xterm-256color");
-            return startProcess(workspaceRoot, new String[]{shell, "-l"}, env);
+            return startProcess(workspaceRoot, new String[] {shell, "-l"}, env);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to start terminal", e);
         }
     }
 
-    static PtyProcess startProcess(String workspaceRoot, String[] command, Map<String, String> environment)
+    static PtyProcess startProcess(
+            String workspaceRoot, String[] command, Map<String, String> environment)
             throws IOException {
         ProcessEnvironmentSanitizer.sanitize(environment);
         return new PtyProcessBuilder(command)
@@ -118,7 +128,8 @@ public class TerminalManager {
                 .start();
     }
 
-    static Map<String, String> terminalEnvironment(Map<String, String> projectEnvironmentVariables) {
+    static Map<String, String> terminalEnvironment(
+            Map<String, String> projectEnvironmentVariables) {
         Map<String, String> environment = new HashMap<>(System.getenv());
         environment.putAll(projectEnvironmentVariables);
         ProcessEnvironmentSanitizer.sanitize(environment);
@@ -174,7 +185,8 @@ public class TerminalManager {
 
         private void pumpOutput() {
             int exitCode = -1;
-            try (var reader = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+            try (var reader =
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
                 char[] buffer = new char[4096];
                 int read;
                 while ((read = reader.read(buffer)) != -1) {
@@ -188,7 +200,12 @@ public class TerminalManager {
             } catch (Exception e) {
                 log.error("Terminal {} failed", terminalId, e);
                 synchronized (outputLock) {
-                    sendToSessions(Map.of("type", "error", "message", e.getMessage() == null ? "terminal_error" : e.getMessage()));
+                    sendToSessions(
+                            Map.of(
+                                    "type",
+                                    "error",
+                                    "message",
+                                    e.getMessage() == null ? "terminal_error" : e.getMessage()));
                 }
             } finally {
                 cleanup(exitCode);
@@ -242,7 +259,8 @@ public class TerminalManager {
                 }
                 try {
                     synchronized (session) {
-                        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
+                        session.sendMessage(
+                                new TextMessage(objectMapper.writeValueAsString(payload)));
                     }
                 } catch (Exception e) {
                     log.error("Failed to stream terminal output", e);

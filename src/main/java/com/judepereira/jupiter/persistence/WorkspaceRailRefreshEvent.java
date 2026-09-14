@@ -1,4 +1,3 @@
 package com.judepereira.jupiter.persistence;
 
-public record WorkspaceRailRefreshEvent() {
-}
+public record WorkspaceRailRefreshEvent() {}

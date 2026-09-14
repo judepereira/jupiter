@@ -1,6 +1,7 @@
 # Slash Commands
 
-Slash commands are Markdown files with YAML frontmatter. They’re deliberately simple enough that adding one doesn’t require touching Java.
+Slash commands are Markdown files with YAML frontmatter. They’re deliberately simple enough that
+adding one doesn’t require touching Java.
 
 ![Slash command picker](images/slash-commands.png)
 
@@ -29,10 +30,12 @@ description: Show repository status
 workingDir: .
 timeoutSeconds: 30
 ---
+
 git status --short
 ```
 
-`type` is required and must be `prompt` or `script`. `workingDir` and `timeoutSeconds` are script-only options.
+`type` is required and must be `prompt` or `script`. `workingDir` and `timeoutSeconds` are
+script-only options.
 
 ## Bundled commands
 

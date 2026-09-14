@@ -1,32 +1,31 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.integer;
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
-import lombok.val;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.integer;
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+import lombok.val;
 
 public class ReadFileTool implements AgentTool {
-    private static final ToolDefinition DEF = ToolDefinition.builtIn(
-            "read_file",
-            "Read a file from the workspace (utf-8) with optional line range",
-            ToolSchema.object(
-                    string("path", "relative file path to read"),
-                    integer("startLine", "optional 1-based start line"),
-                    integer("endLine", "optional 1-based end line")
-            ).required("path")
-    );
+    private static final ToolDefinition DEF =
+            ToolDefinition.builtIn(
+                    "read_file",
+                    "Read a file from the workspace (utf-8) with optional line range",
+                    ToolSchema.object(
+                                    string("path", "relative file path to read"),
+                                    integer("startLine", "optional 1-based start line"),
+                                    integer("endLine", "optional 1-based end line"))
+                            .required("path"));
 
     @Override
     public String name() {
@@ -39,7 +38,8 @@ public class ReadFileTool implements AgentTool {
     }
 
     @Override
-    public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {
+    public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context)
+            throws Exception {
         String rel = (String) args.get("path");
         if (rel == null) {
             return new ToolExecutionResult(false, "missing path", Map.of());
@@ -48,8 +48,14 @@ public class ReadFileTool implements AgentTool {
         if (!Files.exists(p) || !Files.isRegularFile(p)) {
             return new ToolExecutionResult(false, "file not found: " + rel, Map.of());
         }
-        Integer start = args.get("startLine") instanceof Number ? ((Number) args.get("startLine")).intValue() : null;
-        Integer end = args.get("endLine") instanceof Number ? ((Number) args.get("endLine")).intValue() : null;
+        Integer start =
+                args.get("startLine") instanceof Number
+                        ? ((Number) args.get("startLine")).intValue()
+                        : null;
+        Integer end =
+                args.get("endLine") instanceof Number
+                        ? ((Number) args.get("endLine")).intValue()
+                        : null;
         String text;
         if (start != null || end != null) {
             int skipped = 0;
@@ -61,7 +67,10 @@ public class ReadFileTool implements AgentTool {
 
             val out = new StringBuilder();
 
-            try (val br = new BufferedReader(new InputStreamReader(Files.newInputStream(p), StandardCharsets.UTF_8))) {
+            try (val br =
+                    new BufferedReader(
+                            new InputStreamReader(
+                                    Files.newInputStream(p), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = br.readLine()) != null) {
                     read++;
@@ -80,7 +89,9 @@ public class ReadFileTool implements AgentTool {
                 text = out.toString();
             }
         } else {
-            text = FileUtils.readUtf8(p, 1_000_000); // ~ 1 MB max - truncated by ToolRegistry later.
+            text =
+                    FileUtils.readUtf8(
+                            p, 1_000_000); // ~ 1 MB max - truncated by ToolRegistry later.
         }
         return new ToolExecutionResult(true, text, Map.of("path", rel));
     }

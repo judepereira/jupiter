@@ -1,29 +1,38 @@
 :root {
-    --rail-width: 290px;
-    --topbar-height: 42px;
-    --bottom-nav-height: 42px;
-    --system-balloon-gap: 12px;
-    --system-balloon-entry-offset: 8px;
-    --system-balloon-top-reservation: calc(var(--topbar-height) + env(safe-area-inset-top, 0px) + var(--system-balloon-gap) + var(--system-balloon-entry-offset));
-    --system-balloon-bottom-reservation: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + var(--system-balloon-gap));
-    /* width of the review panel (can be overridden by JS during drag) */
-    --review-width: 40%;
-    --terminal-panel-height: 320px;
-    --rail-bg: rgb(248, 249, 251);;
-    --rail-fg: #15233f;
-    --panel-bg: #ffffff;
-    --panel-border: #dfe7f3;
-    --muted: #657492;
-    --bg-hover-in-rails: #6574920d;
-    --accent: rgb(6, 100, 248);
-    --divider-background-hover: rgb(0 0 0 / 0);
-    --outline-colour: rgba(135, 163, 205, 0.22);
-    --shell-bg: #f7faff;
-    --terminal-shell-bg: #ffffff;
-    --terminal-shell-fg: #334155;
-    --terminal-shell-border: #d9e2ef;
-    --terminal-control-bg: #f8fafc;
-    --terminal-control-border: #cbd5e1;
-    --terminal-control-active: #e8eef8;
-    --mobile-offcanvas-transition: transform 180ms ease;
+	--rail-width: 290px;
+	--topbar-height: 42px;
+	--bottom-nav-height: 42px;
+	--system-balloon-gap: 12px;
+	--system-balloon-entry-offset: 8px;
+	--system-balloon-top-reservation: calc(
+		var(--topbar-height) +
+		env(safe-area-inset-top, 0px) +
+		var(--system-balloon-gap) +
+		var(--system-balloon-entry-offset)
+	);
+	--system-balloon-bottom-reservation: calc(
+		var(--bottom-nav-height) +
+		env(safe-area-inset-bottom, 0px) +
+		var(--system-balloon-gap)
+	);
+	/* width of the review panel (can be overridden by JS during drag) */
+	--review-width: 40%;
+	--terminal-panel-height: 320px;
+	--rail-bg: rgb(248, 249, 251);
+	--rail-fg: #15233f;
+	--panel-bg: #ffffff;
+	--panel-border: #dfe7f3;
+	--muted: #657492;
+	--bg-hover-in-rails: #6574920d;
+	--accent: rgb(6, 100, 248);
+	--divider-background-hover: rgb(0 0 0 / 0);
+	--outline-colour: rgba(135, 163, 205, 0.22);
+	--shell-bg: #f7faff;
+	--terminal-shell-bg: #ffffff;
+	--terminal-shell-fg: #334155;
+	--terminal-shell-border: #d9e2ef;
+	--terminal-control-bg: #f8fafc;
+	--terminal-control-border: #cbd5e1;
+	--terminal-control-active: #e8eef8;
+	--mobile-offcanvas-transition: transform 180ms ease;
 }

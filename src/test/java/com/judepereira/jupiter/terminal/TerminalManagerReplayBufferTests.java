@@ -1,18 +1,17 @@
 package com.judepereira.jupiter.terminal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
 
 public class TerminalManagerReplayBufferTests {
 
@@ -30,7 +29,8 @@ public class TerminalManagerReplayBufferTests {
 
         var captor = org.mockito.ArgumentCaptor.forClass(TextMessage.class);
         verify(session).sendMessage(captor.capture());
-        assertThat(captor.getValue().getPayload()).contains("hello from replay", "\"type\":\"output\"");
+        assertThat(captor.getValue().getPayload())
+                .contains("hello from replay", "\"type\":\"output\"");
     }
 
     private static Object newRuntime(TerminalManager manager) throws Exception {
@@ -65,7 +65,9 @@ public class TerminalManagerReplayBufferTests {
                 continue;
             }
             Class<?> parameterType = candidate.getParameterTypes()[0];
-            if (argument == null || parameterType.isInstance(argument) || parameterType.isAssignableFrom(argument.getClass())) {
+            if (argument == null
+                    || parameterType.isInstance(argument)
+                    || parameterType.isAssignableFrom(argument.getClass())) {
                 method = candidate;
                 break;
             }

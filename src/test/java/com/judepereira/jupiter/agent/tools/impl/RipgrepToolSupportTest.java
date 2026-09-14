@@ -1,14 +1,13 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
-import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class RipgrepToolSupportTest {
 
@@ -18,7 +17,8 @@ public class RipgrepToolSupportTest {
     }
 
     @Test
-    public void listFiles_include_matches_root_and_nested_agents_md(@TempDir Path tmp) throws Exception {
+    public void listFiles_include_matches_root_and_nested_agents_md(@TempDir Path tmp)
+            throws Exception {
         Files.writeString(tmp.resolve("AGENTS.md"), "root\n");
         Path nested = Files.createDirectories(tmp.resolve("docs"));
         Files.writeString(nested.resolve("AGENTS.md"), "nested\n");
@@ -32,12 +32,14 @@ public class RipgrepToolSupportTest {
     }
 
     @Test
-    public void searchCode_include_matches_root_and_nested_agents_md(@TempDir Path tmp) throws Exception {
+    public void searchCode_include_matches_root_and_nested_agents_md(@TempDir Path tmp)
+            throws Exception {
         Files.writeString(tmp.resolve("AGENTS.md"), "needle\n");
         Path nested = Files.createDirectories(tmp.resolve("docs"));
         Files.writeString(nested.resolve("AGENTS.md"), "needle\n");
 
-        ToolExecutionResult search = new RipgrepToolSupport().searchCode(tmp, "", "needle", "**/AGENTS.md", 5);
+        ToolExecutionResult search =
+                new RipgrepToolSupport().searchCode(tmp, "", "needle", "**/AGENTS.md", 5);
 
         assertTrue(search.isSuccess());
         List<String> matches = castStrings(search, "matches");
@@ -46,7 +48,8 @@ public class RipgrepToolSupportTest {
     }
 
     @Test
-    public void listFiles_excludes_hidden_and_gitignored_files_by_default(@TempDir Path tmp) throws Exception {
+    public void listFiles_excludes_hidden_and_gitignored_files_by_default(@TempDir Path tmp)
+            throws Exception {
         initGitRepo(tmp);
         Files.writeString(tmp.resolve("visible.txt"), "visible\n");
         Files.writeString(tmp.resolve(".hidden.txt"), "hidden\n");
@@ -63,7 +66,8 @@ public class RipgrepToolSupportTest {
     }
 
     @Test
-    public void searchCode_excludes_hidden_and_gitignored_files_by_default(@TempDir Path tmp) throws Exception {
+    public void searchCode_excludes_hidden_and_gitignored_files_by_default(@TempDir Path tmp)
+            throws Exception {
         initGitRepo(tmp);
         Files.writeString(tmp.resolve("visible.txt"), "needle\n");
         Files.writeString(tmp.resolve(".hidden.txt"), "needle\n");
@@ -102,7 +106,9 @@ public class RipgrepToolSupportTest {
         Files.createDirectories(tmp.resolve("workspace"));
         Files.writeString(tmp.resolve("outside.txt"), "needle\n");
 
-        ToolExecutionResult search = new RipgrepToolSupport().searchCode(tmp.resolve("workspace"), "..", "needle", "", 5);
+        ToolExecutionResult search =
+                new RipgrepToolSupport()
+                        .searchCode(tmp.resolve("workspace"), "..", "needle", "", 5);
 
         assertFalse(search.isSuccess());
         assertTrue(search.getText().contains("failed to resolve path"));

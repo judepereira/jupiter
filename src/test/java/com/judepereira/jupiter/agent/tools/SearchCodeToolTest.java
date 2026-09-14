@@ -1,14 +1,13 @@
 package com.judepereira.jupiter.agent.tools;
 
-import com.judepereira.jupiter.agent.tools.impl.SearchCodeTool;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.judepereira.jupiter.agent.tools.impl.SearchCodeTool;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class SearchCodeToolTest {
 
@@ -20,8 +19,23 @@ public class SearchCodeToolTest {
         Files.writeString(a, "needle");
         Files.writeString(b, "needle\n");
 
-        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        SearchCodeTool t =
+                new SearchCodeTool(
+                        new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
+        ToolExecutionContext ctx =
+                new ToolExecutionContext(
+                        tmp,
+                        true,
+                        true,
+                        5,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of(),
+                        java.util.Set.of(),
+                        ToolProgressSink.noop(),
+                        null);
 
         var res = t.execute(Map.of("path", "", "pattern", "needle", "include", "**/*.java"), ctx);
         assertTrue(res.isSuccess());
@@ -32,16 +46,33 @@ public class SearchCodeToolTest {
     }
 
     @Test
-    public void include_agents_md_matches_root_and_nested_files(@TempDir Path tmp) throws Exception {
+    public void include_agents_md_matches_root_and_nested_files(@TempDir Path tmp)
+            throws Exception {
         Files.writeString(tmp.resolve("AGENTS.md"), "needle");
         Path nested = tmp.resolve("docs");
         Files.createDirectories(nested);
         Files.writeString(nested.resolve("AGENTS.md"), "needle");
 
-        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        SearchCodeTool t =
+                new SearchCodeTool(
+                        new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
+        ToolExecutionContext ctx =
+                new ToolExecutionContext(
+                        tmp,
+                        true,
+                        true,
+                        5,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of(),
+                        java.util.Set.of(),
+                        ToolProgressSink.noop(),
+                        null);
 
-        var res = t.execute(Map.of("path", "", "pattern", "needle", "include", "**/AGENTS.md"), ctx);
+        var res =
+                t.execute(Map.of("path", "", "pattern", "needle", "include", "**/AGENTS.md"), ctx);
         assertTrue(res.isSuccess());
         var matches = (java.util.List<String>) res.getMachine().get("matches");
         assertNotNull(matches);
@@ -58,10 +89,34 @@ public class SearchCodeToolTest {
         Files.writeString(a, "needle");
         Files.writeString(b, "needle\n");
 
-        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        SearchCodeTool t =
+                new SearchCodeTool(
+                        new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
+        ToolExecutionContext ctx =
+                new ToolExecutionContext(
+                        Path.of("."),
+                        true,
+                        true,
+                        5,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of(),
+                        java.util.Set.of(),
+                        ToolProgressSink.noop(),
+                        null);
 
-        var res = t.execute(Map.of("path", ws.getFileName().toString(), "pattern", "needle", "include", "**/*.java"), ctx);
+        var res =
+                t.execute(
+                        Map.of(
+                                "path",
+                                ws.getFileName().toString(),
+                                "pattern",
+                                "needle",
+                                "include",
+                                "**/*.java"),
+                        ctx);
         assertTrue(res.isSuccess());
         var matches = (java.util.List<String>) res.getMachine().get("matches");
         assertNotNull(matches);
@@ -72,6 +127,7 @@ public class SearchCodeToolTest {
                     .sorted(java.util.Comparator.reverseOrder())
                     .map(java.nio.file.Path::toFile)
                     .forEach(java.io.File::delete);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 }

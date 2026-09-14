@@ -12,5 +12,6 @@ public class AnthropicOAuthProperties {
     private String redirectUri = "https://platform.claude.com/oauth/code/callback";
     private String codeChallengeMethod = "S256";
     private boolean code = true;
-    private String scopes = "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
+    private String scopes =
+            "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
 }

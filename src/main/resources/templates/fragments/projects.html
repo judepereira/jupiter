@@ -1,832 +1,1156 @@
 <!doctype html>
-<th:block th:fragment="topbar" th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, reviewPanelOpen=${reviewPanelOpen ?: false}">
-    <header id="top-bar" class="top-bar" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
-        <button type="button"
-                class="app-switcher"
-                aria-controls="left-rail"
-                aria-expanded="false"
-                aria-label="Toggle workspace rail"
-                title="Toggle workspace rail">
-            <img id="topbar-logo" src="/favicon-32x32.png" alt="Jupiter" width="100%">
-        </button>
+<th:block th:fragment="topbar"
+	th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, reviewPanelOpen=${reviewPanelOpen ?: false}">
+	<header id="top-bar" class="top-bar"
+		th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
+		<button type="button" class="app-switcher" aria-controls="left-rail"
+			aria-expanded="false" aria-label="Toggle workspace rail"
+			title="Toggle workspace rail">
+			<img id="topbar-logo" src="/favicon-32x32.png" alt="Jupiter"
+				width="100%">
+		</button>
 
-        <nav class="project-tabs" aria-label="Projects">
-<!--            <button th:if="${#lists.isEmpty(projectList)}" type="button" class="project-tab project-tab-empty" disabled>-->
-<!--                No projects opened-->
-<!--            </button>-->
-            <div th:each="project : ${projectList}"
-                  class="project-tab-group"
-                  th:classappend="${activeProjectView != null and project.id == activeProjectView.id} ? ' active' : ''">
-                <button type="button"
-                         class="project-tab"
-                         th:attr="hx-post=@{/ui/projects/{id}/activate(id=${project.id})}, hx-swap='none'">
-                    <span class="project-tab-label" th:text="${project.name}"></span>
-                </button>
-                <button type="button"
-                        class="project-tab-close"
-                        aria-label="Close project"
-                        th:attr="hx-post=@{/ui/projects/{id}/close(id=${project.id})}, hx-swap='none'">
-                    <i class="bi bi-x-lg" aria-hidden="true"></i>
-                </button>
-            </div>
-            <button type="button"
-                    class="project-tab-add"
-                    aria-label="New tab"
-                    hx-get="/ui/projects/new"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML">
-                <i class="bi bi-plus-lg" aria-hidden="true"></i>
-            </button>
-        </nav>
+		<nav class="project-tabs" aria-label="Projects">
+			<!--            <button th:if="${#lists.isEmpty(projectList)}" type="button" class="project-tab project-tab-empty" disabled>-->
+			<!--                No projects opened-->
+			<!--            </button>-->
+			<div th:each="project : ${projectList}" class="project-tab-group"
+				th:classappend="${activeProjectView != null and project.id == activeProjectView.id} ? ' active' : ''">
+				<button type="button" class="project-tab"
+					th:attr="hx-post=@{/ui/projects/{id}/activate(id=${project.id})}, hx-swap='none'">
+					<span class="project-tab-label" th:text="${project.name}"></span>
+				</button>
+				<button type="button" class="project-tab-close"
+					aria-label="Close project"
+					th:attr="hx-post=@{/ui/projects/{id}/close(id=${project.id})}, hx-swap='none'">
+					<i class="bi bi-x-lg" aria-hidden="true"></i>
+				</button>
+			</div>
+			<button type="button" class="project-tab-add" aria-label="New tab"
+				hx-get="/ui/projects/new" hx-target="#modal-root"
+				hx-swap="innerHTML">
+				<i class="bi bi-plus-lg" aria-hidden="true"></i>
+			</button>
+		</nav>
 
-        <div class="top-bar-actions">
-            <th:block th:replace="~{fragments/projects :: gitPullControl(${activeWorkspaceView == null ? null : activeWorkspaceView.id}, ${gitPullBusy ?: false}, ${activeWorkspaceView != null})}"></th:block>
-            <button type="button"
-                    class="rail-btn topbar-rail-btn"
-                    aria-label="Settings"
-                    title="Settings"
-                    hx-get="/ui/settings"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML">
-                <i class="bi bi-gear" aria-hidden="true"></i>
-            </button>
-                <button id="toggle-review-rail-btn"
-                      type="button"
-                      class="rail-btn topbar-rail-btn"
-                      aria-controls="review"
-                      th:attr="aria-expanded=${reviewPanelOpen}, aria-label=${reviewPanelOpen ? 'Close review panel' : 'Open review panel'}, title=${reviewPanelOpen ? 'Close review panel' : 'Open review panel'}"
-                      hx-post="/ui/review/toggle"
-                      hx-target="#review"
-                      hx-swap="outerHTML">
-                <i class="bi bi-journal-text" aria-hidden="true"></i>
-                </button>
-        </div>
-    </header>
+		<div class="top-bar-actions">
+			<th:block
+				th:replace="~{fragments/projects :: gitPullControl(${activeWorkspaceView == null ? null : activeWorkspaceView.id}, ${gitPullBusy ?: false}, ${activeWorkspaceView != null})}"></th:block>
+			<button type="button" class="rail-btn topbar-rail-btn"
+				aria-label="Settings" title="Settings" hx-get="/ui/settings"
+				hx-target="#modal-root" hx-swap="innerHTML">
+				<i class="bi bi-gear" aria-hidden="true"></i>
+			</button>
+			<button id="toggle-review-rail-btn" type="button"
+				class="rail-btn topbar-rail-btn" aria-controls="review"
+				th:attr="aria-expanded=${reviewPanelOpen}, aria-label=${reviewPanelOpen ? 'Close review panel' : 'Open review panel'}, title=${reviewPanelOpen ? 'Close review panel' : 'Open review panel'}"
+				hx-post="/ui/review/toggle" hx-target="#review" hx-swap="outerHTML">
+				<i class="bi bi-journal-text" aria-hidden="true"></i>
+			</button>
+		</div>
+	</header>
 </th:block>
 
 <th:block th:fragment="gitPullControl(workspaceId, busy, hasWorkspace)"
-          th:with="normalizedWorkspaceId=${workspaceId ?: null}, normalizedBusy=${busy ?: false}, normalizedHasWorkspace=${hasWorkspace != null ? hasWorkspace : normalizedWorkspaceId != null}">
-    <button id="git-pull-control" type="button"
-            class="rail-btn topbar-rail-btn topbar-git-pull-btn"
-            th:disabled="${!normalizedHasWorkspace or normalizedBusy}"
-            th:attr="aria-label=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, title=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, aria-busy=${normalizedBusy}, hx-post=${!normalizedBusy and normalizedHasWorkspace ? '/ui/workspaces/active/git/pull' : null}, hx-get=${normalizedBusy and normalizedWorkspaceId != null ? '/ui/workspaces/' + normalizedWorkspaceId + '/git/pull/status' : null}, hx-trigger=${normalizedBusy and normalizedWorkspaceId != null ? 'every 1s' : null}, hx-target='#git-pull-control', hx-swap='outerHTML'">
-        <span th:if="${normalizedBusy}" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-        <span th:if="${normalizedBusy}" class="visually-hidden">Git pull in progress</span>
-        <i th:unless="${normalizedBusy}" class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
-    </button>
+	th:with="normalizedWorkspaceId=${workspaceId ?: null}, normalizedBusy=${busy ?: false}, normalizedHasWorkspace=${hasWorkspace != null ? hasWorkspace : normalizedWorkspaceId != null}">
+	<button id="git-pull-control" type="button"
+		class="rail-btn topbar-rail-btn topbar-git-pull-btn"
+		th:disabled="${!normalizedHasWorkspace or normalizedBusy}"
+		th:attr="aria-label=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, title=${normalizedBusy ? 'Git pull in progress' : 'Pull latest changes'}, aria-busy=${normalizedBusy}, hx-post=${!normalizedBusy and normalizedHasWorkspace ? '/ui/workspaces/active/git/pull' : null}, hx-get=${normalizedBusy and normalizedWorkspaceId != null ? '/ui/workspaces/' + normalizedWorkspaceId + '/git/pull/status' : null}, hx-trigger=${normalizedBusy and normalizedWorkspaceId != null ? 'every 1s' : null}, hx-target='#git-pull-control', hx-swap='outerHTML'">
+		<span th:if="${normalizedBusy}"
+			class="spinner-border spinner-border-sm" role="status"
+			aria-hidden="true"></span> <span th:if="${normalizedBusy}"
+			class="visually-hidden">Git pull in progress</span> <i
+			th:unless="${normalizedBusy}" class="bi bi-cloud-arrow-down"
+			aria-hidden="true"></i>
+	</button>
 </th:block>
 
-<th:block th:fragment="workspaceRail" th:with="shellRefreshFlag=${shellRefresh ?: false}, workspaceList=${workspaces ?: T(java.util.List).of()}, sessionList=${sessions ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, activeSessionView=${activeSession}">
-    <section id="workspace-session-rail" class="workspace-session-rail" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
-        <div th:if="${activeProjectView == null}" class="workspace-session-empty">
-            No project selected
-        </div>
+<th:block th:fragment="workspaceRail"
+	th:with="shellRefreshFlag=${shellRefresh ?: false}, workspaceList=${workspaces ?: T(java.util.List).of()}, sessionList=${sessions ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, activeSessionView=${activeSession}">
+	<section id="workspace-session-rail" class="workspace-session-rail"
+		th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
+		<div th:if="${activeProjectView == null}"
+			class="workspace-session-empty">No project selected</div>
 
-        <div th:if="${activeProjectView != null}" class="workspace-session-groups">
-            <div th:each="workspace : ${workspaceList}" class="workspace-group" th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''">
-                <div class="workspace-row">
-                    <button type="button"
-                            class="workspace-item"
-                            th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''"
-                            th:attr="hx-post=${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? @{/ui/workspaces/{id}/collapse(id=${workspace.id})} : @{/ui/workspaces/{id}/activate(id=${workspace.id})}, hx-swap='none'">
-                        <i th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-down workspace-disclosure" aria-hidden="true"></i>
-                        <i th:unless="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="bi bi-chevron-right workspace-disclosure" aria-hidden="true"></i>
-                        <i class="bi bi-folder workspace-icon" aria-hidden="true"></i>
-                        <span class="rail-label-wrap">
-                            <span class="workspace-label" th:text="${workspace.name}"></span>
-                            <span th:if="${workspace.failed}" class="failed-dot" aria-label="Failed"></span>
-                            <span th:if="${!workspace.failed and workspace.unread}" class="unread-dot" aria-label="Unread"></span>
-                            <span th:if="${!workspace.failed and !workspace.unread and workspace.inProgress}" class="pending-dot" aria-label="In progress"></span>
-                        </span>
-                    </button>
+		<div th:if="${activeProjectView != null}"
+			class="workspace-session-groups">
+			<div th:each="workspace : ${workspaceList}" class="workspace-group"
+				th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''">
+				<div class="workspace-row">
+					<button type="button" class="workspace-item"
+						th:classappend="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? ' active' : ''"
+						th:attr="hx-post=${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id} ? @{/ui/workspaces/{id}/collapse(id=${workspace.id})} : @{/ui/workspaces/{id}/activate(id=${workspace.id})}, hx-swap='none'">
+						<i
+							th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}"
+							class="bi bi-chevron-down workspace-disclosure"
+							aria-hidden="true"></i> <i
+							th:unless="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}"
+							class="bi bi-chevron-right workspace-disclosure"
+							aria-hidden="true"></i> <i class="bi bi-folder workspace-icon"
+							aria-hidden="true"></i> <span class="rail-label-wrap"> <span
+							class="workspace-label" th:text="${workspace.name}"></span> <span
+							th:if="${workspace.failed}" class="failed-dot"
+							aria-label="Failed"></span> <span
+							th:if="${!workspace.failed and workspace.unread}"
+							class="unread-dot" aria-label="Unread"></span> <span
+							th:if="${!workspace.failed and !workspace.unread and workspace.inProgress}"
+							class="pending-dot" aria-label="In progress"></span>
+						</span>
+					</button>
 
-                    <button th:if="${activeProjectView != null and workspace.path != activeProjectView.path}"
-                            type="button"
-                            class="workspace-close-button"
-                            aria-label="Close workspace"
-                            th:attr="hx-post=@{/ui/workspaces/{id}/close(id=${workspace.id})}, hx-target='#modal-root', hx-swap='innerHTML'">
-                        <i class="bi bi-x-lg" aria-hidden="true"></i>
-                    </button>
-                </div>
+					<button
+						th:if="${activeProjectView != null and workspace.path != activeProjectView.path}"
+						type="button" class="workspace-close-button"
+						aria-label="Close workspace"
+						th:attr="hx-post=@{/ui/workspaces/{id}/close(id=${workspace.id})}, hx-target='#modal-root', hx-swap='innerHTML'">
+						<i class="bi bi-x-lg" aria-hidden="true"></i>
+					</button>
+				</div>
 
-                <div th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}" class="session-list">
-                    <div th:each="s : ${sessionList}" class="session-row" th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''">
-                        <button type="button"
-                                class="session-item"
-                                th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''"
-                                th:attr="hx-post=@{/ui/sessions/{id}/activate(id=${s.id})}, hx-swap='none'">
-                            <i class="bi bi-chat-square session-icon" aria-hidden="true"></i>
-                            <span class="rail-label-wrap">
-                                <span class="session-label" th:text="${s.name}"></span>
-                                <span th:if="${s.failed}" class="failed-dot" aria-label="Failed"></span>
-                                <span th:if="${!s.failed and s.unread}" class="unread-dot" aria-label="Unread"></span>
-                                <span th:if="${!s.failed and !s.unread and s.inProgress}" class="pending-dot" aria-label="In progress"></span>
-                            </span>
-                        </button>
+				<div
+					th:if="${activeWorkspaceView != null and workspace.id == activeWorkspaceView.id}"
+					class="session-list">
+					<div th:each="s : ${sessionList}" class="session-row"
+						th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''">
+						<button type="button" class="session-item"
+							th:classappend="${activeSessionView != null and s.id == activeSessionView.id} ? ' active' : ''"
+							th:attr="hx-post=@{/ui/sessions/{id}/activate(id=${s.id})}, hx-swap='none'">
+							<i class="bi bi-chat-square session-icon" aria-hidden="true"></i>
+							<span class="rail-label-wrap"> <span class="session-label"
+								th:text="${s.name}"></span> <span th:if="${s.failed}"
+								class="failed-dot" aria-label="Failed"></span> <span
+								th:if="${!s.failed and s.unread}" class="unread-dot"
+								aria-label="Unread"></span> <span
+								th:if="${!s.failed and !s.unread and s.inProgress}"
+								class="pending-dot" aria-label="In progress"></span>
+							</span>
+						</button>
 
-                        <button type="button"
-                                class="session-close-button"
-                                aria-label="Close session"
-                                th:attr="hx-post=@{/ui/sessions/{id}/close(id=${s.id})}, hx-target='#shell', hx-swap='none'">
-                            <i class="bi bi-x-lg" aria-hidden="true"></i>
-                        </button>
-                    </div>
+						<button type="button" class="session-close-button"
+							aria-label="Close session"
+							th:attr="hx-post=@{/ui/sessions/{id}/close(id=${s.id})}, hx-target='#shell', hx-swap='none'">
+							<i class="bi bi-x-lg" aria-hidden="true"></i>
+						</button>
+					</div>
 
-                    <th:block th:replace="~{fragments/projects :: newSessionButton}"></th:block>
-                </div>
-            </div>
+					<th:block th:replace="~{fragments/projects :: newSessionButton}"></th:block>
+				</div>
+			</div>
 
-            <button type="button"
-                    class="rail-action-button workspace-create-button"
-                    hx-get="/ui/workspaces/new"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML">
-                <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                <span>New Workspace</span>
-            </button>
-        </div>
-    </section>
+			<button type="button"
+				class="rail-action-button workspace-create-button"
+				hx-get="/ui/workspaces/new" hx-target="#modal-root"
+				hx-swap="innerHTML">
+				<i class="bi bi-plus-lg" aria-hidden="true"></i> <span>New
+					Workspace</span>
+			</button>
+		</div>
+	</section>
 </th:block>
 
 <th:block th:fragment="newSessionButton">
-    <button type="button"
-            class="rail-action-button session-create-button"
-            hx-get="/ui/sessions/new"
-            hx-target="this"
-            hx-swap="outerHTML">
-        <i class="bi bi-plus-lg" aria-hidden="true"></i>
-        <span>New session</span>
-    </button>
+	<button type="button" class="rail-action-button session-create-button"
+		hx-get="/ui/sessions/new" hx-target="this" hx-swap="outerHTML">
+		<i class="bi bi-plus-lg" aria-hidden="true"></i> <span
+			th:text="'New session'"></span>
+	</button>
 </th:block>
 
 <th:block th:fragment="newSessionForm">
-    <form class="session-create-form"
-          data-session-create-form
-          hx-post="/ui/sessions/add"
-          hx-target="#shell"
-          hx-swap="none">
-        <input id="session-name-input"
-               class="session-create-input"
-               type="text"
-               name="name"
-               placeholder="Session name"
-               autocomplete="off"
-               required
-               autofocus>
-    </form>
+	<form class="session-create-form" data-session-create-form
+		hx-post="/ui/sessions/add" hx-target="#shell" hx-swap="none" action="">
+		<input id="session-name-input" class="session-create-input"
+			type="text" name="name" placeholder="Session name" autocomplete="off"
+			required autofocus>
+	</form>
 </th:block>
 
-<th:block th:fragment="selectedNameField(oob)" th:with="selectedNameValue=${selectedName ?: ''}">
-    <input id="project-name-input"
-           class="project-name-input"
-           type="text"
-           name="name"
-           autocomplete="off"
-           required
-           th:value="${selectedNameValue}"
-           th:attr="hx-swap-oob=${oob} ? 'outerHTML' : null">
+<th:block th:fragment="selectedNameField(oob)"
+	th:with="selectedNameValue=${selectedName ?: ''}">
+	<input id="project-name-input" class="project-name-input" type="text"
+		name="name" autocomplete="off" required
+		th:value="${selectedNameValue}"
+		th:attr="hx-swap-oob=${oob} ? 'outerHTML' : null">
 </th:block>
 
-<th:block th:fragment="selectedPathField(oob)" th:with="selectedPathValue=${selectedPath ?: ''}">
-    <input id="project-path-input"
-           class="project-path-input"
-           type="text"
-           name="path"
-           readonly
-           th:value="${selectedPathValue}"
-           th:attr="hx-swap-oob=${oob} ? 'outerHTML' : null">
+<th:block th:fragment="selectedPathField(oob)"
+	th:with="selectedPathValue=${selectedPath ?: ''}">
+	<input id="project-path-input" class="project-path-input" type="text"
+		name="path" readonly th:value="${selectedPathValue}"
+		th:attr="hx-swap-oob=${oob} ? 'outerHTML' : null">
 </th:block>
 
 <th:block th:fragment="modalClose">
-    <div id="modal-root" hx-swap-oob="innerHTML"></div>
+	<div id="modal-root" hx-swap-oob="innerHTML"></div>
 </th:block>
 
 <th:block th:fragment="usageEmpty">
-    <section class="settings-section"><h5>Usage</h5><p class="text-muted">No active project is selected.</p></section>
+	<section class="settings-section">
+		<h5>Usage</h5>
+		<p class="text-muted">No active project is selected.</p>
+	</section>
 </th:block>
 
 <th:block th:fragment="settingsUsage">
-    <section class="settings-section settings-usage" data-settings-usage-chart th:attr="data-range=${usageRange}">
-        <div class="settings-section-header"><div><h5>Usage</h5><p class="settings-usage-note">Reported token metrics, hourly, UTC</p></div>
-            <div class="btn-group btn-group-sm" role="group" aria-label="Usage range">
-                <button th:each="option : ${ {'24h','7d','30d','60d'} }" type="button" class="btn btn-outline-primary" th:classappend="${usageRange == option ? ' active' : ''}" th:text="${option}" th:attr="data-usage-range=${option}"></button>
-            </div>
-        </div>
-        <div class="settings-usage-summary" aria-live="polite">
-            <span><strong data-usage-requests aria-label="Reported requests">0</strong> requests</span><span><strong data-usage-total aria-label="Unavailable">&mdash;</strong> reported total tokens</span><span><strong data-usage-input aria-label="Unavailable">&mdash;</strong> reported input tokens</span><span><strong data-usage-output aria-label="Unavailable">&mdash;</strong> reported output tokens</span>
-        </div>
-        <div class="settings-usage-empty" data-usage-empty hidden>No token usage in this range.</div>
-        <div class="settings-usage-canvas-wrap"><canvas data-usage-canvas aria-label="Token usage by hour and model"></canvas></div>
-        <div data-usage-data hidden th:attr="data-usage-data=${usageJson}"></div>
-    </section>
+	<section class="settings-section settings-usage"
+		data-settings-usage-chart th:attr="data-range=${usageRange}">
+		<div class="settings-section-header">
+			<div>
+				<h5>Usage</h5>
+				<p class="settings-usage-note">Reported token metrics, hourly,
+					UTC</p>
+			</div>
+			<div class="btn-group btn-group-sm" role="group"
+				aria-label="Usage range">
+				<button th:each="option : ${ {'24h','7d','30d','60d'} }"
+					type="button" class="btn btn-outline-primary"
+					th:classappend="${usageRange == option ? ' active' : ''}"
+					th:text="${option}" th:attr="data-usage-range=${option}"></button>
+			</div>
+		</div>
+		<div class="settings-usage-summary" aria-live="polite">
+			<span><strong data-usage-requests
+				aria-label="Reported requests">0</strong> requests</span><span><strong
+				data-usage-total aria-label="Unavailable">&mdash;</strong> reported
+				total tokens</span><span><strong data-usage-input
+				aria-label="Unavailable">&mdash;</strong> reported input tokens</span><span><strong
+				data-usage-output aria-label="Unavailable">&mdash;</strong> reported
+				output tokens</span>
+		</div>
+		<div class="settings-usage-empty" data-usage-empty hidden>No
+			token usage in this range.</div>
+		<div class="settings-usage-canvas-wrap">
+			<canvas data-usage-canvas aria-label="Token usage by hour and model"></canvas>
+		</div>
+		<div data-usage-data hidden th:attr="data-usage-data=${usageJson}"></div>
+	</section>
 </th:block>
 
-<th:block th:fragment="settingsCommands" th:with="commands=${customCommands == null ? T(java.util.List).of() : customCommands}, submitted=${submittedCommand}, submittedForAdd=${submittedCommandOperation == 'create' ? submittedCommand : null}">
-    <div id="settings-commands-content">
-        <div th:if="${commandSuccess != null}" class="alert alert-success" role="status" th:text="${commandSuccess}"></div>
-        <div th:if="${commandError != null}" class="alert alert-danger" role="alert" th:text="${commandError}"></div>
-        <section class="settings-section settings-command-section">
-            <div class="settings-section-header"><div><h5>Custom commands</h5><p class="settings-help-text">Commands discovered in your custom command folder. IDs use lower-case letters, numbers, hyphens, and underscores.</p></div></div>
-            <form class="settings-command-form settings-command-add" hx-post="/ui/settings/commands/create" hx-target="#settings-commands-content" hx-swap="outerHTML">
-                <h6>Add command</h6>
-                <div class="row g-3">
-                    <label class="col-md-6 form-label">ID<input class="form-control" name="id" required pattern="[a-z0-9][a-z0-9_-]*" th:value="${submittedForAdd == null ? '' : submittedForAdd.id}"></label>
-                    <label class="col-md-6 form-label">Name<input class="form-control" name="name" required th:value="${submittedForAdd == null ? '' : submittedForAdd.name}"></label>
-                    <label class="col-md-6 form-label">Type<select class="form-select" name="type" required><option value="prompt" th:selected="${submittedForAdd != null and submittedForAdd.type != null and submittedForAdd.type.name() == 'PROMPT'}">Prompt</option><option value="script" th:selected="${submittedForAdd != null and submittedForAdd.type != null and submittedForAdd.type.name() == 'SCRIPT'}">Script</option></select></label>
-                    <label class="col-md-6 form-label">Description<input class="form-control" name="description" th:value="${submittedForAdd == null ? '' : submittedForAdd.description}"></label>
-                    <label class="col-md-6 form-label">Working directory<input class="form-control" name="workingDir" th:value="${submittedForAdd == null ? '' : submittedForAdd.workingDir}"></label>
-                    <label class="col-md-6 form-label">Timeout (seconds)<input class="form-control" name="timeoutSeconds" type="number" min="1" th:value="${submittedForAdd == null or submittedForAdd.timeoutSeconds == null ? '' : submittedForAdd.timeoutSeconds}"></label>
-                    <label class="col-12 form-label">Body<textarea class="form-control" name="body" rows="5" required th:text="${submittedForAdd == null ? '' : submittedForAdd.body}"></textarea></label>
-                </div>
-                <button class="btn btn-primary" type="submit">Add command</button>
-            </form>
-            <div th:if="${#lists.isEmpty(commands)}" class="settings-command-empty">No custom commands found.</div>
-            <div class="settings-command-list">
-                <article th:each="command, iterStat : ${commands}" class="settings-command-card" th:with="editSubmitted=${submittedCommandOperation == 'update' and submittedCommandOriginalId == command.id ? submittedCommand : null}, editCommand=${editSubmitted == null ? command : editSubmitted}">
-                    <div class="settings-command-card-header"><button class="settings-command-toggle btn btn-link text-start p-0 flex-grow-1" type="button" data-bs-toggle="collapse" th:attr="data-bs-target=|#settings-command-edit-${iterStat.index}|, aria-controls=|settings-command-edit-${iterStat.index}|" aria-expanded="false"><strong th:text="${command.name}"></strong><code th:text="${command.id}"></code></button><span class="badge text-bg-secondary" th:text="${command.type}"></span></div>
-                    <div class="collapse" th:id="|settings-command-edit-${iterStat.index}|">
-                    <form class="settings-command-form" th:attr="hx-post=@{/ui/settings/commands/{id}/update(id=${command.id})}, hx-target='#settings-commands-content', hx-swap='outerHTML'">
-                        <input type="hidden" name="originalId" th:value="${command.id}">
-                        <div class="row g-3"><label class="col-md-6 form-label">ID<input class="form-control" name="id" required pattern="[a-z0-9][a-z0-9_-]*" th:value="${editCommand.id}"></label><label class="col-md-6 form-label">Name<input class="form-control" name="name" required th:value="${editCommand.name}"></label><label class="col-md-6 form-label">Type<select class="form-select" name="type"><option value="prompt" th:selected="${editCommand.type != null and editCommand.type.name() == 'PROMPT'}">Prompt</option><option value="script" th:selected="${editCommand.type != null and editCommand.type.name() == 'SCRIPT'}">Script</option></select></label><label class="col-md-6 form-label">Description<input class="form-control" name="description" th:value="${editCommand.description}"></label><label class="col-md-6 form-label">Working directory<input class="form-control" name="workingDir" th:value="${editCommand.workingDir}"></label><label class="col-md-6 form-label">Timeout (seconds)<input class="form-control" name="timeoutSeconds" type="number" min="1" th:value="${editCommand.timeoutSeconds}"></label><label class="col-12 form-label">Body<textarea class="form-control" name="body" rows="5" required th:text="${editCommand.body}"></textarea></label></div>
-                        <div class="settings-command-actions"><button class="btn btn-primary btn-sm" type="submit">Save changes</button><button class="btn btn-outline-danger btn-sm" type="submit" th:attr="hx-post=@{/ui/settings/commands/{id}/delete(id=${command.id})}, hx-confirm='Delete this custom command?'">Delete</button></div>
-                    </form>
-                    </div>
-                </article>
-            </div>
-        </section>
-    </div>
+<th:block th:fragment="settingsCommands"
+	th:with="commands=${customCommands == null ? T(java.util.List).of() : customCommands}, submitted=${submittedCommand}, submittedForAdd=${submittedCommandOperation == 'create' ? submittedCommand : null}">
+	<div id="settings-commands-content">
+		<div th:if="${commandSuccess != null}" class="alert alert-success"
+			role="status" th:text="${commandSuccess}"></div>
+		<div th:if="${commandError != null}" class="alert alert-danger"
+			role="alert" th:text="${commandError}"></div>
+		<section class="settings-section settings-command-section">
+			<div class="settings-section-header">
+				<div>
+					<h5>Custom commands</h5>
+					<p class="settings-help-text">Commands discovered in your
+						custom command folder. IDs use lower-case letters, numbers,
+						hyphens, and underscores.</p>
+				</div>
+			</div>
+			<form class="settings-command-form settings-command-add"
+				hx-post="/ui/settings/commands/create"
+				hx-target="#settings-commands-content" hx-swap="outerHTML" action="">
+				<h6>Add command</h6>
+				<div class="row g-3">
+					<label class="col-md-6 form-label">ID<input
+						class="form-control" name="id" required
+						pattern="[a-z0-9][a-z0-9_-]*"
+						th:value="${submittedForAdd == null ? '' : submittedForAdd.id}"></label>
+					<label class="col-md-6 form-label">Name<input
+						class="form-control" name="name" required
+						th:value="${submittedForAdd == null ? '' : submittedForAdd.name}"></label>
+					<label class="col-md-6 form-label">Type<select
+						class="form-select" name="type" required><option
+								value="prompt"
+								th:selected="${submittedForAdd != null and submittedForAdd.type != null and submittedForAdd.type.name() == 'PROMPT'}">Prompt</option>
+							<option value="script"
+								th:selected="${submittedForAdd != null and submittedForAdd.type != null and submittedForAdd.type.name() == 'SCRIPT'}">Script</option></select></label>
+					<label class="col-md-6 form-label">Description<input
+						class="form-control" name="description"
+						th:value="${submittedForAdd == null ? '' : submittedForAdd.description}"></label>
+					<label class="col-md-6 form-label">Working directory<input
+						class="form-control" name="workingDir"
+						th:value="${submittedForAdd == null ? '' : submittedForAdd.workingDir}"></label>
+					<label class="col-md-6 form-label">Timeout (seconds)<input
+						class="form-control" name="timeoutSeconds" type="number" min="1"
+						th:value="${submittedForAdd == null or submittedForAdd.timeoutSeconds == null ? '' : submittedForAdd.timeoutSeconds}"></label>
+					<label class="col-12 form-label">Body<textarea
+							class="form-control" name="body" rows="5" required
+							th:text="${submittedForAdd == null ? '' : submittedForAdd.body}"
+							cols=""></textarea></label>
+				</div>
+				<button class="btn btn-primary" type="submit">Add command</button>
+			</form>
+			<div th:if="${#lists.isEmpty(commands)}"
+				class="settings-command-empty">No custom commands found.</div>
+			<div class="settings-command-list">
+				<article th:each="command, iterStat : ${commands}"
+					class="settings-command-card"
+					th:with="editSubmitted=${submittedCommandOperation == 'update' and submittedCommandOriginalId == command.id ? submittedCommand : null}, editCommand=${editSubmitted == null ? command : editSubmitted}">
+					<div class="settings-command-card-header">
+						<button
+							class="settings-command-toggle btn btn-link text-start p-0 flex-grow-1"
+							type="button" data-bs-toggle="collapse"
+							th:attr="data-bs-target=|#settings-command-edit-${iterStat.index}|, aria-controls=|settings-command-edit-${iterStat.index}|"
+							aria-expanded="false">
+							<strong th:text="${command.name}"></strong>
+							<code th:text="${command.id}"></code>
+						</button>
+						<span class="badge text-bg-secondary" th:text="${command.type}"></span>
+					</div>
+					<div class="collapse"
+						th:id="|settings-command-edit-${iterStat.index}|">
+						<form class="settings-command-form"
+							th:attr="hx-post=@{/ui/settings/commands/{id}/update(id=${command.id})}, hx-target='#settings-commands-content', hx-swap='outerHTML'"
+							action="">
+							<input type="hidden" name="originalId" th:value="${command.id}">
+							<div class="row g-3">
+								<label class="col-md-6 form-label">ID<input
+									class="form-control" name="id" required
+									pattern="[a-z0-9][a-z0-9_-]*" th:value="${editCommand.id}"></label><label
+									class="col-md-6 form-label">Name<input
+									class="form-control" name="name" required
+									th:value="${editCommand.name}"></label><label
+									class="col-md-6 form-label">Type<select
+									class="form-select" name="type"><option value="prompt"
+											th:selected="${editCommand.type != null and editCommand.type.name() == 'PROMPT'}">Prompt</option>
+										<option value="script"
+											th:selected="${editCommand.type != null and editCommand.type.name() == 'SCRIPT'}">Script</option></select></label><label
+									class="col-md-6 form-label">Description<input
+									class="form-control" name="description"
+									th:value="${editCommand.description}"></label><label
+									class="col-md-6 form-label">Working directory<input
+									class="form-control" name="workingDir"
+									th:value="${editCommand.workingDir}"></label><label
+									class="col-md-6 form-label">Timeout (seconds)<input
+									class="form-control" name="timeoutSeconds" type="number"
+									min="1" th:value="${editCommand.timeoutSeconds}"></label><label
+									class="col-12 form-label">Body<textarea
+										class="form-control" name="body" rows="5" required
+										th:text="${editCommand.body}" cols=""></textarea></label>
+							</div>
+							<div class="settings-command-actions">
+								<button class="btn btn-primary btn-sm" type="submit">Save
+									changes</button>
+								<button class="btn btn-outline-danger btn-sm" type="submit"
+									th:attr="hx-post=@{/ui/settings/commands/{id}/delete(id=${command.id})}, hx-confirm='Delete this custom command?'">Delete</button>
+							</div>
+						</form>
+					</div>
+				</article>
+			</div>
+		</section>
+	</div>
 </th:block>
 
-<th:block th:fragment="settingsModal" th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, commandEnvironmentAllowlistValue=${activeProject == null or activeProject.commandEnvironmentAllowlist == null ? '' : activeProject.commandEnvironmentAllowlist}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
-    <div id="settings-modal" class="project-modal settings-modal">
-        <div class="project-modal-backdrop"
-             hx-get="/ui/projects/modal/close"
-             hx-target="#modal-root"
-             hx-swap="innerHTML"></div>
+<th:block th:fragment="settingsModal"
+	th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, commandEnvironmentAllowlistValue=${activeProject == null or activeProject.commandEnvironmentAllowlist == null ? '' : activeProject.commandEnvironmentAllowlist}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}">
+	<div id="settings-modal" class="project-modal settings-modal">
+		<div class="project-modal-backdrop" hx-get="/ui/projects/modal/close"
+			hx-target="#modal-root" hx-swap="innerHTML"></div>
 
-        <div class="project-modal-card settings-modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
-            <div class="project-modal-header">
-                <h4 id="settings-modal-title">Settings</h4>
-                <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
-            </div>
+		<div class="project-modal-card settings-modal-card" role="dialog"
+			aria-modal="true" aria-labelledby="settings-modal-title">
+			<div class="project-modal-header">
+				<h4 id="settings-modal-title">Settings</h4>
+				<button type="button" class="btn-close"
+					hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+					hx-swap="innerHTML"></button>
+			</div>
 
-            <div class="settings-modal-grid row g-4">
-                <div class="col-12 col-md-3">
-                    <nav class="nav nav-pills flex-md-column settings-nav" aria-label="Settings tabs" role="tablist">
-                        <button th:if="${activeProject != null}" class="nav-link active" id="settings-current-project-tab" data-bs-toggle="pill" data-bs-target="#settings-current-project" type="button" role="tab" aria-controls="settings-current-project" aria-selected="true">Current Project</button>
-                        <button class="nav-link" id="settings-application-tab" data-bs-toggle="pill" data-bs-target="#settings-application" type="button" role="tab" aria-controls="settings-application" aria-selected="false">Application</button>
-                        <button class="nav-link" id="settings-mcp-servers-tab" data-bs-toggle="pill" data-bs-target="#settings-mcp-servers" type="button" role="tab" aria-controls="settings-mcp-servers" aria-selected="false">MCP Servers</button>
-                        <button class="nav-link" id="settings-hooks-tab" data-bs-toggle="pill" data-bs-target="#settings-hooks" type="button" role="tab" aria-controls="settings-hooks" th:attr="aria-selected=${activeProject == null ? 'true' : 'false'}" th:classappend="${activeProject == null ? ' active' : ''}">Hooks</button>
-                        <button class="nav-link" id="settings-model-providers-tab" data-bs-toggle="pill" data-bs-target="#settings-model-providers" type="button" role="tab" aria-controls="settings-model-providers" aria-selected="false">Model Providers</button>
-                        <button class="nav-link" id="settings-commands-tab" data-bs-toggle="pill" data-bs-target="#settings-commands" type="button" role="tab" aria-controls="settings-commands" aria-selected="false">Commands</button>
-                        <button class="nav-link" id="settings-usage-tab" data-bs-toggle="pill" data-bs-target="#settings-usage" type="button" role="tab" aria-controls="settings-usage" aria-selected="false" data-settings-usage-tab>Usage</button>
-                        <button class="nav-link" id="settings-help-tab" data-bs-toggle="pill" data-bs-target="#settings-help" type="button" role="tab" aria-controls="settings-help" aria-selected="false">Help</button>
-                    </nav>
-                </div>
+			<div class="settings-modal-grid row g-4">
+				<div class="col-12 col-md-3">
+					<nav class="nav nav-pills flex-md-column settings-nav"
+						aria-label="Settings tabs" role="tablist">
+						<button th:if="${activeProject != null}" class="nav-link active"
+							id="settings-current-project-tab" data-bs-toggle="pill"
+							data-bs-target="#settings-current-project" type="button"
+							role="tab" aria-controls="settings-current-project"
+							aria-selected="true">Current Project</button>
+						<button class="nav-link" id="settings-application-tab"
+							data-bs-toggle="pill" data-bs-target="#settings-application"
+							type="button" role="tab" aria-controls="settings-application"
+							aria-selected="false">Application</button>
+						<button class="nav-link" id="settings-mcp-servers-tab"
+							data-bs-toggle="pill" data-bs-target="#settings-mcp-servers"
+							type="button" role="tab" aria-controls="settings-mcp-servers"
+							aria-selected="false">MCP Servers</button>
+						<button class="nav-link" id="settings-hooks-tab"
+							data-bs-toggle="pill" data-bs-target="#settings-hooks"
+							type="button" role="tab" aria-controls="settings-hooks"
+							th:attr="aria-selected=${activeProject == null ? 'true' : 'false'}"
+							th:classappend="${activeProject == null ? ' active' : ''}">Hooks</button>
+						<button class="nav-link" id="settings-model-providers-tab"
+							data-bs-toggle="pill" data-bs-target="#settings-model-providers"
+							type="button" role="tab" aria-controls="settings-model-providers"
+							aria-selected="false">Model Providers</button>
+						<button class="nav-link" id="settings-commands-tab"
+							data-bs-toggle="pill" data-bs-target="#settings-commands"
+							type="button" role="tab" aria-controls="settings-commands"
+							aria-selected="false">Commands</button>
+						<button class="nav-link" id="settings-usage-tab"
+							data-bs-toggle="pill" data-bs-target="#settings-usage"
+							type="button" role="tab" aria-controls="settings-usage"
+							aria-selected="false" data-settings-usage-tab>Usage</button>
+						<button class="nav-link" id="settings-help-tab"
+							data-bs-toggle="pill" data-bs-target="#settings-help"
+							type="button" role="tab" aria-controls="settings-help"
+							aria-selected="false">Help</button>
+					</nav>
+				</div>
 
-                <div class="col-12 col-md-9">
-                    <div class="tab-content settings-tab-content">
-                        <div th:if="${activeProject != null}" class="tab-pane fade show active" id="settings-current-project" role="tabpanel" aria-labelledby="settings-current-project-tab" tabindex="0">
-                            <form class="settings-form" hx-post="/ui/settings/apply" hx-target="#modal-root" hx-swap="innerHTML">
-                                <section class="settings-section">
-                                    <h5>Current Project</h5>
-                                    <div class="settings-project-meta">
-                                        <div><strong>Name:</strong> <span th:text="${activeProject == null ? '' : activeProject.name}"></span></div>
-                                        <div><strong>Path:</strong> <span th:text="${activeProject == null ? '' : activeProject.path}"></span></div>
-                                    </div>
+				<div class="col-12 col-md-9">
+					<div class="tab-content settings-tab-content">
+						<div th:if="${activeProject != null}"
+							class="tab-pane fade show active" id="settings-current-project"
+							role="tabpanel" aria-labelledby="settings-current-project-tab"
+							tabindex="0">
+							<form class="settings-form" hx-post="/ui/settings/apply"
+								hx-target="#modal-root" hx-swap="innerHTML" action="">
+								<section class="settings-section">
+									<h5>Current Project</h5>
+									<div class="settings-project-meta">
+										<div>
+											<strong>Name:</strong> <span
+												th:text="${activeProject == null ? '' : activeProject.name}"></span>
+										</div>
+										<div>
+											<strong>Path:</strong> <span
+												th:text="${activeProject == null ? '' : activeProject.path}"></span>
+										</div>
+									</div>
 
-                                    <div class="project-form-field settings-env-field" data-settings-env-field>
-                                        <span>Environment variables</span>
-                                        <div class="settings-env-list" data-settings-env-vars>
-                                            <div th:if="${#lists.isEmpty(environmentVariablesValue)}" class="settings-env-row" data-settings-env-row>
-                                    <input type="text"
-                                           class="settings-env-name"
-                                           name="environmentVariableNames"
-                                           placeholder="Name"
-                                           autocomplete="off">
-                                    <input type="text"
-                                           class="settings-env-value"
-                                           name="environmentVariableValues"
-                                           placeholder="Value"
-                                           autocomplete="off">
-                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-env-remove>Remove</button>
-                                </div>
-                                <div th:each="environmentVariable : ${environmentVariablesValue}" class="settings-env-row" data-settings-env-row>
-                                    <input type="text"
-                                           class="settings-env-name"
-                                           name="environmentVariableNames"
-                                           placeholder="Name"
-                                           autocomplete="off"
-                                           th:value="${environmentVariable.name}">
-                                    <input type="text"
-                                           class="settings-env-value"
-                                           name="environmentVariableValues"
-                                           placeholder="Value"
-                                           autocomplete="off"
-                                           th:value="${environmentVariable.value}">
-                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-env-remove>Remove</button>
-                                </div>
-                            </div>
-                            <template data-settings-env-template>
-                                <div class="settings-env-row" data-settings-env-row>
-                                    <input type="text"
-                                           class="settings-env-name"
-                                           name="environmentVariableNames"
-                                           placeholder="Name"
-                                           autocomplete="off">
-                                    <input type="text"
-                                           class="settings-env-value"
-                                           name="environmentVariableValues"
-                                           placeholder="Value"
-                                           autocomplete="off">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-settings-env-remove>Remove</button>
-                                </div>
-                            </template>
-                            <button type="button" class="btn btn-outline-primary btn-sm" data-settings-env-add>Add Variable</button>
-                        </div>
+									<div class="project-form-field settings-env-field"
+										data-settings-env-field>
+										<span>Environment variables</span>
+										<div class="settings-env-list" data-settings-env-vars>
+											<div th:if="${#lists.isEmpty(environmentVariablesValue)}"
+												class="settings-env-row" data-settings-env-row>
+												<input type="text" class="settings-env-name"
+													name="environmentVariableNames" placeholder="Name"
+													autocomplete="off"> <input type="text"
+													class="settings-env-value" name="environmentVariableValues"
+													placeholder="Value" autocomplete="off">
+												<button type="button" class="btn btn-outline-danger btn-sm"
+													data-settings-env-remove>Remove</button>
+											</div>
+											<div
+												th:each="environmentVariable : ${environmentVariablesValue}"
+												class="settings-env-row" data-settings-env-row>
+												<input type="text" class="settings-env-name"
+													name="environmentVariableNames" placeholder="Name"
+													autocomplete="off" th:value="${environmentVariable.name}">
+												<input type="text" class="settings-env-value"
+													name="environmentVariableValues" placeholder="Value"
+													autocomplete="off" th:value="${environmentVariable.value}">
+												<button type="button" class="btn btn-outline-danger btn-sm"
+													data-settings-env-remove>Remove</button>
+											</div>
+										</div>
+										<template data-settings-env-template>
+											<div class="settings-env-row" data-settings-env-row>
+												<input type="text" class="settings-env-name"
+													name="environmentVariableNames" placeholder="Name"
+													autocomplete="off"> <input type="text"
+													class="settings-env-value" name="environmentVariableValues"
+													placeholder="Value" autocomplete="off">
+												<button type="button"
+													class="btn btn-outline-secondary btn-sm"
+													data-settings-env-remove>Remove</button>
+											</div>
+										</template>
+										<button type="button" class="btn btn-outline-primary btn-sm"
+											data-settings-env-add>Add Variable</button>
+									</div>
 
-                        <label class="project-form-field">
-                            <span>Command environment allowlist</span>
-                            <input type="text"
-                                   name="commandEnvironmentAllowlist"
-                                   autocomplete="off"
-                                   placeholder="HOME, PATH, CI"
-                                   th:value="${commandEnvironmentAllowlistValue}"
-                                   aria-describedby="command-environment-allowlist-help">
-                            <small id="command-environment-allowlist-help">Comma-separated system environment variable names. This controls only the run command tool; leave blank for no system variables. Terminal sessions retain the normal system environment. Project environment variables remain separate.</small>
-                        </label>
+									<label class="project-form-field"> <span>Command
+											environment allowlist</span> <input type="text"
+										name="commandEnvironmentAllowlist" autocomplete="off"
+										placeholder="HOME, PATH, CI"
+										th:value="${commandEnvironmentAllowlistValue}"
+										aria-describedby="command-environment-allowlist-help">
+										<small id="command-environment-allowlist-help"
+										th:text="'Comma-separated system environment variable names. This controls only the run command tool; leave blank for no system variables. Terminal sessions retain the normal system environment. Project environment variables remain separate.'"></small>
+									</label> <label class="project-form-field settings-commands-field">
+										<span>Workspace init commands</span> <textarea
+											class="settings-commands" name="workspaceInitCommands"
+											rows="8" spellcheck="false"
+											th:text="${workspaceInitCommandsValue}" cols=""></textarea>
+									</label>
 
-                        <label class="project-form-field settings-commands-field">
-                            <span>Workspace init commands</span>
-                            <textarea class="settings-commands"
-                                      name="workspaceInitCommands"
-                                      rows="8"
-                                      spellcheck="false"
-                                      th:text="${workspaceInitCommandsValue}"></textarea>
-                        </label>
+									<div class="project-form-actions">
+										<button type="button" class="btn btn-outline-secondary"
+											hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+											hx-swap="innerHTML">Cancel</button>
+										<button type="submit" class="btn btn-primary">Save</button>
+									</div>
+								</section>
+							</form>
+						</div>
 
-                        <div class="project-form-actions">
-                            <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Save</button>
-                        </div>
-                                    </section>
-                            </form>
-                        </div>
+						<div class="tab-pane fade" id="settings-application"
+							role="tabpanel" aria-labelledby="settings-application-tab"
+							tabindex="0">
+							<form class="settings-form"
+								hx-post="/ui/settings/auto-git-update/apply"
+								hx-target="#modal-root" hx-swap="innerHTML" action="">
+								<section class="settings-section settings-app-section">
+									<h5>Git updates</h5>
+									<label class="settings-toggle"> <input type="checkbox"
+										name="enabled" value="true"
+										th:checked="${autoGitUpdateEnabled}"> <span>Automatically
+											pull Git updates</span>
+									</label>
+									<p class="settings-help-text">When enabled, Jupiter checks
+										Git workspaces periodically. Manual pulls remain available
+										from the top navigation.</p>
+									<div class="project-form-actions">
+										<button type="button" class="btn btn-outline-secondary"
+											hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+											hx-swap="innerHTML">Cancel</button>
+										<button type="submit" class="btn btn-primary">Save
+											Git settings</button>
+									</div>
+								</section>
+							</form>
+						</div>
 
-                        <div class="tab-pane fade" id="settings-application" role="tabpanel" aria-labelledby="settings-application-tab" tabindex="0">
-                            <form class="settings-form" hx-post="/ui/settings/auto-git-update/apply" hx-target="#modal-root" hx-swap="innerHTML">
-                                <section class="settings-section settings-app-section">
-                                    <h5>Git updates</h5>
-                                    <label class="settings-toggle">
-                                        <input type="checkbox" name="enabled" value="true" th:checked="${autoGitUpdateEnabled}">
-                                        <span>Automatically pull Git updates</span>
-                                    </label>
-                                    <p class="settings-help-text">When enabled, Jupiter checks Git workspaces periodically. Manual pulls remain available from the top navigation.</p>
-                                    <div class="project-form-actions">
-                                        <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                                        <button type="submit" class="btn btn-primary">Save Git settings</button>
-                                    </div>
-                                </section>
-                            </form>
-                        </div>
+						<div class="tab-pane fade" id="settings-commands" role="tabpanel"
+							aria-labelledby="settings-commands-tab" tabindex="0">
+							<th:block th:replace="~{fragments/projects :: settingsCommands}"></th:block>
+						</div>
 
-                        <div class="tab-pane fade" id="settings-commands" role="tabpanel" aria-labelledby="settings-commands-tab" tabindex="0"><th:block th:replace="~{fragments/projects :: settingsCommands}"></th:block></div>
+						<div class="tab-pane fade" id="settings-usage" role="tabpanel"
+							aria-labelledby="settings-usage-tab" tabindex="0">
+							<div data-settings-usage-container
+								hx-get="/ui/settings/usage?range=24h"
+								hx-trigger="settings-usage-load" hx-target="this"
+								hx-swap="innerHTML">
+								<section class="settings-section">
+									<h5>Usage</h5>
+									<p class="text-muted">Select Usage to load token activity
+										for this project.</p>
+								</section>
+							</div>
+						</div>
 
-                        <div class="tab-pane fade" id="settings-usage" role="tabpanel" aria-labelledby="settings-usage-tab" tabindex="0">
-                            <div data-settings-usage-container hx-get="/ui/settings/usage?range=24h" hx-trigger="settings-usage-load" hx-target="this" hx-swap="innerHTML">
-                                <section class="settings-section"><h5>Usage</h5><p class="text-muted">Select Usage to load token activity for this project.</p></section>
-                            </div>
-                        </div>
+						<div class="tab-pane fade" id="settings-mcp-servers"
+							role="tabpanel" aria-labelledby="settings-mcp-servers-tab"
+							tabindex="0">
+							<form class="settings-form settings-mcp-form"
+								hx-post="/ui/settings/mcp/apply" hx-target="#modal-root"
+								hx-swap="innerHTML" data-settings-mcp-form action="">
+								<input type="hidden" name="mcpCatalogJson" value="">
+								<section class="settings-section settings-mcp-section"
+									data-settings-mcp-field>
+									<div class="settings-section-header">
+										<h5>MCP servers</h5>
+										<button type="button" class="btn btn-outline-primary btn-sm"
+											data-settings-mcp-add-server>Add Server</button>
+									</div>
 
-                        <div class="tab-pane fade" id="settings-mcp-servers" role="tabpanel" aria-labelledby="settings-mcp-servers-tab" tabindex="0">
-                            <form class="settings-form settings-mcp-form" hx-post="/ui/settings/mcp/apply" hx-target="#modal-root" hx-swap="innerHTML" data-settings-mcp-form>
-                    <input type="hidden" name="mcpCatalogJson" value="">
-                    <section class="settings-section settings-mcp-section" data-settings-mcp-field>
-                        <div class="settings-section-header">
-                            <h5>MCP servers</h5>
-                            <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-server>Add Server</button>
-                        </div>
+									<div class="settings-mcp-list" data-settings-mcp-list>
+										<div th:if="${#lists.isEmpty(mcpServersValue)}"
+											class="settings-mcp-card" data-settings-mcp-server>
+											<div class="settings-mcp-card-header">
+												<input type="text" class="settings-mcp-name"
+													data-mcp-server-name placeholder="Server name"
+													autocomplete="off"> <label
+													class="settings-mcp-enabled"><input type="checkbox"
+													data-mcp-server-enabled checked> Enabled</label>
+												<button type="button" class="btn btn-outline-danger btn-sm"
+													data-settings-mcp-remove-server>Remove Server</button>
+											</div>
+											<label class="project-form-field"> <span>URL</span> <input
+												type="url" class="settings-mcp-url" data-mcp-server-url
+												placeholder="https://example.test/mcp" autocomplete="off">
+											</label>
+											<div class="project-form-field settings-mcp-projects-field">
+												<span>Exposed projects</span> <select
+													class="settings-mcp-projects" data-mcp-server-projects
+													multiple size="4">
+													<option th:each="project : ${visibleProjectsValue}"
+														th:value="${project.id}" th:text="${project.name}"></option>
+												</select>
+											</div>
+											<div class="project-form-field settings-mcp-headers-field"
+												data-settings-mcp-headers>
+												<span>Headers</span>
+												<div class="settings-mcp-header-list"
+													data-settings-mcp-header-list>
+													<div class="settings-mcp-header-row"
+														data-mcp-server-header-row>
+														<input type="text" class="settings-mcp-header-name"
+															data-mcp-server-header-name placeholder="Header name"
+															autocomplete="off"> <input type="text"
+															class="settings-mcp-header-value"
+															data-mcp-server-header-value placeholder="Header value"
+															autocomplete="off">
+														<button type="button"
+															class="btn btn-outline-danger btn-sm"
+															data-settings-mcp-remove-header>Remove Header</button>
+													</div>
+												</div>
+												<template data-settings-mcp-header-template>
+													<div class="settings-mcp-header-row"
+														data-mcp-server-header-row>
+														<input type="text" class="settings-mcp-header-name"
+															data-mcp-server-header-name placeholder="Header name"
+															autocomplete="off"> <input type="text"
+															class="settings-mcp-header-value"
+															data-mcp-server-header-value placeholder="Header value"
+															autocomplete="off">
+														<button type="button"
+															class="btn btn-outline-secondary btn-sm"
+															data-settings-mcp-remove-header>Remove Header</button>
+													</div>
+												</template>
+												<button type="button" class="btn btn-outline-primary btn-sm"
+													data-settings-mcp-add-header>Add Header</button>
+											</div>
+										</div>
 
-                        <div class="settings-mcp-list" data-settings-mcp-list>
-                            <div th:if="${#lists.isEmpty(mcpServersValue)}" class="settings-mcp-card" data-settings-mcp-server>
-                                <div class="settings-mcp-card-header">
-                                    <input type="text" class="settings-mcp-name" data-mcp-server-name placeholder="Server name" autocomplete="off">
-                                    <label class="settings-mcp-enabled"><input type="checkbox" data-mcp-server-enabled checked> Enabled</label>
-                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-server>Remove Server</button>
-                                </div>
-                                <label class="project-form-field">
-                                    <span>URL</span>
-                                    <input type="url" class="settings-mcp-url" data-mcp-server-url placeholder="https://example.test/mcp" autocomplete="off">
-                                </label>
-                                <div class="project-form-field settings-mcp-projects-field">
-                                    <span>Exposed projects</span>
-                                    <select class="settings-mcp-projects" data-mcp-server-projects multiple size="4">
-                                        <option th:each="project : ${visibleProjectsValue}" th:value="${project.id}" th:text="${project.name}"></option>
-                                    </select>
-                                </div>
-                                <div class="project-form-field settings-mcp-headers-field" data-settings-mcp-headers>
-                                    <span>Headers</span>
-                                    <div class="settings-mcp-header-list" data-settings-mcp-header-list>
-                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
-                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
-                                            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-header>Remove Header</button>
-                                        </div>
-                                    </div>
-                                    <template data-settings-mcp-header-template>
-                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
-                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" data-settings-mcp-remove-header>Remove Header</button>
-                                        </div>
-                                    </template>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-header>Add Header</button>
-                                </div>
-                            </div>
+										<div th:each="server : ${mcpServersValue}"
+											class="settings-mcp-card" data-settings-mcp-server
+											th:attr="data-mcp-server-id=${server.id}">
+											<div class="settings-mcp-card-header">
+												<input type="text" class="settings-mcp-name"
+													data-mcp-server-name placeholder="Server name"
+													autocomplete="off" th:value="${server.name}"> <label
+													class="settings-mcp-enabled"><input type="checkbox"
+													data-mcp-server-enabled th:checked="${server.enabled}">
+													Enabled</label>
+												<button type="button" class="btn btn-outline-danger btn-sm"
+													data-settings-mcp-remove-server>Remove Server</button>
+											</div>
+											<label class="project-form-field"> <span>URL</span> <input
+												type="url" class="settings-mcp-url" data-mcp-server-url
+												placeholder="https://example.test/mcp" autocomplete="off"
+												th:value="${server.url}">
+											</label>
+											<div class="project-form-field settings-mcp-projects-field">
+												<span>Exposed projects</span> <select
+													class="settings-mcp-projects" data-mcp-server-projects
+													multiple size="4">
+													<option th:each="project : ${visibleProjectsValue}"
+														th:value="${project.id}" th:text="${project.name}"
+														th:selected="${server.exposedProjectIds.contains(project.id)}"></option>
+												</select>
+											</div>
+											<div class="project-form-field settings-mcp-headers-field"
+												data-settings-mcp-headers>
+												<span>Headers</span>
+												<div class="settings-mcp-header-list"
+													data-settings-mcp-header-list>
+													<div th:if="${#lists.isEmpty(server.headers)}"
+														class="settings-mcp-header-row" data-mcp-server-header-row>
+														<input type="text" class="settings-mcp-header-name"
+															data-mcp-server-header-name placeholder="Header name"
+															autocomplete="off"> <input type="text"
+															class="settings-mcp-header-value"
+															data-mcp-server-header-value placeholder="Header value"
+															autocomplete="off">
+														<button type="button"
+															class="btn btn-outline-danger btn-sm"
+															data-settings-mcp-remove-header>Remove Header</button>
+													</div>
+													<div th:each="header : ${server.headers}"
+														class="settings-mcp-header-row" data-mcp-server-header-row>
+														<input type="text" class="settings-mcp-header-name"
+															data-mcp-server-header-name placeholder="Header name"
+															autocomplete="off" th:value="${header.name}"> <input
+															type="text" class="settings-mcp-header-value"
+															data-mcp-server-header-value placeholder="Header value"
+															autocomplete="off" th:value="${header.value}">
+														<button type="button"
+															class="btn btn-outline-danger btn-sm"
+															data-settings-mcp-remove-header>Remove Header</button>
+													</div>
+												</div>
+												<template data-settings-mcp-header-template>
+													<div class="settings-mcp-header-row"
+														data-mcp-server-header-row>
+														<input type="text" class="settings-mcp-header-name"
+															data-mcp-server-header-name placeholder="Header name"
+															autocomplete="off"> <input type="text"
+															class="settings-mcp-header-value"
+															data-mcp-server-header-value placeholder="Header value"
+															autocomplete="off">
+														<button type="button"
+															class="btn btn-outline-secondary btn-sm"
+															data-settings-mcp-remove-header>Remove Header</button>
+													</div>
+												</template>
+												<button type="button" class="btn btn-outline-primary btn-sm"
+													data-settings-mcp-add-header>Add Header</button>
+											</div>
+										</div>
+									</div>
 
-                            <div th:each="server : ${mcpServersValue}" class="settings-mcp-card" data-settings-mcp-server th:attr="data-mcp-server-id=${server.id}">
-                                <div class="settings-mcp-card-header">
-                                    <input type="text" class="settings-mcp-name" data-mcp-server-name placeholder="Server name" autocomplete="off" th:value="${server.name}">
-                                    <label class="settings-mcp-enabled"><input type="checkbox" data-mcp-server-enabled th:checked="${server.enabled}"> Enabled</label>
-                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-server>Remove Server</button>
-                                </div>
-                                <label class="project-form-field">
-                                    <span>URL</span>
-                                    <input type="url" class="settings-mcp-url" data-mcp-server-url placeholder="https://example.test/mcp" autocomplete="off" th:value="${server.url}">
-                                </label>
-                                <div class="project-form-field settings-mcp-projects-field">
-                                    <span>Exposed projects</span>
-                                    <select class="settings-mcp-projects" data-mcp-server-projects multiple size="4">
-                                        <option th:each="project : ${visibleProjectsValue}" th:value="${project.id}" th:text="${project.name}" th:selected="${server.exposedProjectIds.contains(project.id)}"></option>
-                                    </select>
-                                </div>
-                                <div class="project-form-field settings-mcp-headers-field" data-settings-mcp-headers>
-                                    <span>Headers</span>
-                                    <div class="settings-mcp-header-list" data-settings-mcp-header-list>
-                                        <div th:if="${#lists.isEmpty(server.headers)}" class="settings-mcp-header-row" data-mcp-server-header-row>
-                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
-                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
-                                            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-header>Remove Header</button>
-                                        </div>
-                                        <div th:each="header : ${server.headers}" class="settings-mcp-header-row" data-mcp-server-header-row>
-                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off" th:value="${header.name}">
-                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off" th:value="${header.value}">
-                                            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-header>Remove Header</button>
-                                        </div>
-                                    </div>
-                                    <template data-settings-mcp-header-template>
-                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
-                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" data-settings-mcp-remove-header>Remove Header</button>
-                                        </div>
-                                    </template>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-header>Add Header</button>
-                                </div>
-                            </div>
-                        </div>
+									<template data-settings-mcp-server-template>
+										<div class="settings-mcp-card" data-settings-mcp-server>
+											<div class="settings-mcp-card-header">
+												<input type="text" class="settings-mcp-name"
+													data-mcp-server-name placeholder="Server name"
+													autocomplete="off"> <label
+													class="settings-mcp-enabled"><input type="checkbox"
+													data-mcp-server-enabled checked> Enabled</label>
+												<button type="button" class="btn btn-outline-danger btn-sm"
+													data-settings-mcp-remove-server>Remove Server</button>
+											</div>
+											<label class="project-form-field"> <span>URL</span> <input
+												type="url" class="settings-mcp-url" data-mcp-server-url
+												placeholder="https://example.test/mcp" autocomplete="off">
+											</label>
+											<div class="project-form-field settings-mcp-projects-field">
+												<span>Exposed projects</span> <select
+													class="settings-mcp-projects" data-mcp-server-projects
+													multiple size="4">
+													<option th:each="project : ${visibleProjectsValue}"
+														th:value="${project.id}" th:text="${project.name}"></option>
+												</select>
+											</div>
+											<div class="project-form-field settings-mcp-headers-field"
+												data-settings-mcp-headers>
+												<span>Headers</span>
+												<div class="settings-mcp-header-list"
+													data-settings-mcp-header-list>
+													<div class="settings-mcp-header-row"
+														data-mcp-server-header-row>
+														<input type="text" class="settings-mcp-header-name"
+															data-mcp-server-header-name placeholder="Header name"
+															autocomplete="off"> <input type="text"
+															class="settings-mcp-header-value"
+															data-mcp-server-header-value placeholder="Header value"
+															autocomplete="off">
+														<button type="button"
+															class="btn btn-outline-danger btn-sm"
+															data-settings-mcp-remove-header>Remove Header</button>
+													</div>
+												</div>
+												<template data-settings-mcp-header-template>
+													<div class="settings-mcp-header-row"
+														data-mcp-server-header-row>
+														<input type="text" class="settings-mcp-header-name"
+															data-mcp-server-header-name placeholder="Header name"
+															autocomplete="off"> <input type="text"
+															class="settings-mcp-header-value"
+															data-mcp-server-header-value placeholder="Header value"
+															autocomplete="off">
+														<button type="button"
+															class="btn btn-outline-secondary btn-sm"
+															data-settings-mcp-remove-header>Remove Header</button>
+													</div>
+												</template>
+												<button type="button" class="btn btn-outline-primary btn-sm"
+													data-settings-mcp-add-header>Add Header</button>
+											</div>
+										</div>
+									</template>
+								</section>
 
-                        <template data-settings-mcp-server-template>
-                            <div class="settings-mcp-card" data-settings-mcp-server>
-                                <div class="settings-mcp-card-header">
-                                    <input type="text" class="settings-mcp-name" data-mcp-server-name placeholder="Server name" autocomplete="off">
-                                    <label class="settings-mcp-enabled"><input type="checkbox" data-mcp-server-enabled checked> Enabled</label>
-                                    <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-server>Remove Server</button>
-                                </div>
-                                <label class="project-form-field">
-                                    <span>URL</span>
-                                    <input type="url" class="settings-mcp-url" data-mcp-server-url placeholder="https://example.test/mcp" autocomplete="off">
-                                </label>
-                                <div class="project-form-field settings-mcp-projects-field">
-                                    <span>Exposed projects</span>
-                                    <select class="settings-mcp-projects" data-mcp-server-projects multiple size="4">
-                                        <option th:each="project : ${visibleProjectsValue}" th:value="${project.id}" th:text="${project.name}"></option>
-                                    </select>
-                                </div>
-                                <div class="project-form-field settings-mcp-headers-field" data-settings-mcp-headers>
-                                    <span>Headers</span>
-                                    <div class="settings-mcp-header-list" data-settings-mcp-header-list>
-                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
-                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
-                                            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-header>Remove Header</button>
-                                        </div>
-                                    </div>
-                                    <template data-settings-mcp-header-template>
-                                        <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                            <input type="text" class="settings-mcp-header-name" data-mcp-server-header-name placeholder="Header name" autocomplete="off">
-                                            <input type="text" class="settings-mcp-header-value" data-mcp-server-header-value placeholder="Header value" autocomplete="off">
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" data-settings-mcp-remove-header>Remove Header</button>
-                                        </div>
-                                    </template>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-header>Add Header</button>
-                                </div>
-                            </div>
-                        </template>
-                    </section>
+								<div class="project-form-actions">
+									<button type="submit" class="btn btn-primary">Apply
+										MCP Catalog</button>
+								</div>
+							</form>
+						</div>
 
-                    <div class="project-form-actions">
-                        <button type="submit" class="btn btn-primary">Apply MCP Catalog</button>
-                    </div>
-                            </form>
-                        </div>
+						<div class="tab-pane fade"
+							th:classappend="${activeProject == null ? ' show active' : ''}"
+							id="settings-hooks" role="tabpanel"
+							aria-labelledby="settings-hooks-tab" tabindex="0">
+							<form class="settings-form" hx-post="/ui/settings/hooks/apply"
+								hx-target="#modal-root" hx-swap="innerHTML" action="">
+								<section class="settings-section settings-app-section">
+									<h5>Lifecycle hooks</h5>
+									<div class="settings-hooks-docs">
+										<p class="settings-help-text">
+											<span th:text="'Hooks run asynchronously in Bash using'"></span>
+											<code>/bin/bash</code>
+											, with
+											<code>/tmp</code>
+											as the working directory. <span
+												th:text="'A hook failure does not change the agent or subagent lifecycle result; the timeout applies to each hook.'"></span>
+										</p>
+										<p class="settings-help-text">
+											These runtime variables are always available:
+											<code>JUPITER_PROJECT_NAME</code>
+											(project name),
+											<code>JUPITER_WORKSPACE_NAME</code>
+											(workspace name), and
+											<code>JUPITER_SESSION_NAME</code>
+											(session name). Project-configured environment variables are
+											also passed and can be expanded normally, such as
+											<code>"$WEBHOOK_URL"</code>
+											. The three
+											<code>JUPITER_*</code>
+											values take precedence over project variables with matching
+											names.
+										</p>
+										<p class="settings-help-text">Example:</p>
+										<pre class="settings-hooks-example">
+											<code>printf '%s | %s | %s\n' "$JUPITER_PROJECT_NAME" "$JUPITER_WORKSPACE_NAME" "$JUPITER_SESSION_NAME" &gt;&gt; /tmp/jupiter-hooks.log</code>
+										</pre>
+									</div>
+									<label class="project-form-field"> <span
+										th:text="'Agent completion script'"></span> <small
+										id="agent-completion-help"
+										th:text="'Runs after the agent response completes.'"></small>
+										<textarea name="assistantCompletedScript" rows="6"
+											spellcheck="false" aria-describedby="agent-completion-help"
+											th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantCompletedScript}"
+											cols=""></textarea>
+									</label> <label class="project-form-field"> <span
+										th:text="'Agent error script'"></span> <small
+										id="agent-error-help"
+										th:text="'Runs when the agent execution fails.'"></small> <textarea
+											name="assistantErroredScript" rows="6" spellcheck="false"
+											aria-describedby="agent-error-help"
+											th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantErroredScript}"
+											cols=""></textarea>
+									</label> <label class="project-form-field"> <span
+										th:text="'Subagent completion script'"></span> <small
+										id="subagent-completion-help"
+										th:utext="|Runs when a subagent completes, using the parent session's context.|"></small>
+										<textarea name="subagentCompletedScript" rows="6"
+											spellcheck="false"
+											aria-describedby="subagent-completion-help"
+											th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.subagentCompletedScript}"
+											cols=""></textarea>
+									</label> <label class="project-form-field"> <span>Timeout
+											(seconds)</span> <input type="number" name="timeoutSeconds" min="1"
+										max="3600" required
+										th:value="${lifecycleHookSettingsValue == null ? 30 : lifecycleHookSettingsValue.timeoutSeconds}">
+									</label>
+									<div class="project-form-actions">
+										<button type="button" class="btn btn-outline-secondary"
+											hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+											hx-swap="innerHTML">Cancel</button>
+										<button type="submit" class="btn btn-primary">Save
+											Hooks</button>
+									</div>
+								</section>
+							</form>
+						</div>
 
-                        <div class="tab-pane fade" th:classappend="${activeProject == null ? ' show active' : ''}" id="settings-hooks" role="tabpanel" aria-labelledby="settings-hooks-tab" tabindex="0">
-                            <form class="settings-form" hx-post="/ui/settings/hooks/apply" hx-target="#modal-root" hx-swap="innerHTML">
-                                <section class="settings-section settings-app-section">
-                                    <h5>Lifecycle hooks</h5>
-                                    <div class="settings-hooks-docs">
-                                        <p class="settings-help-text">Hooks run asynchronously in Bash using <code>/bin/bash</code>, with <code>/tmp</code> as the working directory. A hook failure does not change the agent or subagent lifecycle result; the timeout applies to each hook.</p>
-                                        <p class="settings-help-text">These runtime variables are always available: <code>JUPITER_PROJECT_NAME</code> (project name), <code>JUPITER_WORKSPACE_NAME</code> (workspace name), and <code>JUPITER_SESSION_NAME</code> (session name). Project-configured environment variables are also passed and can be expanded normally, such as <code>"$WEBHOOK_URL"</code>. The three <code>JUPITER_*</code> values take precedence over project variables with matching names.</p>
-                                        <p class="settings-help-text">Example:</p>
-                                        <pre class="settings-hooks-example"><code>printf '%s | %s | %s\n' "$JUPITER_PROJECT_NAME" "$JUPITER_WORKSPACE_NAME" "$JUPITER_SESSION_NAME" &gt;&gt; /tmp/jupiter-hooks.log</code></pre>
-                                    </div>
-                                    <label class="project-form-field">
-                                        <span>Agent completion script</span>
-                                        <small id="agent-completion-help">Runs after the agent response completes.</small>
-                                        <textarea name="assistantCompletedScript" rows="6" spellcheck="false" aria-describedby="agent-completion-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantCompletedScript}"></textarea>
-                                    </label>
-                                    <label class="project-form-field">
-                                        <span>Agent error script</span>
-                                        <small id="agent-error-help">Runs when the agent execution fails.</small>
-                                        <textarea name="assistantErroredScript" rows="6" spellcheck="false" aria-describedby="agent-error-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.assistantErroredScript}"></textarea>
-                                    </label>
-                                    <label class="project-form-field">
-                                        <span>Subagent completion script</span>
-                                        <small id="subagent-completion-help">Runs when a subagent completes, using the parent session's context.</small>
-                                        <textarea name="subagentCompletedScript" rows="6" spellcheck="false" aria-describedby="subagent-completion-help" th:text="${lifecycleHookSettingsValue == null ? '' : lifecycleHookSettingsValue.subagentCompletedScript}"></textarea>
-                                    </label>
-                                    <label class="project-form-field">
-                                        <span>Timeout (seconds)</span>
-                                        <input type="number" name="timeoutSeconds" min="1" max="3600" required th:value="${lifecycleHookSettingsValue == null ? 30 : lifecycleHookSettingsValue.timeoutSeconds}">
-                                    </label>
-                                    <div class="project-form-actions">
-                                        <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                                        <button type="submit" class="btn btn-primary">Save Hooks</button>
-                                    </div>
-                                </section>
-                            </form>
-                        </div>
+						<div class="tab-pane fade" id="settings-model-providers"
+							role="tabpanel" aria-labelledby="settings-model-providers-tab"
+							tabindex="0">
+							<section class="settings-section settings-app-section">
+								<h5>Model Providers</h5>
+								<div class="settings-openai-section">
+									<h6>OpenAI subscription</h6>
+									<div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
+								</div>
+								<div class="settings-anthropic-section">
+									<h6>Anthropic</h6>
+									<div
+										th:replace="~{fragments/projects :: anthropicOAuthSection}"></div>
+								</div>
+								<div id="settings-models"
+									th:replace="~{fragments/projects :: settingsModels}"></div>
+							</section>
+						</div>
 
-                        <div class="tab-pane fade" id="settings-model-providers" role="tabpanel" aria-labelledby="settings-model-providers-tab" tabindex="0">
-                            <section class="settings-section settings-app-section">
-                                <h5>Model Providers</h5>
-                                <div class="settings-openai-section">
-                                    <h6>OpenAI subscription</h6>
-                                    <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
-                                </div>
-                                <div class="settings-anthropic-section">
-                                    <h6>Anthropic</h6>
-                                    <div th:replace="~{fragments/projects :: anthropicOAuthSection}"></div>
-                                </div>
-                                <div id="settings-models" th:replace="~{fragments/projects :: settingsModels}"></div>
-                            </section>
-                        </div>
-
-                        <div class="tab-pane fade" id="settings-help" role="tabpanel" aria-labelledby="settings-help-tab" tabindex="0">
-                            <section class="settings-section settings-app-section">
-                                <h5>Help</h5>
-                                <p>Made with &lt;3 in Amsterdam</p>
-                                <p>Version <strong th:text="${appVersion}"></strong></p>
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+						<div class="tab-pane fade" id="settings-help" role="tabpanel"
+							aria-labelledby="settings-help-tab" tabindex="0">
+							<section class="settings-section settings-app-section">
+								<h5>Help</h5>
+								<p>Made with &lt;3 in Amsterdam</p>
+								<p>
+									Version <strong th:text="${appVersion}"></strong>
+								</p>
+							</section>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
 </th:block>
 
-<th:block th:fragment="openaiOAuthSection" th:with="view=${openAiOAuthView}, pending=${openAiOAuthView != null and openAiOAuthView.pending}, connected=${openAiOAuthView != null and openAiOAuthView.connected}">
-    <div id="openai-oauth-section"
-          class="settings-openai-oauth"
-          th:attr="hx-get=${pending} ? '/ui/settings/openai/status' : null, hx-trigger=${pending} ? ${view.pollTrigger} : null, hx-swap=${pending} ? 'outerHTML' : null">
-        <p th:text="${view == null ? 'OpenAI is not connected.' : view.message}"></p>
+<th:block th:fragment="openaiOAuthSection"
+	th:with="view=${openAiOAuthView}, pending=${openAiOAuthView != null and openAiOAuthView.pending}, connected=${openAiOAuthView != null and openAiOAuthView.connected}">
+	<div id="openai-oauth-section" class="settings-openai-oauth"
+		th:attr="hx-get=${pending} ? '/ui/settings/openai/status' : null, hx-trigger=${pending} ? ${view.pollTrigger} : null, hx-swap=${pending} ? 'outerHTML' : null">
+		<p
+			th:text="${view == null ? 'OpenAI is not connected.' : view.message}"></p>
 
-        <div th:if="${pending}" class="settings-openai-device-flow">
-            <p class="settings-openai-user-code-label"><strong>Use this code in ChatGPT:</strong></p>
-            <div class="settings-openai-user-code" th:text="${view.userCode}"></div>
-            <p><strong>Verify at:</strong> <a th:href="${view.verificationUri}" th:text="${view.verificationUri}"></a></p>
-            <p th:if="${view.verificationUriComplete != null}"><a th:href="${view.verificationUriComplete}" th:text="${view.verificationUriComplete}"></a></p>
-        </div>
+		<div th:if="${pending}" class="settings-openai-device-flow">
+			<p class="settings-openai-user-code-label">
+				<strong>Use this code in ChatGPT:</strong>
+			</p>
+			<div class="settings-openai-user-code" th:text="${view.userCode}"></div>
+			<p>
+				<strong>Verify at:</strong> <a th:href="${view.verificationUri}"
+					th:text="${view.verificationUri}"></a>
+			</p>
+			<p th:if="${view.verificationUriComplete != null}">
+				<a th:href="${view.verificationUriComplete}"
+					th:text="${view.verificationUriComplete}"></a>
+			</p>
+		</div>
 
-        <p th:if="${connected}"><strong>Status:</strong> Connected</p>
+		<p th:if="${connected}">
+			<strong>Status:</strong> Connected
+		</p>
 
-        <div class="project-form-actions">
-            <button type="button"
-                    class="btn btn-outline-danger"
-                    th:if="${connected}"
-                    hx-post="/ui/settings/openai/logout"
-                    hx-target="#openai-oauth-section"
-                    hx-swap="outerHTML">Disconnect ChatGPT/OpenAI subscription</button>
-            <button type="button"
-                    class="btn btn-primary"
-                    th:if="${!pending and !connected}"
-                    hx-post="/ui/settings/openai/start"
-                    hx-target="#openai-oauth-section"
-                    hx-swap="outerHTML">Connect ChatGPT/OpenAI subscription</button>
-        </div>
-    </div>
+		<div class="project-form-actions">
+			<button type="button" class="btn btn-outline-danger"
+				th:if="${connected}" hx-post="/ui/settings/openai/logout"
+				hx-target="#openai-oauth-section" hx-swap="outerHTML">Disconnect
+				ChatGPT/OpenAI subscription</button>
+			<button type="button" class="btn btn-primary"
+				th:if="${!pending and !connected}"
+				hx-post="/ui/settings/openai/start"
+				hx-target="#openai-oauth-section" hx-swap="outerHTML">Connect
+				ChatGPT/OpenAI subscription</button>
+		</div>
+	</div>
 </th:block>
 
 <th:block th:fragment="anthropicOAuthSection">
-    <div th:if="${anthropicOAuthView != null}" id="anthropic-oauth-section" class="settings-openai-oauth" th:with="view=${anthropicOAuthView}">
-        <p th:text="${view.message}"></p>
-        <p th:if="${view.status.name() == 'NOT_CONNECTED'}">Not connected</p>
-        <p th:if="${view.status.name() == 'AUTHENTICATION_PENDING'}">Authentication pending</p>
-        <p th:if="${view.status.name() == 'CONNECTED'}">Connected</p>
-        <p th:if="${view.status.name() == 'REFRESH_FAILED'}">Refresh failed</p>
-        <p th:if="${view.pending}"><a class="settings-anthropic-authorization" target="_blank" rel="noreferrer" th:href="${view.authorizationUrl}">Open Claude authentication</a></p>
-        <form th:if="${view.pending}" hx-post="/ui/settings/anthropic/complete" hx-target="#anthropic-oauth-section" hx-swap="outerHTML">
-            <label>Paste authentication code <input name="code" type="text" autocomplete="off" required></label>
-            <button class="btn btn-primary" type="submit">Complete authentication</button>
-        </form>
-        <div class="project-form-actions">
-            <button th:if="${view.status.name() == 'NOT_CONNECTED' or view.status.name() == 'REFRESH_FAILED'}" type="button" class="btn btn-primary" hx-post="/ui/settings/anthropic/start" hx-target="#anthropic-oauth-section" hx-swap="outerHTML">Connect Claude</button>
-            <button th:if="${view.connected or view.status.name() == 'REFRESH_FAILED'}" type="button" class="btn btn-outline-danger" hx-post="/ui/settings/anthropic/disconnect" hx-target="#anthropic-oauth-section" hx-swap="outerHTML">Disconnect</button>
-        </div>
-    </div>
-    <div th:unless="${anthropicOAuthView != null}" id="anthropic-oauth-section" class="settings-openai-oauth">
-        <p>Anthropic is not connected.</p>
-    </div>
+	<div th:if="${anthropicOAuthView != null}" id="anthropic-oauth-section"
+		class="settings-openai-oauth" th:with="view=${anthropicOAuthView}">
+		<p th:text="${view.message}"></p>
+		<p th:if="${view.status.name() == 'NOT_CONNECTED'}">Not connected</p>
+		<p th:if="${view.status.name() == 'AUTHENTICATION_PENDING'}">Authentication
+			pending</p>
+		<p th:if="${view.status.name() == 'CONNECTED'}">Connected</p>
+		<p th:if="${view.status.name() == 'REFRESH_FAILED'}">Refresh
+			failed</p>
+		<p th:if="${view.pending}">
+			<a class="settings-anthropic-authorization" target="_blank"
+				rel="noreferrer" th:href="${view.authorizationUrl}">Open Claude
+				authentication</a>
+		</p>
+		<form th:if="${view.pending}"
+			hx-post="/ui/settings/anthropic/complete"
+			hx-target="#anthropic-oauth-section" hx-swap="outerHTML" action="">
+			<label>Paste authentication code <input name="code"
+				type="text" autocomplete="off" required></label>
+			<button class="btn btn-primary" type="submit">Complete
+				authentication</button>
+		</form>
+		<div class="project-form-actions">
+			<button
+				th:if="${view.status.name() == 'NOT_CONNECTED' or view.status.name() == 'REFRESH_FAILED'}"
+				type="button" class="btn btn-primary"
+				hx-post="/ui/settings/anthropic/start"
+				hx-target="#anthropic-oauth-section" hx-swap="outerHTML">Connect
+				Claude</button>
+			<button
+				th:if="${view.connected or view.status.name() == 'REFRESH_FAILED'}"
+				type="button" class="btn btn-outline-danger"
+				hx-post="/ui/settings/anthropic/disconnect"
+				hx-target="#anthropic-oauth-section" hx-swap="outerHTML">Disconnect</button>
+		</div>
+	</div>
+	<div th:unless="${anthropicOAuthView != null}"
+		id="anthropic-oauth-section" class="settings-openai-oauth">
+		<p>Anthropic is not connected.</p>
+	</div>
 </th:block>
 
 <th:block th:fragment="openaiOAuthResponse">
-    <th:block th:replace="~{fragments/projects :: openaiOAuthSection}"></th:block>
-    <th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
-    <th:block th:if="${chatControlsOob ?: false}" th:replace="~{fragments/chat :: chatControls}"></th:block>
+	<th:block th:replace="~{fragments/projects :: openaiOAuthSection}"></th:block>
+	<th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
+	<th:block th:if="${chatControlsOob ?: false}"
+		th:replace="~{fragments/chat :: chatControls}"></th:block>
 </th:block>
 
 <th:block th:fragment="anthropicOAuthResponse">
-    <th:block th:replace="~{fragments/projects :: anthropicOAuthSection}"></th:block>
-    <th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
-    <th:block th:if="${chatControlsOob ?: false}" th:replace="~{fragments/chat :: chatControls}"></th:block>
+	<th:block th:replace="~{fragments/projects :: anthropicOAuthSection}"></th:block>
+	<th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
+	<th:block th:if="${chatControlsOob ?: false}"
+		th:replace="~{fragments/chat :: chatControls}"></th:block>
 </th:block>
 
 <th:block th:fragment="settingsModels">
-    <section id="settings-models" class="settings-section" th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, favourites=${favouriteModelIds == null ? T(java.util.List).of() : favouriteModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}">
-        <th:block th:replace="~{fragments/projects :: settingsModelsContent}"></th:block>
-    </section>
+	<section id="settings-models" class="settings-section"
+		th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, favourites=${favouriteModelIds == null ? T(java.util.List).of() : favouriteModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}">
+		<th:block th:replace="~{fragments/projects :: settingsModelsContent}"></th:block>
+	</section>
 </th:block>
 
 <th:block th:fragment="settingsModelsWithChatControls">
-    <th:block th:replace="~{fragments/projects :: settingsModels}"></th:block>
-    <th:block th:replace="~{fragments/chat :: chatControls}"></th:block>
+	<th:block th:replace="~{fragments/projects :: settingsModels}"></th:block>
+	<th:block th:replace="~{fragments/chat :: chatControls}"></th:block>
 </th:block>
 
 <th:block th:fragment="settingsModelsOob">
-    <section id="settings-models" class="settings-section" hx-swap-oob="outerHTML:#settings-models" th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, favourites=${favouriteModelIds == null ? T(java.util.List).of() : favouriteModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}">
-        <th:block th:replace="~{fragments/projects :: settingsModelsContent}"></th:block>
-    </section>
+	<section id="settings-models" class="settings-section"
+		hx-swap-oob="outerHTML:#settings-models"
+		th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, favourites=${favouriteModelIds == null ? T(java.util.List).of() : favouriteModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}">
+		<th:block th:replace="~{fragments/projects :: settingsModelsContent}"></th:block>
+	</section>
 </th:block>
 
-<th:block th:fragment="settingsModelsContent" th:with="groups=${groups == null ? T(java.util.Map).of() : groups}, favourites=${favourites == null ? T(java.util.List).of() : favourites}, availability=${availability == null ? T(java.util.Map).of() : availability}">
-    <h6>Models</h6>
-    <div th:each="group : ${groups.entrySet()}">
-        <strong th:text="${group.key}"></strong>
-        <span class="settings-provider-status" th:text="${availability[group.key] == true ? 'Connected' : 'Not connected'}"></span>
-        <div th:each="modelDef : ${group.value}" class="settings-model-row">
-            <button type="button" class="btn btn-link" hx-post="/ui/settings/models/favourite" th:attr="hx-vals=|{&quot;modelId&quot;:&quot;${modelDef.id}&quot;,&quot;favourite&quot;:${!favourites.contains(modelDef.id)}}|, hx-target='#settings-models', hx-swap='outerHTML'" th:text="${favourites.contains(modelDef.id) ? '★' : '☆'}" aria-label="Toggle favourite"></button>
-            <span class="settings-model-provider" th:text="${modelDef.provider}"></span>
-            <span class="settings-model-status" th:text="${availability[modelDef.provider] == true ? 'Connected' : 'Not connected'}"></span>
-            <span th:text="${modelDef.displayName}"></span>
-            <small th:text="${modelDef.contextTokens() > 0 ? modelDef.contextTokens() + ' context' : ''}"></small>
-        </div>
-    </div>
+<th:block th:fragment="settingsModelsContent"
+	th:with="groups=${groups == null ? T(java.util.Map).of() : groups}, favourites=${favourites == null ? T(java.util.List).of() : favourites}, availability=${availability == null ? T(java.util.Map).of() : availability}">
+	<h6>Models</h6>
+	<div th:each="group : ${groups.entrySet()}">
+		<strong th:text="${group.key}"></strong> <span
+			class="settings-provider-status"
+			th:text="${availability[group.key] == true ? 'Connected' : 'Not connected'}"></span>
+		<div th:each="modelDef : ${group.value}" class="settings-model-row">
+			<button type="button" class="btn btn-link"
+				hx-post="/ui/settings/models/favourite"
+				th:attr="hx-vals=|{&quot;modelId&quot;:&quot;${modelDef.id}&quot;,&quot;favourite&quot;:${!favourites.contains(modelDef.id)}}|, hx-target='#settings-models', hx-swap='outerHTML'"
+				th:text="${favourites.contains(modelDef.id) ? '★' : '☆'}"
+				aria-label="Toggle favourite"></button>
+			<span class="settings-model-provider" th:text="${modelDef.provider}"></span>
+			<span class="settings-model-status"
+				th:text="${availability[modelDef.provider] == true ? 'Connected' : 'Not connected'}"></span>
+			<span th:text="${modelDef.displayName}"></span> <small
+				th:text="${modelDef.contextTokens() &gt; 0 ? modelDef.contextTokens() + ' context' : ''}"></small>
+		</div>
+	</div>
 </th:block>
 
-<th:block th:fragment="modal" th:with="selectedPathValue=${selectedPath ?: ''}, currentPathValue=${currentPath ?: ''}, directoryEntries=${directoryEntries ?: T(java.util.List).of()}">
-    <div id="project-modal" class="project-modal">
-        <div class="project-modal-backdrop"
-             hx-get="/ui/projects/modal/close"
-             hx-target="#modal-root"
-             hx-swap="innerHTML"></div>
+<th:block th:fragment="modal"
+	th:with="selectedPathValue=${selectedPath ?: ''}, currentPathValue=${currentPath ?: ''}, directoryEntries=${directoryEntries ?: T(java.util.List).of()}">
+	<div id="project-modal" class="project-modal">
+		<div class="project-modal-backdrop" hx-get="/ui/projects/modal/close"
+			hx-target="#modal-root" hx-swap="innerHTML"></div>
 
-        <div class="project-modal-card" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
-            <div class="project-modal-header">
-                <h4 id="project-modal-title">Open Project</h4>
-                <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
-            </div>
+		<div class="project-modal-card" role="dialog" aria-modal="true"
+			aria-labelledby="project-modal-title">
+			<div class="project-modal-header">
+				<h4 id="project-modal-title">Open Project</h4>
+				<button type="button" class="btn-close"
+					hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+					hx-swap="innerHTML"></button>
+			</div>
 
-            <form class="project-form" hx-post="/ui/projects/add" hx-target="#shell" hx-swap="none">
-                <label class="project-form-field">
-                    <span>Name</span>
-                    <th:block th:replace="~{fragments/projects :: selectedNameField(oob=false)}"></th:block>
-                </label>
+			<form class="project-form" hx-post="/ui/projects/add"
+				hx-target="#shell" hx-swap="none" action="">
+				<label class="project-form-field"> <span>Name</span> <th:block
+						th:replace="~{fragments/projects :: selectedNameField(oob=false)}"></th:block>
+				</label> <label class="project-form-field"> <span>Path</span> <th:block
+						th:replace="~{fragments/projects :: selectedPathField(oob=false)}"></th:block>
+				</label>
 
-                <label class="project-form-field">
-                    <span>Path</span>
-                    <th:block th:replace="~{fragments/projects :: selectedPathField(oob=false)}"></th:block>
-                </label>
+				<section class="directory-browser">
+					<div class="directory-browser-path" th:text="${currentPathValue}"></div>
+					<div class="directory-browser-tree"
+						th:replace="~{fragments/directory-list :: tree}"></div>
+				</section>
 
-                <section class="directory-browser">
-                    <div class="directory-browser-path" th:text="${currentPathValue}"></div>
-                    <div class="directory-browser-tree" th:replace="~{fragments/directory-list :: tree}"></div>
-                </section>
-
-                <div class="project-form-actions">
-                    <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Open</button>
-                </div>
-            </form>
-        </div>
-    </div>
+				<div class="project-form-actions">
+					<button type="button" class="btn btn-outline-secondary"
+						hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+						hx-swap="innerHTML">Cancel</button>
+					<button type="submit" class="btn btn-primary">Open</button>
+				</div>
+			</form>
+		</div>
+	</div>
 </th:block>
 
-<th:block th:fragment="workspaceModal" th:with="branchNameValue=${branchName ?: ''}, branchModeValue=${branchMode ?: 'create'}, modalOob=${modalOob ?: false}">
-    <div th:if="${modalOob}" id="modal-root" hx-swap-oob="innerHTML">
-        <th:block th:replace="~{fragments/projects :: workspaceModalContent}"></th:block>
-    </div>
-    <th:block th:unless="${modalOob}" th:replace="~{fragments/projects :: workspaceModalContent}"></th:block>
+<th:block th:fragment="workspaceModal"
+	th:with="branchNameValue=${branchName ?: ''}, branchModeValue=${branchMode ?: 'create'}, modalOob=${modalOob ?: false}">
+	<div th:if="${modalOob}" id="modal-root" hx-swap-oob="innerHTML">
+		<th:block th:replace="~{fragments/projects :: workspaceModalContent}"></th:block>
+	</div>
+	<th:block th:unless="${modalOob}"
+		th:replace="~{fragments/projects :: workspaceModalContent}"></th:block>
 </th:block>
 
 <th:block th:fragment="workspaceModalContent">
-    <div id="workspace-modal" class="project-modal workspace-modal">
-        <div class="project-modal-backdrop"
-             hx-get="/ui/projects/modal/close"
-             hx-target="#modal-root"
-             hx-swap="innerHTML"></div>
+	<div id="workspace-modal" class="project-modal workspace-modal">
+		<div class="project-modal-backdrop" hx-get="/ui/projects/modal/close"
+			hx-target="#modal-root" hx-swap="innerHTML"></div>
 
-        <div class="project-modal-card workspace-modal-card" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
-            <div class="project-modal-header">
-                <h4 id="workspace-modal-title">New Workspace</h4>
-                <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
-            </div>
+		<div class="project-modal-card workspace-modal-card" role="dialog"
+			aria-modal="true" aria-labelledby="workspace-modal-title">
+			<div class="project-modal-header">
+				<h4 id="workspace-modal-title">New Workspace</h4>
+				<button type="button" class="btn-close"
+					hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+					hx-swap="innerHTML"></button>
+			</div>
 
-            Create a new Git worktree under that will reference a new or an existing branch.
-            <br>
-            <br>
-            <form class="project-form workspace-form" hx-post="/ui/workspaces/add" hx-target="#shell" hx-swap="none">
-                <fieldset class="project-form-field workspace-mode-field" data-workspace-branch-mode-field>
-                    <label class="workspace-mode-option">
-                        <input type="radio" name="branchMode" value="create" data-workspace-branch-mode th:checked="${branchModeValue == 'create'}">
-                        <span>
-                            <small>Create a new branch</small>
-                        </span>
-                    </label>
+			Create a new Git worktree under that will reference a new or an
+			existing branch. <br> <br>
+			<form class="project-form workspace-form"
+				hx-post="/ui/workspaces/add" hx-target="#shell" hx-swap="none"
+				action="">
+				<fieldset class="project-form-field workspace-mode-field"
+					data-workspace-branch-mode-field>
+					<label class="workspace-mode-option"> <input type="radio"
+						name="branchMode" value="create" data-workspace-branch-mode
+						th:checked="${branchModeValue == 'create'}"> <span>
+							<small>Create a new branch</small>
+					</span>
+					</label> <label class="workspace-mode-option"> <input type="radio"
+						name="branchMode" value="checkout" data-workspace-branch-mode
+						th:checked="${branchModeValue == 'checkout'}"> <span>
+							<small>Checkout an existing branch</small>
+					</span>
+					</label>
+				</fieldset>
+				<label class="project-form-field"> <input type="text"
+					name="branchName" data-workspace-branch-name autocomplete="off"
+					placeholder="Branch name" required th:value="${branchNameValue}">
+				</label>
 
-                    <label class="workspace-mode-option">
-                        <input type="radio" name="branchMode" value="checkout" data-workspace-branch-mode th:checked="${branchModeValue == 'checkout'}">
-                        <span>
-                            <small>Checkout an existing branch</small>
-                        </span>
-                    </label>
-                </fieldset>
-                <label class="project-form-field">
-                    <input type="text"
-                           name="branchName"
-                           data-workspace-branch-name
-                           autocomplete="off"
-                           placeholder="Branch name"
-                           required
-                           th:value="${branchNameValue}">
-                </label>
-
-                <div class="project-form-actions">
-                    <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create workspace</button>
-                </div>
-            </form>
-        </div>
-    </div>
+				<div class="project-form-actions">
+					<button type="button" class="btn btn-outline-secondary"
+						hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+						hx-swap="innerHTML">Cancel</button>
+					<button type="submit" class="btn btn-primary">Create
+						workspace</button>
+				</div>
+			</form>
+		</div>
+	</div>
 </th:block>
 
-<th:block th:fragment="workspaceCloseModal" th:with="status=${workspaceCloseStatus}">
-    <div id="workspace-close-modal" class="project-modal workspace-close-modal">
-        <div class="project-modal-backdrop"
-             hx-get="/ui/projects/modal/close"
-             hx-target="#modal-root"
-             hx-swap="innerHTML"></div>
+<th:block th:fragment="workspaceCloseModal"
+	th:with="status=${workspaceCloseStatus}">
+	<div id="workspace-close-modal"
+		class="project-modal workspace-close-modal">
+		<div class="project-modal-backdrop" hx-get="/ui/projects/modal/close"
+			hx-target="#modal-root" hx-swap="innerHTML"></div>
 
-        <div class="project-modal-card workspace-close-modal-card" role="dialog" aria-modal="true" aria-labelledby="workspace-close-modal-title">
-            <div class="project-modal-header">
-                <h4 id="workspace-close-modal-title">Close Workspace</h4>
-                <button type="button" class="btn-close" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML"></button>
-            </div>
+		<div class="project-modal-card workspace-close-modal-card"
+			role="dialog" aria-modal="true"
+			aria-labelledby="workspace-close-modal-title">
+			<div class="project-modal-header">
+				<h4 id="workspace-close-modal-title">Close Workspace</h4>
+				<button type="button" class="btn-close"
+					hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+					hx-swap="innerHTML"></button>
+			</div>
 
-            <div>Are you sure you want to delete the workspace <code th:text="${workspaceName}"></code>?</div>
+			<div>
+				Are you sure you want to delete the workspace
+				<code th:text="${workspaceName}"></code>
+				?
+			</div>
 
-            <div class="workspace-close-warning">
-                <ul class="workspace-close-reasons">
-                    <li th:each="reason : ${workspaceCloseReasons}" th:text="${reason}"></li>
-                </ul>
-            </div>
+			<div class="workspace-close-warning">
+				<ul class="workspace-close-reasons">
+					<li th:each="reason : ${workspaceCloseReasons}" th:text="${reason}"></li>
+				</ul>
+			</div>
 
-            <div class="project-form-actions">
-                <button type="button" class="btn btn-outline-secondary" hx-get="/ui/projects/modal/close" hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
-                <button type="button"
-                        class="btn btn-danger"
-                        th:attr="hx-post=@{/ui/workspaces/{id}/close/confirm(id=${workspaceId})}, hx-target='#shell', hx-swap='none'">Close workspace</button>
-            </div>
-        </div>
-    </div>
+			<div class="project-form-actions">
+				<button type="button" class="btn btn-outline-secondary"
+					hx-get="/ui/projects/modal/close" hx-target="#modal-root"
+					hx-swap="innerHTML">Cancel</button>
+				<button type="button" class="btn btn-danger"
+					th:attr="hx-post=@{/ui/workspaces/{id}/close/confirm(id=${workspaceId})}, hx-target='#shell', hx-swap='none'">Close
+					workspace</button>
+			</div>
+		</div>
+	</div>
 </th:block>
 
 <th:block th:fragment="shellUpdates">
-    <th:block th:replace="~{fragments/projects :: topbar}"></th:block>
-    <th:block th:replace="~{fragments/projects :: workspaceRail}"></th:block>
-    <th:block th:if="${includeChatContainer}" th:replace="~{fragments/chat :: chat}"></th:block>
-    <th:block th:replace="~{fragments/review :: panel}"></th:block>
-    <th:block th:replace="~{fragments/terminal :: panel}"></th:block>
-    <div id="modal-root" hx-swap-oob="innerHTML"></div>
+	<th:block th:replace="~{fragments/projects :: topbar}"></th:block>
+	<th:block th:replace="~{fragments/projects :: workspaceRail}"></th:block>
+	<th:block th:if="${includeChatContainer}"
+		th:replace="~{fragments/chat :: chat}"></th:block>
+	<th:block th:replace="~{fragments/review :: panel}"></th:block>
+	<th:block th:replace="~{fragments/terminal :: panel}"></th:block>
+	<div id="modal-root" hx-swap-oob="innerHTML"></div>
 </th:block>

@@ -1,16 +1,15 @@
 package com.judepereira.jupiter.ui.balloon;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import java.io.IOException;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 class SystemBalloonServiceTests {
 
@@ -22,7 +21,8 @@ class SystemBalloonServiceTests {
         service.connect();
 
         assertThat(emitter.sentEvent).isNotNull();
-        assertThat(emitter.sentEvent.build()).singleElement()
+        assertThat(emitter.sentEvent.build())
+                .singleElement()
                 .satisfies(data -> assertThat(data.getData()).isEqualTo(":connected\n\n"));
         assertThat(service.publishedBalloons()).isEmpty();
         assertThat(service.activeEmitterCount()).isEqualTo(1);
@@ -43,9 +43,16 @@ class SystemBalloonServiceTests {
 
     @Test
     void publishRecordsBalloonWithoutConnectedClients() {
-        SystemBalloonService service = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
+        SystemBalloonService service =
+                new SystemBalloonService(
+                        new ObjectMapper(),
+                        () ->
+                                new org.springframework.web.servlet.mvc.method.annotation
+                                        .SseEmitter(0L));
 
-        service.publishError("Git error", "Could not check out existing Git branch \"missing\".\n\nGit output:\nfatal: invalid reference: missing");
+        service.publishError(
+                "Git error",
+                "Could not check out existing Git branch \"missing\".\n\nGit output:\nfatal: invalid reference: missing");
 
         assertThat(service.publishedBalloons()).hasSize(1);
         SystemBalloon balloon = service.publishedBalloons().get(0);

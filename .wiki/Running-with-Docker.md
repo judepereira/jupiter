@@ -1,6 +1,7 @@
 # Running with Docker
 
-Docker is the easiest way to run Jupiter without caring about the local Java setup. The runtime image uses Java 25 and already includes Git, Git LFS, and ripgrep.
+Docker is the easiest way to run Jupiter without caring about the local Java setup. The runtime
+image uses Java 25 and already includes Git, Git LFS, and ripgrep.
 
 ## Build it
 
@@ -23,7 +24,8 @@ docker run --rm \
 
 Keep that encryption key. Replacing it on the next run will not unlock the existing database.
 
-The entrypoint accepts the key from the container environment, removes it before init scripts run, and then pipes it once to Java over stdin.
+The entrypoint accepts the key from the container environment, removes it before init scripts run,
+and then pipes it once to Java over stdin.
 
 ## User and group IDs
 
@@ -38,10 +40,12 @@ Override UID/GID if your mounted source or state directories need host-compatibl
 
 ## Init scripts
 
-If `/init.sh` exists, it runs as root. If `/init-user.sh` exists, it runs as the configured Jupiter user.
+If `/init.sh` exists, it runs as root. If `/init-user.sh` exists, it runs as the configured Jupiter
+user.
 
 Neither script receives `JUPITER_ENCRYPTION_KEY` in its environment.
 
 ## Source code
 
-Mount or otherwise make the repositories you want Jupiter to manage available inside the container. They need to be writable if agents or Git worktrees are going to change them.
+Mount or otherwise make the repositories you want Jupiter to manage available inside the container.
+They need to be writable if agents or Git worktrees are going to change them.

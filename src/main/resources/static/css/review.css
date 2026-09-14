@@ -1,24 +1,24 @@
 /* Review shell: header + split area */
 .review-shell {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
 }
 
 .review-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
 }
 
 .review-source-select {
-    max-width: 180px;
-    padding: 4px 6px;
-    border-radius: 6px;
-    border: 1px solid var(--panel-border);
-    background: var(--panel-bg);
+	max-width: 180px;
+	padding: 4px 6px;
+	border-radius: 6px;
+	border: 1px solid var(--panel-border);
+	background: var(--panel-bg);
 }
 
 /* Previously there was a compact "rail-like" stub when the review shell was closed
@@ -28,17 +28,17 @@
    .closed modifier. */
 .review-shell[data-open="false"] .changed-files,
 .review-shell[data-open="false"] .file-diff-container {
-    display: none;
+	display: none;
 }
 
 .review-shell[data-open="false"] .review-header h2 {
-    display: none;
+	display: none;
 }
 
 .review-collapsed {
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    color: var(--muted);
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+	color: var(--muted);
 }
 
 /* If a component wants to completely remove the shell from layout use the
@@ -47,43 +47,42 @@
 
 /* Review internal split: files list + diff preview */
 .changed-files {
-    overflow: auto;
+	overflow: auto;
 }
 
 .file-diff-container {
-    margin-top: 6px;
-    margin-left: 8px;
+	margin-top: 6px;
+	margin-left: 8px;
 }
 
 .changed-file-item {
-    display: flex;
-    flex-direction: column;
+	display: flex;
+	flex-direction: column;
 }
 
 .file-diff pre.diff-source {
-    white-space: pre-wrap;
-    word-break: break-word;
-    font-family: monospace;
-    background: #fff;
-    padding: 8px;
-    border-radius: 6px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-family: monospace;
+	background: #fff;
+	padding: 8px;
+	border-radius: 6px;
 }
 
 /* file list styles */
 .changed-files ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
 }
 
-
 .review-panel {
-    overflow: scroll;
+	overflow: scroll;
 }
 
 .review-shell.closed {
-    display: none;
+	display: none;
 }

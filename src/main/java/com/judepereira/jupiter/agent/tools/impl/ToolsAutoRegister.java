@@ -7,7 +7,10 @@ public class ToolsAutoRegister {
         registerAll(registry, runCommandTool, new RipgrepToolSupport());
     }
 
-    public static void registerAll(ToolRegistry registry, RunCommandTool runCommandTool, RipgrepToolSupport ripgrepToolSupport) {
+    public static void registerAll(
+            ToolRegistry registry,
+            RunCommandTool runCommandTool,
+            RipgrepToolSupport ripgrepToolSupport) {
         registry.register(new ListFilesTool(ripgrepToolSupport));
         registry.register(new ReadFileTool());
         registry.register(new SearchCodeTool(ripgrepToolSupport));

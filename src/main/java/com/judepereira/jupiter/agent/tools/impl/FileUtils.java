@@ -5,7 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class FileUtils {
-    public static Path resolveWorkspacePath(Path workspaceRoot, String relative) throws IOException {
+    public static Path resolveWorkspacePath(Path workspaceRoot, String relative)
+            throws IOException {
         // handle null/blank relative as empty path
         String rel = relative == null || relative.isBlank() ? "" : relative;
         // canonicalize workspace root to absolute normalized path first

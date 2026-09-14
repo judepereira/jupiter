@@ -18,8 +18,10 @@ public class TextEncryptor {
     private static final int TAG_SIZE_BITS = 128;
     private static final String CIPHER = "AES/GCM/NoPadding";
     private static final String BLIND_INDEX_PREFIX = "jupiter-blind-index:v1:";
-    private static final byte[] AES_INFO = "Jupiter encryption v1 AES-256 key".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] HMAC_INFO = "Jupiter encryption v1 HMAC-SHA-256 key".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] AES_INFO =
+            "Jupiter encryption v1 AES-256 key".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] HMAC_INFO =
+            "Jupiter encryption v1 HMAC-SHA-256 key".getBytes(StandardCharsets.UTF_8);
 
     private final SecretKeySpec aesKey;
     private final SecretKeySpec hmacKey;
@@ -44,7 +46,11 @@ public class TextEncryptor {
             cipher.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(TAG_SIZE_BITS, nonce));
             cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
             byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
-            byte[] packed = ByteBuffer.allocate(nonce.length + ciphertext.length).put(nonce).put(ciphertext).array();
+            byte[] packed =
+                    ByteBuffer.allocate(nonce.length + ciphertext.length)
+                            .put(nonce)
+                            .put(ciphertext)
+                            .array();
             return PREFIX + Base64.getEncoder().encodeToString(packed);
         } catch (GeneralSecurityException exception) {
             throw new EncryptionException("Encryption failed", exception);
@@ -56,11 +62,17 @@ public class TextEncryptor {
         if (!value.startsWith(PREFIX)) throw new EncryptionException("Malformed encrypted value");
         try {
             byte[] packed = Base64.getDecoder().decode(value.substring(PREFIX.length()));
-            if (packed.length < NONCE_SIZE + 16) throw new EncryptionException("Malformed encrypted value");
+            if (packed.length < NONCE_SIZE + 16)
+                throw new EncryptionException("Malformed encrypted value");
             Cipher cipher = Cipher.getInstance(CIPHER);
-            cipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(TAG_SIZE_BITS, packed, 0, NONCE_SIZE));
+            cipher.init(
+                    Cipher.DECRYPT_MODE,
+                    aesKey,
+                    new GCMParameterSpec(TAG_SIZE_BITS, packed, 0, NONCE_SIZE));
             cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
-            return new String(cipher.doFinal(packed, NONCE_SIZE, packed.length - NONCE_SIZE), StandardCharsets.UTF_8);
+            return new String(
+                    cipher.doFinal(packed, NONCE_SIZE, packed.length - NONCE_SIZE),
+                    StandardCharsets.UTF_8);
         } catch (IllegalArgumentException | GeneralSecurityException exception) {
             throw new EncryptionException("Unable to decrypt value", exception);
         }
@@ -72,7 +84,9 @@ public class TextEncryptor {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(hmacKey);
             mac.update((BLIND_INDEX_PREFIX + domain + ":").getBytes(StandardCharsets.UTF_8));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
+            return Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
         } catch (GeneralSecurityException exception) {
             throw new EncryptionException("Blind index failed", exception);
         }
@@ -111,7 +125,12 @@ public class TextEncryptor {
     }
 
     public static class EncryptionException extends RuntimeException {
-        public EncryptionException(String message) { super(message); }
-        public EncryptionException(String message, Throwable cause) { super(message, cause); }
+        public EncryptionException(String message) {
+            super(message);
+        }
+
+        public EncryptionException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

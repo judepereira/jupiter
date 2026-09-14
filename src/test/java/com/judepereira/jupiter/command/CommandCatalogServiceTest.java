@@ -1,17 +1,15 @@
 package com.judepereira.jupiter.command;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 class CommandCatalogServiceTest {
-    @TempDir
-    Path root;
+    @TempDir Path root;
 
     @Test
     void createWritesFileAndIsImmediatelyAvailable() throws Exception {
@@ -20,7 +18,8 @@ class CommandCatalogServiceTest {
 
         service.create(definition);
 
-        assertThat(Files.readString(root.resolve("custom.md"))).contains("id: \"custom\"", "echo custom");
+        assertThat(Files.readString(root.resolve("custom.md")))
+                .contains("id: \"custom\"", "echo custom");
         assertThat(service.listCustom()).containsExactly(definition);
         assertThat(service.getRequired(" custom ")).isEqualTo(definition);
     }
@@ -35,7 +34,8 @@ class CommandCatalogServiceTest {
         service.update("renamed", updated);
 
         assertThat(Files.exists(root.resolve("source-name.md"))).isFalse();
-        assertThat(Files.readString(root.resolve("new-id.md"))).contains("id: \"new-id\"", "new body");
+        assertThat(Files.readString(root.resolve("new-id.md")))
+                .contains("id: \"new-id\"", "new body");
         assertThat(service.getRequired("new-id")).isEqualTo(updated);
     }
 
@@ -63,7 +63,8 @@ class CommandCatalogServiceTest {
     @Test
     void failedReloadRestoresUpdatedFileAndSnapshot() throws Exception {
         CommandCatalogService service = new CommandCatalogService(root.toString());
-        CommandCatalogService.CommandDefinition original = service.create(command("stable", "original"));
+        CommandCatalogService.CommandDefinition original =
+                service.create(command("stable", "original"));
         Files.writeString(root.resolve("invalid.md"), "not frontmatter");
 
         assertThatThrownBy(() -> service.update("stable", command("stable", "changed")))
@@ -88,8 +89,8 @@ class CommandCatalogServiceTest {
     }
 
     private static CommandCatalogService.CommandDefinition command(String id, String body) {
-        return new CommandCatalogService.CommandDefinition(id, "Name", null,
-                CommandCatalogService.CommandKind.SCRIPT, body, null, null);
+        return new CommandCatalogService.CommandDefinition(
+                id, "Name", null, CommandCatalogService.CommandKind.SCRIPT, body, null, null);
     }
 
     private static String document(String id, String body) {

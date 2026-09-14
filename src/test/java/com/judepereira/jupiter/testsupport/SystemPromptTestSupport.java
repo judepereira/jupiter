@@ -9,27 +9,33 @@ public final class SystemPromptTestSupport {
 
     private static final String DEFAULT_SYSTEM_PROMPT_RESOURCE = "/system-prompt.md";
 
-    private SystemPromptTestSupport() {
-    }
+    private SystemPromptTestSupport() {}
 
     public static String defaultSystemPrompt() {
-        try (InputStream inputStream = SystemPromptTestSupport.class.getResourceAsStream(DEFAULT_SYSTEM_PROMPT_RESOURCE)) {
+        try (InputStream inputStream =
+                SystemPromptTestSupport.class.getResourceAsStream(DEFAULT_SYSTEM_PROMPT_RESOURCE)) {
             if (inputStream == null) {
-                throw new IllegalStateException("Missing test resource: " + DEFAULT_SYSTEM_PROMPT_RESOURCE);
+                throw new IllegalStateException(
+                        "Missing test resource: " + DEFAULT_SYSTEM_PROMPT_RESOURCE);
             }
             return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).strip();
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to load test resource: " + DEFAULT_SYSTEM_PROMPT_RESOURCE, e);
+            throw new IllegalStateException(
+                    "Failed to load test resource: " + DEFAULT_SYSTEM_PROMPT_RESOURCE, e);
         }
     }
 
     public static String envAppendage(Path workspaceRoot) {
-        return "<env>\n" +
-                "Working directory: " + workspaceRoot.toAbsolutePath().normalize() + "\n" +
-                "Current date: " + LocalDate.now() + "\n" +
-                "Operating system: Ubuntu Linux\n" +
-                "Shell: bash\n" +
-                "</env>";
+        return "<env>\n"
+                + "Working directory: "
+                + workspaceRoot.toAbsolutePath().normalize()
+                + "\n"
+                + "Current date: "
+                + LocalDate.now()
+                + "\n"
+                + "Operating system: Ubuntu Linux\n"
+                + "Shell: bash\n"
+                + "</env>";
     }
 
     public static String composeExpected(String appendage, Path workspaceRoot) {

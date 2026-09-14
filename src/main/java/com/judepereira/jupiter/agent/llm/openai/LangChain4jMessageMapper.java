@@ -15,7 +15,6 @@ import dev.langchain4j.model.openai.OpenAiChatResponseMetadata;
 import dev.langchain4j.model.openai.OpenAiResponsesChatResponseMetadata;
 import dev.langchain4j.model.openai.OpenAiTokenUsage;
 import dev.langchain4j.model.output.TokenUsage;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,30 +40,44 @@ public final class LangChain4jMessageMapper {
                 case ASSISTANT -> {
                     List<ToolCall> toolCalls = message.getToolCalls();
                     if (toolCalls == null || toolCalls.isEmpty()) {
-                        messages.add(new AiMessage(message.getContent() == null ? "" : message.getContent()));
+                        messages.add(
+                                new AiMessage(
+                                        message.getContent() == null ? "" : message.getContent()));
                     } else {
-                        List<dev.langchain4j.agent.tool.ToolExecutionRequest> requests = new ArrayList<>(toolCalls.size());
+                        List<dev.langchain4j.agent.tool.ToolExecutionRequest> requests =
+                                new ArrayList<>(toolCalls.size());
                         for (int j = 0; j < toolCalls.size(); j++) {
                             ToolCall toolCall = toolCalls.get(j);
                             String toolCallId = normalizeToolCallId(toolCall.getToolCallId(), i, j);
                             String toolName = requireToolName(toolCall.getToolName());
                             toolNamesById.put(toolCallId, toolName);
-                            requests.add(dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
-                                    .id(toolCallId)
-                                    .name(toolName)
-                                    .arguments(toolArgumentsCodec.serialize(toolCall.getArguments()))
-                                    .build());
+                            requests.add(
+                                    dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
+                                            .id(toolCallId)
+                                            .name(toolName)
+                                            .arguments(
+                                                    toolArgumentsCodec.serialize(
+                                                            toolCall.getArguments()))
+                                            .build());
                         }
-                        messages.add(new AiMessage(message.getContent() == null ? "" : message.getContent(), requests));
+                        messages.add(
+                                new AiMessage(
+                                        message.getContent() == null ? "" : message.getContent(),
+                                        requests));
                     }
                 }
                 case TOOL -> {
                     String toolCallId = requireToolCallId(message.getToolCallId());
                     String toolName = toolNamesById.get(toolCallId);
                     if (toolName == null || toolName.isBlank()) {
-                        throw new IllegalStateException("Missing tool name for tool call id: " + toolCallId);
+                        throw new IllegalStateException(
+                                "Missing tool name for tool call id: " + toolCallId);
                     }
-                    messages.add(new ToolExecutionResultMessage(toolCallId, toolName, message.getContent() == null ? "" : message.getContent()));
+                    messages.add(
+                            new ToolExecutionResultMessage(
+                                    toolCallId,
+                                    toolName,
+                                    message.getContent() == null ? "" : message.getContent()));
                 }
             }
         }
@@ -80,7 +93,11 @@ public final class LangChain4jMessageMapper {
         AiMessage aiMessage = response.aiMessage();
         ModelResponseMetadata metadata = toModelResponseMetadata(response);
         if (aiMessage.hasToolExecutionRequests() && !aiMessage.toolExecutionRequests().isEmpty()) {
-            return new ModelResponse(aiMessage.text(), toToolCall(aiMessage.toolExecutionRequests().get(0)), metadata, null);
+            return new ModelResponse(
+                    aiMessage.text(),
+                    toToolCall(aiMessage.toolExecutionRequests().get(0)),
+                    metadata,
+                    null);
         }
         return new ModelResponse(aiMessage.text(), null, metadata, null);
     }
@@ -108,8 +125,7 @@ public final class LangChain4jMessageMapper {
                 response.id(),
                 response.modelName(),
                 response.finishReason() == null ? null : response.finishReason().name(),
-                providerMetadata(response.metadata())
-        );
+                providerMetadata(response.metadata()));
     }
 
     private Map<String, Object> providerMetadata(ChatResponseMetadata metadata) {
@@ -133,11 +149,14 @@ public final class LangChain4jMessageMapper {
     }
 
     public ToolCall toToolCall(dev.langchain4j.agent.tool.ToolExecutionRequest request) {
-        return new ToolCall(request.id(), request.name(), toolArgumentsCodec.parse(request.arguments()));
+        return new ToolCall(
+                request.id(), request.name(), toolArgumentsCodec.parse(request.arguments()));
     }
 
     private static String normalizeToolCallId(String toolCallId, int messageIndex, int toolIndex) {
-        return toolCallId == null || toolCallId.isBlank() ? "tool-" + messageIndex + "-" + toolIndex : toolCallId;
+        return toolCallId == null || toolCallId.isBlank()
+                ? "tool-" + messageIndex + "-" + toolIndex
+                : toolCallId;
     }
 
     private static String requireToolCallId(String toolCallId) {

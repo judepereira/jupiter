@@ -12,7 +12,6 @@ import dev.langchain4j.model.chat.request.json.JsonNumberSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonSchemaElement;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,17 +26,20 @@ public final class LangChain4jToolSpecificationMapper {
         for (ToolDefinition tool : tools) {
             ToolSpecification nativeSpecification = tool.getNativeToolSpecification();
             if (nativeSpecification != null) {
-                specifications.add(ToolSpecification.builder()
-                        .name(tool.getName())
-                        .description(nativeSpecification.description())
-                        .parameters(nativeSpecification.parameters())
-                        .build());
+                specifications.add(
+                        ToolSpecification.builder()
+                                .name(tool.getName())
+                                .description(nativeSpecification.description())
+                                .parameters(nativeSpecification.parameters())
+                                .build());
             } else {
-                specifications.add(ToolSpecification.builder()
-                        .name(tool.getName())
-                        .description(tool.getDescription() == null ? "" : tool.getDescription())
-                        .parameters(toObjectSchema(tool.getSchema()))
-                        .build());
+                specifications.add(
+                        ToolSpecification.builder()
+                                .name(tool.getName())
+                                .description(
+                                        tool.getDescription() == null ? "" : tool.getDescription())
+                                .parameters(toObjectSchema(tool.getSchema()))
+                                .build());
             }
         }
         return specifications;
@@ -55,7 +57,9 @@ public final class LangChain4jToolSpecificationMapper {
         }
 
         String description = schema.description();
-        if ((description == null || description.isBlank()) && descriptionFallback != null && !descriptionFallback.isBlank()) {
+        if ((description == null || description.isBlank())
+                && descriptionFallback != null
+                && !descriptionFallback.isBlank()) {
             description = descriptionFallback;
         }
         if (description != null && !description.isBlank()) {
@@ -106,6 +110,7 @@ public final class LangChain4jToolSpecificationMapper {
                     .build();
         }
 
-        throw new IllegalStateException("Unsupported tool parameter type: " + parameter.getClass().getName());
+        throw new IllegalStateException(
+                "Unsupported tool parameter type: " + parameter.getClass().getName());
     }
 }

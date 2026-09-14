@@ -1,44 +1,44 @@
 #connection-loss-overlay[hidden] {
-    display: none !important;
+	display: none !important;
 }
 
 .connection-loss-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 2500;
-    display: grid;
-    place-items: center;
-    padding: 24px;
-    background: rgba(15, 23, 42, 0.72);
-    backdrop-filter: blur(10px);
+	position: fixed;
+	inset: 0;
+	z-index: 2500;
+	display: grid;
+	place-items: center;
+	padding: 24px;
+	background: rgba(15, 23, 42, 0.72);
+	backdrop-filter: blur(10px);
 }
 
 .connection-loss-overlay__panel {
-    width: min(100%, 520px);
-    border-radius: 5px;
-    padding: 28px 24px;
-    background: #ffffff;
-    color: #0f172a;
-    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
-    text-align: center;
+	width: min(100%, 520px);
+	border-radius: 5px;
+	padding: 28px 24px;
+	background: #ffffff;
+	color: #0f172a;
+	box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+	text-align: center;
 }
 
 .connection-loss-overlay__eyebrow {
-    margin: 0 0 8px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #b45309;
+	margin: 0 0 8px;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: #b45309;
 }
 
 .connection-loss-overlay__message {
-    margin: 14px 0 22px;
-    font-size: 15px;
-    line-height: 1.5;
-    color: #475569;
+	margin: 14px 0 22px;
+	font-size: 15px;
+	line-height: 1.5;
+	color: #475569;
 }
 
 body.connection-loss-overlay-open {
-    overflow: hidden;
+	overflow: hidden;
 }

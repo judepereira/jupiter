@@ -2,11 +2,6 @@ package com.judepereira.jupiter.agent.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import org.springframework.core.io.Resource;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +12,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.stereotype.Service;
 
 @Service
 public class AgentDefinitionService {
@@ -24,22 +23,23 @@ public class AgentDefinitionService {
     private static final String RESOURCE_PATTERN = "classpath*:agents/*.md";
     private static final String DEFAULT_AGENT_ID = "plan";
     private static final YAMLMapper YAML_MAPPER = new YAMLMapper();
-    private static final List<String> SUPPORTED_TOOLS = List.of(
-            "list_files",
-            "read_file",
-            "search_code",
-            "write_file",
-            "apply_patch",
-            "display_image",
-            "run_command",
-            "task"
-    );
+    private static final List<String> SUPPORTED_TOOLS =
+            List.of(
+                    "list_files",
+                    "read_file",
+                    "search_code",
+                    "write_file",
+                    "apply_patch",
+                    "display_image",
+                    "run_command",
+                    "task");
 
     private final List<AgentDefinition> agents;
     private final Map<String, AgentDefinition> agentsById;
 
     @Autowired
-    public AgentDefinitionService(ObjectMapper objectMapper, ModelCatalogService modelCatalogService) {
+    public AgentDefinitionService(
+            ObjectMapper objectMapper, ModelCatalogService modelCatalogService) {
         this.agents = loadAgents(modelCatalogService);
         this.agentsById = indexAgents(agents);
         getRequired(DEFAULT_AGENT_ID);
@@ -89,15 +89,20 @@ public class AgentDefinitionService {
     private static List<AgentDefinition> loadAgents(ModelCatalogService modelCatalogService) {
         try {
             var resolver = new PathMatchingResourcePatternResolver();
-            var agents = Arrays.stream(resolver.getResources(RESOURCE_PATTERN))
-                    .sorted(Comparator.comparing(Resource::getFilename, Comparator.nullsLast(String::compareTo))
-                            .thenComparing(AgentDefinitionService::resourceSortKey))
-                    .map(AgentDefinitionService::loadAgent)
-                    .toList();
+            var agents =
+                    Arrays.stream(resolver.getResources(RESOURCE_PATTERN))
+                            .sorted(
+                                    Comparator.comparing(
+                                                    Resource::getFilename,
+                                                    Comparator.nullsLast(String::compareTo))
+                                            .thenComparing(AgentDefinitionService::resourceSortKey))
+                            .map(AgentDefinitionService::loadAgent)
+                            .toList();
             validateAgents(agents, modelCatalogService);
             return List.copyOf(agents);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to load agent catalog from classpath:" + RESOURCE_PATTERN, e);
+            throw new IllegalStateException(
+                    "Failed to load agent catalog from classpath:" + RESOURCE_PATTERN, e);
         }
     }
 
@@ -109,7 +114,8 @@ public class AgentDefinitionService {
             var id = resolveId(resource, metadata.id());
             var name = resolveName(id, metadata.name());
             var allowedTools = resolveAllowedTools(metadata.tools(), id, metadata.mode());
-            var allowWrite = allowedTools.contains("write_file") || allowedTools.contains("apply_patch");
+            var allowWrite =
+                    allowedTools.contains("write_file") || allowedTools.contains("apply_patch");
             var allowCommand = allowedTools.contains("run_command");
             validateRequiredFields(metadata, id);
             return new AgentDefinition(
@@ -123,23 +129,28 @@ public class AgentDefinitionService {
                     metadata.textVerbosity(),
                     allowWrite,
                     allowCommand,
-                    allowedTools
-            );
+                    allowedTools);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to load agent definition from classpath:" + resourceSortKey(resource), e);
+            throw new IllegalStateException(
+                    "Failed to load agent definition from classpath:" + resourceSortKey(resource),
+                    e);
         } catch (RuntimeException e) {
-            throw new IllegalStateException("Failed to load agent definition from classpath:" + resourceSortKey(resource), e);
+            throw new IllegalStateException(
+                    "Failed to load agent definition from classpath:" + resourceSortKey(resource),
+                    e);
         }
     }
 
     private static FrontMatterAndBody parseFrontMatter(Resource resource, String content) {
         if (!content.startsWith("---")) {
-            throw new IllegalStateException("Missing YAML frontmatter in classpath:" + resourceSortKey(resource));
+            throw new IllegalStateException(
+                    "Missing YAML frontmatter in classpath:" + resourceSortKey(resource));
         }
 
         int firstLineEnd = lineEnd(content, 0);
         if (!stripTrailingCarriageReturn(content.substring(0, firstLineEnd)).equals("---")) {
-            throw new IllegalStateException("Malformed YAML frontmatter in classpath:" + resourceSortKey(resource));
+            throw new IllegalStateException(
+                    "Malformed YAML frontmatter in classpath:" + resourceSortKey(resource));
         }
 
         int frontMatterStart = nextLineStart(content, firstLineEnd);
@@ -150,7 +161,8 @@ public class AgentDefinitionService {
         return new FrontMatterAndBody(yaml, trimTrailingLineBreak(trimLeadingLineBreak(body)));
     }
 
-    private static int findClosingFrontMatterDelimiter(String content, int start, Resource resource) {
+    private static int findClosingFrontMatterDelimiter(
+            String content, int start, Resource resource) {
         int index = start;
         while (index <= content.length()) {
             int lineEnd = lineEnd(content, index);
@@ -162,7 +174,9 @@ public class AgentDefinitionService {
             }
             index = nextLineStart(content, lineEnd);
         }
-        throw new IllegalStateException("Missing closing YAML frontmatter delimiter in classpath:" + resourceSortKey(resource));
+        throw new IllegalStateException(
+                "Missing closing YAML frontmatter delimiter in classpath:"
+                        + resourceSortKey(resource));
     }
 
     private static int lineEnd(String content, int start) {
@@ -231,20 +245,39 @@ public class AgentDefinitionService {
         return idToDisplayName(id);
     }
 
-    private static List<String> resolveAllowedTools(Map<String, Boolean> tools, String agentId, AgentMode mode) {
+    private static List<String> resolveAllowedTools(
+            Map<String, Boolean> tools, String agentId, AgentMode mode) {
         if (tools == null || tools.isEmpty()) {
             throw new IllegalStateException("tools is required for agent: " + agentId);
         }
         if (Boolean.TRUE.equals(tools.get("*"))) {
             return mode == AgentMode.SUBAGENT
-                    ? List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "display_image", "run_command", "mcp:*")
-                    : List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "display_image", "run_command", "mcp:*", "task");
+                    ? List.of(
+                            "list_files",
+                            "read_file",
+                            "search_code",
+                            "write_file",
+                            "apply_patch",
+                            "display_image",
+                            "run_command",
+                            "mcp:*")
+                    : List.of(
+                            "list_files",
+                            "read_file",
+                            "search_code",
+                            "write_file",
+                            "apply_patch",
+                            "display_image",
+                            "run_command",
+                            "mcp:*",
+                            "task");
         }
-        List<String> allowed = tools.entrySet().stream()
-                .filter(entry -> Boolean.TRUE.equals(entry.getValue()))
-                .map(Map.Entry::getKey)
-                .peek(AgentDefinitionService::validateToolName)
-                .toList();
+        List<String> allowed =
+                tools.entrySet().stream()
+                        .filter(entry -> Boolean.TRUE.equals(entry.getValue()))
+                        .map(Map.Entry::getKey)
+                        .peek(AgentDefinitionService::validateToolName)
+                        .toList();
         if (mode == AgentMode.SUBAGENT && allowed.contains("task")) {
             throw new IllegalStateException("task is not allowed for subagent: " + agentId);
         }
@@ -267,22 +300,26 @@ public class AgentDefinitionService {
         if (filename == null || filename.isBlank()) {
             throw new IllegalStateException("Agent id is required");
         }
-        String baseName = filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
+        String baseName =
+                filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
         return baseName.replaceFirst("^\\d+-", "");
     }
 
     private static String idToDisplayName(String id) {
-        return Arrays.stream(id.split("[-_]") )
+        return Arrays.stream(id.split("[-_]"))
                 .filter(part -> !part.isBlank())
                 .map(part -> part.substring(0, 1).toUpperCase() + part.substring(1))
                 .collect(Collectors.joining(" "));
     }
 
     private static List<String> parseModels(String value, String agentId) {
-        if (value == null) throw new IllegalStateException("model is required for agent: " + agentId);
+        if (value == null)
+            throw new IllegalStateException("model is required for agent: " + agentId);
         var ids = Arrays.stream(value.split(",", -1)).map(String::trim).toList();
-        if (ids.stream().anyMatch(String::isBlank) || ids.stream().distinct().count() != ids.size()) {
-            throw new IllegalStateException("model must contain non-blank, unique ids for agent: " + agentId);
+        if (ids.stream().anyMatch(String::isBlank)
+                || ids.stream().distinct().count() != ids.size()) {
+            throw new IllegalStateException(
+                    "model must contain non-blank, unique ids for agent: " + agentId);
         }
         return List.copyOf(ids);
     }
@@ -306,16 +343,19 @@ public class AgentDefinitionService {
             if (agent.mode() == null) {
                 throw new IllegalStateException("mode is required for agent: " + agent.id());
             }
-            if (agent.modelIds() == null || agent.modelIds().isEmpty()
+            if (agent.modelIds() == null
+                    || agent.modelIds().isEmpty()
                     || agent.modelIds().stream().anyMatch(id -> id == null || id.isBlank())
                     || agent.modelIds().stream().distinct().count() != agent.modelIds().size()) {
-                throw new IllegalStateException("model must contain non-blank, unique ids for agent: " + agent.id());
+                throw new IllegalStateException(
+                        "model must contain non-blank, unique ids for agent: " + agent.id());
             }
             if (catalog != null) {
                 agent.modelIds().forEach(id -> catalog.resolveBundledModel(id));
             }
             if (agent.defaultThinkingLevel() == null) {
-                throw new IllegalStateException("reasoningEffort is required for agent: " + agent.id());
+                throw new IllegalStateException(
+                        "reasoningEffort is required for agent: " + agent.id());
             }
             if (agent.allowedTools() == null || agent.allowedTools().isEmpty()) {
                 throw new IllegalStateException("tools is required for agent: " + agent.id());
@@ -338,8 +378,7 @@ public class AgentDefinitionService {
         }
     }
 
-    private record FrontMatterAndBody(String yaml, String body) {
-    }
+    private record FrontMatterAndBody(String yaml, String body) {}
 
     private record FrontMatter(
             String id,
@@ -349,7 +388,5 @@ public class AgentDefinitionService {
             String model,
             ThinkingLevel reasoningEffort,
             String textVerbosity,
-            Map<String, Boolean> tools
-    ) {
-    }
+            Map<String, Boolean> tools) {}
 }

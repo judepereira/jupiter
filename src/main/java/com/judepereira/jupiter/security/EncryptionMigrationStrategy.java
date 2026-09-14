@@ -1,8 +1,7 @@
 package com.judepereira.jupiter.security;
 
-import javax.sql.DataSource;
 import java.sql.SQLException;
-
+import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.flywaydb.core.Flyway;
 import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;

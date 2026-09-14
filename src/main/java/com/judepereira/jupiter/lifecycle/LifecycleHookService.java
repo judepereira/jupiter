@@ -5,9 +5,6 @@ import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import jakarta.annotation.PreDestroy;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -19,13 +16,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.stereotype.Service;
 
-/** Executes one explicitly selected, persisted lifecycle action without changing persisted lifecycle state. */
+/**
+ * Executes one explicitly selected, persisted lifecycle action without changing persisted lifecycle
+ * state.
+ */
 @Log4j2
 @Service
 public class LifecycleHookService {
@@ -41,11 +42,14 @@ public class LifecycleHookService {
     private final Path tempDirectory;
     private final Object lifecycleLock = new Object();
     private final Map<Process, Boolean> activeProcesses = new ConcurrentHashMap<>();
-    private final Set<CompletableFuture<HookExecutionResult>> activeTasks = ConcurrentHashMap.newKeySet();
+    private final Set<CompletableFuture<HookExecutionResult>> activeTasks =
+            ConcurrentHashMap.newKeySet();
     private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
-    public LifecycleHookService(AppStateService appStateService, SystemBalloonService systemBalloonService,
-                                LifecycleHookRuntime runtime) {
+    public LifecycleHookService(
+            AppStateService appStateService,
+            SystemBalloonService systemBalloonService,
+            LifecycleHookRuntime runtime) {
         this.appStateService = appStateService;
         this.systemBalloonService = systemBalloonService;
         this.executor = runtime.executor();
@@ -53,7 +57,10 @@ public class LifecycleHookService {
         this.tempDirectory = runtime.tempDirectory();
     }
 
-    /** Queues the selected action and returns a future useful to callers that need to observe its outcome. */
+    /**
+     * Queues the selected action and returns a future useful to callers that need to observe its
+     * outcome.
+     */
     public CompletableFuture<HookExecutionResult> dispatch(LifecycleEvent event, long sessionId) {
         if (event == null) {
             throw new IllegalArgumentException("Lifecycle event is required");
@@ -62,10 +69,12 @@ public class LifecycleHookService {
         Persistence.LifecycleHookSettings settings = appStateService.loadLifecycleHookSettings();
         String script = event.scriptFrom(settings);
         if (script == null || script.isBlank()) {
-            return CompletableFuture.completedFuture(new HookExecutionResult(event, HookStatus.SKIPPED, null, 0, 0));
+            return CompletableFuture.completedFuture(
+                    new HookExecutionResult(event, HookStatus.SKIPPED, null, 0, 0));
         }
 
-        Persistence.LifecycleHookContext context = appStateService.loadLifecycleHookContext(sessionId);
+        Persistence.LifecycleHookContext context =
+                appStateService.loadLifecycleHookContext(sessionId);
         CompletableFuture<HookExecutionResult> result = new CompletableFuture<>();
         synchronized (lifecycleLock) {
             if (shutdownStarted.get()) {
@@ -75,31 +84,51 @@ public class LifecycleHookService {
             activeTasks.add(result);
             result.whenComplete((ignored, failure) -> activeTasks.remove(result));
             try {
-                executor.submit(() -> {
-                    try {
-                        result.complete(run(event, script, context, settings.timeoutSeconds()));
-                    } catch (Throwable failure) {
-                        log.error("Lifecycle action failed: event={}, sessionId={}, reason={}", event, sessionId,
-                                failure.getClass().getSimpleName());
-                        systemBalloonService.publishError("Lifecycle action failed",
-                                "The configured lifecycle action could not be executed for session " + sessionId + ".");
-                        result.complete(new HookExecutionResult(event, HookStatus.LAUNCH_FAILED, null, 0, 0));
-                    }
-                });
+                executor.submit(
+                        () -> {
+                            try {
+                                result.complete(
+                                        run(event, script, context, settings.timeoutSeconds()));
+                            } catch (Throwable failure) {
+                                log.error(
+                                        "Lifecycle action failed: event={}, sessionId={}, reason={}",
+                                        event,
+                                        sessionId,
+                                        failure.getClass().getSimpleName());
+                                systemBalloonService.publishError(
+                                        "Lifecycle action failed",
+                                        "The configured lifecycle action could not be executed for session "
+                                                + sessionId
+                                                + ".");
+                                result.complete(
+                                        new HookExecutionResult(
+                                                event, HookStatus.LAUNCH_FAILED, null, 0, 0));
+                            }
+                        });
             } catch (RuntimeException failure) {
                 activeTasks.remove(result);
-                log.error("Lifecycle action could not be queued: event={}, sessionId={}, reason={}", event, sessionId,
+                log.error(
+                        "Lifecycle action could not be queued: event={}, sessionId={}, reason={}",
+                        event,
+                        sessionId,
                         failure.getClass().getSimpleName());
-                systemBalloonService.publishError("Lifecycle action failed",
-                        "The configured lifecycle action could not be executed for session " + sessionId + ".");
-                result.complete(new HookExecutionResult(event, HookStatus.LAUNCH_FAILED, null, 0, 0));
+                systemBalloonService.publishError(
+                        "Lifecycle action failed",
+                        "The configured lifecycle action could not be executed for session "
+                                + sessionId
+                                + ".");
+                result.complete(
+                        new HookExecutionResult(event, HookStatus.LAUNCH_FAILED, null, 0, 0));
             }
         }
         return result;
     }
 
-    private HookExecutionResult run(LifecycleEvent event, String script, Persistence.LifecycleHookContext context,
-                                    int timeoutSeconds) {
+    private HookExecutionResult run(
+            LifecycleEvent event,
+            String script,
+            Persistence.LifecycleHookContext context,
+            int timeoutSeconds) {
         Path scriptFile = null;
         Process process = null;
         OutputCapture stdout = new OutputCapture(MAX_DIAGNOSTIC_OUTPUT_BYTES);
@@ -111,7 +140,8 @@ public class LifecycleHookService {
             Files.writeString(scriptFile, script, StandardCharsets.UTF_8);
             restrictFile(scriptFile);
 
-            ProcessLaunchRequest request = new ProcessLaunchRequest(scriptFile, environment(context));
+            ProcessLaunchRequest request =
+                    new ProcessLaunchRequest(scriptFile, environment(context));
             synchronized (lifecycleLock) {
                 if (shutdownStarted.get()) {
                     return new HookExecutionResult(event, HookStatus.CANCELLED, null, 0, 0);
@@ -121,8 +151,14 @@ public class LifecycleHookService {
             }
 
             Process runningProcess = process;
-            stdoutReader = Thread.ofVirtual().name("lifecycle-hook-stdout").start(() -> readOutput(runningProcess.getInputStream(), stdout));
-            stderrReader = Thread.ofVirtual().name("lifecycle-hook-stderr").start(() -> readOutput(runningProcess.getErrorStream(), stderr));
+            stdoutReader =
+                    Thread.ofVirtual()
+                            .name("lifecycle-hook-stdout")
+                            .start(() -> readOutput(runningProcess.getInputStream(), stdout));
+            stderrReader =
+                    Thread.ofVirtual()
+                            .name("lifecycle-hook-stderr")
+                            .start(() -> readOutput(runningProcess.getErrorStream(), stderr));
 
             boolean finished;
             try {
@@ -130,27 +166,39 @@ public class LifecycleHookService {
             } catch (InterruptedException e) {
                 terminate(process);
                 Thread.currentThread().interrupt();
-                return new HookExecutionResult(event, HookStatus.CANCELLED, null, stdout.size(), stderr.size());
+                return new HookExecutionResult(
+                        event, HookStatus.CANCELLED, null, stdout.size(), stderr.size());
             }
             if (!finished) {
                 terminate(process);
                 joinReader(stdoutReader);
                 joinReader(stderrReader);
-                reportFailure(event, context.sessionId(), HookStatus.TIMED_OUT, null, stdout, stderr);
-                return new HookExecutionResult(event, HookStatus.TIMED_OUT, null, stdout.size(), stderr.size());
+                reportFailure(
+                        event, context.sessionId(), HookStatus.TIMED_OUT, null, stdout, stderr);
+                return new HookExecutionResult(
+                        event, HookStatus.TIMED_OUT, null, stdout.size(), stderr.size());
             }
 
             joinReader(stdoutReader);
             joinReader(stderrReader);
             int exitCode = process.exitValue();
             if (exitCode != 0) {
-                reportFailure(event, context.sessionId(), HookStatus.NON_ZERO_EXIT, exitCode, stdout, stderr);
-                return new HookExecutionResult(event, HookStatus.NON_ZERO_EXIT, exitCode, stdout.size(), stderr.size());
+                reportFailure(
+                        event,
+                        context.sessionId(),
+                        HookStatus.NON_ZERO_EXIT,
+                        exitCode,
+                        stdout,
+                        stderr);
+                return new HookExecutionResult(
+                        event, HookStatus.NON_ZERO_EXIT, exitCode, stdout.size(), stderr.size());
             }
             return new HookExecutionResult(event, HookStatus.SUCCEEDED, exitCode, 0, 0);
         } catch (Exception failure) {
-            reportFailure(event, context.sessionId(), HookStatus.LAUNCH_FAILED, null, stdout, stderr);
-            return new HookExecutionResult(event, HookStatus.LAUNCH_FAILED, null, stdout.size(), stderr.size());
+            reportFailure(
+                    event, context.sessionId(), HookStatus.LAUNCH_FAILED, null, stdout, stderr);
+            return new HookExecutionResult(
+                    event, HookStatus.LAUNCH_FAILED, null, stdout.size(), stderr.size());
         } finally {
             if (process != null) {
                 if (process.isAlive()) {
@@ -177,16 +225,33 @@ public class LifecycleHookService {
         return environment;
     }
 
-    private void reportFailure(LifecycleEvent event, long sessionId, HookStatus status, Integer exitCode,
-                               OutputCapture stdout, OutputCapture stderr) {
-        log.error("Lifecycle action failed: event={}, sessionId={}, status={}, exitCode={}, stdoutBytes={}, stderrBytes={}",
-                event, sessionId, status, exitCode, stdout.size(), stderr.size());
-        systemBalloonService.publishError("Lifecycle action failed",
-                "The configured lifecycle action failed for session " + sessionId + " (" + status.displayName + ").");
+    private void reportFailure(
+            LifecycleEvent event,
+            long sessionId,
+            HookStatus status,
+            Integer exitCode,
+            OutputCapture stdout,
+            OutputCapture stderr) {
+        log.error(
+                "Lifecycle action failed: event={}, sessionId={}, status={}, exitCode={}, stdoutBytes={}, stderrBytes={}",
+                event,
+                sessionId,
+                status,
+                exitCode,
+                stdout.size(),
+                stderr.size());
+        systemBalloonService.publishError(
+                "Lifecycle action failed",
+                "The configured lifecycle action failed for session "
+                        + sessionId
+                        + " ("
+                        + status.displayName
+                        + ").");
     }
 
     static Process startProcess(ProcessLaunchRequest request) throws IOException {
-        ProcessBuilder builder = new ProcessBuilder("setsid", "/bin/bash", request.scriptFile().toString());
+        ProcessBuilder builder =
+                new ProcessBuilder("setsid", "/bin/bash", request.scriptFile().toString());
         builder.directory(TEMP_DIRECTORY.toFile());
         builder.environment().putAll(request.environment());
         ProcessEnvironmentSanitizer.sanitize(builder);
@@ -222,7 +287,8 @@ public class LifecycleHookService {
             return;
         }
         try {
-            ProcessBuilder signalBuilder = new ProcessBuilder("/bin/kill", "-" + signal, "-" + process.pid());
+            ProcessBuilder signalBuilder =
+                    new ProcessBuilder("/bin/kill", "-" + signal, "-" + process.pid());
             ProcessEnvironmentSanitizer.sanitize(signalBuilder);
             Process signalProcess = signalBuilder.start();
             signalProcess.waitFor(TERMINATION_GRACE_MILLIS, TimeUnit.MILLISECONDS);
@@ -233,16 +299,18 @@ public class LifecycleHookService {
     }
 
     private void destroy(List<ProcessHandle> handles, boolean forcibly) {
-        handles.reversed().forEach(handle -> {
-            if (!handle.isAlive()) {
-                return;
-            }
-            if (forcibly) {
-                handle.destroyForcibly();
-            } else {
-                handle.destroy();
-            }
-        });
+        handles.reversed()
+                .forEach(
+                        handle -> {
+                            if (!handle.isAlive()) {
+                                return;
+                            }
+                            if (forcibly) {
+                                handle.destroyForcibly();
+                            } else {
+                                handle.destroy();
+                            }
+                        });
     }
 
     private void waitForHandles(List<ProcessHandle> handles, long deadline) {
@@ -261,7 +329,9 @@ public class LifecycleHookService {
                 return;
             }
             try {
-                process.waitFor(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(25)), TimeUnit.NANOSECONDS);
+                process.waitFor(
+                        Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(25)),
+                        TimeUnit.NANOSECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -294,9 +364,11 @@ public class LifecycleHookService {
 
     private void restrictFile(Path file) {
         try {
-            Files.setPosixFilePermissions(file, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+            Files.setPosixFilePermissions(
+                    file, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
         } catch (UnsupportedOperationException ignored) {
-            // The temp directory normally supports POSIX permissions; the file remains securely created by the OS.
+            // The temp directory normally supports POSIX permissions; the file remains securely
+            // created by the OS.
         } catch (IOException e) {
             throw new IllegalStateException("Failed to secure lifecycle action temporary file", e);
         }
@@ -311,7 +383,10 @@ public class LifecycleHookService {
             executor.shutdownNow();
         }
         activeProcesses.keySet().forEach(this::terminate);
-        activeTasks.forEach(task -> task.complete(new HookExecutionResult(null, HookStatus.CANCELLED, null, 0, 0)));
+        activeTasks.forEach(
+                task ->
+                        task.complete(
+                                new HookExecutionResult(null, HookStatus.CANCELLED, null, 0, 0)));
         try {
             executor.awaitTermination(2, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -325,8 +400,7 @@ public class LifecycleHookService {
         Process launch(ProcessLaunchRequest request) throws Exception;
     }
 
-    record ProcessLaunchRequest(Path scriptFile, Map<String, String> environment) {
-    }
+    record ProcessLaunchRequest(Path scriptFile, Map<String, String> environment) {}
 
     public enum LifecycleEvent {
         ASSISTANT_COMPLETED {
@@ -366,9 +440,12 @@ public class LifecycleHookService {
         }
     }
 
-    public record HookExecutionResult(LifecycleEvent event, HookStatus status, Integer exitCode,
-                                      int stdoutBytes, int stderrBytes) {
-    }
+    public record HookExecutionResult(
+            LifecycleEvent event,
+            HookStatus status,
+            Integer exitCode,
+            int stdoutBytes,
+            int stderrBytes) {}
 
     private static final class OutputCapture {
         private final int limit;

@@ -1,10 +1,9 @@
 package com.judepereira.jupiter.agent.catalog;
 
 import com.judepereira.jupiter.persistence.AppStateRepository;
-import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.stereotype.Service;
 
 @Service
 public class ModelPreferencesService {
@@ -19,9 +18,10 @@ public class ModelPreferencesService {
     public void initializeProvider(String provider, String defaultModelId) {
         if (repository.isProviderInitialized(provider)) return;
         var favourites = new ArrayList<>(favouriteModelIds());
-        boolean hasProviderFavourite = favourites.stream()
-                .map(this::resolveKnownModel)
-                .anyMatch(model -> model != null && model.provider().equals(provider));
+        boolean hasProviderFavourite =
+                favourites.stream()
+                        .map(this::resolveKnownModel)
+                        .anyMatch(model -> model != null && model.provider().equals(provider));
         if (!hasProviderFavourite && defaultModelId != null) favourites.add(defaultModelId);
         repository.updateFavouriteModelIds(favourites);
         repository.updateProviderInitialized(provider, true);
@@ -43,8 +43,10 @@ public class ModelPreferencesService {
     }
 
     public List<ModelDefinition> favouriteModels() {
-        return favouriteModelIds().stream().map(this::resolveKnownModel)
-                .filter(model -> model != null).toList();
+        return favouriteModelIds().stream()
+                .map(this::resolveKnownModel)
+                .filter(model -> model != null)
+                .toList();
     }
 
     private ModelDefinition resolveKnownModel(String id) {

@@ -39,7 +39,8 @@ class SqliteStorageConfig {
             try {
                 Files.createDirectories(parentDirectory);
             } catch (IOException e) {
-                throw new IllegalStateException("Failed to create SQLite data directory: " + parentDirectory, e);
+                throw new IllegalStateException(
+                        "Failed to create SQLite data directory: " + parentDirectory, e);
             }
         };
     }

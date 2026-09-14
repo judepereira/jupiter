@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
@@ -8,18 +10,15 @@ import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
 class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
 
@@ -34,31 +33,55 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+        try (RunningApp app =
+                        startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab"))
+                    .waitFor();
 
             openProject(page, "Alpha", projectDir);
             page.locator("#chat-input").fill("show the image");
             page.locator("#chat-send-btn").click();
 
-            var call = page.locator("#chat-messages-list [data-tool-call-target='call'][data-tool-call-id='display-image-1']");
+            var call =
+                    page.locator(
+                            "#chat-messages-list [data-tool-call-target='call'][data-tool-call-id='display-image-1']");
             call.waitFor();
             assertThat(call.locator(".tool-call-image-preview")).hasCount(1);
             assertThat(call.locator(".tool-call-image-preview img")).hasCount(1);
-            org.assertj.core.api.Assertions.assertThat((String) call.locator(".tool-call-image-preview figcaption > span").evaluate("el => el.textContent")).isEqualTo("Cat");
-            org.assertj.core.api.Assertions.assertThat((String) call.locator(".tool-call-image-preview figcaption > small").evaluate("el => el.textContent")).isEqualTo("images/cat.png");
+            org.assertj.core.api.Assertions.assertThat(
+                            (String)
+                                    call.locator(".tool-call-image-preview figcaption > span")
+                                            .evaluate("el => el.textContent"))
+                    .isEqualTo("Cat");
+            org.assertj.core.api.Assertions.assertThat(
+                            (String)
+                                    call.locator(".tool-call-image-preview figcaption > small")
+                                            .evaluate("el => el.textContent"))
+                    .isEqualTo("images/cat.png");
 
             page.reload();
-            var reloadedCall = page.locator("#chat-messages-list .tool-call-call[data-tool-call-id='display-image-1']");
+            var reloadedCall =
+                    page.locator(
+                            "#chat-messages-list .tool-call-call[data-tool-call-id='display-image-1']");
             reloadedCall.waitFor();
             assertThat(reloadedCall.locator(".tool-call-image-preview")).hasCount(1);
             assertThat(reloadedCall.locator(".tool-call-image-preview img")).hasCount(1);
-            org.assertj.core.api.Assertions.assertThat((String) reloadedCall.locator(".tool-call-image-preview figcaption > span").evaluate("el => el.textContent")).isEqualTo("Cat");
-            org.assertj.core.api.Assertions.assertThat((String) reloadedCall.locator(".tool-call-image-preview figcaption > small").evaluate("el => el.textContent")).isEqualTo("images/cat.png");
+            org.assertj.core.api.Assertions.assertThat(
+                            (String)
+                                    reloadedCall
+                                            .locator(".tool-call-image-preview figcaption > span")
+                                            .evaluate("el => el.textContent"))
+                    .isEqualTo("Cat");
+            org.assertj.core.api.Assertions.assertThat(
+                            (String)
+                                    reloadedCall
+                                            .locator(".tool-call-image-preview figcaption > small")
+                                            .evaluate("el => el.textContent"))
+                    .isEqualTo("images/cat.png");
         } finally {
             if (previousHome == null) {
                 System.clearProperty("user.home");
@@ -80,27 +103,53 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        new com.judepereira.jupiter.agent.harness.SystemPromptComposer(
+                                com.judepereira.jupiter.testsupport.SkillTestSupport
+                                        .defaultComponents()
+                                        .renderer()),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .discovery(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .resolver(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .injector());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                Map<String, Object> args = Map.of(
-                        "path", "images/cat.png",
-                        "alt", "Cat"
-                );
-                ToolCallTrace started = new ToolCallTrace("display-image-1", "display_image", args, false, "", Map.of());
+            public AgentTurnResult runTurnStreaming(
+                    AgentTurnRequest request, AgentStreamListener listener) {
+                Map<String, Object> args =
+                        Map.of(
+                                "path", "images/cat.png",
+                                "alt", "Cat");
+                ToolCallTrace started =
+                        new ToolCallTrace(
+                                "display-image-1", "display_image", args, false, "", Map.of());
                 listener.onTextDelta("Displaying image");
                 listener.onToolCallStarted(started);
 
-                ToolCallTrace trace = new ToolCallTrace("display-image-1", "display_image", args, true,
-                        "Displayed image: images/cat.png",
-                        Map.of(
-                                "displayType", "image",
-                                "path", "images/cat.png",
-                                "alt", "Cat",
-                                "mediaType", "image/png"
-                        ));
+                ToolCallTrace trace =
+                        new ToolCallTrace(
+                                "display-image-1",
+                                "display_image",
+                                args,
+                                true,
+                                "Displayed image: images/cat.png",
+                                Map.of(
+                                        "displayType", "image",
+                                        "path", "images/cat.png",
+                                        "alt", "Cat",
+                                        "mediaType", "image/png"));
                 listener.onToolCallTrace(trace);
                 AgentTurnResult result = new AgentTurnResult("done", List.of(trace));
                 listener.onComplete(result);

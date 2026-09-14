@@ -21,7 +21,8 @@ public class ToolRegistry {
         return tools.get(name);
     }
 
-    public ToolExecutionResult executeByName(String name, Map<String, Object> args, ToolExecutionContext context) throws Exception {
+    public ToolExecutionResult executeByName(
+            String name, Map<String, Object> args, ToolExecutionContext context) throws Exception {
         AgentTool tool = tools.get(name);
         if (tool == null) {
             throw new IllegalArgumentException("Unknown tool: " + name);
@@ -72,10 +73,14 @@ public class ToolRegistry {
 
     private static String suffixFor(String toolName) {
         return switch (toolName) {
-            case "read_file" -> "\n\n[tool_output_truncated: output exceeded 16 KiB. Use startLine/endLine to read a smaller range.]";
-            case "search_code" -> "\n\n[tool_output_truncated: output exceeded 16 KiB. Narrow path, include, or pattern.]";
-            case "list_files" -> "\n\n[tool_output_truncated: output exceeded 16 KiB. Narrow path or include.]";
-            case "run_command" -> "\n\n[tool_output_truncated: output exceeded 16 KiB. Refine the command or redirect full output to a file.]";
+            case "read_file" ->
+                    "\n\n[tool_output_truncated: output exceeded 16 KiB. Use startLine/endLine to read a smaller range.]";
+            case "search_code" ->
+                    "\n\n[tool_output_truncated: output exceeded 16 KiB. Narrow path, include, or pattern.]";
+            case "list_files" ->
+                    "\n\n[tool_output_truncated: output exceeded 16 KiB. Narrow path or include.]";
+            case "run_command" ->
+                    "\n\n[tool_output_truncated: output exceeded 16 KiB. Refine the command or redirect full output to a file.]";
             default -> "\n\n[tool_output_truncated: output exceeded 16 KiB.]";
         };
     }

@@ -1,18 +1,18 @@
 package com.judepereira.jupiter.agent.tools;
 
-import com.judepereira.jupiter.agent.tools.impl.FileUtils;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import java.io.IOException;
 import java.nio.file.Path;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class FileUtilsTest {
 
     @Test
-    public void resolve_relative_from_dot_allows_valid_relative(@TempDir Path tmp) throws IOException {
+    public void resolve_relative_from_dot_allows_valid_relative(@TempDir Path tmp)
+            throws IOException {
         // workspace root is current dir (.) resolved to tmp
         Path ws = tmp.resolve("sub");
         ws.toFile().mkdirs();

@@ -18,6 +18,5 @@ class HealthController {
                 .body(new HealthResponse("UP"));
     }
 
-    record HealthResponse(String status) {
-    }
+    record HealthResponse(String status) {}
 }

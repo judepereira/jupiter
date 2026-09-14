@@ -1,14 +1,13 @@
 package com.judepereira.jupiter.config;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.mock.web.MockFilterChain;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockFilterChain;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 class HttpBasicAuthFilterTests {
 
@@ -28,7 +27,11 @@ class HttpBasicAuthFilterTests {
         HttpAuthProperties properties = properties("secret");
         HttpBasicAuthFilter filter = new HttpBasicAuthFilter(properties);
         MockHttpServletRequest request = request("/static/app.js");
-        request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString("jupiter:secret".getBytes(StandardCharsets.UTF_8)));
+        request.addHeader(
+                "Authorization",
+                "Basic "
+                        + Base64.getEncoder()
+                                .encodeToString("jupiter:secret".getBytes(StandardCharsets.UTF_8)));
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
 
@@ -52,7 +55,8 @@ class HttpBasicAuthFilterTests {
 
     @Test
     void doesNothingWhenPasswordIsBlank() throws Exception {
-        MockHttpServletResponse response = invoke(new HttpBasicAuthFilter(properties(" ")), request("/"));
+        MockHttpServletResponse response =
+                invoke(new HttpBasicAuthFilter(properties(" ")), request("/"));
 
         assertThat(response.getStatus()).isEqualTo(200);
     }
@@ -71,7 +75,8 @@ class HttpBasicAuthFilterTests {
         return request;
     }
 
-    private static MockHttpServletResponse invoke(HttpBasicAuthFilter filter, MockHttpServletRequest request) throws Exception {
+    private static MockHttpServletResponse invoke(
+            HttpBasicAuthFilter filter, MockHttpServletRequest request) throws Exception {
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(request, response, new MockFilterChain());
         return response;

@@ -2,7 +2,6 @@ package com.judepereira.jupiter.agent.llm.openai;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.util.Map;
 
 public final class ToolArgumentsCodec {

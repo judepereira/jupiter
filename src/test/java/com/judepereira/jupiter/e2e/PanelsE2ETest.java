@@ -1,5 +1,9 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
@@ -7,19 +11,14 @@ import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PanelsE2ETest extends E2ETestSupport {
 
@@ -31,18 +30,21 @@ class PanelsE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-        Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "PanelsE2ETest"));
+        Path screenshotsDir =
+                Files.createDirectories(
+                        Path.of("target", "playwright-screenshots", "PanelsE2ETest"));
 
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab"))
+                        .waitFor();
 
                 openProject(page, "Alpha", projectDir);
                 captureScreenshot(page, screenshotsDir, "01-project-opened.png");
@@ -59,9 +61,11 @@ class PanelsE2ETest extends E2ETestSupport {
                 assertThat(page.locator("#review")).not().isVisible();
                 runTerminalCommandAndAssertOutput(page);
 
-                double initialBottomPanelHeight = page.locator("#bottom-panel").boundingBox().height;
+                double initialBottomPanelHeight =
+                        page.locator("#bottom-panel").boundingBox().height;
                 dragTerminalPanelDivider(page, 40);
-                double resizedBottomPanelHeight = page.locator("#bottom-panel").boundingBox().height;
+                double resizedBottomPanelHeight =
+                        page.locator("#bottom-panel").boundingBox().height;
                 assertNotEquals(initialBottomPanelHeight, resizedBottomPanelHeight);
 
                 captureScreenshot(page, screenshotsDir, "02-terminal-open.png");
@@ -97,7 +101,8 @@ class PanelsE2ETest extends E2ETestSupport {
     }
 
     @Test
-    void keyboardShortcutsToggleTerminalAndCycleChatSelectors(@TempDir Path tempDir) throws Exception {
+    void keyboardShortcutsToggleTerminalAndCycleChatSelectors(@TempDir Path tempDir)
+            throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
@@ -108,21 +113,26 @@ class PanelsE2ETest extends E2ETestSupport {
 
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab"))
+                        .waitFor();
 
                 openProject(page, "Alpha", projectDir);
 
                 assertThat(page.locator("#bottom-panel")).not().isVisible();
                 page.waitForResponse(
-                        response -> response.url().contains("/ui/panel/terminal") && response.status() == 200,
+                        response ->
+                                response.url().contains("/ui/panel/terminal")
+                                        && response.status() == 200,
                         () -> page.keyboard().press("Control+`"));
                 assertTerminalPanelVisible(page);
                 page.waitForResponse(
-                        response -> response.url().contains("/ui/panel/terminal") && response.status() == 200,
+                        response ->
+                                response.url().contains("/ui/panel/terminal")
+                                        && response.status() == 200,
                         () -> page.keyboard().press("Control+`"));
                 assertThat(page.locator("#bottom-panel")).not().isVisible();
 
@@ -156,10 +166,20 @@ class PanelsE2ETest extends E2ETestSupport {
 
     private void assertShortcutCyclesSelect(Page page, String selectSelector, String shortcut) {
         @SuppressWarnings("unchecked")
-        List<String> values = (List<String>) page.locator(selectSelector + " option").evaluateAll("options => options.map(option => option.value)");
+        List<String> values =
+                (List<String>)
+                        page.locator(selectSelector + " option")
+                                .evaluateAll("options => options.map(option => option.value)");
         String currentValue = page.locator(selectSelector).inputValue();
         int currentIndex = values.indexOf(currentValue);
-        assertTrue(currentIndex >= 0, () -> selectSelector + " current value not found in options: " + currentValue + " / " + values);
+        assertTrue(
+                currentIndex >= 0,
+                () ->
+                        selectSelector
+                                + " current value not found in options: "
+                                + currentValue
+                                + " / "
+                                + values);
 
         String expectedNextValue = values.get((currentIndex + 1) % values.size());
         page.keyboard().press(shortcut);
@@ -168,9 +188,13 @@ class PanelsE2ETest extends E2ETestSupport {
 
     private void dragTerminalPanelDivider(Page page, double deltaY) {
         var dividerBox = page.locator("#terminal-panel-divider").boundingBox();
-        page.mouse().move(dividerBox.x + dividerBox.width / 2, dividerBox.y + dividerBox.height / 2);
+        page.mouse()
+                .move(dividerBox.x + dividerBox.width / 2, dividerBox.y + dividerBox.height / 2);
         page.mouse().down();
-        page.mouse().move(dividerBox.x + dividerBox.width / 2, dividerBox.y + dividerBox.height / 2 + deltaY);
+        page.mouse()
+                .move(
+                        dividerBox.x + dividerBox.width / 2,
+                        dividerBox.y + dividerBox.height / 2 + deltaY);
         page.mouse().up();
     }
 
@@ -186,11 +210,31 @@ class PanelsE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        new com.judepereira.jupiter.agent.harness.SystemPromptComposer(
+                                com.judepereira.jupiter.testsupport.SkillTestSupport
+                                        .defaultComponents()
+                                        .renderer()),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .discovery(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .resolver(),
+                        com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents()
+                                .injector());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(
+                    AgentTurnRequest request, AgentStreamListener listener) {
                 listener.onTextDelta(ASSISTANT_REPLY);
                 AgentTurnResult result = new AgentTurnResult(ASSISTANT_REPLY, java.util.List.of());
                 listener.onComplete(result);

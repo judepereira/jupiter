@@ -11,6 +11,4 @@ public record ModelDefinition(
         int outputTokens,
         String inputPrice,
         String outputPrice,
-        String releaseDate
-) {
-}
+        String releaseDate) {}

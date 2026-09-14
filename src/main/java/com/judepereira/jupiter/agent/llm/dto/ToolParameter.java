@@ -2,9 +2,14 @@ package com.judepereira.jupiter.agent.llm.dto;
 
 import java.util.List;
 
-public sealed interface ToolParameter permits ToolParameter.StringParameter, ToolParameter.IntegerParameter,
-        ToolParameter.NumberParameter, ToolParameter.BooleanParameter, ToolParameter.EnumParameter,
-        ToolParameter.ObjectParameter, ToolParameter.ArrayParameter {
+public sealed interface ToolParameter
+        permits ToolParameter.StringParameter,
+                ToolParameter.IntegerParameter,
+                ToolParameter.NumberParameter,
+                ToolParameter.BooleanParameter,
+                ToolParameter.EnumParameter,
+                ToolParameter.ObjectParameter,
+                ToolParameter.ArrayParameter {
 
     String name();
 
@@ -50,14 +55,17 @@ public sealed interface ToolParameter permits ToolParameter.StringParameter, Too
 
     record BooleanParameter(String name, String description) implements ToolParameter {}
 
-    record EnumParameter(String name, String description, List<String> values) implements ToolParameter {
+    record EnumParameter(String name, String description, List<String> values)
+            implements ToolParameter {
         public EnumParameter {
             values = List.copyOf(values);
         }
     }
 
-    record ObjectParameter(String name, String description, ToolSchema schema) implements ToolParameter {}
+    record ObjectParameter(String name, String description, ToolSchema schema)
+            implements ToolParameter {}
 
     /** Array item parameters have a null name because items are not object properties. */
-    record ArrayParameter(String name, String description, ToolParameter items) implements ToolParameter {}
+    record ArrayParameter(String name, String description, ToolParameter items)
+            implements ToolParameter {}
 }

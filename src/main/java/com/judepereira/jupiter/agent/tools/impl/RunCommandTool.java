@@ -1,13 +1,14 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
-import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,20 +23,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
-
 public class RunCommandTool implements AgentTool {
     private static final int INLINE_OUTPUT_LIMIT_BYTES = 4 * 1024;
     private static final int PREVIEW_EDGE_BYTES = 2 * 1024;
-    private final List<String> forbidden = List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
-    private static final ToolDefinition DEF = ToolDefinition.builtIn(
-            "run_command",
-            "Run a shell command in workspace (restricted)",
-            ToolSchema.object(
-                    string("command", "shell command to run"),
-                    string("workingDir", "optional relative working directory")
-            ).required("command")
-    );
+    private final List<String> forbidden =
+            List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
+    private static final ToolDefinition DEF =
+            ToolDefinition.builtIn(
+                    "run_command",
+                    "Run a shell command in workspace (restricted)",
+                    ToolSchema.object(
+                                    string("command", "shell command to run"),
+                                    string("workingDir", "optional relative working directory"))
+                            .required("command"));
 
     @Override
     public String name() {
@@ -48,9 +48,11 @@ public class RunCommandTool implements AgentTool {
     }
 
     @Override
-    public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {
+    public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context)
+            throws Exception {
         if (!context.isAllowCommand()) {
-            return new ToolExecutionResult(false, "command execution disabled by configuration", Map.of());
+            return new ToolExecutionResult(
+                    false, "command execution disabled by configuration", Map.of());
         }
         String cmd = (String) args.get("command");
         String working = (String) args.getOrDefault("workingDir", "");
@@ -72,7 +74,11 @@ public class RunCommandTool implements AgentTool {
         pb.directory(wd.toFile());
         Map<String, String> environment = pb.environment();
         environment.clear();
-        environment.putAll(buildCommandEnvironment(System.getenv(), context.getCommandEnvironmentAllowlist(), context.getEnvironmentVariables()));
+        environment.putAll(
+                buildCommandEnvironment(
+                        System.getenv(),
+                        context.getCommandEnvironmentAllowlist(),
+                        context.getEnvironmentVariables()));
         environment.put("LANG", "C.utf8");
         environment.put("LC_ALL", "C.utf8");
         Process p;
@@ -83,10 +89,12 @@ public class RunCommandTool implements AgentTool {
         Thread tErr = new Thread(() -> capture(p.getErrorStream(), stderrCapture));
         tOut.start();
         tErr.start();
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(context.getCommandTimeoutSeconds());
+        long deadline =
+                System.nanoTime() + TimeUnit.SECONDS.toNanos(context.getCommandTimeoutSeconds());
         boolean finished = false;
         while (!finished) {
-            if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
+            if (context.getCancellationToken() != null
+                    && context.getCancellationToken().isCancelled()) {
                 p.destroyForcibly();
                 try {
                     tOut.join(200);
@@ -105,7 +113,8 @@ public class RunCommandTool implements AgentTool {
             if (remainingNanos <= 0) {
                 break;
             }
-            long waitMillis = Math.max(1L, Math.min(TimeUnit.NANOSECONDS.toMillis(remainingNanos), 100L));
+            long waitMillis =
+                    Math.max(1L, Math.min(TimeUnit.NANOSECONDS.toMillis(remainingNanos), 100L));
             finished = p.waitFor(waitMillis, TimeUnit.MILLISECONDS);
         }
         if (!finished) {
@@ -133,7 +142,8 @@ public class RunCommandTool implements AgentTool {
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
-        if (context.getCancellationToken() != null && context.getCancellationToken().isCancelled()) {
+        if (context.getCancellationToken() != null
+                && context.getCancellationToken().isCancelled()) {
             throw new StreamCancelledException();
         }
         Files.deleteIfExists(commandScript);
@@ -141,17 +151,19 @@ public class RunCommandTool implements AgentTool {
 
         String stdout = formatOutput(stdoutCapture);
         String stderr = formatOutput(stderrCapture);
-        Map<String, Object> machine = Map.of(
-                "exitCode", code,
-                "stdout", stdout,
-                "stderr", stderr);
+        Map<String, Object> machine =
+                Map.of(
+                        "exitCode", code,
+                        "stdout", stdout,
+                        "stderr", stderr);
         String text = "exitCode=" + code + "\n" + stdout + stderr;
         return new ToolExecutionResult(code == 0, text, machine);
     }
 
-    static Map<String, String> buildCommandEnvironment(Map<String, String> hostEnvironment,
-                                                        java.util.Set<String> allowlist,
-                                                        Map<String, String> projectEnvironment) {
+    static Map<String, String> buildCommandEnvironment(
+            Map<String, String> hostEnvironment,
+            java.util.Set<String> allowlist,
+            Map<String, String> projectEnvironment) {
         Map<String, String> environment = new java.util.HashMap<>();
         for (String name : allowlist) {
             String value = hostEnvironment.get(name);
@@ -165,7 +177,8 @@ public class RunCommandTool implements AgentTool {
     }
 
     private static void capture(InputStream input, OutputCapture capture) {
-        try (input; OutputStream output = Files.newOutputStream(capture.path)) {
+        try (input;
+                OutputStream output = Files.newOutputStream(capture.path)) {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = input.read(buffer)) != -1) {
@@ -220,7 +233,7 @@ public class RunCommandTool implements AgentTool {
         private void finish(OutputStream output) throws IOException {
             if (size > 0 && suffix[suffixLength - 1] != '\n') {
                 output.write('\n');
-                accept(new byte[]{'\n'}, 1);
+                accept(new byte[] {'\n'}, 1);
             }
             // Output is written by the capture loop.
         }
@@ -254,8 +267,10 @@ public class RunCommandTool implements AgentTool {
         return "";
     }
 
-    private static String decodeUtf8(byte[] bytes, int offset, int length) throws CharacterCodingException {
-        return StandardCharsets.UTF_8.newDecoder()
+    private static String decodeUtf8(byte[] bytes, int offset, int length)
+            throws CharacterCodingException {
+        return StandardCharsets.UTF_8
+                .newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT)
                 .decode(ByteBuffer.wrap(bytes, offset, length))

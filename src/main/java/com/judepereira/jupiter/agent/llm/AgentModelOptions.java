@@ -7,6 +7,4 @@ public record AgentModelOptions(
         String apiModelId,
         ThinkingLevel thinkingLevel,
         boolean supportsReasoning,
-        String textVerbosity
-) {
-}
+        String textVerbosity) {}

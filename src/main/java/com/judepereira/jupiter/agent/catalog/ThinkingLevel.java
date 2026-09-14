@@ -1,7 +1,6 @@
 package com.judepereira.jupiter.agent.catalog;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-
 import java.util.Locale;
 
 public enum ThinkingLevel {

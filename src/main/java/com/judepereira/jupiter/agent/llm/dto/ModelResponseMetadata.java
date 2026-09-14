@@ -12,13 +12,13 @@ public record ModelResponseMetadata(
         String responseId,
         String modelId,
         String finishReason,
-        Map<String, Object> providerMetadata
-) {
+        Map<String, Object> providerMetadata) {
     public ModelResponseMetadata {
         providerMetadata = providerMetadata == null ? Map.of() : Map.copyOf(providerMetadata);
     }
 
     public static ModelResponseMetadata empty() {
-        return new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of());
+        return new ModelResponseMetadata(
+                null, null, null, null, null, null, null, null, null, Map.of());
     }
 }

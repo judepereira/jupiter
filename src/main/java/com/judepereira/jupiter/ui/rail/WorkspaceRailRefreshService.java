@@ -1,5 +1,11 @@
 package com.judepereira.jupiter.ui.rail;
 
+import java.io.IOException;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.context.event.ContextClosedEvent;
@@ -7,13 +13,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
 @Service
 public class WorkspaceRailRefreshService {
@@ -26,7 +25,8 @@ public class WorkspaceRailRefreshService {
     private final Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
-    public WorkspaceRailRefreshService(Supplier<SseEmitter> emitterFactory, EventSender eventSender) {
+    public WorkspaceRailRefreshService(
+            Supplier<SseEmitter> emitterFactory, EventSender eventSender) {
         this.emitterFactory = emitterFactory;
         this.eventSender = eventSender;
     }
@@ -99,7 +99,8 @@ public class WorkspaceRailRefreshService {
         return emitters.size();
     }
 
-    private static void sendNamedEvent(SseEmitter emitter, String eventName, Object data) throws IOException {
+    private static void sendNamedEvent(SseEmitter emitter, String eventName, Object data)
+            throws IOException {
         emitter.send(SseEmitter.event().name(eventName).data(data));
     }
 

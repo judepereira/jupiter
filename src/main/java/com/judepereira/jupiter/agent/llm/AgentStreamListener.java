@@ -1,16 +1,15 @@
 package com.judepereira.jupiter.agent.llm;
 
-import com.judepereira.jupiter.agent.harness.AgentTurnResult;
+import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
+import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.dto.Message;
-import com.judepereira.jupiter.agent.catalog.ModelDefinition;
-
 import java.util.List;
 
 /**
- * Simple callback interface for streaming model responses.
- * All methods are no-op by default so implementers only need the callbacks they use.
+ * Simple callback interface for streaming model responses. All methods are no-op by default so
+ * implementers only need the callbacks they use.
  */
 public interface AgentStreamListener {
 
@@ -28,9 +27,11 @@ public interface AgentStreamListener {
 
     default void onToolCallStarted(ToolCallTrace trace) {}
 
-    default void onToolCallProgress(String toolCallId, String toolName, String eventName, Object payload) {}
+    default void onToolCallProgress(
+            String toolCallId, String toolName, String eventName, Object payload) {}
 
-    default List<Message> onBeforeModelRequest(AgentTurnRequest request, List<Message> conversation) {
+    default List<Message> onBeforeModelRequest(
+            AgentTurnRequest request, List<Message> conversation) {
         return conversation;
     }
 }

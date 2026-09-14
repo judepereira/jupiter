@@ -1,16 +1,21 @@
 package com.judepereira.jupiter.ui.balloon;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.ui.UiExceptionHandler;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class UiExceptionHandlerTests {
 
     @Test
     void handlesUiExceptionByPublishingInternalErrorBalloonAndReturning500() {
-        SystemBalloonService balloonService = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
+        SystemBalloonService balloonService =
+                new SystemBalloonService(
+                        new ObjectMapper(),
+                        () ->
+                                new org.springframework.web.servlet.mvc.method.annotation
+                                        .SseEmitter(0L));
         UiExceptionHandler handler = new UiExceptionHandler(balloonService);
 
         var response = handler.handleUiException(new IllegalStateException("Boom"));

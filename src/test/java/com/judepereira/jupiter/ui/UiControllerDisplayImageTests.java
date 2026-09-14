@@ -1,5 +1,8 @@
 package com.judepereira.jupiter.ui;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.config.AgentProperties;
@@ -9,21 +12,17 @@ import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
+import com.judepereira.jupiter.terminal.TerminalManager;
+import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
-import com.judepereira.jupiter.terminal.TerminalManager;
-import com.judepereira.jupiter.terminal.TerminalStateService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class UiControllerDisplayImageTests {
 
@@ -39,25 +38,103 @@ class UiControllerDisplayImageTests {
         appStateService.addOrReopenProject("Alpha", workspace.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
         var turn = appStateService.appendUserMessageAndPendingAssistant(sessionId, "show image");
-        appStateService.appendToolCallTrace(sessionId, turn.assistantMessage().id(),
-                new ToolCallTraceInput("image-1", "display_image", Map.of("path", "images/cat.png"), true,
+        appStateService.appendToolCallTrace(
+                sessionId,
+                turn.assistantMessage().id(),
+                new ToolCallTraceInput(
+                        "image-1",
+                        "display_image",
+                        Map.of("path", "images/cat.png"),
+                        true,
                         "Displayed image: images/cat.png",
-                        Map.of("displayType", "image", "path", "images/cat.png", "alt", "Cat", "mediaType", "image/png")));
+                        Map.of(
+                                "displayType",
+                                "image",
+                                "path",
+                                "images/cat.png",
+                                "alt",
+                                "Cat",
+                                "mediaType",
+                                "image/png")));
 
-        var skillComponents = com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents();
-        var promptComposer = new com.judepereira.jupiter.agent.harness.SystemPromptComposer(skillComponents.renderer());
-        UiController controller = new UiController(new CodingAgentHarness(null, null, new AgentProperties(), null, null, com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.modelCatalogService()), null, null, null, promptComposer,
-                skillComponents.discovery(), skillComponents.resolver(), skillComponents.injector()), new AgentProperties(), appStateService,
-                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null, null, org.mockito.Mockito.mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class),
-                new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)),
-                new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L),
-                        (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))),
-                appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
-                new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class), null),
-                new com.judepereira.jupiter.persistence.ContextCompactionService(appStateService, mock(AgentModelClientFactory.class), null, promptComposer, skillComponents.discovery()),
-                null, mock(CommandStreamService.class), new com.judepereira.jupiter.command.CommandCatalogService(""), null,
-                new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(),
-                mock(com.judepereira.jupiter.git.GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+        var skillComponents =
+                com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents();
+        var promptComposer =
+                new com.judepereira.jupiter.agent.harness.SystemPromptComposer(
+                        skillComponents.renderer());
+        UiController controller =
+                new UiController(
+                        new CodingAgentHarness(
+                                null,
+                                null,
+                                new AgentProperties(),
+                                null,
+                                null,
+                                com.judepereira.jupiter.testsupport.ModelCatalogTestSupport
+                                        .resolutionService(
+                                                com.judepereira.jupiter.testsupport
+                                                        .ModelCatalogTestSupport
+                                                        .modelCatalogService()),
+                                null,
+                                null,
+                                null,
+                                promptComposer,
+                                skillComponents.discovery(),
+                                skillComponents.resolver(),
+                                skillComponents.injector()),
+                        new AgentProperties(),
+                        appStateService,
+                        new AgentDefinitionService(new ObjectMapper()),
+                        ModelCatalogTestSupport.modelCatalogService(),
+                        com.judepereira.jupiter.testsupport.ModelCatalogTestSupport
+                                .resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                        null,
+                        null,
+                        null,
+                        org.mockito.Mockito.mock(
+                                com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService
+                                        .class),
+                        new SystemBalloonService(
+                                new ObjectMapper(),
+                                () ->
+                                        new org.springframework.web.servlet.mvc.method.annotation
+                                                .SseEmitter(0L)),
+                        new WorkspaceRailRefreshService(
+                                () ->
+                                        new org.springframework.web.servlet.mvc.method.annotation
+                                                .SseEmitter(0L),
+                                (emitter, eventName, data) ->
+                                        emitter.send(
+                                                org.springframework.web.servlet.mvc.method
+                                                        .annotation.SseEmitter.event()
+                                                        .name(eventName)
+                                                        .data(data))),
+                        appStateService.activeStreamRegistryService(),
+                        mock(TerminalManager.class),
+                        new TerminalStateService(),
+                        new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(
+                                new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(),
+                                new ObjectMapper(),
+                                HttpClient.newHttpClient(),
+                                mock(com.judepereira.jupiter.persistence.AppStateRepository.class),
+                                null),
+                        new com.judepereira.jupiter.persistence.ContextCompactionService(
+                                appStateService,
+                                mock(AgentModelClientFactory.class),
+                                null,
+                                promptComposer,
+                                skillComponents.discovery()),
+                        null,
+                        mock(CommandStreamService.class),
+                        new com.judepereira.jupiter.command.CommandCatalogService(""),
+                        null,
+                        new com.judepereira.jupiter.ui.ChatPresentationService(),
+                        null,
+                        null,
+                        new com.judepereira.jupiter.config.HttpAuthProperties(),
+                        mock(com.judepereira.jupiter.git.GitAutoUpdateService.class),
+                        mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class),
+                        "0.0.1-SNAPSHOT");
 
         var response = controller.streamDisplayImage(sessionId, "image-1");
 

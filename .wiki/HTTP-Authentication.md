@@ -24,18 +24,22 @@ Everything except exactly:
 GET /health
 ```
 
-That means the UI, static files, error routes, SSE connections, and WebSocket handshakes all require credentials once auth is enabled.
+That means the UI, static files, error routes, SSE connections, and WebSocket handshakes all require
+credentials once auth is enabled.
 
 ## Comparison behaviour
 
-After decoding the Basic header, Jupiter compares the complete `username:password` value with `MessageDigest.isEqual`.
+After decoding the Basic header, Jupiter compares the complete `username:password` value with
+`MessageDigest.isEqual`.
 
 ## Please use HTTPS
 
 Basic authentication is encoding, not transport encryption.
 
-If Jupiter sees Basic auth enabled while the public request still looks like HTTP, it raises a warning in the UI.
+If Jupiter sees Basic auth enabled while the public request still looks like HTTP, it raises a
+warning in the UI.
 
 ## What it is not
 
-This is one shared access gate. v1 has no per-user identities, roles, or project-level authorisation boundaries.
+This is one shared access gate. v1 has no per-user identities, roles, or project-level authorisation
+boundaries.

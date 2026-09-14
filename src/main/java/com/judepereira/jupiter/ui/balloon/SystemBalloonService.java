@@ -2,14 +2,6 @@ package com.judepereira.jupiter.ui.balloon;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Service;
-import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -18,6 +10,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Log4j2
 @Service
@@ -111,11 +110,20 @@ public class SystemBalloonService {
     }
 
     public void publishWarning(SseEmitter emitter, String title, String body) {
-        sendToEmitter(emitter, serialize(new SystemBalloon(UUID.randomUUID(), SystemBalloon.Type.WARNING, title, body, Instant.now())));
+        sendToEmitter(
+                emitter,
+                serialize(
+                        new SystemBalloon(
+                                UUID.randomUUID(),
+                                SystemBalloon.Type.WARNING,
+                                title,
+                                body,
+                                Instant.now())));
     }
 
     private void publish(SystemBalloon.Type type, String title, String body) {
-        String payload = serialize(new SystemBalloon(UUID.randomUUID(), type, title, body, Instant.now()));
+        String payload =
+                serialize(new SystemBalloon(UUID.randomUUID(), type, title, body, Instant.now()));
         for (SseEmitter emitter : emitters) {
             sendToEmitter(emitter, payload);
         }

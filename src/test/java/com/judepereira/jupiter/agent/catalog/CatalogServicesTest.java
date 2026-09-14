@@ -1,35 +1,35 @@
 package com.judepereira.jupiter.agent.catalog;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
-import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
-
-import java.nio.charset.StandardCharsets;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 
 public class CatalogServicesTest {
 
     private static final YAMLMapper YAML_MAPPER = new YAMLMapper();
-    private static final Pattern AGENT_MARKDOWN = Pattern.compile("(?s)^---\\R(.*?)\\R---\\R?(.*)$");
-    private static final List<String> AGENT_RESOURCE_PATHS = List.of(
-            "/agents/01-plan.md",
-            "/agents/02-engineer.md",
-            "/agents/03-explore.md",
-            "/agents/04-apprentice.md",
-            "/agents/05-test.md"
-    );
+    private static final Pattern AGENT_MARKDOWN =
+            Pattern.compile("(?s)^---\\R(.*?)\\R---\\R?(.*)$");
+    private static final List<String> AGENT_RESOURCE_PATHS =
+            List.of(
+                    "/agents/01-plan.md",
+                    "/agents/02-engineer.md",
+                    "/agents/03-explore.md",
+                    "/agents/04-apprentice.md",
+                    "/agents/05-test.md");
 
     @Test
     public void unknownModelDoesNotResolveToProviderFirstModel() {
@@ -43,36 +43,45 @@ public class CatalogServicesTest {
     @Test
     public void agentCatalogLoadsAllBundledAgentsWithExpectedDefaults() {
         AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
-        List<AgentResource> resources = AGENT_RESOURCE_PATHS.stream()
-                .map(path -> new AgentResource(path, loadAgentMarkdown(path)))
-                .toList();
+        List<AgentResource> resources =
+                AGENT_RESOURCE_PATHS.stream()
+                        .map(path -> new AgentResource(path, loadAgentMarkdown(path)))
+                        .toList();
         AgentDefinition wildcardPrimary = loadInlineWildcardAgent("11-primary.md", AgentMode.AGENT);
-        AgentDefinition wildcardSubagent = loadInlineWildcardAgent("12-subagent.md", AgentMode.SUBAGENT);
+        AgentDefinition wildcardSubagent =
+                loadInlineWildcardAgent("12-subagent.md", AgentMode.SUBAGENT);
 
-        assertThat(service.list()).extracting(AgentDefinition::id)
+        assertThat(service.list())
+                .extracting(AgentDefinition::id)
                 .containsExactlyElementsOf(resources.stream().map(AgentResource::id).toList());
-        assertThat(service.listPrimaryAgents()).extracting(AgentDefinition::id)
+        assertThat(service.listPrimaryAgents())
+                .extracting(AgentDefinition::id)
                 .containsExactly("plan", "engineer");
-        assertThat(service.listSubagents()).extracting(AgentDefinition::id)
+        assertThat(service.listSubagents())
+                .extracting(AgentDefinition::id)
                 .containsExactly("explore", "apprentice", "test");
         assertThat(service.defaultAgent().id()).isEqualTo("plan");
 
         ModelCatalogService modelCatalog = ModelCatalogTestSupport.modelCatalogService();
-        resources.forEach(resource -> {
-            assertAgentMatchesResource(
-                    service.getRequired(resource.id()),
-                    resource,
-                    wildcardPrimary,
-                    wildcardSubagent
-            );
-            assertThat(service.getRequired(resource.id()).modelIds())
-                    .allSatisfy(modelCatalog::resolveBundledModel);
-        });
+        resources.forEach(
+                resource -> {
+                    assertAgentMatchesResource(
+                            service.getRequired(resource.id()),
+                            resource,
+                            wildcardPrimary,
+                            wildcardSubagent);
+                    assertThat(service.getRequired(resource.id()).modelIds())
+                            .allSatisfy(modelCatalog::resolveBundledModel);
+                });
     }
 
     @Test
     public void wildcardToolSupportIncludesTaskForPrimaryAgentsButNotSubagents() throws Exception {
-        AgentDefinition primary = AgentDefinitionService.loadAgent(resource("11-primary.md", """
+        AgentDefinition primary =
+                AgentDefinitionService.loadAgent(
+                        resource(
+                                "11-primary.md",
+                                """
                 ---
                 id: primary-task
                 name: Primary Task
@@ -87,7 +96,11 @@ public class CatalogServicesTest {
                 body
                 """));
 
-        AgentDefinition subagent = AgentDefinitionService.loadAgent(resource("12-subagent.md", """
+        AgentDefinition subagent =
+                AgentDefinitionService.loadAgent(
+                        resource(
+                                "12-subagent.md",
+                                """
                 ---
                 id: subagent-task
                 name: Subagent Task
@@ -116,7 +129,9 @@ public class CatalogServicesTest {
         AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
         AgentDefinition plan = service.getRequired("plan");
 
-        assertThat(plan.allowedTools()).contains("list_files", "read_file", "search_code", "display_image", "task", "mcp:*");
+        assertThat(plan.allowedTools())
+                .contains(
+                        "list_files", "read_file", "search_code", "display_image", "task", "mcp:*");
         assertThat(plan.allowedTools()).doesNotContain("write_file", "apply_patch", "run_command");
     }
 
@@ -129,7 +144,8 @@ public class CatalogServicesTest {
 
     @Test
     public void agentDefinitionLoadingFailsLoudlyWhenRequiredFieldsAreMissing() throws Exception {
-        String frontMatter = """
+        String frontMatter =
+                """
                 ---
                 description: Missing required fields
                 mode: agent
@@ -140,12 +156,13 @@ public class CatalogServicesTest {
                 body
                 """;
 
-        ByteArrayResource resource = new ByteArrayResource(frontMatter.getBytes(StandardCharsets.UTF_8)) {
-            @Override
-            public String getFilename() {
-                return "99-missing-model.md";
-            }
-        };
+        ByteArrayResource resource =
+                new ByteArrayResource(frontMatter.getBytes(StandardCharsets.UTF_8)) {
+                    @Override
+                    public String getFilename() {
+                        return "99-missing-model.md";
+                    }
+                };
 
         assertThatThrownBy(() -> AgentDefinitionService.loadAgent(resource))
                 .hasRootCauseInstanceOf(IllegalStateException.class)
@@ -157,11 +174,23 @@ public class CatalogServicesTest {
         ModelCatalogService service = ModelCatalogTestSupport.modelCatalogService();
 
         assertThat(service.defaultModelId()).isEqualTo("openai/gpt-5.6-sol");
-        assertThat(service.list()).extracting(ModelDefinition::id)
-                .containsExactly("openai/gpt-5.6-sol", "anthropic/claude-opus-5", "anthropic/claude-sonnet-5", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
-        assertThat(service.list()).extracting(ModelDefinition::id)
-                .doesNotContain("openai/gpt-4.1", "openai/gpt-5.5", "openai/gpt-5.5-pro", "openai/gpt-5.60-preview");
-        assertThat(service.list()).extracting(ModelDefinition::provider)
+        assertThat(service.list())
+                .extracting(ModelDefinition::id)
+                .containsExactly(
+                        "openai/gpt-5.6-sol",
+                        "anthropic/claude-opus-5",
+                        "anthropic/claude-sonnet-5",
+                        "openai/gpt-5.6-terra",
+                        "openai/gpt-5.6-luna");
+        assertThat(service.list())
+                .extracting(ModelDefinition::id)
+                .doesNotContain(
+                        "openai/gpt-4.1",
+                        "openai/gpt-5.5",
+                        "openai/gpt-5.5-pro",
+                        "openai/gpt-5.60-preview");
+        assertThat(service.list())
+                .extracting(ModelDefinition::provider)
                 .contains("openai", "anthropic");
 
         ModelDefinition anthropic = service.getRequired("anthropic/claude-opus-5");
@@ -175,7 +204,8 @@ public class CatalogServicesTest {
 
     @Test
     public void modelCatalogFailsLoudlyOnBadInput() {
-        String json = """
+        String json =
+                """
                 {
                   "models": {
                     "openai/gpt-5.6-bad": {
@@ -193,7 +223,10 @@ public class CatalogServicesTest {
                 }
                 """;
 
-        assertThatThrownBy(() -> ModelCatalogTestSupport.modelCatalogService("http://example.test/catalog.json", json))
+        assertThatThrownBy(
+                        () ->
+                                ModelCatalogTestSupport.modelCatalogService(
+                                        "http://example.test/catalog.json", json))
                 .isInstanceOf(IllegalStateException.class)
                 .hasRootCauseMessage("Model id is required");
     }
@@ -215,11 +248,13 @@ public class CatalogServicesTest {
         }
 
         FrontMatter frontMatter = readFrontMatter(matcher.group(1), resourcePath);
-        return new AgentMarkdown(frontMatter, trimTrailingLineBreak(trimLeadingLineBreak(matcher.group(2))));
+        return new AgentMarkdown(
+                frontMatter, trimTrailingLineBreak(trimLeadingLineBreak(matcher.group(2))));
     }
 
     private static String readResource(String resourcePath) {
-        try (InputStream inputStream = CatalogServicesTest.class.getResourceAsStream(resourcePath)) {
+        try (InputStream inputStream =
+                CatalogServicesTest.class.getResourceAsStream(resourcePath)) {
             if (inputStream == null) {
                 throw new IllegalStateException("Missing test resource: " + resourcePath);
             }
@@ -233,13 +268,17 @@ public class CatalogServicesTest {
         try {
             return YAML_MAPPER.readValue(yaml, FrontMatter.class);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse agent front matter: " + resourcePath, e);
+            throw new IllegalStateException(
+                    "Failed to parse agent front matter: " + resourcePath, e);
         }
     }
 
     private static AgentDefinition loadInlineWildcardAgent(String filename, AgentMode mode) {
         try {
-            return AgentDefinitionService.loadAgent(resource(filename, """
+            return AgentDefinitionService.loadAgent(
+                    resource(
+                            filename,
+                            """
                     ---
                     id: %s
                     name: %s
@@ -252,37 +291,55 @@ public class CatalogServicesTest {
                       '*': true
                     ---
                     body
-                    """.formatted(
-                    filenameToId(filename),
-                    displayName(filenameToId(filename)),
-                    mode == AgentMode.AGENT ? "Primary wildcard tools" : "Subagent wildcard tools",
-                    mode.name().toLowerCase()
-            )));
+                    """
+                                    .formatted(
+                                            filenameToId(filename),
+                                            displayName(filenameToId(filename)),
+                                            mode == AgentMode.AGENT
+                                                    ? "Primary wildcard tools"
+                                                    : "Subagent wildcard tools",
+                                            mode.name().toLowerCase())));
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load inline wildcard agent", e);
         }
     }
 
-    private static void assertAgentMatchesResource(AgentDefinition actual, AgentResource expected, AgentDefinition wildcardPrimary, AgentDefinition wildcardSubagent) {
+    private static void assertAgentMatchesResource(
+            AgentDefinition actual,
+            AgentResource expected,
+            AgentDefinition wildcardPrimary,
+            AgentDefinition wildcardSubagent) {
         assertThat(actual.name()).isEqualTo(displayName(expected.id()));
         assertThat(actual.description()).isEqualTo(expected.markdown().frontMatter().description());
         assertThat(actual.mode()).isEqualTo(expected.markdown().frontMatter().mode());
-        assertThat(actual.modelIds()).containsExactlyElementsOf(java.util.Arrays.stream(expected.markdown().frontMatter().model().split(","))
-                .map(String::trim).toList());
-        assertThat(actual.defaultThinkingLevel()).isEqualTo(expected.markdown().frontMatter().reasoningEffort());
-        assertThat(actual.textVerbosity()).isEqualTo(expected.markdown().frontMatter().textVerbosity());
+        assertThat(actual.modelIds())
+                .containsExactlyElementsOf(
+                        java.util.Arrays.stream(
+                                        expected.markdown().frontMatter().model().split(","))
+                                .map(String::trim)
+                                .toList());
+        assertThat(actual.defaultThinkingLevel())
+                .isEqualTo(expected.markdown().frontMatter().reasoningEffort());
+        assertThat(actual.textVerbosity())
+                .isEqualTo(expected.markdown().frontMatter().textVerbosity());
         assertThat(actual.systemPrompt()).isEqualTo(expected.markdown().body());
-        assertThat(actual.allowWrite()).isEqualTo(actual.allowedTools().contains("write_file") || actual.allowedTools().contains("apply_patch"));
+        assertThat(actual.allowWrite())
+                .isEqualTo(
+                        actual.allowedTools().contains("write_file")
+                                || actual.allowedTools().contains("apply_patch"));
         assertThat(actual.allowCommand()).isEqualTo(actual.allowedTools().contains("run_command"));
 
         if (Boolean.TRUE.equals(expected.markdown().frontMatter().tools().get("*"))) {
-            assertThat(actual.allowedTools()).isEqualTo(expected.markdown().frontMatter().mode() == AgentMode.AGENT
-                    ? wildcardPrimary.allowedTools()
-                    : wildcardSubagent.allowedTools());
+            assertThat(actual.allowedTools())
+                    .isEqualTo(
+                            expected.markdown().frontMatter().mode() == AgentMode.AGENT
+                                    ? wildcardPrimary.allowedTools()
+                                    : wildcardSubagent.allowedTools());
             return;
         }
 
-        assertThat(actual.allowedTools()).containsExactlyElementsOf(enabledTools(expected.markdown().frontMatter().tools()));
+        assertThat(actual.allowedTools())
+                .containsExactlyElementsOf(enabledTools(expected.markdown().frontMatter().tools()));
     }
 
     private static List<String> enabledTools(Map<String, Boolean> tools) {
@@ -293,7 +350,8 @@ public class CatalogServicesTest {
     }
 
     private static String filenameToId(String filename) {
-        String baseName = filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
+        String baseName =
+                filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
         return baseName.replaceFirst("^\\d+-", "");
     }
 
@@ -324,8 +382,7 @@ public class CatalogServicesTest {
         return value;
     }
 
-    private record AgentMarkdown(FrontMatter frontMatter, String body) {
-    }
+    private record AgentMarkdown(FrontMatter frontMatter, String body) {}
 
     private record AgentResource(String path, AgentMarkdown markdown) {
         String id() {
@@ -341,7 +398,5 @@ public class CatalogServicesTest {
             String model,
             ThinkingLevel reasoningEffort,
             String textVerbosity,
-            Map<String, Boolean> tools
-    ) {
-    }
+            Map<String, Boolean> tools) {}
 }

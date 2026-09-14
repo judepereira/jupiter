@@ -1,9 +1,9 @@
 package com.judepereira.jupiter.documentation;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -12,10 +12,9 @@ import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.zip.CRC32;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class ScreenshotCatalogSynchronizerTest {
     @TempDir Path repository;
@@ -43,7 +42,8 @@ class ScreenshotCatalogSynchronizerTest {
 
         ScreenshotCatalogSynchronizer.Summary summary = synchronize(generated, tracked);
 
-        assertThat(ImageIO.read(tracked.resolve("image.png").toFile()).getRGB(0, 0)).isEqualTo(Color.BLUE.getRGB());
+        assertThat(ImageIO.read(tracked.resolve("image.png").toFile()).getRGB(0, 0))
+                .isEqualTo(Color.BLUE.getRGB());
         assertThat(summary.updated()).isEqualTo(1);
     }
 
@@ -85,7 +85,8 @@ class ScreenshotCatalogSynchronizerTest {
         byte[] original = png(Color.RED, 1, 1);
         Files.write(tracked.resolve("valid.png"), original);
 
-        assertThatThrownBy(() -> synchronize(generated, tracked)).hasMessageContaining("non-PNG file");
+        assertThatThrownBy(() -> synchronize(generated, tracked))
+                .hasMessageContaining("non-PNG file");
         assertThat(Files.readAllBytes(tracked.resolve("valid.png"))).isEqualTo(original);
     }
 
@@ -98,7 +99,8 @@ class ScreenshotCatalogSynchronizerTest {
         byte[] original = png(Color.RED, 1, 1);
         Files.write(tracked.resolve("valid.png"), original);
 
-        assertThatThrownBy(() -> synchronize(generated, tracked)).hasMessageContaining("nested directory");
+        assertThatThrownBy(() -> synchronize(generated, tracked))
+                .hasMessageContaining("nested directory");
         assertThat(Files.readAllBytes(tracked.resolve("valid.png"))).isEqualTo(original);
     }
 
@@ -126,7 +128,8 @@ class ScreenshotCatalogSynchronizerTest {
             assumeTrue(false, "symbolic links unavailable: " + exception.getMessage());
         }
 
-        assertThatThrownBy(() -> synchronize(generated, tracked)).hasMessageContaining("symbolic link");
+        assertThatThrownBy(() -> synchronize(generated, tracked))
+                .hasMessageContaining("symbolic link");
     }
 
     @Test
@@ -137,7 +140,8 @@ class ScreenshotCatalogSynchronizerTest {
         byte[] original = png(Color.RED, 1, 1);
         Files.write(tracked.resolve("valid.png"), original);
 
-        assertThatThrownBy(() -> synchronize(generated, tracked)).hasMessageContaining("Unreadable PNG image");
+        assertThatThrownBy(() -> synchronize(generated, tracked))
+                .hasMessageContaining("Unreadable PNG image");
         assertThat(Files.readAllBytes(tracked.resolve("valid.png"))).isEqualTo(original);
     }
 
@@ -150,7 +154,8 @@ class ScreenshotCatalogSynchronizerTest {
         byte[] original = png(Color.RED, 1, 1);
         Files.write(tracked.resolve("valid.png"), original);
 
-        assertThatThrownBy(() -> synchronize(generated, tracked)).hasMessageContaining("Unreadable PNG image");
+        assertThatThrownBy(() -> synchronize(generated, tracked))
+                .hasMessageContaining("Unreadable PNG image");
         assertThat(Files.readAllBytes(tracked.resolve("valid.png"))).isEqualTo(original);
     }
 
@@ -159,9 +164,17 @@ class ScreenshotCatalogSynchronizerTest {
         Path generated = directory("generated");
         Path tracked = directory("tracked");
 
-        assertThatThrownBy(() -> ScreenshotCatalogSynchronizer.synchronize(repository, generated, tracked.resolve("absolute").toAbsolutePath()))
+        assertThatThrownBy(
+                        () ->
+                                ScreenshotCatalogSynchronizer.synchronize(
+                                        repository,
+                                        generated,
+                                        tracked.resolve("absolute").toAbsolutePath()))
                 .hasMessageContaining("must be relative");
-        assertThatThrownBy(() -> ScreenshotCatalogSynchronizer.synchronize(repository, Path.of("../outside"), Path.of("tracked")))
+        assertThatThrownBy(
+                        () ->
+                                ScreenshotCatalogSynchronizer.synchronize(
+                                        repository, Path.of("../outside"), Path.of("tracked")))
                 .hasMessageContaining("escapes the repository");
     }
 
@@ -174,7 +187,10 @@ class ScreenshotCatalogSynchronizerTest {
         } catch (UnsupportedOperationException | FileSystemException exception) {
             assumeTrue(false, "symbolic links unavailable: " + exception.getMessage());
         }
-        assertThatThrownBy(() -> ScreenshotCatalogSynchronizer.synchronize(repository, Path.of("generated-link"), Path.of("tracked")))
+        assertThatThrownBy(
+                        () ->
+                                ScreenshotCatalogSynchronizer.synchronize(
+                                        repository, Path.of("generated-link"), Path.of("tracked")))
                 .hasMessageContaining("symbolic link");
     }
 
@@ -183,7 +199,8 @@ class ScreenshotCatalogSynchronizerTest {
     }
 
     private ScreenshotCatalogSynchronizer.Summary synchronize(Path generated, Path tracked) {
-        return ScreenshotCatalogSynchronizer.synchronize(repository, repository.relativize(generated), repository.relativize(tracked));
+        return ScreenshotCatalogSynchronizer.synchronize(
+                repository, repository.relativize(generated), repository.relativize(tracked));
     }
 
     private static void write(Path path, Color color, int width, int height) throws Exception {
@@ -194,7 +211,8 @@ class ScreenshotCatalogSynchronizerTest {
         return pngWithText(color, width, height, null);
     }
 
-    private static byte[] pngWithText(Color color, int width, int height, String text) throws Exception {
+    private static byte[] pngWithText(Color color, int width, int height, String text)
+            throws Exception {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {

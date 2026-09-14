@@ -1,16 +1,15 @@
 package com.judepereira.jupiter.agent.tools;
 
-import com.judepereira.jupiter.agent.tools.impl.DisplayImageTool;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import com.judepereira.jupiter.agent.tools.impl.DisplayImageTool;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class DisplayImageToolTest {
 
@@ -21,7 +20,22 @@ class DisplayImageToolTest {
         Files.write(image, new byte[] {(byte) 0x89, 'P', 'N', 'G'});
 
         DisplayImageTool tool = new DisplayImageTool();
-        ToolExecutionResult result = tool.execute(Map.of("path", "images/cat.png", "alt", "Cat"), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null));
+        ToolExecutionResult result =
+                tool.execute(
+                        Map.of("path", "images/cat.png", "alt", "Cat"),
+                        new ToolExecutionContext(
+                                tmp,
+                                true,
+                                true,
+                                5,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                java.util.Set.of(),
+                                null,
+                                null));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getMachine().get("displayType")).isEqualTo("image");
@@ -33,7 +47,22 @@ class DisplayImageToolTest {
     @Test
     void failsWhenFileMissing(@TempDir Path tmp) throws Exception {
         DisplayImageTool tool = new DisplayImageTool();
-        ToolExecutionResult result = tool.execute(Map.of("path", "missing.png"), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null));
+        ToolExecutionResult result =
+                tool.execute(
+                        Map.of("path", "missing.png"),
+                        new ToolExecutionContext(
+                                tmp,
+                                true,
+                                true,
+                                5,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                java.util.Set.of(),
+                                null,
+                                null));
 
         assertFalse(result.isSuccess());
         assertThat(result.getText()).contains("file not found");
@@ -45,7 +74,22 @@ class DisplayImageToolTest {
         Files.writeString(file, "not an image");
 
         DisplayImageTool tool = new DisplayImageTool();
-        ToolExecutionResult result = tool.execute(Map.of("path", "notes.txt"), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null));
+        ToolExecutionResult result =
+                tool.execute(
+                        Map.of("path", "notes.txt"),
+                        new ToolExecutionContext(
+                                tmp,
+                                true,
+                                true,
+                                5,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                java.util.Set.of(),
+                                null,
+                                null));
 
         assertFalse(result.isSuccess());
         assertThat(result.getText()).contains("unsupported image type");
@@ -61,7 +105,24 @@ class DisplayImageToolTest {
             Files.createSymbolicLink(link, outside);
 
             DisplayImageTool tool = new DisplayImageTool();
-            assertThrows(Exception.class, () -> tool.execute(Map.of("path", "images/escape.png"), new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null)));
+            assertThrows(
+                    Exception.class,
+                    () ->
+                            tool.execute(
+                                    Map.of("path", "images/escape.png"),
+                                    new ToolExecutionContext(
+                                            tmp,
+                                            true,
+                                            true,
+                                            5,
+                                            null,
+                                            null,
+                                            null,
+                                            null,
+                                            null,
+                                            java.util.Set.of(),
+                                            null,
+                                            null)));
         } finally {
             Files.deleteIfExists(outside);
         }

@@ -14,12 +14,16 @@ public final class SkillInvocationResolver {
 
     public Resolution resolveExplicit(String userMessage, SkillCatalog catalog) {
         if (userMessage == null || catalog == null) return new Resolution(List.of(), List.of());
-        var healthy = catalog.skills().stream().collect(java.util.stream.Collectors.toMap(
-                SkillDefinition::name, s -> s, (a, b) -> a));
-        var broken = catalog.errors().stream()
-                .map(SkillLoadError::candidateSkillName)
-                .filter(name -> name != null && name.matches("[a-z0-9][a-z0-9-]{0,63}"))
-                .collect(java.util.stream.Collectors.toSet());
+        var healthy =
+                catalog.skills().stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        SkillDefinition::name, s -> s, (a, b) -> a));
+        var broken =
+                catalog.errors().stream()
+                        .map(SkillLoadError::candidateSkillName)
+                        .filter(name -> name != null && name.matches("[a-z0-9][a-z0-9-]{0,63}"))
+                        .collect(java.util.stream.Collectors.toSet());
         LinkedHashSet<String> seen = new LinkedHashSet<>();
         List<SkillDefinition> skills = new ArrayList<>();
         List<String> brokenMatches = new ArrayList<>();
@@ -34,6 +38,9 @@ public final class SkillInvocationResolver {
     }
 
     public record Resolution(List<SkillDefinition> skills, List<String> brokenSkills) {
-        public Resolution { skills = List.copyOf(skills); brokenSkills = List.copyOf(brokenSkills); }
+        public Resolution {
+            skills = List.copyOf(skills);
+            brokenSkills = List.copyOf(brokenSkills);
+        }
     }
 }

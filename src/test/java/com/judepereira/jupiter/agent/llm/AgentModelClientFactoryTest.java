@@ -1,14 +1,14 @@
 package com.judepereira.jupiter.agent.llm;
 
-import com.judepereira.jupiter.agent.llm.anthropic.AnthropicAgentModelClient;
-import com.judepereira.jupiter.agent.llm.openai.OpenAiAgentModelClient;
-import org.junit.jupiter.api.Test;
-import org.springframework.context.ApplicationContext;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import com.judepereira.jupiter.agent.llm.anthropic.AnthropicAgentModelClient;
+import com.judepereira.jupiter.agent.llm.openai.OpenAiAgentModelClient;
+import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationContext;
 
 class AgentModelClientFactoryTest {
     private final ApplicationContext context = mock(ApplicationContext.class);
@@ -27,8 +27,7 @@ class AgentModelClientFactoryTest {
 
     @Test
     void rejectsMissingAndUnknownProviders() {
-        assertThatThrownBy(() -> factory.getClient(null))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> factory.getClient(null)).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> factory.getClient("   "))
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> factory.getClient("gemini"))

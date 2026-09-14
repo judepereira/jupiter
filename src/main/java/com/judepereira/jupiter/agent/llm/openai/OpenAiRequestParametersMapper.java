@@ -11,7 +11,8 @@ public final class OpenAiRequestParametersMapper {
             return null;
         }
         boolean hasReasoning = options.supportsReasoning() && options.thinkingLevel() != null;
-        boolean hasTextVerbosity = options.textVerbosity() != null && !options.textVerbosity().isBlank();
+        boolean hasTextVerbosity =
+                options.textVerbosity() != null && !options.textVerbosity().isBlank();
         if (!hasReasoning && !hasTextVerbosity) {
             return null;
         }

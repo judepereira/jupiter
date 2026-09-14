@@ -7,8 +7,7 @@ public final class TestEncryptionSupport {
     public static final String KEY = "K9fFdgQTSimRghWh99cnOZ9UoPEzz97NKf16loLUKYw=";
     private static final TextEncryptor ENCRYPTOR = new TextEncryptor(EncryptionKey.fromBase64(KEY));
 
-    private TestEncryptionSupport() {
-    }
+    private TestEncryptionSupport() {}
 
     public static EncryptionKey encryptionKey() {
         return EncryptionKey.fromBase64(KEY);

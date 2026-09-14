@@ -10,8 +10,7 @@ public final class EncryptionKeyBootstrapReader {
     private static final int ENCODED_KEY_LENGTH = 44;
     private static final int MAX_INPUT_LENGTH = 128;
 
-    private EncryptionKeyBootstrapReader() {
-    }
+    private EncryptionKeyBootstrapReader() {}
 
     public static EncryptionKey read(InputStream input) {
         byte[] inputBuffer = new byte[MAX_INPUT_LENGTH + 1];
@@ -40,10 +39,12 @@ public final class EncryptionKeyBootstrapReader {
                 try {
                     decoded = Base64.getDecoder().decode(base64Input);
                 } catch (IllegalArgumentException exception) {
-                    throw new IllegalStateException("stdin encryption key is invalid Base64", exception);
+                    throw new IllegalStateException(
+                            "stdin encryption key is invalid Base64", exception);
                 }
                 if (decoded.length != 32) {
-                    throw new IllegalStateException("stdin encryption key must decode to exactly 32 bytes");
+                    throw new IllegalStateException(
+                            "stdin encryption key must decode to exactly 32 bytes");
                 }
                 return new EncryptionKey(decoded);
             } finally {

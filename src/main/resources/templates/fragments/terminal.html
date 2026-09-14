@@ -1,38 +1,46 @@
-<aside th:fragment="panel" id="bottom-panel" class="main-panel bottom-panel terminal-panel"
-       th:classappend="${bottomPanelMode != 'terminal'} ? 'closed' : ''"
-       th:attr="hx-swap-oob=${terminalOob} ? 'outerHTML' : null">
-    <div id="terminal-panel-divider" class="terminal-panel-divider" role="separator"
-         aria-label="Drag to resize" title="Drag to resize"
-         aria-orientation="horizontal" tabindex="0"></div>
+<aside th:fragment="panel" id="bottom-panel"
+	class="main-panel bottom-panel terminal-panel"
+	th:classappend="${bottomPanelMode != 'terminal'} ? 'closed' : ''"
+	th:attr="hx-swap-oob=${terminalOob} ? 'outerHTML' : null">
+	<div id="terminal-panel-divider" class="terminal-panel-divider"
+		role="separator" aria-label="Drag to resize" title="Drag to resize"
+		aria-orientation="horizontal" tabindex="0"></div>
 
-    <div class="terminal-shell" th:if="${bottomPanelMode == 'terminal'}">
-        <div class="terminal-empty-state" th:if="${terminalTabs.isEmpty()}">
-            <p>No terminals open.</p>
-            <button type="button" class="terminal-empty-button" hx-post="/ui/terminal/new" hx-target="#bottom-panel"
-                     hx-swap="outerHTML">New terminal</button>
-        </div>
+	<div class="terminal-shell" th:if="${bottomPanelMode == 'terminal'}">
+		<div class="terminal-empty-state" th:if="${terminalTabs.isEmpty()}">
+			<p>No terminals open.</p>
+			<button type="button" class="terminal-empty-button"
+				hx-post="/ui/terminal/new" hx-target="#bottom-panel"
+				hx-swap="outerHTML">New terminal</button>
+		</div>
 
-        <div class="terminal-tabs" th:unless="${terminalTabs.isEmpty()}">
-            <div class="terminal-tab-group" th:each="tab : ${terminalTabs}" th:classappend="${tab.active} ? ' active' : ''">
-                <button type="button" class="terminal-tab" th:text="${tab.title}"
-                        th:attr="hx-post=@{/ui/terminal/{id}/activate(id=${tab.id})}, hx-target='#bottom-panel', hx-swap='outerHTML'"></button>
-                <button type="button" class="terminal-tab-close" th:attr="hx-post=@{/ui/terminal/{id}/close(id=${tab.id})}, hx-target='#bottom-panel', hx-swap='outerHTML'"
-                        aria-label="Close terminal" title="Close terminal">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
-            <button type="button" class="terminal-tab-add" hx-post="/ui/terminal/new" hx-target="#bottom-panel"
-                    hx-swap="outerHTML" aria-label="New terminal" title="New terminal">
-                <i class="bi bi-plus-lg"></i>
-            </button>
-        </div>
+		<div class="terminal-tabs" th:unless="${terminalTabs.isEmpty()}">
+			<div class="terminal-tab-group" th:each="tab : ${terminalTabs}"
+				th:classappend="${tab.active} ? ' active' : ''">
+				<button type="button" class="terminal-tab" th:text="${tab.title}"
+					th:attr="hx-post=@{/ui/terminal/{id}/activate(id=${tab.id})}, hx-target='#bottom-panel', hx-swap='outerHTML'"></button>
+				<button type="button" class="terminal-tab-close"
+					th:attr="hx-post=@{/ui/terminal/{id}/close(id=${tab.id})}, hx-target='#bottom-panel', hx-swap='outerHTML'"
+					aria-label="Close terminal" title="Close terminal">
+					<i class="bi bi-x-lg"></i>
+				</button>
+			</div>
+			<button type="button" class="terminal-tab-add"
+				hx-post="/ui/terminal/new" hx-target="#bottom-panel"
+				hx-swap="outerHTML" aria-label="New terminal" title="New terminal">
+				<i class="bi bi-plus-lg"></i>
+			</button>
+		</div>
 
-        <section class="terminal-body" th:if="${activeTerminal != null}">
-            <div class="terminal-mount" th:attr="data-terminal-id=${activeTerminal.id}, data-ws-url=@{/ui/terminal/ws/{id}(id=${activeTerminal.id})}"></div>
-        </section>
-    </div>
+		<section class="terminal-body" th:if="${activeTerminal != null}">
+			<div class="terminal-mount"
+				th:attr="data-terminal-id=${activeTerminal.id}, data-ws-url=@{/ui/terminal/ws/{id}(id=${activeTerminal.id})}"></div>
+		</section>
+	</div>
 
-    <div class="terminal-closed" th:unless="${bottomPanelMode == 'terminal'}">
-        <div class="panel-placeholder" data-panel-name="terminal">Terminal closed</div>
-    </div>
+	<div class="terminal-closed"
+		th:unless="${bottomPanelMode == 'terminal'}">
+		<div class="panel-placeholder" data-panel-name="terminal">Terminal
+			closed</div>
+	</div>
 </aside>

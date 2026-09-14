@@ -1,6 +1,7 @@
 # Feature Inventory
 
-This is the boring-but-useful v1 checklist. When a user-visible feature lands, represent it here and on the closest task-oriented page — otherwise documentation drift is almost guaranteed.
+This is the boring-but-useful v1 checklist. When a user-visible feature lands, represent it here and
+on the closest task-oriented page — otherwise documentation drift is almost guaranteed.
 
 ## Development workflow
 
@@ -25,19 +26,24 @@ This is the boring-but-useful v1 checklist. When a user-visible feature lands, r
 - primary Plan and Engineer agents
 - Explore, Apprentice, and Test subagents
 - per-turn agent, model, and thinking controls
-- ordered comma-separated agent model preferences, with OpenAI-first Anthropic fallbacks (Opus 5 for Plan/Engineer; Sonnet 5 for Explore/Apprentice/Test)
-- availability-based pre-request fallback for agent-default and subagent runs, with implicit browser selection re-resolved at execution
-- strict explicit model selection (no silent fallback), with preferred/actual attribution and actual-model usage accounting
+- ordered comma-separated agent model preferences, with OpenAI-first Anthropic fallbacks (Opus 5 for
+  Plan/Engineer; Sonnet 5 for Explore/Apprentice/Test)
+- availability-based pre-request fallback for agent-default and subagent runs, with implicit browser
+  selection re-resolved at execution
+- strict explicit model selection (no silent fallback), with preferred/actual attribution and
+  actual-model usage accounting
 - dynamic models.dev catalogue for OpenAI GPT-5.6-series and Anthropic Claude models
 - Anthropic adaptive thinking mapped from LOW, MEDIUM, and HIGH effort
-- private Anthropic thinking, signature, and redacted-thinking blocks retained for tool continuation without rendering as assistant text
+- private Anthropic thinking, signature, and redacted-thinking blocks retained for tool continuation
+  without rendering as assistant text
 - Anthropic parallel tool use disabled until multiple tool calls are supported safely
 - global ordered model favourites
 - provider-aware chat picker with empty state
 - model-derived provider routing
 - historical unavailable-model handling
 - native tool allowlists
-- `list_files`, `read_file`, `search_code`, `write_file`, `apply_patch`, `display_image`, `run_command`, and `task`
+- `list_files`, `read_file`, `search_code`, `write_file`, `apply_patch`, `display_image`,
+  `run_command`, and `task`
 - persisted subagent child sessions
 - live and persisted tool traces
 - automatic context compaction

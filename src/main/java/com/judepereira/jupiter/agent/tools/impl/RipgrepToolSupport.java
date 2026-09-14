@@ -2,7 +2,6 @@ package com.judepereira.jupiter.agent.tools.impl;
 
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -21,13 +20,16 @@ public final class RipgrepToolSupport {
     public void assertAvailable() {
         RunResult result = run(List.of(RG, "--version"), null, BOOT_CHECK_TIMEOUT_SECONDS);
         if (result.missingCommand()) {
-            throw new IllegalStateException("ripgrep (rg) is not available on PATH", result.failure());
+            throw new IllegalStateException(
+                    "ripgrep (rg) is not available on PATH", result.failure());
         }
         if (result.timedOut()) {
-            throw new IllegalStateException("ripgrep availability check timed out", result.failure());
+            throw new IllegalStateException(
+                    "ripgrep availability check timed out", result.failure());
         }
         if (result.exitCode() != 0) {
-            String message = "ripgrep availability check failed with exit code " + result.exitCode();
+            String message =
+                    "ripgrep availability check failed with exit code " + result.exitCode();
             if (!result.stderr().isBlank()) {
                 message += ": " + result.stderr().trim();
             } else if (!result.stdout().isBlank()) {
@@ -37,15 +39,20 @@ public final class RipgrepToolSupport {
         }
     }
 
-    public ToolExecutionResult listFiles(Path workspaceRoot, String relativePath, String include, int timeoutSeconds) {
+    public ToolExecutionResult listFiles(
+            Path workspaceRoot, String relativePath, String include, int timeoutSeconds) {
         Path resolvedRoot;
         try {
             resolvedRoot = resolveWorkspacePath(workspaceRoot, relativePath);
         } catch (IOException e) {
-            return new ToolExecutionResult(false, "failed to resolve path: " + normalizeRelativePath(relativePath), Map.of());
+            return new ToolExecutionResult(
+                    false,
+                    "failed to resolve path: " + normalizeRelativePath(relativePath),
+                    Map.of());
         }
         if (!Files.exists(resolvedRoot)) {
-            return new ToolExecutionResult(false, "path does not exist: " + normalizeRelativePath(relativePath), Map.of());
+            return new ToolExecutionResult(
+                    false, "path does not exist: " + normalizeRelativePath(relativePath), Map.of());
         }
 
         List<String> command = new ArrayList<>();
@@ -60,7 +67,8 @@ public final class RipgrepToolSupport {
             }
         }
 
-        RunResult result = run(command, FileUtils.canonicalWorkspaceRoot(workspaceRoot), timeoutSeconds);
+        RunResult result =
+                run(command, FileUtils.canonicalWorkspaceRoot(workspaceRoot), timeoutSeconds);
         if (result.missingCommand()) {
             return failure("ripgrep (rg) is not available on PATH");
         }
@@ -76,7 +84,12 @@ public final class RipgrepToolSupport {
         return new ToolExecutionResult(true, text, Map.of("files", files));
     }
 
-    public ToolExecutionResult searchCode(Path workspaceRoot, String relativePath, String pattern, String include, int timeoutSeconds) {
+    public ToolExecutionResult searchCode(
+            Path workspaceRoot,
+            String relativePath,
+            String pattern,
+            String include,
+            int timeoutSeconds) {
         if (pattern == null || pattern.isBlank()) {
             return new ToolExecutionResult(false, "pattern is required", Map.of());
         }
@@ -85,10 +98,14 @@ public final class RipgrepToolSupport {
         try {
             resolvedRoot = resolveWorkspacePath(workspaceRoot, relativePath);
         } catch (IOException e) {
-            return new ToolExecutionResult(false, "failed to resolve path: " + normalizeRelativePath(relativePath), Map.of());
+            return new ToolExecutionResult(
+                    false,
+                    "failed to resolve path: " + normalizeRelativePath(relativePath),
+                    Map.of());
         }
         if (!Files.exists(resolvedRoot)) {
-            return new ToolExecutionResult(false, "path does not exist: " + normalizeRelativePath(relativePath), Map.of());
+            return new ToolExecutionResult(
+                    false, "path does not exist: " + normalizeRelativePath(relativePath), Map.of());
         }
 
         List<String> command = new ArrayList<>();
@@ -108,7 +125,8 @@ public final class RipgrepToolSupport {
             command.add(normalizeRelativePath(relativePath));
         }
 
-        RunResult result = run(command, FileUtils.canonicalWorkspaceRoot(workspaceRoot), timeoutSeconds);
+        RunResult result =
+                run(command, FileUtils.canonicalWorkspaceRoot(workspaceRoot), timeoutSeconds);
         if (result.missingCommand()) {
             return failure("ripgrep (rg) is not available on PATH");
         }
@@ -131,7 +149,8 @@ public final class RipgrepToolSupport {
         }
     }
 
-    private static Path resolveWorkspacePath(Path workspaceRoot, String relativePath) throws IOException {
+    private static Path resolveWorkspacePath(Path workspaceRoot, String relativePath)
+            throws IOException {
         Path resolved = FileUtils.resolveWorkspacePath(workspaceRoot, relativePath);
         Path root = FileUtils.canonicalWorkspaceRoot(workspaceRoot);
         if (!resolved.startsWith(root)) {
@@ -225,7 +244,8 @@ public final class RipgrepToolSupport {
     }
 
     private static void readStream(java.io.InputStream stream, StringBuilder output) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+        try (BufferedReader reader =
+                new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (output.length() > 0) {
@@ -246,14 +266,31 @@ public final class RipgrepToolSupport {
         }
     }
 
-    private record RunResult(int exitCode, String stdout, String stderr, boolean timedOut, boolean missingCommand,
-                             Throwable failure) {
+    private record RunResult(
+            int exitCode,
+            String stdout,
+            String stderr,
+            boolean timedOut,
+            boolean missingCommand,
+            Throwable failure) {
         static RunResult completed(int exitCode, String stdout, String stderr) {
-            return new RunResult(exitCode, stdout == null ? "" : stdout, stderr == null ? "" : stderr, false, false, null);
+            return new RunResult(
+                    exitCode,
+                    stdout == null ? "" : stdout,
+                    stderr == null ? "" : stderr,
+                    false,
+                    false,
+                    null);
         }
 
         static RunResult timedOut(String stdout, String stderr, Throwable failure) {
-            return new RunResult(-1, stdout == null ? "" : stdout, stderr == null ? "" : stderr, true, false, failure);
+            return new RunResult(
+                    -1,
+                    stdout == null ? "" : stdout,
+                    stderr == null ? "" : stderr,
+                    true,
+                    false,
+                    failure);
         }
 
         static RunResult missingCommand(Throwable failure) {

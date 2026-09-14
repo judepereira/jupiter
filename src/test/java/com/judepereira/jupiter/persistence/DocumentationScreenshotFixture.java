@@ -7,9 +7,9 @@ import java.util.List;
 /**
  * Deterministic application state used by documentation screenshots.
  *
- * <p>This deliberately lives in the persistence package so it can use the same
- * repository write path as the application, including encryption, without
- * introducing screenshot-only production APIs.</p>
+ * <p>This deliberately lives in the persistence package so it can use the same repository write
+ * path as the application, including encryption, without introducing screenshot-only production
+ * APIs.
  */
 public final class DocumentationScreenshotFixture {
 
@@ -19,82 +19,168 @@ public final class DocumentationScreenshotFixture {
     private static final String MODEL_ID = "openai/gpt-5.6-sol";
     private static final String THINKING = "HIGH";
 
-    private DocumentationScreenshotFixture() {
-    }
+    private DocumentationScreenshotFixture() {}
 
     public static Fixture seed(AppStateRepository repository, FixturePaths paths) {
         repository.updateAutoGitUpdateEnabled(false);
 
-        long jupiterProjectId = repository.insertProject(
-                "Jupiter", normalized(paths.jupiterProject()), 1, BASE.minusSeconds(1_200));
-        long blueCaveProjectId = repository.insertProject(
-                "Blue Cave", normalized(paths.blueCaveProject()), 2, BASE.minusSeconds(900));
-        long websiteProjectId = repository.insertProject(
-                "Website", normalized(paths.websiteProject()), 3, BASE.minusSeconds(600));
+        long jupiterProjectId =
+                repository.insertProject(
+                        "Jupiter", normalized(paths.jupiterProject()), 1, BASE.minusSeconds(1_200));
+        long blueCaveProjectId =
+                repository.insertProject(
+                        "Blue Cave",
+                        normalized(paths.blueCaveProject()),
+                        2,
+                        BASE.minusSeconds(900));
+        long websiteProjectId =
+                repository.insertProject(
+                        "Website", normalized(paths.websiteProject()), 3, BASE.minusSeconds(600));
 
-        repository.updateProjectWorkspaceInitCommands(jupiterProjectId, """
+        repository.updateProjectWorkspaceInitCommands(
+                jupiterProjectId,
+                """
                 ./mvnw -q -DskipTests compile
                 ./mvnw -q test -DskipE2E=true
-                """.stripTrailing());
-        repository.updateProjectEnvironmentVariables(jupiterProjectId,
+                """
+                        .stripTrailing());
+        repository.updateProjectEnvironmentVariables(
+                jupiterProjectId,
                 "[{\"name\":\"JAVA_HOME\",\"value\":\"/opt/jdk-25\"},{\"name\":\"JUPITER_PROFILE\",\"value\":\"docs\"}]");
         repository.updateProjectCommandEnvironmentAllowlist(jupiterProjectId, "HOME, PATH, CI");
 
-        long jupiterMainWorkspaceId = repository.insertWorkspace(
-                jupiterProjectId, "main", normalized(paths.jupiterProject()), 1, BASE.minusSeconds(1_000));
-        long docsWorkspaceId = repository.insertWorkspace(
-                jupiterProjectId, "docs/screenshots", normalized(paths.docsWorkspace()), 2, BASE.minusSeconds(500));
-        long mcpWorkspaceId = repository.insertWorkspace(
-                jupiterProjectId, "feature/mcp-auth", normalized(paths.mcpWorkspace()), 3, BASE.minusSeconds(400));
+        long jupiterMainWorkspaceId =
+                repository.insertWorkspace(
+                        jupiterProjectId,
+                        "main",
+                        normalized(paths.jupiterProject()),
+                        1,
+                        BASE.minusSeconds(1_000));
+        long docsWorkspaceId =
+                repository.insertWorkspace(
+                        jupiterProjectId,
+                        "docs/screenshots",
+                        normalized(paths.docsWorkspace()),
+                        2,
+                        BASE.minusSeconds(500));
+        long mcpWorkspaceId =
+                repository.insertWorkspace(
+                        jupiterProjectId,
+                        "feature/mcp-auth",
+                        normalized(paths.mcpWorkspace()),
+                        3,
+                        BASE.minusSeconds(400));
 
-        long blueCaveWorkspaceId = repository.insertWorkspace(
-                blueCaveProjectId, "main", normalized(paths.blueCaveProject()), 1, BASE.minusSeconds(800));
-        long websiteWorkspaceId = repository.insertWorkspace(
-                websiteProjectId, "main", normalized(paths.websiteProject()), 1, BASE.minusSeconds(700));
+        long blueCaveWorkspaceId =
+                repository.insertWorkspace(
+                        blueCaveProjectId,
+                        "main",
+                        normalized(paths.blueCaveProject()),
+                        1,
+                        BASE.minusSeconds(800));
+        long websiteWorkspaceId =
+                repository.insertWorkspace(
+                        websiteProjectId,
+                        "main",
+                        normalized(paths.websiteProject()),
+                        1,
+                        BASE.minusSeconds(700));
 
-        long flakySessionId = repository.insertSession(
-                jupiterMainWorkspaceId, "Fix flaky Playwright tests", 1,
-                BASE.minusSeconds(780), false, Persistence.ReviewSource.SESSION, null);
-        long oauthSessionId = repository.insertSession(
-                jupiterMainWorkspaceId, "Review OAuth flow", 2,
-                BASE.minusSeconds(740), false, Persistence.ReviewSource.SESSION, null);
+        long flakySessionId =
+                repository.insertSession(
+                        jupiterMainWorkspaceId,
+                        "Fix flaky Playwright tests",
+                        1,
+                        BASE.minusSeconds(780),
+                        false,
+                        Persistence.ReviewSource.SESSION,
+                        null);
+        long oauthSessionId =
+                repository.insertSession(
+                        jupiterMainWorkspaceId,
+                        "Review OAuth flow",
+                        2,
+                        BASE.minusSeconds(740),
+                        false,
+                        Persistence.ReviewSource.SESSION,
+                        null);
 
-        long activeSessionId = repository.insertSession(
-                docsWorkspaceId, "Build documentation screenshots", 1,
-                BASE.minusSeconds(300), false, Persistence.ReviewSource.SESSION, null);
-        long mobileSessionId = repository.insertSession(
-                docsWorkspaceId, "Polish mobile layout", 2,
-                BASE.minusSeconds(240), false, Persistence.ReviewSource.SESSION, null);
+        long activeSessionId =
+                repository.insertSession(
+                        docsWorkspaceId,
+                        "Build documentation screenshots",
+                        1,
+                        BASE.minusSeconds(300),
+                        false,
+                        Persistence.ReviewSource.SESSION,
+                        null);
+        long mobileSessionId =
+                repository.insertSession(
+                        docsWorkspaceId,
+                        "Polish mobile layout",
+                        2,
+                        BASE.minusSeconds(240),
+                        false,
+                        Persistence.ReviewSource.SESSION,
+                        null);
         repository.updateSessionUnread(mobileSessionId, true);
 
-        long mcpSessionId = repository.insertSession(
-                mcpWorkspaceId, "Add MCP authentication", 1,
-                BASE.minusSeconds(180), false, Persistence.ReviewSource.SESSION, null);
+        long mcpSessionId =
+                repository.insertSession(
+                        mcpWorkspaceId,
+                        "Add MCP authentication",
+                        1,
+                        BASE.minusSeconds(180),
+                        false,
+                        Persistence.ReviewSource.SESSION,
+                        null);
 
-        long sdkSessionId = repository.insertSession(
-                blueCaveWorkspaceId, "Review Java SDK", 1,
-                BASE.minusSeconds(660), false, Persistence.ReviewSource.SESSION, null);
-        long homepageSessionId = repository.insertSession(
-                websiteWorkspaceId, "Refresh homepage", 1,
-                BASE.minusSeconds(620), false, Persistence.ReviewSource.SESSION, null);
+        long sdkSessionId =
+                repository.insertSession(
+                        blueCaveWorkspaceId,
+                        "Review Java SDK",
+                        1,
+                        BASE.minusSeconds(660),
+                        false,
+                        Persistence.ReviewSource.SESSION,
+                        null);
+        long homepageSessionId =
+                repository.insertSession(
+                        websiteWorkspaceId,
+                        "Refresh homepage",
+                        1,
+                        BASE.minusSeconds(620),
+                        false,
+                        Persistence.ReviewSource.SESSION,
+                        null);
 
-        seedShortConversation(repository, flakySessionId,
+        seedShortConversation(
+                repository,
+                flakySessionId,
                 "Why is the panel test flaky on CI?",
                 "The failure is timing-related. I’d wait for the SSE connection explicitly instead of sleeping before the assertion.",
                 BASE.minusSeconds(700));
-        seedShortConversation(repository, oauthSessionId,
+        seedShortConversation(
+                repository,
+                oauthSessionId,
                 "Check the device authorization flow for edge cases.",
                 "The polling path already backs off on rate limits. The remaining useful test is expiry while the browser is still open.",
                 BASE.minusSeconds(640));
-        seedShortConversation(repository, mobileSessionId,
+        seedShortConversation(
+                repository,
+                mobileSessionId,
                 "The settings dialog still feels cramped on mobile.",
                 "I’d keep the navigation stacked above the content at 390px and avoid changing the desktop layout.",
                 BASE.minusSeconds(150));
-        seedShortConversation(repository, sdkSessionId,
+        seedShortConversation(
+                repository,
+                sdkSessionId,
                 "Can you review the Java SDK changes?",
                 "The public API is small and consistent. I’d only rename the retry option before releasing it.",
                 BASE.minusSeconds(580));
-        seedShortConversation(repository, homepageSessionId,
+        seedShortConversation(
+                repository,
+                homepageSessionId,
                 "Tighten the homepage copy without changing the layout.",
                 "Done. The first section now says what the product does before explaining how it works.",
                 BASE.minusSeconds(560));
@@ -102,20 +188,21 @@ public final class DocumentationScreenshotFixture {
         seedPendingConversation(repository, mcpSessionId, BASE.minusSeconds(90));
         ActiveConversation activeConversation = seedActiveConversation(repository, activeSessionId);
 
-        long subagentSessionId = repository.insertSession(
-                docsWorkspaceId,
-                "Subagent: Explore",
-                3,
-                BASE.minusSeconds(15),
-                false,
-                Persistence.ReviewSource.SESSION,
-                null,
-                true,
-                activeSessionId,
-                "task-catalog-1",
-                "explore",
-                "Explore",
-                activeConversation.toolAssistantMessageId());
+        long subagentSessionId =
+                repository.insertSession(
+                        docsWorkspaceId,
+                        "Subagent: Explore",
+                        3,
+                        BASE.minusSeconds(15),
+                        false,
+                        Persistence.ReviewSource.SESSION,
+                        null,
+                        true,
+                        activeSessionId,
+                        "task-catalog-1",
+                        "explore",
+                        "Explore",
+                        activeConversation.toolAssistantMessageId());
         seedSubagentConversation(repository, subagentSessionId);
 
         repository.insertToolCallTrace(
@@ -167,12 +254,13 @@ public final class DocumentationScreenshotFixture {
                 BASE.plusSeconds(101),
                 BASE.plusSeconds(96));
 
-        long screenshotTestFileId = repository.insertChangedFile(
-                activeSessionId,
-                "src/test/java/com/judepereira/jupiter/e2e/DocumentationScreenshotsTest.java",
-                SCREENSHOT_TEST_DIFF,
-                1,
-                BASE.plusSeconds(180));
+        long screenshotTestFileId =
+                repository.insertChangedFile(
+                        activeSessionId,
+                        "src/test/java/com/judepereira/jupiter/e2e/DocumentationScreenshotsTest.java",
+                        SCREENSHOT_TEST_DIFF,
+                        1,
+                        BASE.plusSeconds(180));
         repository.insertChangedFile(
                 activeSessionId,
                 "src/test/java/com/judepereira/jupiter/persistence/DocumentationScreenshotFixture.java",
@@ -194,13 +282,15 @@ public final class DocumentationScreenshotFixture {
                 "printf '%s subagent-complete\\n' \"$JUPITER_SESSION_NAME\" >> /tmp/jupiter-hooks.log",
                 30);
 
-        long mcpServerId = repository.insertMcpServer(
-                "GitHub",
-                "https://mcp.example.test/github",
-                true,
-                "[{\"name\":\"Authorization\",\"value\":\"Bearer ${env.GITHUB_TOKEN}\"}]",
-                BASE.plusSeconds(30));
-        repository.replaceMcpServerProjectExposures(mcpServerId, List.of(jupiterProjectId, blueCaveProjectId));
+        long mcpServerId =
+                repository.insertMcpServer(
+                        "GitHub",
+                        "https://mcp.example.test/github",
+                        true,
+                        "[{\"name\":\"Authorization\",\"value\":\"Bearer ${env.GITHUB_TOKEN}\"}]",
+                        BASE.plusSeconds(30));
+        repository.replaceMcpServerProjectExposures(
+                mcpServerId, List.of(jupiterProjectId, blueCaveProjectId));
 
         // Make the screenshot workspace/session the exact state the UI opens into.
         repository.updateProjectLastOpened(jupiterProjectId, BASE.plusSeconds(240));
@@ -211,28 +301,50 @@ public final class DocumentationScreenshotFixture {
         return new Fixture(jupiterProjectId, docsWorkspaceId, activeSessionId, subagentSessionId);
     }
 
-    private static ActiveConversation seedActiveConversation(AppStateRepository repository, long sessionId) {
-        turn(repository, sessionId, 1, 1,
+    private static ActiveConversation seedActiveConversation(
+            AppStateRepository repository, long sessionId) {
+        turn(
+                repository,
+                sessionId,
+                1,
+                1,
                 "Can we make the documentation screenshots reproducible? I want the same projects, workspaces and conversation every time.",
                 "Yes. I’m treating screenshots as a fixture, not as a manual browser session. The database, Git state, clock, viewport and rendering environment all need to be deterministic.",
                 BASE.minusSeconds(120));
 
-        turn(repository, sessionId, 2, 3,
+        turn(
+                repository,
+                sessionId,
+                2,
+                3,
                 "Use a real worktree for `docs/screenshots`, too. I don’t want fake paths that only work in the UI.",
                 "Agreed. The fixture creates actual Git worktrees first and then points Jupiter at them. That keeps the workspace rail and anything that shells out to Git honest.",
                 BASE.minusSeconds(85));
 
-        turn(repository, sessionId, 3, 5,
+        turn(
+                repository,
+                sessionId,
+                3,
+                5,
                 "What are we using for the actual captures?",
                 "Two fixed profiles:\n\n```text\ndesktop: 1440 × 900 @ 2x\nmobile:   390 × 844 @ 3x\n```\n\nBoth use Playwright Chromium with a fixed clock, light mode and reduced motion. The resulting PNGs are 2880×1800 and 1170×2532.",
                 BASE.minusSeconds(48));
 
-        long toolAssistantMessageId = turn(repository, sessionId, 4, 7,
-                "Can the catalog cover tool calls, images and subagents as well as the normal chat?",
-                "Yes. I’ve put those states into the fixture itself, so the catalog can photograph the real persisted projection rather than invoking a model during screenshot generation.",
-                BASE.minusSeconds(20));
+        long toolAssistantMessageId =
+                turn(
+                        repository,
+                        sessionId,
+                        4,
+                        7,
+                        "Can the catalog cover tool calls, images and subagents as well as the normal chat?",
+                        "Yes. I’ve put those states into the fixture itself, so the catalog can photograph the real persisted projection rather than invoking a model during screenshot generation.",
+                        BASE.minusSeconds(20));
 
-        turn(repository, sessionId, 5, 9,
+        turn(
+                repository,
+                sessionId,
+                5,
+                9,
                 "And keep this native on macOS. I want Jupiter’s real font stack.",
                 "That stays unchanged. The runner installs Playwright’s pinned Chromium build natively and leaves Jupiter’s CSS fonts alone. The fixed 2x and 3x device scale factors keep the PNGs Retina-sharp.",
                 BASE.minusSeconds(8));
@@ -257,26 +369,27 @@ public final class DocumentationScreenshotFixture {
 
         Instant assistantStartedAt = BASE.plusSeconds(77);
         Instant assistantCompletedAt = BASE.plusSeconds(83);
-        long assistantMessageId = repository.insertConversationMessage(
-                sessionId,
-                "subagent-assistant-1",
-                "assistant",
-                1,
-                2,
-                "The catalog covers the main shell, projects, workspaces, sessions, review, terminal, settings, MCP, OAuth, usage, slash commands, tool calls and this subagent transcript. The mobile capture gets its own 390px state as well.",
-                null,
-                null,
-                true,
-                true,
-                false,
-                "explore",
-                "Explore",
-                "openai/gpt-5.6-luna",
-                "MEDIUM",
-                null,
-                null,
-                assistantCompletedAt,
-                assistantStartedAt);
+        long assistantMessageId =
+                repository.insertConversationMessage(
+                        sessionId,
+                        "subagent-assistant-1",
+                        "assistant",
+                        1,
+                        2,
+                        "The catalog covers the main shell, projects, workspaces, sessions, review, terminal, settings, MCP, OAuth, usage, slash commands, tool calls and this subagent transcript. The mobile capture gets its own 390px state as well.",
+                        null,
+                        null,
+                        true,
+                        true,
+                        false,
+                        "explore",
+                        "Explore",
+                        "openai/gpt-5.6-luna",
+                        "MEDIUM",
+                        null,
+                        null,
+                        assistantCompletedAt,
+                        assistantStartedAt);
         repository.insertToolCallTrace(
                 sessionId,
                 assistantMessageId,
@@ -291,26 +404,60 @@ public final class DocumentationScreenshotFixture {
                 BASE.plusSeconds(79));
     }
 
-    private static void seedShortConversation(AppStateRepository repository, long sessionId,
-                                              String userText, String assistantText, Instant startedAt) {
+    private static void seedShortConversation(
+            AppStateRepository repository,
+            long sessionId,
+            String userText,
+            String assistantText,
+            Instant startedAt) {
         turn(repository, sessionId, 1, 1, userText, assistantText, startedAt);
     }
 
-    private static void seedPendingConversation(AppStateRepository repository, long sessionId, Instant startedAt) {
+    private static void seedPendingConversation(
+            AppStateRepository repository, long sessionId, Instant startedAt) {
         repository.insertConversationMessage(
-                sessionId, "mcp-user-1", "user", 1, 1,
+                sessionId,
+                "mcp-user-1",
+                "user",
+                1,
+                1,
                 "Add bearer-token support to the MCP server configuration.",
-                null, null, true, true, false, startedAt);
+                null,
+                null,
+                true,
+                true,
+                false,
+                startedAt);
         repository.insertConversationMessage(
-                sessionId, "mcp-assistant-1", "assistant", 1, 2,
+                sessionId,
+                "mcp-assistant-1",
+                "assistant",
+                1,
+                2,
                 "Thinking…",
-                null, null, true, false, true,
-                AGENT_ID, AGENT_NAME, MODEL_ID, THINKING,
-                null, null, null, startedAt.plusSeconds(1));
+                null,
+                null,
+                true,
+                false,
+                true,
+                AGENT_ID,
+                AGENT_NAME,
+                MODEL_ID,
+                THINKING,
+                null,
+                null,
+                null,
+                startedAt.plusSeconds(1));
     }
 
-    private static long turn(AppStateRepository repository, long sessionId, long turnId, long firstSequence,
-                             String userText, String assistantText, Instant startedAt) {
+    private static long turn(
+            AppStateRepository repository,
+            long sessionId,
+            long turnId,
+            long firstSequence,
+            String userText,
+            String assistantText,
+            Instant startedAt) {
         repository.insertConversationMessage(
                 sessionId,
                 "session-" + sessionId + "-user-" + turnId,
@@ -353,18 +500,23 @@ public final class DocumentationScreenshotFixture {
         return path.toAbsolutePath().normalize().toString();
     }
 
-    public record FixturePaths(Path jupiterProject, Path docsWorkspace, Path mcpWorkspace,
-                               Path blueCaveProject, Path websiteProject) {
-    }
+    public record FixturePaths(
+            Path jupiterProject,
+            Path docsWorkspace,
+            Path mcpWorkspace,
+            Path blueCaveProject,
+            Path websiteProject) {}
 
-    public record Fixture(long activeProjectId, long activeWorkspaceId, long activeSessionId,
-                          long subagentSessionId) {
-    }
+    public record Fixture(
+            long activeProjectId,
+            long activeWorkspaceId,
+            long activeSessionId,
+            long subagentSessionId) {}
 
-    private record ActiveConversation(long toolAssistantMessageId) {
-    }
+    private record ActiveConversation(long toolAssistantMessageId) {}
 
-    private static final String SCREENSHOT_TEST_DIFF = """
+    private static final String SCREENSHOT_TEST_DIFF =
+            """
             diff --git a/src/test/java/com/judepereira/jupiter/e2e/DocumentationScreenshotsTest.java b/src/test/java/com/judepereira/jupiter/e2e/DocumentationScreenshotsTest.java
             new file mode 100644
             index 0000000..9d6fbd2
@@ -381,7 +533,8 @@ public final class DocumentationScreenshotFixture {
             +}
             """;
 
-    private static final String SCREENSHOT_FIXTURE_DIFF = """
+    private static final String SCREENSHOT_FIXTURE_DIFF =
+            """
             diff --git a/src/test/java/com/judepereira/jupiter/persistence/DocumentationScreenshotFixture.java b/src/test/java/com/judepereira/jupiter/persistence/DocumentationScreenshotFixture.java
             new file mode 100644
             index 0000000..d71b6ae
@@ -394,7 +547,8 @@ public final class DocumentationScreenshotFixture {
             +}
             """;
 
-    private static final String SCREENSHOT_SCRIPT_DIFF = """
+    private static final String SCREENSHOT_SCRIPT_DIFF =
+            """
             diff --git a/scripts/generate_screenshots.sh b/scripts/generate_screenshots.sh
             new file mode 100755
             index 0000000..94c3e4d

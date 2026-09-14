@@ -15,15 +15,8 @@ import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.ReducedMotion;
 import com.microsoft.playwright.options.ScreenshotScale;
 import com.microsoft.playwright.options.ViewportSize;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
-
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-
-import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -41,6 +34,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 
 class DocumentationScreenshotsTest extends E2ETestSupport {
 
@@ -54,35 +52,72 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static final String FIXED_BROWSER_TIME = "2026-09-08T09:45:00+02:00";
 
-    private static final List<String> CATALOG = List.of(
-            "interface-desktop.png",
-            "interface-mobile.png",
-            "projects.png",
-            "workspaces.png",
-            "sessions-and-chat.png",
-            "agents-models-thinking.png",
-            "review-and-diffs.png",
-            "tool-calls-and-images.png",
-            "subagent-session.png",
-            "terminal.png",
-            "project-settings.png",
-            "lifecycle-hooks.png",
-            "mcp-servers.png",
-            "openai-authentication.png",
-            "usage-and-token-tracking.png",
-            "slash-commands.png"
-    );
+    private static final List<String> CATALOG =
+            List.of(
+                    "interface-desktop.png",
+                    "interface-mobile.png",
+                    "projects.png",
+                    "workspaces.png",
+                    "sessions-and-chat.png",
+                    "agents-models-thinking.png",
+                    "review-and-diffs.png",
+                    "tool-calls-and-images.png",
+                    "subagent-session.png",
+                    "terminal.png",
+                    "project-settings.png",
+                    "lifecycle-hooks.png",
+                    "mcp-servers.png",
+                    "openai-authentication.png",
+                    "usage-and-token-tracking.png",
+                    "slash-commands.png");
 
-    private static final List<Persistence.ProjectTokenUsageHourly> FIXED_USAGE = List.of(
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T04:00:00Z"), "openai/gpt-5.6-terra", 2, 9_800L, 2_400L, 12_200L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T05:00:00Z"), "openai/gpt-5.6-terra", 4, 22_300L, 5_200L, 27_500L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T05:00:00Z"), "openai/gpt-5.6-luna", 3, 11_100L, 2_700L, 13_800L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T06:00:00Z"), "openai/gpt-5.6-sol", 1, 18_700L, 4_900L, 23_600L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T07:00:00Z"), "openai/gpt-5.6-terra", 3, 16_900L, 3_800L, 20_700L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T07:00:00Z"), "openai/gpt-5.6-luna", 5, 13_200L, 3_100L, 16_300L)
-    );
+    private static final List<Persistence.ProjectTokenUsageHourly> FIXED_USAGE =
+            List.of(
+                    new Persistence.ProjectTokenUsageHourly(
+                            Instant.parse("2026-09-08T04:00:00Z"),
+                            "openai/gpt-5.6-terra",
+                            2,
+                            9_800L,
+                            2_400L,
+                            12_200L),
+                    new Persistence.ProjectTokenUsageHourly(
+                            Instant.parse("2026-09-08T05:00:00Z"),
+                            "openai/gpt-5.6-terra",
+                            4,
+                            22_300L,
+                            5_200L,
+                            27_500L),
+                    new Persistence.ProjectTokenUsageHourly(
+                            Instant.parse("2026-09-08T05:00:00Z"),
+                            "openai/gpt-5.6-luna",
+                            3,
+                            11_100L,
+                            2_700L,
+                            13_800L),
+                    new Persistence.ProjectTokenUsageHourly(
+                            Instant.parse("2026-09-08T06:00:00Z"),
+                            "openai/gpt-5.6-sol",
+                            1,
+                            18_700L,
+                            4_900L,
+                            23_600L),
+                    new Persistence.ProjectTokenUsageHourly(
+                            Instant.parse("2026-09-08T07:00:00Z"),
+                            "openai/gpt-5.6-terra",
+                            3,
+                            16_900L,
+                            3_800L,
+                            20_700L),
+                    new Persistence.ProjectTokenUsageHourly(
+                            Instant.parse("2026-09-08T07:00:00Z"),
+                            "openai/gpt-5.6-luna",
+                            5,
+                            13_200L,
+                            3_100L,
+                            16_300L));
 
-    private static final String MODEL_CATALOG_JSON = """
+    private static final String MODEL_CATALOG_JSON =
+            """
             {
               "models": {
                 "anthropic/claude-opus-5": {"id":"anthropic/claude-opus-5","name":"Claude Opus 5","reasoning":true,"tool_call":true,"limit":{"context":400000,"output":128000}},
@@ -123,7 +158,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             }
             """;
 
-    private static final String SCREENSHOT_STYLE = """
+    private static final String SCREENSHOT_STYLE =
+            """
             *, *::before, *::after {
                 animation: none !important;
                 transition: none !important;
@@ -136,8 +172,11 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     void captureDocumentationScreenshots() throws Exception {
         Path repositoryRoot = Path.of("").toAbsolutePath().normalize();
         Path fixtureRoot = repositoryRoot.resolve("target/documentation-screenshot-fixture");
-        Path outputDir = repositoryRoot.resolve(
-                System.getProperty("documentation.screenshots.output", "target/documentation-screenshots"));
+        Path outputDir =
+                repositoryRoot.resolve(
+                        System.getProperty(
+                                "documentation.screenshots.output",
+                                "target/documentation-screenshots"));
 
         recreateDirectory(fixtureRoot);
         Files.createDirectories(outputDir);
@@ -154,19 +193,25 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (FixtureServer fixtureServer = FixtureServer.start();
-             RunningApp app = startApp(fakeHome, dbFile,
-                     Map.of(
-                             "models.dev.catalog-url", fixtureServer.catalogUrl(),
-                             "openai.oauth.issuer", fixtureServer.baseUrl(),
-                             "openai.oauth.client-id", "documentation-screenshots"
-                     ), ScreenshotUsageConfig.class)) {
+                RunningApp app =
+                        startApp(
+                                fakeHome,
+                                dbFile,
+                                Map.of(
+                                        "models.dev.catalog-url", fixtureServer.catalogUrl(),
+                                        "openai.oauth.issuer", fixtureServer.baseUrl(),
+                                        "openai.oauth.client-id", "documentation-screenshots"),
+                                ScreenshotUsageConfig.class)) {
             AppStateRepository repository = app.context().getBean(AppStateRepository.class);
-            Fixture fixture = DocumentationScreenshotFixture.seed(repository, new FixturePaths(
-                    git.jupiterProject(),
-                    git.docsWorkspace(),
-                    git.mcpWorkspace(),
-                    git.blueCaveProject(),
-                    git.websiteProject()));
+            Fixture fixture =
+                    DocumentationScreenshotFixture.seed(
+                            repository,
+                            new FixturePaths(
+                                    git.jupiterProject(),
+                                    git.docsWorkspace(),
+                                    git.mcpWorkspace(),
+                                    git.blueCaveProject(),
+                                    git.websiteProject()));
 
             // The model picker only exposes catalog favourites for connected providers. Establish
             // that state through the same mocked device flow used by the OAuth E2E coverage.
@@ -203,192 +248,328 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         Page page = newBrowserContext().newPage();
         try {
             page.navigate(app.baseUrl());
-            page.locator("#chat-container[data-session-id='" + fixture.activeSessionId() + "']").waitFor();
+            page.locator("#chat-container[data-session-id='" + fixture.activeSessionId() + "']")
+                    .waitFor();
             openSettings(page);
             page.locator("#settings-model-providers-tab").click();
             page.waitForResponse(
-                    response -> response.url().contains("/ui/settings/openai/start") && response.status() == 200,
-                    () -> page.getByRole(AriaRole.BUTTON,
-                            new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")).click());
+                    response ->
+                            response.url().contains("/ui/settings/openai/start")
+                                    && response.status() == 200,
+                    () ->
+                            page.getByRole(
+                                            AriaRole.BUTTON,
+                                            new Page.GetByRoleOptions()
+                                                    .setName("Connect ChatGPT/OpenAI subscription"))
+                                    .click());
             page.locator("#openai-oauth-section").waitFor();
-            page.waitForFunction("() => document.querySelector('#openai-oauth-section')?.textContent.includes('Status: Connected')", null,
+            page.waitForFunction(
+                    "() => document.querySelector('#openai-oauth-section')?.textContent.includes('Status: Connected')",
+                    null,
                     new Page.WaitForFunctionOptions().setTimeout(120000));
         } finally {
             page.context().close();
         }
     }
 
-    private static void captureInterfaceDesktop(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, true, outputDir.resolve("interface-desktop.png"), page -> {
-            page.locator("#review-panel").waitFor();
-            settleChat(page);
-        });
+    private static void captureInterfaceDesktop(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                true,
+                outputDir.resolve("interface-desktop.png"),
+                page -> {
+                    page.locator("#review-panel").waitFor();
+                    settleChat(page);
+                });
     }
 
-    private static void captureInterfaceMobile(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
+    private static void captureInterfaceMobile(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
         ensureReviewState(app, fixture, false);
-        Browser.NewContextOptions options = commonContextOptions(MOBILE_WIDTH, MOBILE_HEIGHT, MOBILE_DPR)
-                .setIsMobile(true)
-                .setHasTouch(true);
+        Browser.NewContextOptions options =
+                commonContextOptions(MOBILE_WIDTH, MOBILE_HEIGHT, MOBILE_DPR)
+                        .setIsMobile(true)
+                        .setHasTouch(true);
         try (BrowserContext context = newBrowserContext(options)) {
             Page page = context.newPage();
             preparePage(page, app, fixture, MOBILE_DPR);
             page.waitForFunction("() => window.matchMedia('(max-width: 767.98px)').matches");
             settleChat(page);
-            captureViewport(page, outputDir.resolve("interface-mobile.png"), MOBILE_WIDTH, MOBILE_HEIGHT, MOBILE_DPR);
+            captureViewport(
+                    page,
+                    outputDir.resolve("interface-mobile.png"),
+                    MOBILE_WIDTH,
+                    MOBILE_HEIGHT,
+                    MOBILE_DPR);
         }
     }
 
-    private static void captureProjects(RunningApp app, Fixture fixture, Path sampleProject, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("projects.png"), page -> {
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).click();
-            page.locator("#project-modal").waitFor();
-            page.getByRole(AriaRole.BUTTON,
-                    new Page.GetByRoleOptions().setName(sampleProject.getFileName().toString()).setExact(true)).click();
-            page.locator("#project-name-input").fill("Sample Service");
-            page.waitForFunction("expected => document.querySelector('#project-path-input')?.value === expected",
-                    sampleProject.toAbsolutePath().normalize().toString());
-            settlePage(page);
-        });
+    private static void captureProjects(
+            RunningApp app, Fixture fixture, Path sampleProject, Path outputDir) throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("projects.png"),
+                page -> {
+                    page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab"))
+                            .click();
+                    page.locator("#project-modal").waitFor();
+                    page.getByRole(
+                                    AriaRole.BUTTON,
+                                    new Page.GetByRoleOptions()
+                                            .setName(sampleProject.getFileName().toString())
+                                            .setExact(true))
+                            .click();
+                    page.locator("#project-name-input").fill("Sample Service");
+                    page.waitForFunction(
+                            "expected => document.querySelector('#project-path-input')?.value === expected",
+                            sampleProject.toAbsolutePath().normalize().toString());
+                    settlePage(page);
+                });
     }
 
-    private static void captureWorkspaces(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("workspaces.png"), page -> {
-            page.locator(".workspace-create-button").click();
-            page.locator("#workspace-modal").waitFor();
-            page.locator("[data-workspace-branch-name]").fill("feature/screenshot-catalog");
-            settlePage(page);
-        });
+    private static void captureWorkspaces(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("workspaces.png"),
+                page -> {
+                    page.locator(".workspace-create-button").click();
+                    page.locator("#workspace-modal").waitFor();
+                    page.locator("[data-workspace-branch-name]").fill("feature/screenshot-catalog");
+                    settlePage(page);
+                });
     }
 
-    private static void captureSessionsAndChat(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("sessions-and-chat.png"), DocumentationScreenshotsTest::settleChat);
+    private static void captureSessionsAndChat(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("sessions-and-chat.png"),
+                DocumentationScreenshotsTest::settleChat);
     }
 
-    private static void captureAgentsModelsThinking(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("agents-models-thinking.png"), page -> {
-            page.locator("#chat-agent-select").selectOption("plan");
-            page.locator("#chat-model-select").selectOption("openai/gpt-5.6-sol");
-            page.locator("#chat-thinking-select").selectOption("HIGH");
-            settleChat(page);
-        });
+    private static void captureAgentsModelsThinking(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("agents-models-thinking.png"),
+                page -> {
+                    page.locator("#chat-agent-select").selectOption("plan");
+                    page.locator("#chat-model-select").selectOption("openai/gpt-5.6-sol");
+                    page.locator("#chat-thinking-select").selectOption("HIGH");
+                    settleChat(page);
+                });
     }
 
-    private static void captureReviewAndDiffs(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, true, outputDir.resolve("review-and-diffs.png"), page -> {
-            page.locator("#review-panel").waitFor();
-            page.locator("#review-panel .diff-viewer").first().waitFor();
-            settlePage(page);
-        });
+    private static void captureReviewAndDiffs(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                true,
+                outputDir.resolve("review-and-diffs.png"),
+                page -> {
+                    page.locator("#review-panel").waitFor();
+                    page.locator("#review-panel .diff-viewer").first().waitFor();
+                    settlePage(page);
+                });
     }
 
-    private static void captureToolCallsAndImages(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("tool-calls-and-images.png"), page -> {
-            var imageGroup = page.locator("[data-tool-call-target='group'][data-tool-call-tool-name='display_image']").first();
-            imageGroup.waitFor();
-            page.waitForFunction("() => document.querySelector('.tool-call-image-preview img')?.naturalWidth > 0");
-            imageGroup.evaluate("el => el.scrollIntoView({block: 'center', inline: 'nearest'})");
-            settlePage(page);
-        });
+    private static void captureToolCallsAndImages(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("tool-calls-and-images.png"),
+                page -> {
+                    var imageGroup =
+                            page.locator(
+                                            "[data-tool-call-target='group'][data-tool-call-tool-name='display_image']")
+                                    .first();
+                    imageGroup.waitFor();
+                    page.waitForFunction(
+                            "() => document.querySelector('.tool-call-image-preview img')?.naturalWidth > 0");
+                    imageGroup.evaluate(
+                            "el => el.scrollIntoView({block: 'center', inline: 'nearest'})");
+                    settlePage(page);
+                });
     }
 
-    private static void captureSubagentSession(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("subagent-session.png"), page -> {
-            var task = page.locator("[data-tool-call-target='group'][data-tool-call-tool-name='task']").first();
-            task.waitFor();
-            var button = task.locator(".tool-call-subagent-button");
-            button.waitFor();
-            button.click();
-            page.locator(".subagent-bar").waitFor();
-            page.locator(".subagent-bar-name").waitFor();
-            settleChat(page);
-        });
+    private static void captureSubagentSession(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("subagent-session.png"),
+                page -> {
+                    var task =
+                            page.locator(
+                                            "[data-tool-call-target='group'][data-tool-call-tool-name='task']")
+                                    .first();
+                    task.waitFor();
+                    var button = task.locator(".tool-call-subagent-button");
+                    button.waitFor();
+                    button.click();
+                    page.locator(".subagent-bar").waitFor();
+                    page.locator(".subagent-bar-name").waitFor();
+                    settleChat(page);
+                });
     }
 
-    private static void captureProjectSettings(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("project-settings.png"), page -> {
-            openSettings(page);
-            page.locator("#settings-current-project").waitFor();
-            settlePage(page);
-        });
+    private static void captureProjectSettings(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("project-settings.png"),
+                page -> {
+                    openSettings(page);
+                    page.locator("#settings-current-project").waitFor();
+                    settlePage(page);
+                });
     }
 
-    private static void captureLifecycleHooks(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("lifecycle-hooks.png"), page -> {
-            openSettings(page);
-            page.locator("#settings-hooks-tab").click();
-            page.locator("#settings-hooks").waitFor();
-            page.locator("textarea[name='assistantCompletedScript']").waitFor();
-            settlePage(page);
-        });
+    private static void captureLifecycleHooks(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("lifecycle-hooks.png"),
+                page -> {
+                    openSettings(page);
+                    page.locator("#settings-hooks-tab").click();
+                    page.locator("#settings-hooks").waitFor();
+                    page.locator("textarea[name='assistantCompletedScript']").waitFor();
+                    settlePage(page);
+                });
     }
 
-    private static void captureMcpServers(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("mcp-servers.png"), page -> {
-            openSettings(page);
-            page.locator("#settings-mcp-servers-tab").click();
-            page.locator("#settings-mcp-servers [data-settings-mcp-server]").first().waitFor();
-            settlePage(page);
-        });
+    private static void captureMcpServers(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("mcp-servers.png"),
+                page -> {
+                    openSettings(page);
+                    page.locator("#settings-mcp-servers-tab").click();
+                    page.locator("#settings-mcp-servers [data-settings-mcp-server]")
+                            .first()
+                            .waitFor();
+                    settlePage(page);
+                });
     }
 
-    private static void captureOpenAiAuthentication(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        app.context().getBean(com.judepereira.jupiter.openai.oauth.OpenAiOAuthService.class).resetConnectionState();
-        captureDesktop(app, fixture, false, outputDir.resolve("openai-authentication.png"), page -> {
-            openSettings(page);
-            page.locator("#settings-model-providers-tab").click();
-            page.locator("#openai-oauth-section").waitFor();
-            page.getByRole(AriaRole.BUTTON,
-                    new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")).click();
-            page.locator(".settings-openai-user-code").waitFor();
-            page.waitForFunction("() => document.querySelector('.settings-openai-user-code')?.textContent.trim() === 'JUPI-TER7'");
-            settlePage(page);
-        });
+    private static void captureOpenAiAuthentication(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        app.context()
+                .getBean(com.judepereira.jupiter.openai.oauth.OpenAiOAuthService.class)
+                .resetConnectionState();
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("openai-authentication.png"),
+                page -> {
+                    openSettings(page);
+                    page.locator("#settings-model-providers-tab").click();
+                    page.locator("#openai-oauth-section").waitFor();
+                    page.getByRole(
+                                    AriaRole.BUTTON,
+                                    new Page.GetByRoleOptions()
+                                            .setName("Connect ChatGPT/OpenAI subscription"))
+                            .click();
+                    page.locator(".settings-openai-user-code").waitFor();
+                    page.waitForFunction(
+                            "() => document.querySelector('.settings-openai-user-code')?.textContent.trim() === 'JUPI-TER7'");
+                    settlePage(page);
+                });
     }
 
-    private static void captureUsage(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("usage-and-token-tracking.png"), page -> {
-            openSettings(page);
-            page.evaluate("() => { if (window.Chart) { Chart.defaults.animation = false; } }");
-            page.locator("#settings-usage-tab").click();
-            page.locator("[data-settings-usage-chart]").waitFor();
-            page.waitForFunction("() => Number((document.querySelector('[data-usage-requests]')?.textContent || '0').replace(/[^0-9]/g, '')) > 0");
-            settlePage(page);
-        });
+    private static void captureUsage(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("usage-and-token-tracking.png"),
+                page -> {
+                    openSettings(page);
+                    page.evaluate(
+                            "() => { if (window.Chart) { Chart.defaults.animation = false; } }");
+                    page.locator("#settings-usage-tab").click();
+                    page.locator("[data-settings-usage-chart]").waitFor();
+                    page.waitForFunction(
+                            "() => Number((document.querySelector('[data-usage-requests]')?.textContent || '0').replace(/[^0-9]/g, '')) > 0");
+                    settlePage(page);
+                });
     }
 
-    private static void captureSlashCommands(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("slash-commands.png"), page -> {
-            settleChat(page);
-            page.locator("#chat-input").fill("/");
-            page.locator("#command-modal").waitFor();
-            page.locator(".command-modal-item").first().waitFor();
-            settlePage(page);
-        });
+    private static void captureSlashCommands(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
+        captureDesktop(
+                app,
+                fixture,
+                false,
+                outputDir.resolve("slash-commands.png"),
+                page -> {
+                    settleChat(page);
+                    page.locator("#chat-input").fill("/");
+                    page.locator("#command-modal").waitFor();
+                    page.locator(".command-modal-item").first().waitFor();
+                    settlePage(page);
+                });
     }
 
-    private static void captureTerminal(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
+    private static void captureTerminal(RunningApp app, Fixture fixture, Path outputDir)
+            throws Exception {
         ensureReviewState(app, fixture, false);
-        Browser.NewContextOptions options = commonContextOptions(DESKTOP_WIDTH, DESKTOP_HEIGHT, DESKTOP_DPR);
+        Browser.NewContextOptions options =
+                commonContextOptions(DESKTOP_WIDTH, DESKTOP_HEIGHT, DESKTOP_DPR);
         try (BrowserContext context = newBrowserContext(options)) {
             Page page = context.newPage();
             preparePage(page, app, fixture, DESKTOP_DPR);
             page.locator("#toggle-terminal-rail-btn").click();
             page.locator("#bottom-panel .terminal-mount .xterm").waitFor();
             page.locator(".terminal-mount").click();
-            page.keyboard().type("export PS1='jupiter:docs/screenshots$ '; clear; printf 'Documentation screenshot catalog\\n16 captures -> .wiki/images\\n'");
+            page.keyboard()
+                    .type(
+                            "export PS1='jupiter:docs/screenshots$ '; clear; printf 'Documentation screenshot catalog\\n16 captures -> .wiki/images\\n'");
             page.keyboard().press("Enter");
-            page.waitForFunction("() => document.querySelector('.terminal-mount .xterm-rows')?.textContent.includes('16 captures -> .wiki/images')");
+            page.waitForFunction(
+                    "() => document.querySelector('.terminal-mount .xterm-rows')?.textContent.includes('16 captures -> .wiki/images')");
             settlePage(page);
-            captureViewport(page, outputDir.resolve("terminal.png"), DESKTOP_WIDTH, DESKTOP_HEIGHT, DESKTOP_DPR);
+            captureViewport(
+                    page,
+                    outputDir.resolve("terminal.png"),
+                    DESKTOP_WIDTH,
+                    DESKTOP_HEIGHT,
+                    DESKTOP_DPR);
             page.locator("#toggle-terminal-rail-btn").click();
         }
     }
 
-    private static void captureDesktop(RunningApp app, Fixture fixture, boolean reviewOpen, Path output,
-                                       Consumer<Page> setup) throws Exception {
+    private static void captureDesktop(
+            RunningApp app, Fixture fixture, boolean reviewOpen, Path output, Consumer<Page> setup)
+            throws Exception {
         ensureReviewState(app, fixture, reviewOpen);
-        Browser.NewContextOptions options = commonContextOptions(DESKTOP_WIDTH, DESKTOP_HEIGHT, DESKTOP_DPR);
+        Browser.NewContextOptions options =
+                commonContextOptions(DESKTOP_WIDTH, DESKTOP_HEIGHT, DESKTOP_DPR);
         try (BrowserContext context = newBrowserContext(options)) {
             Page page = context.newPage();
             preparePage(page, app, fixture, DESKTOP_DPR);
@@ -400,7 +581,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     private static void ensureReviewState(RunningApp app, Fixture fixture, boolean expectedOpen) {
         AppStateService service = app.context().getBean(AppStateService.class);
         var view = service.loadViewData();
-        if (view.activeSession() == null || view.activeSession().id() != fixture.activeSessionId()) {
+        if (view.activeSession() == null
+                || view.activeSession().id() != fixture.activeSessionId()) {
             service.activateSession(fixture.activeSessionId());
             view = service.loadViewData();
         }
@@ -418,7 +600,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         page.locator("#settings-modal").waitFor();
     }
 
-    private static Browser.NewContextOptions commonContextOptions(int width, int height, double dpr) {
+    private static Browser.NewContextOptions commonContextOptions(
+            int width, int height, double dpr) {
         return new Browser.NewContextOptions()
                 .setViewportSize(new ViewportSize(width, height))
                 .setScreenSize(width, height)
@@ -429,20 +612,26 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                 .setReducedMotion(ReducedMotion.REDUCE);
     }
 
-    private static void preparePage(Page page, RunningApp app, Fixture fixture, double expectedDpr) {
+    private static void preparePage(
+            Page page, RunningApp app, Fixture fixture, double expectedDpr) {
         page.clock().setFixedTime(FIXED_BROWSER_TIME);
         page.navigate(app.baseUrl());
-        page.locator("#chat-container[data-session-id='" + fixture.activeSessionId() + "']").waitFor();
+        page.locator("#chat-container[data-session-id='" + fixture.activeSessionId() + "']")
+                .waitFor();
         page.locator(".project-tab-group.active .project-tab-label").waitFor();
         page.addStyleTag(new Page.AddStyleTagOptions().setContent(SCREENSHOT_STYLE));
         page.evaluate("async () => { await document.fonts.ready; }");
         page.waitForFunction("() => document.fonts.status === 'loaded'");
-        page.waitForFunction("expected => Math.abs(window.devicePixelRatio - expected) < 0.01", expectedDpr);
-        page.waitForFunction("() => document.querySelectorAll('#chat-messages-list > li').length >= 10");
-        page.waitForFunction("() => Array.from(document.querySelectorAll('#chat-messages-list .chat-message-text'))"
-                + ".every(node => node.dataset.markdownRendered === 'true')");
-        page.waitForFunction("() => Array.from(document.querySelectorAll('#chat-messages-list .chat-message-subtitle-text'))"
-                + ".every(node => node.textContent.trim().length > 0)");
+        page.waitForFunction(
+                "expected => Math.abs(window.devicePixelRatio - expected) < 0.01", expectedDpr);
+        page.waitForFunction(
+                "() => document.querySelectorAll('#chat-messages-list > li').length >= 10");
+        page.waitForFunction(
+                "() => Array.from(document.querySelectorAll('#chat-messages-list .chat-message-text'))"
+                        + ".every(node => node.dataset.markdownRendered === 'true')");
+        page.waitForFunction(
+                "() => Array.from(document.querySelectorAll('#chat-messages-list .chat-message-subtitle-text'))"
+                        + ".every(node => node.textContent.trim().length > 0)");
     }
 
     private static void settleChat(Page page) {
@@ -451,14 +640,17 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     }
 
     private static void settlePage(Page page) {
-        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        page.evaluate(
+                "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     }
 
-    private static void captureViewport(Page page, Path output, int cssWidth, int cssHeight, double dpr) throws IOException {
-        page.screenshot(new Page.ScreenshotOptions()
-                .setPath(output)
-                .setFullPage(false)
-                .setScale(ScreenshotScale.DEVICE));
+    private static void captureViewport(
+            Page page, Path output, int cssWidth, int cssHeight, double dpr) throws IOException {
+        page.screenshot(
+                new Page.ScreenshotOptions()
+                        .setPath(output)
+                        .setFullPage(false)
+                        .setScale(ScreenshotScale.DEVICE));
 
         BufferedImage image = ImageIO.read(output.toFile());
         if (image == null) {
@@ -467,9 +659,17 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         int expectedWidth = (int) Math.round(cssWidth * dpr);
         int expectedHeight = (int) Math.round(cssHeight * dpr);
         if (image.getWidth() != expectedWidth || image.getHeight() != expectedHeight) {
-            throw new IllegalStateException("Unexpected screenshot dimensions for " + output + ": got "
-                    + image.getWidth() + "x" + image.getHeight() + ", expected "
-                    + expectedWidth + "x" + expectedHeight);
+            throw new IllegalStateException(
+                    "Unexpected screenshot dimensions for "
+                            + output
+                            + ": got "
+                            + image.getWidth()
+                            + "x"
+                            + image.getHeight()
+                            + ", expected "
+                            + expectedWidth
+                            + "x"
+                            + expectedHeight);
         }
     }
 
@@ -484,7 +684,9 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static void createCustomCommands(Path fakeHome) throws IOException {
         Path commands = Files.createDirectories(fakeHome.resolve(".jupiter/commands"));
-        Files.writeString(commands.resolve("review-pr.md"), """
+        Files.writeString(
+                commands.resolve("review-pr.md"),
+                """
                 ---
                 id: review-pr
                 name: Review PR
@@ -493,8 +695,11 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                 ---
 
                 Review the current changes for correctness, tests and anything that should be fixed before opening a pull request.
-                """.stripLeading());
-        Files.writeString(commands.resolve("smoke-test.md"), """
+                """
+                        .stripLeading());
+        Files.writeString(
+                commands.resolve("smoke-test.md"),
+                """
                 ---
                 id: smoke-test
                 name: Smoke Test
@@ -504,7 +709,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                 ---
 
                 ./mvnw -q -DskipE2E=true test
-                """.stripLeading());
+                """
+                        .stripLeading());
     }
 
     private static GitFixture createGitFixture(Path fakeHome) throws Exception {
@@ -518,7 +724,14 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         Map<String, String> architectureCommitEnvironment = new HashMap<>();
         architectureCommitEnvironment.put("GIT_AUTHOR_DATE", "2026-09-08T07:02:00Z");
         architectureCommitEnvironment.put("GIT_COMMITTER_DATE", "2026-09-08T07:02:00Z");
-        runCommand(jupiter, architectureCommitEnvironment, "git", "commit", "--quiet", "-m", "Add architecture fixture");
+        runCommand(
+                jupiter,
+                architectureCommitEnvironment,
+                "git",
+                "commit",
+                "--quiet",
+                "-m",
+                "Add architecture fixture");
 
         runGit(jupiter, "git", "branch", "docs/screenshots");
         runGit(jupiter, "git", "branch", "feature/mcp-auth");
@@ -527,13 +740,29 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         Path mcpWorkspace = worktrees.resolve("feature/mcp-auth");
         Files.createDirectories(docsWorkspace.getParent());
         Files.createDirectories(mcpWorkspace.getParent());
-        runGit(jupiter, "git", "worktree", "add", "--quiet", docsWorkspace.toString(), "docs/screenshots");
-        runGit(jupiter, "git", "worktree", "add", "--quiet", mcpWorkspace.toString(), "feature/mcp-auth");
+        runGit(
+                jupiter,
+                "git",
+                "worktree",
+                "add",
+                "--quiet",
+                docsWorkspace.toString(),
+                "docs/screenshots");
+        runGit(
+                jupiter,
+                "git",
+                "worktree",
+                "add",
+                "--quiet",
+                mcpWorkspace.toString(),
+                "feature/mcp-auth");
 
         Files.createDirectories(docsWorkspace.resolve("docs"));
-        Files.writeString(docsWorkspace.resolve("docs/screenshot-notes.md"),
+        Files.writeString(
+                docsWorkspace.resolve("docs/screenshot-notes.md"),
                 "# Screenshot fixture\n\nKeep the database, Git state, browser clock and pixels deterministic.\n",
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         Path blueCave = projects.resolve("blue-cave");
         initRepository(blueCave, "Blue Cave");
@@ -542,7 +771,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         Path sampleProject = fakeHome.resolve("sample-app");
         initRepository(sampleProject, "Sample App");
 
-        return new GitFixture(jupiter, docsWorkspace, mcpWorkspace, blueCave, website, sampleProject);
+        return new GitFixture(
+                jupiter, docsWorkspace, mcpWorkspace, blueCave, website, sampleProject);
     }
 
     private static void createArchitecturePng(Path output) throws IOException {
@@ -550,7 +780,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         BufferedImage image = new BufferedImage(640, 360, BufferedImage.TYPE_INT_RGB);
         Graphics2D graphics = image.createGraphics();
         try {
-            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+            graphics.setRenderingHint(
+                    RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
             graphics.setColor(new Color(248, 250, 252));
             graphics.fillRect(0, 0, 640, 360);
 
@@ -582,7 +813,9 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         runGit(directory, "git", "config", "user.name", "Jupiter Screenshots");
         runGit(directory, "git", "config", "user.email", "screenshots@example.invalid");
 
-        Files.writeString(directory.resolve("README.md"), "# " + title + "\n\nDeterministic documentation fixture.\n");
+        Files.writeString(
+                directory.resolve("README.md"),
+                "# " + title + "\n\nDeterministic documentation fixture.\n");
         Files.createDirectories(directory.resolve("src"));
         Files.writeString(directory.resolve("src/example.txt"), "fixture\n");
         runGit(directory, "git", "add", ".");
@@ -590,21 +823,35 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         Map<String, String> fixedGitEnvironment = new HashMap<>();
         fixedGitEnvironment.put("GIT_AUTHOR_DATE", "2026-09-08T07:00:00Z");
         fixedGitEnvironment.put("GIT_COMMITTER_DATE", "2026-09-08T07:00:00Z");
-        runCommand(directory, fixedGitEnvironment, "git", "commit", "--quiet", "-m", "Initial fixture");
+        runCommand(
+                directory,
+                fixedGitEnvironment,
+                "git",
+                "commit",
+                "--quiet",
+                "-m",
+                "Initial fixture");
     }
 
-    private static void runCommand(Path workingDirectory, Map<String, String> extraEnvironment,
-                                   String... command) throws Exception {
-        ProcessBuilder builder = new ProcessBuilder(command)
-                .directory(workingDirectory.toFile())
-                .redirectErrorStream(true);
+    private static void runCommand(
+            Path workingDirectory, Map<String, String> extraEnvironment, String... command)
+            throws Exception {
+        ProcessBuilder builder =
+                new ProcessBuilder(command)
+                        .directory(workingDirectory.toFile())
+                        .redirectErrorStream(true);
         builder.environment().putAll(extraEnvironment);
         Process process = builder.start();
         byte[] output = process.getInputStream().readAllBytes();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new IllegalStateException("Command failed (" + exitCode + "): " + String.join(" ", command)
-                    + "\n" + new String(output, StandardCharsets.UTF_8));
+            throw new IllegalStateException(
+                    "Command failed ("
+                            + exitCode
+                            + "): "
+                            + String.join(" ", command)
+                            + "\n"
+                            + new String(output, StandardCharsets.UTF_8));
         }
     }
 
@@ -626,8 +873,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         TokenUsageService documentationScreenshotTokenUsageService() {
             return new TokenUsageService(null, null) {
                 @Override
-                public List<Persistence.ProjectTokenUsageHourly> findProjectHourlyUsage(long projectId, Instant fromInclusive,
-                                                                                        Instant toExclusive) {
+                public List<Persistence.ProjectTokenUsageHourly> findProjectHourlyUsage(
+                        long projectId, Instant fromInclusive, Instant toExclusive) {
                     return FIXED_USAGE;
                 }
             };
@@ -644,8 +891,15 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         static FixtureServer start() throws IOException {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             FixtureServer fixture = new FixtureServer(server);
-            server.createContext("/catalog.json", exchange -> respond(exchange, 200, MODEL_CATALOG_JSON));
-            server.createContext("/api/accounts/deviceauth/usercode", exchange -> respond(exchange, 200, """
+            server.createContext(
+                    "/catalog.json", exchange -> respond(exchange, 200, MODEL_CATALOG_JSON));
+            server.createContext(
+                    "/api/accounts/deviceauth/usercode",
+                    exchange ->
+                            respond(
+                                    exchange,
+                                    200,
+                                    """
                     {
                       "device_auth_id": "docs-device-1",
                       "user_code": "JUPI-TER7",
@@ -653,14 +907,26 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                       "expires": 600
                     }
                     """));
-            server.createContext("/api/accounts/deviceauth/token", exchange -> respond(exchange, 200, """
+            server.createContext(
+                    "/api/accounts/deviceauth/token",
+                    exchange ->
+                            respond(
+                                    exchange,
+                                    200,
+                                    """
                     {
                       "authorization_code": "docs-authorization-code",
                       "code_challenge": "docs-code-challenge",
                       "code_verifier": "docs-code-verifier"
                     }
                     """));
-            server.createContext("/oauth/token", exchange -> respond(exchange, 200, """
+            server.createContext(
+                    "/oauth/token",
+                    exchange ->
+                            respond(
+                                    exchange,
+                                    200,
+                                    """
                     {
                       "access_token": "docs-access-token",
                       "refresh_token": "docs-refresh-token",
@@ -685,7 +951,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             server.stop(0);
         }
 
-        private static void respond(HttpExchange exchange, int status, String body) throws IOException {
+        private static void respond(HttpExchange exchange, int status, String body)
+                throws IOException {
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
             exchange.sendResponseHeaders(status, bytes.length);
@@ -695,7 +962,11 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         }
     }
 
-    private record GitFixture(Path jupiterProject, Path docsWorkspace, Path mcpWorkspace,
-                              Path blueCaveProject, Path websiteProject, Path sampleProject) {
-    }
+    private record GitFixture(
+            Path jupiterProject,
+            Path docsWorkspace,
+            Path mcpWorkspace,
+            Path blueCaveProject,
+            Path websiteProject,
+            Path sampleProject) {}
 }

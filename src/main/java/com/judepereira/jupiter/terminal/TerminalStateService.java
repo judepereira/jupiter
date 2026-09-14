@@ -1,14 +1,13 @@
 package com.judepereira.jupiter.terminal;
 
-import lombok.extern.log4j.Log4j2;
-import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.stereotype.Service;
 
 @Log4j2
 @Service
@@ -42,7 +41,8 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
 
     public TerminalPanelState closeTerminal(long sessionId, String terminalId) {
         SessionState state = states.get(sessionId);
-        TerminalPanelState snapshot = state == null ? SessionState.emptySnapshot() : state.closeTerminal(terminalId);
+        TerminalPanelState snapshot =
+                state == null ? SessionState.emptySnapshot() : state.closeTerminal(terminalId);
         terminalSessions.remove(terminalId);
         return snapshot;
     }
@@ -77,10 +77,22 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
         private synchronized TerminalPanelState snapshot() {
             List<TerminalTab> tabs = new ArrayList<>(terminals.size());
             for (var entry : terminals.entrySet()) {
-                tabs.add(new TerminalTab(entry.getKey(), entry.getValue(), entry.getKey().equals(activeTerminalId)));
+                tabs.add(
+                        new TerminalTab(
+                                entry.getKey(),
+                                entry.getValue(),
+                                entry.getKey().equals(activeTerminalId)));
             }
-            TerminalTab active = activeTerminalId == null ? null : new TerminalTab(activeTerminalId, terminals.get(activeTerminalId), true);
-            return new TerminalPanelState(bottomPanelMode, List.copyOf(tabs), active, "terminal".equals(bottomPanelMode) && active != null);
+            TerminalTab active =
+                    activeTerminalId == null
+                            ? null
+                            : new TerminalTab(
+                                    activeTerminalId, terminals.get(activeTerminalId), true);
+            return new TerminalPanelState(
+                    bottomPanelMode,
+                    List.copyOf(tabs),
+                    active,
+                    "terminal".equals(bottomPanelMode) && active != null);
         }
 
         private synchronized TerminalPanelState openTerminalPane() {
@@ -99,7 +111,11 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
         }
 
         private synchronized TerminalPanelState registerTerminal(TerminalHandle terminal) {
-            terminals.put(terminal.id(), terminal.title() == null || terminal.title().isBlank() ? nextTerminalTitle() : terminal.title());
+            terminals.put(
+                    terminal.id(),
+                    terminal.title() == null || terminal.title().isBlank()
+                            ? nextTerminalTitle()
+                            : terminal.title());
             activeTerminalId = terminal.id();
             bottomPanelMode = "terminal";
             return snapshot();

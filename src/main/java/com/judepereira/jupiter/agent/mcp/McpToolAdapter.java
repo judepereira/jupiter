@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.agent.mcp;
 
+import static java.util.Objects.requireNonNull;
+
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolParameter;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
@@ -8,12 +10,9 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.mcp.client.McpClient;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import static java.util.Objects.requireNonNull;
 
 final class McpToolAdapter implements McpProjectToolExecutor {
     private final String modelToolName;
@@ -23,7 +22,13 @@ final class McpToolAdapter implements McpProjectToolExecutor {
     private final McpClient client;
     private final ToolDefinition toolDefinition;
 
-    private McpToolAdapter(String modelToolName, String serverSlug, String toolSlug, String remoteToolName, McpClient client, ToolDefinition toolDefinition) {
+    private McpToolAdapter(
+            String modelToolName,
+            String serverSlug,
+            String toolSlug,
+            String remoteToolName,
+            McpClient client,
+            ToolDefinition toolDefinition) {
         this.modelToolName = modelToolName;
         this.serverSlug = serverSlug;
         this.toolSlug = toolSlug;
@@ -32,11 +37,21 @@ final class McpToolAdapter implements McpProjectToolExecutor {
         this.toolDefinition = toolDefinition;
     }
 
-    static McpToolAdapter from(McpClient client, String serverSlug, ToolSpecification specification) {
+    static McpToolAdapter from(
+            McpClient client, String serverSlug, ToolSpecification specification) {
         String toolSlug = McpTemplateResolver.slugify(specification.name());
         String modelToolName = "mcp__" + serverSlug + "__" + toolSlug;
-        return new McpToolAdapter(modelToolName, serverSlug, toolSlug, specification.name(), client,
-                ToolDefinition.withNativeToolSpecification(modelToolName, specification.description(), toSchema(specification), specification));
+        return new McpToolAdapter(
+                modelToolName,
+                serverSlug,
+                toolSlug,
+                specification.name(),
+                client,
+                ToolDefinition.withNativeToolSpecification(
+                        modelToolName,
+                        specification.description(),
+                        toSchema(specification),
+                        specification));
     }
 
     ToolDefinition definition() {
@@ -59,13 +74,17 @@ final class McpToolAdapter implements McpProjectToolExecutor {
     }
 
     @Override
-    public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {
-        ToolExecutionRequest request = ToolExecutionRequest.builder()
-                .id(context.getToolCallId())
-                .name(remoteToolName)
-                .arguments(McpToolJson.toJson(args))
-                .build();
-        var result = requireNonNull(client.executeTool(request), "MCP tool execution returned no result");
+    public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context)
+            throws Exception {
+        ToolExecutionRequest request =
+                ToolExecutionRequest.builder()
+                        .id(context.getToolCallId())
+                        .name(remoteToolName)
+                        .arguments(McpToolJson.toJson(args))
+                        .build();
+        var result =
+                requireNonNull(
+                        client.executeTool(request), "MCP tool execution returned no result");
         String text = result.resultText();
         if (text == null && result.result() != null) {
             text = McpToolJson.toJsonValue(result.result(), "result");
@@ -81,40 +100,57 @@ final class McpToolAdapter implements McpProjectToolExecutor {
         for (var entry : specification.parameters().properties().entrySet()) {
             properties.add(toParameter(entry.getKey(), entry.getValue()));
         }
-        return new ToolSchema(specification.parameters().description(), properties, specification.parameters().required(), specification.parameters().additionalProperties());
+        return new ToolSchema(
+                specification.parameters().description(),
+                properties,
+                specification.parameters().required(),
+                specification.parameters().additionalProperties());
     }
 
     /** Converts the schema shapes supported by the model-facing tool contract recursively. */
-    private static ToolParameter toParameter(String name, dev.langchain4j.model.chat.request.json.JsonSchemaElement element) {
-        if (element instanceof dev.langchain4j.model.chat.request.json.JsonStringSchema stringSchema) {
+    private static ToolParameter toParameter(
+            String name, dev.langchain4j.model.chat.request.json.JsonSchemaElement element) {
+        if (element
+                instanceof dev.langchain4j.model.chat.request.json.JsonStringSchema stringSchema) {
             return ToolParameter.string(name, stringSchema.description());
         }
-        if (element instanceof dev.langchain4j.model.chat.request.json.JsonIntegerSchema integerSchema) {
+        if (element
+                instanceof
+                dev.langchain4j.model.chat.request.json.JsonIntegerSchema integerSchema) {
             return ToolParameter.integer(name, integerSchema.description());
         }
-        if (element instanceof dev.langchain4j.model.chat.request.json.JsonNumberSchema numberSchema) {
+        if (element
+                instanceof dev.langchain4j.model.chat.request.json.JsonNumberSchema numberSchema) {
             return ToolParameter.number(name, numberSchema.description());
         }
-        if (element instanceof dev.langchain4j.model.chat.request.json.JsonBooleanSchema booleanSchema) {
+        if (element
+                instanceof
+                dev.langchain4j.model.chat.request.json.JsonBooleanSchema booleanSchema) {
             return ToolParameter.bool(name, booleanSchema.description());
         }
         if (element instanceof dev.langchain4j.model.chat.request.json.JsonEnumSchema enumSchema) {
-            return ToolParameter.enumeration(name, enumSchema.description(), enumSchema.enumValues());
+            return ToolParameter.enumeration(
+                    name, enumSchema.description(), enumSchema.enumValues());
         }
-        if (element instanceof dev.langchain4j.model.chat.request.json.JsonObjectSchema objectSchema) {
+        if (element
+                instanceof dev.langchain4j.model.chat.request.json.JsonObjectSchema objectSchema) {
             return ToolParameter.object(name, objectSchema.description(), toSchema(objectSchema));
         }
-        if (element instanceof dev.langchain4j.model.chat.request.json.JsonArraySchema arraySchema) {
-            return ToolParameter.array(name, arraySchema.description(), toParameter(null, arraySchema.items()));
+        if (element
+                instanceof dev.langchain4j.model.chat.request.json.JsonArraySchema arraySchema) {
+            return ToolParameter.array(
+                    name, arraySchema.description(), toParameter(null, arraySchema.items()));
         }
         return ToolParameter.string(name, element.description());
     }
 
-    private static ToolSchema toSchema(dev.langchain4j.model.chat.request.json.JsonObjectSchema schema) {
+    private static ToolSchema toSchema(
+            dev.langchain4j.model.chat.request.json.JsonObjectSchema schema) {
         List<ToolParameter> properties = new ArrayList<>();
         for (var entry : schema.properties().entrySet()) {
             properties.add(toParameter(entry.getKey(), entry.getValue()));
         }
-        return new ToolSchema(schema.description(), properties, schema.required(), schema.additionalProperties());
+        return new ToolSchema(
+                schema.description(), properties, schema.required(), schema.additionalProperties());
     }
 }

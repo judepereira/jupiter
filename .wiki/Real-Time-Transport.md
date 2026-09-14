@@ -1,6 +1,7 @@
 # Real-Time Transport
 
-Jupiter uses SSE where traffic mostly flows from server to browser, and WebSockets where it genuinely needs two-way traffic.
+Jupiter uses SSE where traffic mostly flows from server to browser, and WebSockets where it
+genuinely needs two-way traffic.
 
 ## Server-Sent Events
 
@@ -13,11 +14,13 @@ SSE carries:
 - workspace-rail refreshes
 - system balloons
 
-Active assistant streams live on the server and can have browser emitters attach over their lifetime.
+Active assistant streams live on the server and can have browser emitters attach over their
+lifetime.
 
 ## WebSockets
 
-The terminal needs bidirectional, low-latency traffic, so attach, input, output, and resize operations use WebSockets.
+The terminal needs bidirectional, low-latency traffic, so attach, input, output, and resize
+operations use WebSockets.
 
 ## Reverse proxies
 

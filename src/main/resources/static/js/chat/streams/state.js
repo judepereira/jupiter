@@ -2,34 +2,34 @@ const activePendingStreams = new Map();
 let stopRequestInFlight = false;
 
 function getPendingStreamSource(assistantId) {
-    return activePendingStreams.get(assistantId);
+	return activePendingStreams.get(assistantId);
 }
 
 function registerPendingStream(assistantId, source) {
-    activePendingStreams.set(assistantId, source);
+	activePendingStreams.set(assistantId, source);
 }
 
 function clearPendingStreamState(assistantId, source) {
-    if (activePendingStreams.get(assistantId) === source) {
-        activePendingStreams.delete(assistantId);
-        return true;
-    }
-    return false;
+	if (activePendingStreams.get(assistantId) === source) {
+		activePendingStreams.delete(assistantId);
+		return true;
+	}
+	return false;
 }
 
 function isStopRequestInFlight() {
-    return stopRequestInFlight;
+	return stopRequestInFlight;
 }
 
 function setStopRequestInFlight(value) {
-    stopRequestInFlight = Boolean(value);
+	stopRequestInFlight = Boolean(value);
 }
 
 export {
-    activePendingStreams,
-    clearPendingStreamState,
-    getPendingStreamSource,
-    isStopRequestInFlight,
-    registerPendingStream,
-    setStopRequestInFlight
+	activePendingStreams,
+	clearPendingStreamState,
+	getPendingStreamSource,
+	isStopRequestInFlight,
+	registerPendingStream,
+	setStopRequestInFlight,
 };
