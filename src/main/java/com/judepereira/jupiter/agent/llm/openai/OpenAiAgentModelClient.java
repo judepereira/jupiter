@@ -243,7 +243,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         List<Message> transformed = new java.util.ArrayList<>(conversation.size());
         for (Message message : conversation) {
             if (message.getRole() == Message.Role.SYSTEM) {
-                transformed.add(new Message(Message.Role.USER, message.getContent(), message.getToolCallId(), message.getToolCalls()));
+                transformed.add(new Message(Message.Role.USER, message.getContent(), message.getToolCallId(), message.getToolCalls(), null));
             } else {
                 transformed.add(message);
             }
@@ -290,8 +290,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private String requireApiKey() {
-        String apiKey = openAiProperties.getApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
+        String apiKey = openAiProperties.effectiveApiKey();
+        if (!openAiProperties.hasApiKey()) {
             throw new IllegalStateException("OpenAI API key (openai.api-key) is required to call OpenAI provider");
         }
         return apiKey;
@@ -388,9 +388,9 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         private ModelResponse finish() {
             if (response.get() != null) {
                 return toolCall.get() == null ? response.get() : new ModelResponse(
-                        response.get().getAssistantText(), toolCall.get(), response.get().getMetadata());
+                        response.get().getAssistantText(), toolCall.get(), response.get().getMetadata(), null);
             }
-            return new ModelResponse(null, toolCall.get(), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
+            return new ModelResponse(null, toolCall.get(), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
         }
 
         private IllegalStateException streamingFailure(Throwable throwable, boolean includePrefix) {

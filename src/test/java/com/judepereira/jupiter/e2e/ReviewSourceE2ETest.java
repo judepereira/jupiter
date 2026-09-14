@@ -44,7 +44,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try {
-            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+            try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
@@ -110,7 +110,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try {
-            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+            try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
                 List<String> consoleErrors = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -221,7 +221,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
             }
 
             @Override

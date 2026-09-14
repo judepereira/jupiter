@@ -565,6 +565,43 @@ public class AppStateServicePersistenceTests {
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
     }
     @Test
+    public void assistantModelPreferencesAreEncryptedAndRoundTrip(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "actual-model", "HIGH", "preferred-model");
+
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "hello", metadata);
+        String rawPreferred = new JdbcTemplate(context.dataSource()).queryForObject(
+                "SELECT preferred_model_id FROM conversation_messages WHERE public_id = ?", String.class, turn.assistantMessage().id());
+        assertThat(rawPreferred).isNotNull().startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:").doesNotContain("preferred-model");
+
+        AppStateRepository.ConversationMessageRow loaded = context.repository().findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
+        assertThat(loaded.modelId()).isEqualTo("actual-model");
+        assertThat(loaded.preferredModelId()).isEqualTo("preferred-model");
+        assertThat(service.loadSessionDetail(sessionId).chatMessages()).filteredOn(message -> message.id().equals(turn.assistantMessage().id()))
+                .singleElement().extracting(ChatMessageView::metadata)
+                .isEqualTo(metadata);
+    }
+
+    @Test
+    public void nullPreferredModelRemainsBackwardCompatible(@TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        AppStateService service = context.service();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long sessionId = service.loadViewData().activeSession().id();
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "actual-model", "HIGH", null);
+
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "hello", metadata);
+        AppStateRepository.ConversationMessageRow loaded = context.repository().findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
+        assertThat(loaded.modelId()).isEqualTo("actual-model");
+        assertThat(loaded.preferredModelId()).isNull();
+        assertThat(service.loadSessionDetail(sessionId).chatMessages()).filteredOn(message -> message.id().equals(turn.assistantMessage().id()))
+                .singleElement().extracting(ChatMessageView::metadata).isEqualTo(metadata);
+    }
+
+    @Test
     public void forkPrimarySessionCopiesConversationAndToolCallStateWithoutDraftOrReviewState(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
         AppStateService service = context.service();
@@ -573,7 +610,7 @@ public class AppStateServicePersistenceTests {
         long sourceSessionId = service.loadViewData().activeSession().id();
         service.updateSessionDraft(sourceSessionId, "draft text");
         service.addChangedFilesToSession(sourceSessionId, List.of(new ChangedFileDraft("src/Fork.java", "diff")));
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5", "HIGH");
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5", "HIGH", "anthropic/claude-sonnet");
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sourceSessionId, "user-1", "assistant-1", "use a task", metadata);
         ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "task output", Map.of("sessionId", sourceSessionId));
         service.appendToolCallTrace(sourceSessionId, turn.assistantMessage().id(), trace);
@@ -595,6 +632,7 @@ public class AppStateServicePersistenceTests {
         assertThat(forkAssistant.content()).isEqualTo("final reply");
         assertThat(forkAssistant.agentId()).isEqualTo(sourceAssistant.agentId());
         assertThat(forkAssistant.modelId()).isEqualTo(sourceAssistant.modelId());
+        assertThat(forkAssistant.preferredModelId()).isEqualTo(sourceAssistant.preferredModelId());
         assertThat(forkAssistant.thinkingLevel()).isEqualTo(sourceAssistant.thinkingLevel());
         var sourceTraces = repository.listToolCallTracesBySession(sourceSessionId);
         var forkTraces = repository.listToolCallTracesBySession(forkedSessionId);
@@ -1348,9 +1386,9 @@ public class AppStateServicePersistenceTests {
 
         RecordingSummaryClient client = new RecordingSummaryClient();
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter.agent.config.AgentProperties()) {
+                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
                     @Override
-                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
+                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) {
                         return client;
                     }
                 }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
@@ -1358,7 +1396,7 @@ public class AppStateServicePersistenceTests {
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                          ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
                 service.markTurnsIncludeInModelFalse(sessionId, 5);
-                client.chat(List.of(new Message(Message.Role.SYSTEM, "Summarize", null, null), new Message(Message.Role.USER, "transcript", null, null)), List.of(),
+                client.chat(List.of(new Message(Message.Role.SYSTEM, "Summarize", null, null, null), new Message(Message.Role.USER, "transcript", null, null, null)), List.of(),
                         new AgentModelOptions(ignoredModel.id(), ignoredModel.apiModelId(), ignoredThinkingLevel, ignoredModel.supportsReasoning(), ignoredAgent.textVerbosity()));
                 return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 5L));
             }
@@ -1410,9 +1448,9 @@ public class AppStateServicePersistenceTests {
         }
 
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter.agent.config.AgentProperties()) {
+                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
                     @Override
-                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient() {
+                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) {
                         return new RecordingSummaryClient();
                     }
                 }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
@@ -1468,9 +1506,9 @@ public class AppStateServicePersistenceTests {
         service.appendToolCallTrace(sessionId, toolTurn.assistantMessage().id(), trace);
 
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null, new com.judepereira.jupiter.agent.config.AgentProperties()) {
+                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
                     @Override
-                    public AgentModelClient getClient() {
+                    public AgentModelClient getClient(String provider) {
                         return new RecordingSummaryClient();
                     }
                 }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
@@ -1502,9 +1540,9 @@ public class AppStateServicePersistenceTests {
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
-        return new AgentModelClientFactory(null, new com.judepereira.jupiter.agent.config.AgentProperties()) {
+        return new AgentModelClientFactory(null) {
             @Override
-            public AgentModelClient getClient() {
+            public AgentModelClient getClient(String provider) {
                 return client;
             }
         };
@@ -1525,7 +1563,7 @@ public class AppStateServicePersistenceTests {
             conversations.add(List.copyOf(conversation));
             toolCalls.add(List.copyOf(tools));
             this.options.add(options);
-            return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
+            return new ModelResponse("compact summary", null, ModelResponseMetadata.empty(), null);
         }
 
         @Override
@@ -1542,7 +1580,7 @@ public class AppStateServicePersistenceTests {
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("agent-1", "Agent One", "model-1", "HIGH");
+        ChatMessageMetadata metadata = new ChatMessageMetadata("agent-1", "Agent One", "model-1", "HIGH", null);
         service.appendUserMessageAndPendingAssistant(sessionId, null, null, "hello", metadata);
 
         ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()

@@ -14,6 +14,19 @@ public class OpenAiProperties {
     private String apiKey;
     private Retry retry = new Retry();
 
+    public boolean hasApiKey() {
+        return apiKey != null && !apiKey.isBlank();
+    }
+
+    public String effectiveApiKey() {
+        return hasApiKey() ? apiKey.trim() : null;
+    }
+
+    /** Compatibility accessor; does not mutate the configured value. */
+    public String trimmedApiKey() {
+        return effectiveApiKey();
+    }
+
     @Getter
     @Setter
     public static class Retry {

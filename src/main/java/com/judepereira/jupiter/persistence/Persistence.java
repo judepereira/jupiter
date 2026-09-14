@@ -87,7 +87,11 @@ public final class Persistence {
                                 String imageUrl, String imageAlt, String imagePath, String imageMediaType, String taskBody) {
     }
 
-    public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel) {
+    public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel, String preferredModelId) {
+
+        public boolean isFallback() {
+            return preferredModelId != null && !preferredModelId.isBlank() && !preferredModelId.equals(modelId);
+        }
     }
 
     public record ChatMessageView(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {

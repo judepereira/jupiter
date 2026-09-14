@@ -90,7 +90,7 @@ public class SubagentTaskService {
         sink.onStarted(new SubagentTaskStarted(childSessionId, request.parentSessionId(), request.parentToolCallId(), subagent.id(), subagent.name(), request.requestSummary(), request.task()));
 
         String userPrompt = buildUserPrompt(request.task(), request.expectedOutput());
-        ChatMessageMetadata assistantMetadata = new ChatMessageMetadata(subagent.id(), subagent.name(), subagent.defaultModel(), subagent.defaultThinkingLevel().name());
+        ChatMessageMetadata assistantMetadata = new ChatMessageMetadata(subagent.id(), subagent.name(), null, subagent.defaultThinkingLevel().name(), null);
         var queued = appStateService.appendUserMessageAndPendingAssistant(childSessionId, null, null, userPrompt, assistantMetadata);
         String assistantPublicId = queued.assistantMessage().id();
 
@@ -103,10 +103,15 @@ public class SubagentTaskService {
         try {
             CodingAgentHarness harness = harnessProvider.getObject();
             AgentTurnRequest childRequest = new AgentTurnRequest(subagent.systemPrompt(), appStateService.buildConversationHistory(childSessionId),
-                    request.workspaceRoot(), subagent.id(), subagent.defaultModel(), subagent.defaultThinkingLevel(), childSessionId, request.cancellationToken());
+                    request.workspaceRoot(), subagent.id(), null, subagent.defaultThinkingLevel(), childSessionId, request.cancellationToken());
 
             AgentTurnResult result = harness.runTurnStreaming(childRequest, new AgentStreamListener() {
                 private final StringBuilder accumulated = new StringBuilder();
+
+                @Override
+                public void onModelResolved(String preferredModelId, com.judepereira.jupiter.agent.catalog.ModelDefinition actualModel) {
+                    appStateService.updateAssistantModelMetadata(childSessionId, assistantPublicId, actualModel.id(), preferredModelId);
+                }
 
                 @Override
                 public void onTextDelta(String delta) {

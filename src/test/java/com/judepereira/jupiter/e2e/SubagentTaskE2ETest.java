@@ -49,7 +49,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
@@ -124,7 +124,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
@@ -178,7 +178,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
@@ -238,7 +238,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
@@ -339,7 +339,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
@@ -481,7 +481,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             private final TaskTool taskTool;
 
             TestCodingAgentHarness(TaskTool taskTool) {
-                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
                 this.taskTool = taskTool;
             }
 

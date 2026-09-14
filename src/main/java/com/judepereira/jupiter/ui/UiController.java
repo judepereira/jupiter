@@ -26,6 +26,7 @@ import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
+import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
 import com.judepereira.jupiter.persistence.TokenUsageService;
@@ -69,6 +70,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
 import com.judepereira.jupiter.ui.ChatPresentationService.ToolCallView;
@@ -85,6 +87,11 @@ public class UiController {
     private final AppStateService appStateService;
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
+    private final AgentModelResolutionService agentModelResolutionService;
+    private final ModelPickerService modelPickerService;
+    private final ModelPreferencesService modelPreferencesService;
+    private final ProviderAvailabilityService providerAvailabilityService;
+    private final AnthropicOAuthService anthropicOAuthService;
     private final ContextCompactionService contextCompactionService;
     private final TokenUsageService tokenUsageService;
     private final CommandStreamService commandStreamService;
@@ -113,6 +120,9 @@ public class UiController {
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
                         AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                        AgentModelResolutionService agentModelResolutionService, ModelPickerService modelPickerService, ModelPreferencesService modelPreferencesService,
+                        ProviderAvailabilityService providerAvailabilityService,
+                        AnthropicOAuthService anthropicOAuthService,
                         SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
                         ActiveStreamRegistryService activeStreamRegistryService,
                         TerminalManager terminalManager,
@@ -129,6 +139,11 @@ public class UiController {
         this.appStateService = appStateService;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
+        this.agentModelResolutionService = agentModelResolutionService;
+        this.modelPickerService = modelPickerService;
+        this.modelPreferencesService = modelPreferencesService;
+        this.providerAvailabilityService = providerAvailabilityService;
+        this.anthropicOAuthService = anthropicOAuthService;
         this.contextCompactionService = contextCompactionService;
         this.tokenUsageService = tokenUsageService;
         this.commandStreamService = commandStreamService;
@@ -178,6 +193,20 @@ public class UiController {
         ChatSelection selected = resolveChatSelection(agentId, modelId, thinkingLevel);
 
         if (message != null && !message.isBlank()) {
+            boolean implicitModel = modelId == null || modelId.isBlank();
+            AgentModelResolutionService.ModelResolution modelResolution = implicitModel
+                    ? agentModelResolutionService.resolve(selected.selectedAgent())
+                    : new AgentModelResolutionService.ModelResolution(null, selected.selectedModel());
+            // Use the queue-time executable model for validation and compaction, but keep the
+            // request implicit so the harness resolves availability again at execution time.
+            if (implicitModel) {
+                selected = new ChatSelection(selected.selectedAgent(), modelResolution.model(), selected.selectedThinking(), false,
+                        selected.defaultAgent(), selected.defaultModel(), selected.defaultThinking());
+            }
+            String selectedModelId = selected.selectedModel().id();
+            if (modelPickerService != null && modelPickerService.listPickerModels().stream().noneMatch(candidate -> candidate.id().equals(selectedModelId))) {
+                throw new IllegalArgumentException("That model is no longer available. Choose an available favourite model in Settings.");
+            }
             if (view.activeSession() != null && activeStreamRegistryService.hasActiveStreamForSession(view.activeSession().id())) {
                 throw new IllegalStateException("A chat stream is already active for the current session");
             }
@@ -193,7 +222,8 @@ public class UiController {
             String user = message.trim();
             String assistantId = UUID.randomUUID().toString();
             String userId = UUID.randomUUID().toString();
-            ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(), selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name());
+            ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(), selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name(),
+                    implicitModel && modelResolution.fallback() ? modelResolution.preferredModelId() : null);
             Optional<ChatMessageView> summaryMessage = contextCompactionService.compactIfNeeded(session.id(), selected.selectedAgent(), selected.selectedModel(),
                     selected.selectedThinking(), workspaceRoot, user);
             summaryMessage.ifPresent(summary -> newChatMessages.add(toChatMessage(summary)));
@@ -205,7 +235,7 @@ public class UiController {
             CancellationToken cancellationToken = new CancellationToken();
             ActiveStream activeStream = ActiveStream.create(new PendingStream(session.id(), workspaceRoot,
                     new AgentTurnRequest(null, conversationHistory, workspaceRoot,
-                            selected.selectedAgent().id(), selected.selectedModel().id(), selected.selectedThinking(), session.id(), cancellationToken)), cancellationToken);
+                            selected.selectedAgent().id(), implicitModel ? null : selected.selectedModel().id(), selected.selectedThinking(), session.id(), cancellationToken)), cancellationToken);
             activeStreams.put(assistantId, activeStream);
             try {
                 activeStreamRegistryService.register(assistantId, session.id(), workspaceRoot);
@@ -333,6 +363,11 @@ public class UiController {
         StringBuilder accumulated = active.accumulatedText().get();
 
         AgentStreamListener listener = new AgentStreamListener() {
+            @Override
+            public void onModelResolved(String preferredModelId, ModelDefinition actualModel) {
+                appStateService.updateAssistantModelMetadata(pending.sessionId(), assistantId, actualModel.id(), preferredModelId);
+            }
+
             @Override
             public void onTextDelta(String delta) {
                 try {
@@ -932,11 +967,42 @@ public class UiController {
     public String settingsModal(Model model) {
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
+        populateSettingsModel(model);
+        return "fragments/projects :: settingsModal";
+    }
+
+    private void populateSettingsModel(Model model) {
         model.addAttribute("lifecycleHookSettings", appStateService.loadLifecycleHookSettings());
         model.addAttribute("autoGitUpdateEnabled", appStateService.loadAutoGitUpdateEnabled());
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
+        model.addAttribute("anthropicOAuthView", anthropicOAuthService.currentView());
         model.addAttribute("customCommands", commandCatalogService.listCustom());
-        return "fragments/projects :: settingsModal";
+        populateSettingsModels(model);
+    }
+
+    private void populateChatControlsOob(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        populateChatControlsModel(model, activeChatSelection(view));
+        model.addAttribute("chatControlsOob", true);
+    }
+
+    private void populateSettingsModels(Model model) {
+        var modelGroups = modelCatalogService.list().stream().collect(java.util.stream.Collectors.groupingBy(
+                ModelDefinition::provider, LinkedHashMap::new, java.util.stream.Collectors.toList()));
+        model.addAttribute("modelGroups", modelGroups);
+        model.addAttribute("providerAvailability", modelGroups.keySet().stream().collect(java.util.stream.Collectors.toMap(
+                provider -> provider, providerAvailabilityService::isAvailable, (left, right) -> right, LinkedHashMap::new)));
+        model.addAttribute("favouriteModelIds", modelPreferencesService.favouriteModelIds());
+    }
+
+    @PostMapping("/ui/settings/models/favourite")
+    public String toggleModelFavourite(@RequestParam String modelId,
+                                       @RequestParam(defaultValue = "true") boolean favourite, Model model) {
+        modelCatalogService.getRequired(modelId);
+        modelPreferencesService.setFavourite(modelId, favourite);
+        populateSettingsModel(model);
+        populateChatControlsOob(model);
+        return "fragments/projects :: settingsModelsWithChatControls";
     }
 
     @PostMapping("/ui/settings/commands/create")
@@ -1174,20 +1240,53 @@ public class UiController {
 
     @PostMapping("/ui/settings/openai/start")
     public String startOpenAiOAuth(Model model) {
-        model.addAttribute("openAiOAuthView", openAiOAuthService.startDeviceAuthorization());
-        return "fragments/projects :: openaiOAuthSection";
+        var view = openAiOAuthService.startDeviceAuthorization();
+        populateSettingsModel(model);
+        model.addAttribute("openAiOAuthView", view);
+        return "fragments/projects :: openaiOAuthResponse";
+    }
+
+    @PostMapping("/ui/settings/anthropic/start")
+    public String startAnthropicOAuth(Model model) {
+        var view = anthropicOAuthService.startAuthorization();
+        populateSettingsModel(model);
+        model.addAttribute("anthropicOAuthView", view);
+        return "fragments/projects :: anthropicOAuthResponse";
+    }
+
+    @PostMapping("/ui/settings/anthropic/complete")
+    public String completeAnthropicOAuth(@RequestParam("code") String code, Model model) {
+        var view = anthropicOAuthService.completeAuthorization(code);
+        populateSettingsModel(model);
+        model.addAttribute("anthropicOAuthView", view);
+        populateChatControlsOob(model);
+        return "fragments/projects :: anthropicOAuthResponse";
+    }
+
+    @PostMapping("/ui/settings/anthropic/disconnect")
+    public String disconnectAnthropicOAuth(Model model) {
+        var view = anthropicOAuthService.disconnect();
+        populateSettingsModel(model);
+        model.addAttribute("anthropicOAuthView", view);
+        populateChatControlsOob(model);
+        return "fragments/projects :: anthropicOAuthResponse";
     }
 
     @PostMapping("/ui/settings/openai/logout")
     public String logoutOpenAiOAuth(Model model) {
-        model.addAttribute("openAiOAuthView", openAiOAuthService.resetConnectionState());
-        return "fragments/projects :: openaiOAuthSection";
+        var disconnected = openAiOAuthService.resetConnectionState();
+        populateSettingsModel(model);
+        model.addAttribute("openAiOAuthView", disconnected);
+        populateChatControlsOob(model);
+        return "fragments/projects :: openaiOAuthResponse";
     }
 
     @GetMapping("/ui/settings/openai/status")
     public String openAiOAuthStatus(Model model) {
         model.addAttribute("openAiOAuthView", openAiOAuthService.pollCurrentDeviceAuthorization());
-        return "fragments/projects :: openaiOAuthSection";
+        populateSettingsModel(model);
+        populateChatControlsOob(model);
+        return "fragments/projects :: openaiOAuthResponse";
     }
 
     @PostMapping("/ui/workspaces/active/git/pull")
@@ -1569,40 +1668,72 @@ public class UiController {
             }
             ChatMessageMetadata metadata = message.metadata();
             AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
-            ModelDefinition selectedModel = modelCatalogService.resolveOrDefault(metadata.modelId());
+            ModelDefinition selectedModel = modelCatalogService.getRequired(metadata.modelId());
             ThinkingLevel selectedThinking = resolveThinkingLevelOrDefault(metadata.thinkingLevel(), selectedAgent.defaultThinkingLevel());
             AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-            ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
-            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+            ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
+            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, true,
+                    defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
         }
         return null;
     }
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {
-        model.addAttribute("agents", agentDefinitionService.listPrimaryAgents());
-        model.addAttribute("models", modelCatalogService.list());
+        List<AgentDefinition> agents = agentDefinitionService.listPrimaryAgents();
+        model.addAttribute("agents", agents);
+        List<ModelDefinition> pickerModels = modelPickerService == null ? modelCatalogService.list() : modelPickerService.listPickerModels();
+        // Only mark a rendered model implicit when it is one of the agent's preferences.
+        // The picker fallback is a real selection and must therefore be submitted explicitly.
+        Map<String, String> agentDefaultModels = new LinkedHashMap<>();
+        agents.forEach(agent -> preferredModelInPicker(agent, pickerModels)
+                .ifPresent(modelDef -> agentDefaultModels.put(agent.id(), modelDef.id())));
+        model.addAttribute("agentDefaultModels", agentDefaultModels);
+        model.addAttribute("models", pickerModels);
+        model.addAttribute("pickerEmpty", pickerModels.isEmpty());
+        ModelDefinition renderedModel = selection.explicitModel()
+                ? pickerModels.stream().filter(candidate -> candidate.id().equals(selection.selectedModel().id())).findFirst()
+                        .or(() -> renderedModelFor(selection.selectedAgent(), pickerModels))
+                        .orElse(selection.selectedModel())
+                : renderedModelFor(selection.selectedAgent(), pickerModels).orElse(selection.selectedModel());
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
         model.addAttribute("defaultModel", selection.defaultModel());
         model.addAttribute("defaultThinking", selection.defaultThinking());
         model.addAttribute("selectedAgent", selection.selectedAgent());
-        model.addAttribute("selectedModel", selection.selectedModel());
+        model.addAttribute("selectedModel", renderedModel);
         model.addAttribute("selectedThinking", selection.selectedThinking());
+        model.addAttribute("selectedModelExplicit", selection.explicitModel());
     }
 
     private ChatSelection defaultChatSelection() {
         AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-        ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
-        return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+        ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
+        return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), false,
+                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+    }
+
+    private ModelDefinition resolveAgentModel(AgentDefinition agent) {
+        return agentModelResolutionService.resolveForDisplay(agent).model();
+    }
+
+    private Optional<ModelDefinition> preferredModelInPicker(AgentDefinition agent, List<ModelDefinition> pickerModels) {
+        return agent.modelIds().stream()
+                .flatMap(id -> pickerModels.stream().filter(model -> model.id().equals(id)))
+                .findFirst();
+    }
+
+    private Optional<ModelDefinition> renderedModelFor(AgentDefinition agent, List<ModelDefinition> pickerModels) {
+        return preferredModelInPicker(agent, pickerModels).or(() -> pickerModels.stream().findFirst());
     }
 
     private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {
         AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
         AgentDefinition selectedAgent = agentId == null || agentId.isBlank() ? defaultAgent : agentDefinitionService.getRequired(agentId);
-        ModelDefinition selectedModel = modelId == null || modelId.isBlank() ? modelCatalogService.resolveOrDefault(selectedAgent.defaultModel()) : modelCatalogService.getRequired(modelId);
+        ModelDefinition selectedModel = modelId == null || modelId.isBlank() ? resolveAgentModel(selectedAgent) : modelCatalogService.getRequired(modelId);
         ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank() ? selectedAgent.defaultThinkingLevel() : ThinkingLevel.fromValue(thinkingLevel);
-        ModelDefinition defaultModel = modelCatalogService.resolveOrDefault(defaultAgent.defaultModel());
-        return new ChatSelection(selectedAgent, selectedModel, selectedThinking, defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+        ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
+        return new ChatSelection(selectedAgent, selectedModel, selectedThinking, modelId != null && !modelId.isBlank(),
+                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
     }
 
     private ThinkingLevel resolveThinkingLevelOrDefault(String value, ThinkingLevel fallback) {
@@ -1740,7 +1871,9 @@ public class UiController {
     private ModelDefinition resolveRequestModel(AgentTurnRequest request, AgentDefinition agent) {
         String requestedModelId = request.getModelId();
         if (requestedModelId == null || requestedModelId.isBlank()) {
-            requestedModelId = agent == null ? agentProperties.getModel() : agent.defaultModel();
+            return agent == null
+                    ? modelCatalogService.getRequired(agentProperties.getModel())
+                    : agentModelResolutionService.resolve(agent).model();
         }
         return modelCatalogService.getRequired(requestedModelId);
     }
@@ -1978,7 +2111,8 @@ public class UiController {
     public record DirectoryEntry(String name, String path, boolean directory) {}
 
     private record ChatSelection(AgentDefinition selectedAgent, ModelDefinition selectedModel, ThinkingLevel selectedThinking,
-                                  AgentDefinition defaultAgent, ModelDefinition defaultModel, ThinkingLevel defaultThinking) {}
+                                  boolean explicitModel, AgentDefinition defaultAgent, ModelDefinition defaultModel,
+                                  ThinkingLevel defaultThinking) {}
 
     private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {}
 

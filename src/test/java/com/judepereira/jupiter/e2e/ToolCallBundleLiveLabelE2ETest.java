@@ -41,7 +41,7 @@ class ToolCallBundleLiveLabelE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (Playwright playwright = Playwright.create(); Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-             RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+             RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = browser.newContext()) {
 
             Page page = context.newPage();
@@ -89,7 +89,7 @@ class ToolCallBundleLiveLabelE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
                 @Override
                 public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                     Map<String, Object> args = Map.of("path", "README.md");

@@ -313,6 +313,54 @@ public class AppStateRepository {
                 new MapSqlParameterSource());
     }
 
+    public Optional<AnthropicOAuthStateRow> loadAnthropicOAuthState() {
+        return queryOne("SELECT anthropic_access_token, anthropic_refresh_token, anthropic_expires_at, anthropic_scopes, anthropic_account_json FROM app_state WHERE id = 1",
+                new MapSqlParameterSource(), this::mapAnthropicOAuthState);
+    }
+
+    public void updateAnthropicOAuthState(String accessToken, String refreshToken, Instant expiresAt,
+                                          String scopes, String accountJson) {
+        jdbc.update("UPDATE app_state SET anthropic_access_token = :accessToken, anthropic_refresh_token = :refreshToken, anthropic_expires_at = :expiresAt, anthropic_scopes = :scopes, anthropic_account_json = :accountJson WHERE id = 1",
+                new MapSqlParameterSource()
+                        .addValue("accessToken", enc("app_state", "anthropic_access_token", accessToken))
+                        .addValue("refreshToken", enc("app_state", "anthropic_refresh_token", refreshToken))
+                        .addValue("expiresAt", expiresAt == null ? null : Timestamp.from(expiresAt))
+                        .addValue("scopes", enc("app_state", "anthropic_scopes", scopes))
+                        .addValue("accountJson", enc("app_state", "anthropic_account_json", accountJson)));
+    }
+
+    public void clearAnthropicOAuthState() {
+        jdbc.update("UPDATE app_state SET anthropic_access_token = NULL, anthropic_refresh_token = NULL, anthropic_expires_at = NULL, anthropic_scopes = NULL, anthropic_account_json = NULL WHERE id = 1",
+                new MapSqlParameterSource());
+    }
+
+    public List<String> loadFavouriteModelIds() {
+        String json = jdbc.queryForObject("SELECT favourite_model_ids_json FROM app_state WHERE id = 1", new MapSqlParameterSource(), String.class);
+        if (json == null) return List.of();
+        try { return List.copyOf(objectMapper.readValue(dec("app_state", "favourite_model_ids_json", json), objectMapper.getTypeFactory().constructCollectionType(List.class, String.class))); }
+        catch (Exception e) { throw new IllegalStateException("Invalid favourite model ids", e); }
+    }
+
+    public void updateFavouriteModelIds(List<String> modelIds) {
+        try {
+            String json = objectMapper.writeValueAsString(modelIds);
+            jdbc.update("UPDATE app_state SET favourite_model_ids_json = :ids WHERE id = 1", new MapSqlParameterSource("ids", enc("app_state", "favourite_model_ids_json", json)));
+        } catch (Exception e) { throw new IllegalStateException("Could not serialize favourite model ids", e); }
+    }
+
+    public boolean isProviderInitialized(String provider) {
+        String column = providerColumn(provider);
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT " + column + " FROM app_state WHERE id = 1", new MapSqlParameterSource(), Boolean.class));
+    }
+
+    public void updateProviderInitialized(String provider, boolean initialized) {
+        jdbc.update("UPDATE app_state SET " + providerColumn(provider) + " = :initialized WHERE id = 1", new MapSqlParameterSource("initialized", initialized));
+    }
+
+    private static String providerColumn(String provider) {
+        return switch (provider) { case "openai" -> "openai_initialized"; case "anthropic" -> "anthropic_initialized"; default -> throw new IllegalArgumentException("Unknown provider: " + provider); };
+    }
+
     void updateAppState(Long projectId, Long workspaceId, Long sessionId) {
         jdbc.update("UPDATE app_state SET active_project_id = :projectId, active_workspace_id = :workspaceId, active_session_id = :sessionId WHERE id = 1",
                 new MapSqlParameterSource()
@@ -922,16 +970,16 @@ public class AppStateRepository {
 
     long insertConversationMessage(long sessionId, String publicId, String role, long turnId, long sequence, String content,
                                    String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending, Instant now) {
-        return insertConversationMessage(sessionId, publicId, role, turnId, sequence, content, toolCallId, toolCallsJson, showInChat, includeInModel, pending, null, null, null, null, null, null, now);
+        return insertConversationMessage(sessionId, publicId, role, turnId, sequence, content, toolCallId, toolCallsJson, showInChat, includeInModel, pending, null, null, null, null, null, null, null, now);
     }
 
     long insertConversationMessage(long sessionId, String publicId, String role, long turnId, long sequence, String content,
                                    String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
-                                   String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant completedAt, Instant now) {
+                                   String agentId, String agentName, String modelId, String thinkingLevel, String preferredModelId, Long compactedThroughTurnId, Instant completedAt, Instant now) {
         return insertAndReturnId("""
                 INSERT INTO conversation_messages
-                (session_id, public_id, role, turn_id, sequence, content, tool_call_id, tool_calls_json, show_in_chat, include_in_model, pending, agent_id, agent_name, model_id, thinking_level, compacted_through_turn_id, completed_at, created_at)
-                VALUES (:sessionId, :publicId, :role, :turnId, :sequence, :content, :toolCallId, :toolCallsJson, :showInChat, :includeInModel, :pending, :agentId, :agentName, :modelId, :thinkingLevel, :compactedThroughTurnId, :completedAt, :createdAt)
+                (session_id, public_id, role, turn_id, sequence, content, tool_call_id, tool_calls_json, show_in_chat, include_in_model, pending, agent_id, agent_name, model_id, thinking_level, preferred_model_id, compacted_through_turn_id, completed_at, created_at)
+                VALUES (:sessionId, :publicId, :role, :turnId, :sequence, :content, :toolCallId, :toolCallsJson, :showInChat, :includeInModel, :pending, :agentId, :agentName, :modelId, :thinkingLevel, :preferredModelId, :compactedThroughTurnId, :completedAt, :createdAt)
                 """, params -> params
                 .addValue("sessionId", sessionId)
                 .addValue("publicId", publicId)
@@ -948,9 +996,17 @@ public class AppStateRepository {
                 .addValue("agentName", enc("conversation_messages", "agent_name", agentName))
                 .addValue("modelId", enc("conversation_messages", "model_id", modelId))
                 .addValue("thinkingLevel", enc("conversation_messages", "thinking_level", thinkingLevel))
+                .addValue("preferredModelId", enc("conversation_messages", "preferred_model_id", preferredModelId))
                 .addValue("compactedThroughTurnId", compactedThroughTurnId)
                 .addValue("completedAt", completedAt == null ? null : Timestamp.from(completedAt))
                 .addValue("createdAt", Timestamp.from(now)));
+    }
+
+    void updateMessageMetadata(long messageId, String modelId, String preferredModelId) {
+        jdbc.update("UPDATE conversation_messages SET model_id = :modelId, preferred_model_id = :preferredModelId WHERE id = :messageId",
+                new MapSqlParameterSource().addValue("messageId", messageId)
+                        .addValue("modelId", enc("conversation_messages", "model_id", modelId))
+                        .addValue("preferredModelId", enc("conversation_messages", "preferred_model_id", preferredModelId)));
     }
 
     void updateMessageContentAndPending(long messageId, String content, boolean pending, boolean includeInModel, Instant completedAt) {
@@ -1292,12 +1348,18 @@ public class AppStateRepository {
         return new ConversationMessageRow(rs.getLong("id"), rs.getLong("session_id"), rs.getString("public_id"), rs.getString("role"), rs.getLong("turn_id"),
                 rs.getLong("sequence"), dec("conversation_messages", "content", rs.getString("content")), rs.getString("tool_call_id"), dec("conversation_messages", "tool_calls_json", rs.getString("tool_calls_json")), rs.getBoolean("show_in_chat"),
                 rs.getBoolean("include_in_model"), rs.getBoolean("pending"), dec("conversation_messages", "agent_id", rs.getString("agent_id")), dec("conversation_messages", "agent_name", rs.getString("agent_name")), dec("conversation_messages", "model_id", rs.getString("model_id")),
-                dec("conversation_messages", "thinking_level", rs.getString("thinking_level")), nullableLong(rs, "compacted_through_turn_id"), timestampToInstant(rs.getTimestamp("completed_at")), timestampToInstant(rs.getTimestamp("created_at")));
+                dec("conversation_messages", "thinking_level", rs.getString("thinking_level")), dec("conversation_messages", "preferred_model_id", rs.getString("preferred_model_id")), nullableLong(rs, "compacted_through_turn_id"), timestampToInstant(rs.getTimestamp("completed_at")), timestampToInstant(rs.getTimestamp("created_at")));
     }
 
     private OpenAiOAuthStateRow mapOpenAiOAuthState(ResultSet rs, int rowNum) throws SQLException {
         return new OpenAiOAuthStateRow(dec("app_state", "openai_access_token", rs.getString("openai_access_token")), dec("app_state", "openai_refresh_token", rs.getString("openai_refresh_token")), dec("app_state", "openai_id_token", rs.getString("openai_id_token")),
                 dec("app_state", "openai_account_id", rs.getString("openai_account_id")), timestampToInstant(rs.getTimestamp("openai_expires_at")));
+    }
+
+    private AnthropicOAuthStateRow mapAnthropicOAuthState(ResultSet rs, int rowNum) throws SQLException {
+        return new AnthropicOAuthStateRow(dec("app_state", "anthropic_access_token", rs.getString("anthropic_access_token")),
+                dec("app_state", "anthropic_refresh_token", rs.getString("anthropic_refresh_token")), timestampToInstant(rs.getTimestamp("anthropic_expires_at")),
+                dec("app_state", "anthropic_scopes", rs.getString("anthropic_scopes")), dec("app_state", "anthropic_account_json", rs.getString("anthropic_account_json")));
     }
 
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
@@ -1335,6 +1397,7 @@ public class AppStateRepository {
     record WorkspaceAutoGitUpdateStateRow(long workspaceId, boolean failureEpisodeActive, Instant failureStartedAt,
                                           Instant lastSuccessAt) {}
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId, Instant expiresAt) {}
+    public record AnthropicOAuthStateRow(String accessToken, String refreshToken, Instant expiresAt, String scopes, String accountJson) {}
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt, Instant createdAt, Instant lastOpenedAt,
                       String workspaceInitCommands, String environmentVariables, String commandEnvironmentAllowlist) {}
     record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt, List<Long> exposedProjectIds) {}
@@ -1347,7 +1410,7 @@ public class AppStateRepository {
                       String chatDraft, boolean unread, boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId, String subagentAgentName,
                       Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt, boolean inProgress) {}
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence, String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel, boolean pending,
-                                  String agentId, String agentName, String modelId, String thinkingLevel, Long compactedThroughTurnId, Instant completedAt, Instant createdAt) {}
+                                  String agentId, String agentName, String modelId, String thinkingLevel, String preferredModelId, Long compactedThroughTurnId, Instant completedAt, Instant createdAt) {}
     record ToolCallTraceRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, String toolName, Boolean success, String argsJson, String textSummary, String machineSummaryJson, Instant completedAt, Instant createdAt) {}
     record TaskCallProjectionRow(long id, long sessionId, long assistantMessageId, long sequence, String toolCallId, Boolean success,
                                  Instant completedAt, String requestSummary, Long subagentSessionId, String subagentAgentId,

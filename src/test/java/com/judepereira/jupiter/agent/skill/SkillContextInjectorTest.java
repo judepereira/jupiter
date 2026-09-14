@@ -27,7 +27,7 @@ class SkillContextInjectorTest {
         Files.createSymbolicLink(skillFile, external);
 
         List<Message> injected = skills.injector().injectBeforeNewestUser(
-                List.of(new Message(Message.Role.USER, "$deploy", null, null)),
+                List.of(new Message(Message.Role.USER, "$deploy", null, null, null)),
                 skills.resolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
 
         assertThat(injected).anySatisfy(message -> assertThat(message.getContent())
@@ -46,7 +46,7 @@ class SkillContextInjectorTest {
         Files.writeString(skillFile, "---\nname: deploy\ndescription: changed description\n---\nREPLACED SECRET BODY");
 
         List<Message> injected = skills.injector().injectBeforeNewestUser(
-                List.of(new Message(Message.Role.USER, "$deploy", null, null)),
+                List.of(new Message(Message.Role.USER, "$deploy", null, null, null)),
                 skills.resolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
 
         assertThat(injected).anySatisfy(message -> assertThat(message.getContent())
@@ -70,7 +70,7 @@ class SkillContextInjectorTest {
         Files.createSymbolicLink(skillDirectory, external);
 
         List<Message> injected = skills.injector().injectBeforeNewestUser(
-                List.of(new Message(Message.Role.USER, "$deploy", null, null)),
+                List.of(new Message(Message.Role.USER, "$deploy", null, null, null)),
                 skills.resolver().resolveExplicit("$deploy", new SkillCatalog(List.of(discovered), List.of())));
 
         assertThat(injected).anySatisfy(message -> assertThat(message.getContent())

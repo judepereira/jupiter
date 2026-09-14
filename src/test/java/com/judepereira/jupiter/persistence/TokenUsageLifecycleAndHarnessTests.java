@@ -37,7 +37,7 @@ class TokenUsageLifecycleAndHarnessTests {
         long sessionId = appStateService.loadViewData().activeSession().id();
         String usageKey = repository.findSessionUsageContext(sessionId).orElseThrow().sessionUsageKey();
         tokenUsageService.recordModelResponse(sessionId, "model-history", "harness",
-                new ModelResponse("done", null, metadata(12, 8, 20)));
+                new ModelResponse("done", null, metadata(12, 8, 20), null));
 
         appStateService.closeSession(sessionId);
 
@@ -76,34 +76,37 @@ class TokenUsageLifecycleAndHarnessTests {
         ToolRegistry registry = new ToolRegistry();
         registry.register(new WriteFileTool());
         AgentModelClient model = new SequenceModel(List.of(
-                new ModelResponse(null, new ToolCall(null, "write_file", Map.of("path", "iteration.txt", "content", "written")), metadata(10, 4, 14)),
-                new ModelResponse("final response", null, metadata(15, 6, 21))));
+                new ModelResponse(null, new ToolCall(null, "write_file", Map.of("path", "iteration.txt", "content", "written")), metadata(10, 4, 14), null),
+                new ModelResponse("final response", null, metadata(15, 6, 21), null)));
         CodingAgentHarness harness = new CodingAgentHarness(
-                fakeFactory(model), registry, properties, null, null, appStateService, tokenUsageService, null,
+                fakeFactory(model), registry, properties, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.modelCatalogService(),
+                com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.modelCatalogService()),
+                appStateService, tokenUsageService, null,
                 new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
-        AgentTurnRequest request = new AgentTurnRequest("system", List.of(new Message(Message.Role.USER, "user", null, null)), workspacePath.toString(),
-                null, "model-iterations", null, sessionId, null);
+        AgentTurnRequest request = new AgentTurnRequest("system", List.of(new Message(Message.Role.USER, "user", null, null, null)), workspacePath.toString(),
+                null, "openai/gpt-5.6-sol", null, sessionId, null);
         assertThat(harness.runTurn(request).getFinalText()).isEqualTo("final response");
 
         assertThat(tokenUsageService.findFacts(usageKey))
                 .extracting(Persistence.TokenUsageFact::modelKey, Persistence.TokenUsageFact::totalTokenCount)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple("model-iterations", 14),
-                        org.assertj.core.groups.Tuple.tuple("model-iterations", 21));
+                        org.assertj.core.groups.Tuple.tuple("openai/gpt-5.6-sol", 14),
+                        org.assertj.core.groups.Tuple.tuple("openai/gpt-5.6-sol", 21));
         assertThat(tokenUsageService.findHourlyUsage(usageKey, Instant.EPOCH, Instant.now().plus(1, ChronoUnit.HOURS)))
                 .singleElement()
                 .satisfies(row -> {
-                    assertThat(row.modelKey()).isEqualTo("model-iterations");
+                    assertThat(row.modelKey()).isEqualTo("openai/gpt-5.6-sol");
                     assertThat(row.requestCount()).isEqualTo(2);
                     assertThat(row.totalTokenCount()).isEqualTo(35);
                 });
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient model) {
-        return new AgentModelClientFactory(null, new AgentProperties()) {
+        return new AgentModelClientFactory(null) {
+
             @Override
-            public AgentModelClient getClient() {
+            public AgentModelClient getClient(String provider) {
                 return model;
             }
         };

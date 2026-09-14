@@ -175,7 +175,8 @@ class JupiterStartupIntegrationTests {
                 "--server.port=" + port,
                 "--spring.datasource.url=jdbc:sqlite:file:" + database + "?journal_mode=WAL&foreign_keys=on&busy_timeout=20000",
                 "--spring.flyway.enabled=true", "--spring.main.banner-mode=off",
-                "--spring.devtools.restart.enabled=false", "--agent.workspace-root=" + home);
+                "--spring.devtools.restart.enabled=false", "--agent.workspace-root=" + home,
+                "--models.dev.catalog-url=" + catalogUrl());
         Map<String, String> environment = new HashMap<>(builder.environment());
         environment.put("JUPITER_TEST_SENTINEL", "present");
         environment.put("JUPITER_ENCRYPTION_KEY", "fake-test-key");
@@ -189,6 +190,11 @@ class JupiterStartupIntegrationTests {
         process.getOutputStream().write((key + "\n").getBytes(StandardCharsets.US_ASCII));
         process.getOutputStream().close();
         return process;
+    }
+
+    private static String catalogUrl() throws IOException {
+        Path catalog = Path.of(System.getProperty("user.dir"), "src/test/resources/test-model-catalog.json");
+        return catalog.toUri().toString();
     }
 
     private static void waitForHealth(Process process, int port, Path log) throws Exception {

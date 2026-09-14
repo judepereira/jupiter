@@ -7,6 +7,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.util.Collections;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,8 +20,8 @@ import java.util.stream.StreamSupport;
 public class ModelCatalogService {
 
     private static final String DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
-    private static final String OPENAI_PROVIDER = "openai";
     private static final String GPT_5_6_MODEL_PREFIX = "openai/gpt-5.6";
+    private static final String ANTHROPIC_MODEL_PREFIX = "anthropic/claude-";
 
     private final List<ModelDefinition> models;
     private final Map<String, ModelDefinition> modelsById;
@@ -51,18 +54,33 @@ public class ModelCatalogService {
         return modelsById.getOrDefault(id, getRequired(DEFAULT_MODEL_ID));
     }
 
+    /** Resolves a bundled preference exactly; provider-wide substitution is not supported. */
+    public ModelDefinition resolveBundledModel(String id) {
+        return getRequired(id);
+    }
+
+    public boolean hasProviderModel(String provider) {
+        return models.stream().anyMatch(model -> model.provider().equals(provider));
+    }
+
     public String defaultModelId() {
         return DEFAULT_MODEL_ID;
     }
 
     private static List<ModelDefinition> loadModels(ObjectMapper objectMapper, RestClient restClient, String catalogUrl) {
         try {
-            String body = restClient.get().uri(catalogUrl).retrieve().body(String.class);
+            String body;
+            if (catalogUrl.startsWith("file:")) {
+                body = Files.readString(Path.of(URI.create(catalogUrl)));
+            } else {
+                body = restClient.get().uri(catalogUrl).retrieve().body(String.class);
+            }
             var root = objectMapper.readTree(body);
             var modelsNode = root.path("models");
             var openAiModels = StreamSupport.stream(Spliterators.spliteratorUnknownSize(modelsNode.fields(), 0), false)
                     .filter(entry -> entry.getKey().equals(GPT_5_6_MODEL_PREFIX)
-                            || entry.getKey().startsWith(GPT_5_6_MODEL_PREFIX + "-"))
+                            || entry.getKey().startsWith(GPT_5_6_MODEL_PREFIX + "-")
+                            || entry.getKey().startsWith(ANTHROPIC_MODEL_PREFIX))
                     .map(Map.Entry::getValue)
                     .map(ModelCatalogService::toModelDefinition)
                     .toList();
@@ -76,12 +94,14 @@ public class ModelCatalogService {
     private static ModelDefinition toModelDefinition(JsonNode node) {
         var id = node.path("id").asText();
         var displayName = node.path("name").asText();
-        var apiModelId = id.startsWith(OPENAI_PROVIDER + "/") ? id.substring(OPENAI_PROVIDER.length() + 1) : id;
+        int separator = id.indexOf('/');
+        var provider = separator > 0 ? id.substring(0, separator) : id;
+        var apiModelId = separator > 0 ? id.substring(separator + 1) : id;
         var limit = node.path("limit");
         return new ModelDefinition(
                 id,
                 displayName,
-                OPENAI_PROVIDER,
+                provider,
                 apiModelId,
                 node.path("reasoning").asBoolean(),
                 node.path("tool_call").asBoolean(),

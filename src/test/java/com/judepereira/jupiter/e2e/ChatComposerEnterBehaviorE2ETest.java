@@ -35,7 +35,7 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
 
@@ -75,7 +75,7 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
 
@@ -108,7 +108,7 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
                      .setViewportSize(new ViewportSize(390, 844))
                      .setIsMobile(true)
@@ -148,7 +148,7 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
             }
 
             @Override

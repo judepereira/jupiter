@@ -43,16 +43,16 @@ public class CodingAgentHarnessTaskToolTests {
                         "requestSummary", "Do the thing",
                         "task", "do the thing",
                         "expectedOutput", "done"
-                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
-                new ModelResponse("primary complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
+                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
+                new ModelResponse("primary complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null)
         ));
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp), agentService(primary),
-                ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "Primary system prompt",
-                List.of(new Message(Message.Role.USER, "hello", null, null)),
+                List.of(new Message(Message.Role.USER, "hello", null, null, null)),
                 tmp.toString(),
                 "primary",
                 null,
@@ -79,16 +79,16 @@ public class CodingAgentHarnessTaskToolTests {
                         "requestSummary", "Recursively call task",
                         "task", "recursively call task",
                         "expectedOutput", "never"
-                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
-                new ModelResponse("subagent complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
+                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
+                new ModelResponse("subagent complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null)
         ));
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp), agentService(subagent),
-                ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "Subagent system prompt",
-                List.of(new Message(Message.Role.USER, "hello", null, null)),
+                List.of(new Message(Message.Role.USER, "hello", null, null, null)),
                 tmp.toString(),
                 "engineer",
                 null,
@@ -104,9 +104,9 @@ public class CodingAgentHarnessTaskToolTests {
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
-        return new AgentModelClientFactory(null, new AgentProperties()) {
+        return new AgentModelClientFactory(null) {
             @Override
-            public AgentModelClient getClient() {
+            public AgentModelClient getClient(String provider) {
                 return client;
             }
         };
@@ -184,7 +184,7 @@ public class CodingAgentHarnessTaskToolTests {
             capturedConversations.add(List.copyOf(conversation));
             capturedToolDefinitions.add(List.copyOf(tools));
             if (index >= responses.size()) {
-                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
+                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
             }
             return responses.get(index++);
         }

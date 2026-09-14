@@ -24,6 +24,24 @@ class EncryptionMigrationIntegrationTests {
     private static final String KEY = TestEncryptionSupport.KEY;
 
     @Test
+    void v28AddsNullablePreferredModelWithoutChangingExistingMessages() throws Exception {
+        var dataSource = SQLiteTestSupport.fileBackedDataSource(
+                Files.createTempDirectory("jupiter-v28-").resolve("db.sqlite"));
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("27").load().migrate();
+        var jdbc = new JdbcTemplate(dataSource);
+        jdbc.update("INSERT INTO projects (id,name,normalized_path,display_order) VALUES (1,'project','/tmp/v28',1)");
+        jdbc.update("INSERT INTO workspaces (id,project_id,name,normalized_path,position) VALUES (1,1,'workspace','/tmp/v28',1)");
+        jdbc.update("INSERT INTO sessions (id,workspace_id,name,position) VALUES (1,1,'session',1)");
+        jdbc.update("INSERT INTO conversation_messages (id,session_id,public_id,role,turn_id,sequence,content,model_id) VALUES (1,1,'message-1','assistant',1,1,'existing','actual-model')");
+
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM pragma_table_info('conversation_messages') WHERE name='preferred_model_id'", Integer.class)).isEqualTo(1);
+        Map<String, Object> row = jdbc.queryForMap("SELECT model_id, content, preferred_model_id FROM conversation_messages WHERE id=1");
+        assertThat(row).containsEntry("model_id", "actual-model").containsEntry("content", "existing").containsEntry("preferred_model_id", null);
+    }
+
+    @Test
     void strategyMigratesRowsAfterV26AndCompletesMigration() throws Exception {
         var dataSource = SQLiteTestSupport.fileBackedDataSource(
                 Files.createTempDirectory("jupiter-encryption-strategy-").resolve("db.sqlite"));
@@ -38,7 +56,7 @@ class EncryptionMigrationIntegrationTests {
                 .migrate(flyway);
 
         assertThat(jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE installed_rank = (SELECT MAX(installed_rank) FROM flyway_schema_history)", String.class))
-                .isEqualTo("26");
+                .isEqualTo("28");
         assertThat(jdbc.queryForObject("SELECT migration_complete FROM encryption_metadata WHERE id=1", Integer.class))
                 .isEqualTo(1);
         assertEncryptedAndHidden(jdbc, "projects", "name", "strategy secret");

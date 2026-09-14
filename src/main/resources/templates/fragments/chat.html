@@ -15,22 +15,23 @@
             </ul>
         </div>
 
-        <form th:if="${!(subagentView ?: false)}" id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend" th:attr="data-session-id=${activeSession != null ? activeSession.id : null}">
-            <div class="chat-controls">
+        <form th:if="${!(subagentView ?: false)}" id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend" th:attr="data-session-id=${activeSession != null ? activeSession.id : null}, data-model-explicit=${selectedModelExplicit}">
+            <div id="chat-controls" class="chat-controls" th:fragment="chatControls" th:attr="hx-swap-oob=${chatControlsOob ?: false} ? 'outerHTML:#chat-controls' : null, data-model-explicit=${selectedModelExplicit}">
                 <label>
                     <span class="chat-control-label">Agent</span>
                     <select id="chat-agent-select" name="agentId" class="form-select">
                         <option th:each="agent : ${agents}"
                                 th:value="${agent.id}"
                                 th:selected="${selectedAgent != null and selectedAgent.id == agent.id}"
-                                th:attr="data-description=${agent.description}, data-default-model=${agent.defaultModel}, data-default-thinking=${agent.defaultThinkingLevel}, title=${agent.description}"
+                                th:attr="data-description=${agent.description}, data-default-model=${agentDefaultModels != null ? agentDefaultModels[agent.id] : null}, data-default-thinking=${agent.defaultThinkingLevel}, title=${agent.description}"
                                 th:text="${agent.name + ' — ' + agent.description}"></option>
                     </select>
                 </label>
 
                 <label>
                     <span class="chat-control-label">Model</span>
-                    <select id="chat-model-select" name="modelId" class="form-select">
+                    <select id="chat-model-select" name="modelId" class="form-select" th:disabled="${pickerEmpty}">
+                        <option th:if="${pickerEmpty}" value="">No models available</option>
                         <option th:each="modelDef : ${models}"
                                 th:value="${modelDef.id}"
                                 th:selected="${selectedModel != null and selectedModel.id == modelDef.id}"
@@ -49,10 +50,12 @@
                 </label>
             </div>
 
+            <p th:if="${pickerEmpty}" class="chat-picker-empty">No models available. <a href="#settings-modal" hx-get="/ui/settings" hx-target="#modal-root" hx-swap="innerHTML">Connect a provider or choose favourite models in Settings.</a></p>
+
             <div class="chat-compose-row">
                 <label for="chat-input" class="sr-only">Message</label>
                 <textarea id="chat-input" name="message" rows="1" autocomplete="off" th:text="${chatDraft ?: ''}"></textarea>
-                <button id="chat-send-btn" type="submit" class="btn btn-outline-primary"><i class="bi bi-send"></i> Send</button>
+                <button id="chat-send-btn" type="submit" class="btn btn-outline-primary" th:disabled="${pickerEmpty}"><i class="bi bi-send"></i> Send</button>
             </div>
         </form>
     </section>

@@ -186,7 +186,7 @@ public class UiControllerSettingsTests {
         ConcurrentModel model = new ConcurrentModel();
         String view = context.controller().logoutOpenAiOAuth(model);
 
-        assertThat(view).isEqualTo("fragments/projects :: openaiOAuthSection");
+        assertThat(view).isEqualTo("fragments/projects :: openaiOAuthResponse");
         verify(context.openAiOAuthService()).resetConnectionState();
         assertThat(model.getAttribute("openAiOAuthView")).isEqualTo(disconnected);
     }
@@ -242,9 +242,9 @@ public class UiControllerSettingsTests {
         long sessionId = context.appStateService().loadViewData().activeSession().id();
         Instant hour = Instant.now().truncatedTo(ChronoUnit.HOURS);
         context.tokenUsageService().recordModelResponse(sessionId, "openai/gpt-5.6-sol", "chat",
-                new ModelResponse("ok", null, new ModelResponseMetadata(10, 5, 15, null, null, null, null, null, null, Map.of())));
+                new ModelResponse("ok", null, new ModelResponseMetadata(10, 5, 15, null, null, null, null, null, null, Map.of()), null));
         context.tokenUsageService().recordModelResponse(sessionId, "stale-model", "chat",
-                new ModelResponse("ok", null, new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of())));
+                new ModelResponse("ok", null, new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of()), null));
 
         ConcurrentModel model = new ConcurrentModel();
         assertThat(context.controller().settingsUsage("7d", model)).isEqualTo("fragments/projects :: settingsUsage");
@@ -384,7 +384,7 @@ public class UiControllerSettingsTests {
                 mcpRuntimeManager,
                 gitAutoUpdateService,
                 executor,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), gitAutoUpdateService, coordinator, "test"), commandCatalogService);
+                new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), org.mockito.Mockito.mock(com.judepereira.jupiter.agent.catalog.ModelPickerService.class), org.mockito.Mockito.mock(com.judepereira.jupiter.agent.catalog.ModelPreferencesService.class), org.mockito.Mockito.mock(com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService.class), org.mockito.Mockito.mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), gitAutoUpdateService, coordinator, "test"), commandCatalogService);
     }
 
     private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor, UiController controller, CommandCatalogService commandCatalogService) {

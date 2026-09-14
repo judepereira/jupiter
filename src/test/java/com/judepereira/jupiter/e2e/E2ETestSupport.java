@@ -1,8 +1,14 @@
 package com.judepereira.jupiter.e2e;
 
 import com.judepereira.jupiter.Jupiter;
+import java.io.IOException;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import com.judepereira.jupiter.testsupport.TestEncryptionConfiguration;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
+import com.judepereira.jupiter.persistence.AppStateRepository;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
@@ -163,12 +169,30 @@ abstract class E2ETestSupport {
         return newline >= 0 ? message.substring(0, newline) : message;
     }
 
+    private static String catalogJsonWithBundledModels() {
+        return ModelCatalogTestSupport.catalogJsonWithBundledAnthropicModels().replace("\"openai/gpt-5.6-terra\"", "\"openai/gpt-5.6-terra\"");
+    }
+
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
         return startApp(fakeHome, dbFile, Map.of(), testConfigClasses);
     }
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, int port, Class<?>... testConfigClasses) {
         return startApp(fakeHome, dbFile, Map.of("server.port", Integer.toString(port)), testConfigClasses);
+    }
+
+    /** Starts an app with the same persisted state produced by a successful OpenAI OAuth connection. */
+    protected static RunningApp startAppWithConnectedOpenAi(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
+        RunningApp bootstrap = startApp(fakeHome, dbFile, testConfigClasses);
+        try {
+            AppStateRepository repository = bootstrap.context().getBean(AppStateRepository.class);
+            repository.updateOpenAiOAuthState("e2e-access-token", "e2e-refresh-token", "e2e-id-token", "e2e-account", java.time.Instant.now().plusSeconds(3600));
+            repository.updateProviderInitialized("openai", true);
+            repository.updateFavouriteModelIds(java.util.List.of("openai/gpt-5.6-sol"));
+        } finally {
+            bootstrap.close();
+        }
+        return startApp(fakeHome, dbFile, testConfigClasses);
     }
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {
@@ -184,6 +208,22 @@ abstract class E2ETestSupport {
         properties.put("spring.flyway.enabled", "true");
         properties.put("agent.workspace-root", fakeHome.toAbsolutePath().normalize().toString());
         properties.put("openai.api-key", "test");
+        HttpServer catalogServer = null;
+        if (!additionalProperties.containsKey("models.dev.catalog-url")) {
+            try {
+                catalogServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            } catch (IOException exception) {
+                throw new IllegalStateException("Unable to start test model catalog", exception);
+            }
+            catalogServer.createContext("/catalog.json", exchange -> {
+                byte[] body = catalogJsonWithBundledModels().getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                try (var output = exchange.getResponseBody()) { output.write(body); }
+            });
+            catalogServer.start();
+            properties.put("models.dev.catalog-url", "http://127.0.0.1:" + catalogServer.getAddress().getPort() + "/catalog.json");
+        }
         properties.putAll(additionalProperties);
         ConfigurableApplicationContext context = new SpringApplicationBuilder(sources)
                 .web(WebApplicationType.SERVLET)
@@ -195,7 +235,13 @@ abstract class E2ETestSupport {
             throw new IllegalStateException("Missing local.server.port");
         }
         SQLiteTestSupport.assertWalAndForeignKeysEnabled(context.getBean(DataSource.class));
-        return new RunningApp(context, "http://localhost:" + port, () -> restoreSystemProperties(previousProperties));
+        HttpServer finalCatalogServer = catalogServer;
+        return new RunningApp(context, "http://localhost:" + port, () -> {
+            if (finalCatalogServer != null) {
+                finalCatalogServer.stop(0);
+            }
+            restoreSystemProperties(previousProperties);
+        });
     }
 
     private static void overrideSystemProperty(Map<String, String> previousProperties, String key, String value) {

@@ -10,6 +10,7 @@
 - [Running Natively](Running-Natively)
 - [Running with Docker](Running-with-Docker)
 - [OpenAI Authentication](OpenAI-Authentication)
+- [Anthropic Authentication](Anthropic-Authentication)
 
 ## Core workflow
 - [Projects](Projects)

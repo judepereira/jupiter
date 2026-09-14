@@ -20,6 +20,9 @@ public class ChatPresentationService {
 
     public ChatMessage toChatMessage(ChatMessageView view, Function<String, String> modelLabelResolver) {
         String modelLabel = view.metadata() == null ? null : modelLabelResolver.apply(view.metadata().modelId());
+        if (view.metadata() != null && view.metadata().isFallback()) {
+            modelLabel = "Preferred " + modelLabelResolver.apply(view.metadata().preferredModelId()) + " · Used " + modelLabel;
+        }
         return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.completedTs(),
                 view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata(), modelLabel);
     }

@@ -44,7 +44,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
@@ -129,7 +129,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
@@ -260,7 +260,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
         try {
             long sessionId;
-            try (RunningApp first = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+            try (RunningApp first = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
                 page.navigate(first.baseUrl());
@@ -271,7 +271,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
                 insertPendingAssistant(first.context().getBean(JdbcTemplate.class), sessionId);
             }
 
-            try (RunningApp second = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+            try (RunningApp second = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                  BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
                 page.navigate(second.baseUrl());
@@ -307,7 +307,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
-        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
              BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
@@ -416,7 +416,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
             }
 
             @Override

@@ -1,7 +1,7 @@
 ---
 description: A read only, planning assistant
 mode: agent
-model: openai/gpt-5.6-sol
+model: openai/gpt-5.6-sol, anthropic/claude-opus-5
 reasoningEffort: high
 tools:
   list_files: true

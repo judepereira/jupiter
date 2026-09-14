@@ -40,7 +40,7 @@ public class OpenAiOAuthServiceTests {
             properties.setClientId("client-123");
 
             OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
-                    mock(AppStateRepository.class));
+                    mock(AppStateRepository.class), null);
 
             OpenAiOAuthService.OpenAiOAuthView started = service.startDeviceAuthorization();
             assertThat(started.pending()).isTrue();
@@ -80,12 +80,12 @@ public class OpenAiOAuthServiceTests {
             properties.setIssuer(server.baseUrl());
             properties.setClientId("client-123");
 
-            OpenAiOAuthService first = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository());
+            OpenAiOAuthService first = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository(), null);
             first.startDeviceAuthorization();
             first.pollCurrentDeviceAuthorization();
             first.pollCurrentDeviceAuthorization();
 
-            OpenAiOAuthService fresh = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository());
+            OpenAiOAuthService fresh = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository(), null);
             assertThat(fresh.currentView().connected()).isTrue();
             assertThat(fresh.currentView().pending()).isFalse();
             assertThat(fresh.currentAccessToken()).contains("access-123");
@@ -93,7 +93,7 @@ public class OpenAiOAuthServiceTests {
 
             fresh.resetConnectionState();
 
-            OpenAiOAuthService afterLogout = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository());
+            OpenAiOAuthService afterLogout = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(), database.repository(), null);
             assertThat(afterLogout.currentView().connected()).isFalse();
             assertThat(afterLogout.currentView().pending()).isFalse();
             assertThat(afterLogout.currentAccessToken()).isEmpty();
@@ -109,7 +109,7 @@ public class OpenAiOAuthServiceTests {
             properties.setClientId("client-123");
 
             OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
-                    mock(AppStateRepository.class));
+                    mock(AppStateRepository.class), null);
 
             service.startDeviceAuthorization();
             OpenAiOAuthService.OpenAiOAuthView pending = service.pollCurrentDeviceAuthorization();
@@ -128,7 +128,7 @@ public class OpenAiOAuthServiceTests {
         OpenAiOAuthProperties properties = new OpenAiOAuthProperties();
         properties.setClientId(" ");
         OpenAiOAuthService service = new OpenAiOAuthService(properties, new ObjectMapper(), HttpClient.newHttpClient(),
-                mock(AppStateRepository.class));
+                mock(AppStateRepository.class), null);
 
         assertThatThrownBy(service::startDeviceAuthorization)
                 .isInstanceOf(IllegalStateException.class)

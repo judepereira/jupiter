@@ -1,7 +1,13 @@
 package com.judepereira.jupiter.testsupport;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentModelResolutionService;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
+import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import com.judepereira.jupiter.agent.config.ModelCatalogProperties;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
@@ -49,16 +55,24 @@ public final class ModelCatalogTestSupport {
                     "output": 128000
                   }
                 },
-                "anthropic/claude-opus-4": {
-                  "id": "anthropic/claude-opus-4",
-                  "name": "Claude Opus 4",
+                "anthropic/claude-opus-5": {
+                  "id": "anthropic/claude-opus-5",
+                  "name": "Claude Opus 5",
                   "reasoning": true,
                   "tool_call": true,
-                  "release_date": "2026-02-15",
+                  "release_date": "2026-07-24",
                   "limit": {
                     "context": 200000,
                     "output": 32000
                   }
+                },
+                "anthropic/claude-sonnet-5": {
+                  "id": "anthropic/claude-sonnet-5",
+                  "name": "Claude Sonnet 5",
+                  "reasoning": true,
+                  "tool_call": true,
+                  "release_date": "2026-06-30",
+                  "limit": {"context": 200000, "output": 32000}
                 },
                 "openai/gpt-5.6-terra": {
                   "id": "openai/gpt-5.6-terra",
@@ -111,6 +125,16 @@ public final class ModelCatalogTestSupport {
     private static final String DEFAULT_URL = "https://models.dev/catalog.json";
 
     private ModelCatalogTestSupport() {
+    }
+
+    public static AgentModelResolutionService resolutionService(ModelCatalogService catalog) {
+        ProviderAvailabilityService availability = mock(ProviderAvailabilityService.class);
+        when(availability.isAvailable(anyString())).thenReturn(true);
+        return new AgentModelResolutionService(catalog, availability);
+    }
+
+    public static String catalogJsonWithBundledAnthropicModels() {
+        return OPENAI_CATALOG_JSON;
     }
 
     public static ModelCatalogService modelCatalogService() {

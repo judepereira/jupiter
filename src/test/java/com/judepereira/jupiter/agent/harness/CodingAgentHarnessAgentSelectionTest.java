@@ -49,10 +49,10 @@ public class CodingAgentHarnessAgentSelectionTest {
         RecordingTool runCommand = recordingTool("run_command");
 
         RecordingModel model = new RecordingModel(List.of(
-                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "mcp__project__alpha", Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
+                new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "mcp__project__alpha", Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
                 new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "write_file",
-                        Map.of("path", "blocked.txt", "content", "nope")), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
-                new ModelResponse("finished", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
+                        Map.of("path", "blocked.txt", "content", "nope")), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
+                new ModelResponse("finished", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null)
         ));
 
         AgentProperties props = properties(tmp, true, true);
@@ -66,7 +66,7 @@ public class CodingAgentHarnessAgentSelectionTest {
                 planAgent.mode(), planAgent.defaultModel(), planAgent.defaultThinkingLevel(), planAgent.textVerbosity(), planAgent.allowWrite(),
                 planAgent.allowCommand(), List.of("list_files", "read_file", "search_code", "mcp:*", "task"));
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
-                agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(), appStateService, null, mcpManager,
+                agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), appStateService, null, mcpManager,
                 new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()),
                 com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(),
                 com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(),
@@ -74,7 +74,7 @@ public class CodingAgentHarnessAgentSelectionTest {
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Plan.",
-                List.of(new Message(Message.Role.USER, "use tools", null, null)),
+                List.of(new Message(Message.Role.USER, "use tools", null, null, null)),
                 tmp.toString(),
                 "plan",
                 "openai/gpt-5.6-sol",
@@ -117,18 +117,18 @@ public class CodingAgentHarnessAgentSelectionTest {
 
         RecordingModel model = new RecordingModel(List.of(
                 new ModelResponse(null, new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "run_command",
-                        Map.of("command", "echo hi")), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
-                new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
+                        Map.of("command", "echo hi")), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
+                new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null)
         ));
 
         AgentProperties props = properties(tmp, false, false);
         AgentDefinitionService agentDefinitions = new AgentDefinitionService(new ObjectMapper());
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
-                agentDefinitions, ModelCatalogTestSupport.modelCatalogService(), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                agentDefinitions, ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null, null, new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "You are Engineer.",
-                List.of(new Message(Message.Role.USER, "run a command", null, null)),
+                List.of(new Message(Message.Role.USER, "run a command", null, null, null)),
                 tmp.toString(),
                 "engineer",
                 null,
@@ -155,9 +155,9 @@ public class CodingAgentHarnessAgentSelectionTest {
     }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
-        return new AgentModelClientFactory(null, new AgentProperties()) {
+        return new AgentModelClientFactory(null) {
             @Override
-            public AgentModelClient getClient() {
+            public AgentModelClient getClient(String provider) {
                 return client;
             }
         };
@@ -252,7 +252,7 @@ public class CodingAgentHarnessAgentSelectionTest {
             capturedToolDefinitions.add(List.copyOf(tools));
             capturedOptions.add(options);
             if (index >= responses.size()) {
-                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
+                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
             }
             return responses.get(index++);
         }

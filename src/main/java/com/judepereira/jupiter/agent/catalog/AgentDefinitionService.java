@@ -3,6 +3,7 @@ package com.judepereira.jupiter.agent.catalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import org.springframework.core.io.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
@@ -37,8 +38,16 @@ public class AgentDefinitionService {
     private final List<AgentDefinition> agents;
     private final Map<String, AgentDefinition> agentsById;
 
+    @Autowired
+    public AgentDefinitionService(ObjectMapper objectMapper, ModelCatalogService modelCatalogService) {
+        this.agents = loadAgents(modelCatalogService);
+        this.agentsById = indexAgents(agents);
+        getRequired(DEFAULT_AGENT_ID);
+    }
+
+    /** Used by lightweight catalog tests that do not start model infrastructure. */
     public AgentDefinitionService(ObjectMapper objectMapper) {
-        this.agents = loadAgents();
+        this.agents = loadAgents(null);
         this.agentsById = indexAgents(agents);
         getRequired(DEFAULT_AGENT_ID);
     }
@@ -77,7 +86,7 @@ public class AgentDefinitionService {
         return agentsById.getOrDefault(id, defaultAgent());
     }
 
-    private static List<AgentDefinition> loadAgents() {
+    private static List<AgentDefinition> loadAgents(ModelCatalogService modelCatalogService) {
         try {
             var resolver = new PathMatchingResourcePatternResolver();
             var agents = Arrays.stream(resolver.getResources(RESOURCE_PATTERN))
@@ -85,7 +94,7 @@ public class AgentDefinitionService {
                             .thenComparing(AgentDefinitionService::resourceSortKey))
                     .map(AgentDefinitionService::loadAgent)
                     .toList();
-            validateAgents(agents);
+            validateAgents(agents, modelCatalogService);
             return List.copyOf(agents);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load agent catalog from classpath:" + RESOURCE_PATTERN, e);
@@ -109,7 +118,7 @@ public class AgentDefinitionService {
                     metadata.description(),
                     frontMatter.body(),
                     metadata.mode(),
-                    metadata.model(),
+                    parseModels(metadata.model(), id),
                     metadata.reasoningEffort(),
                     metadata.textVerbosity(),
                     allowWrite,
@@ -269,7 +278,16 @@ public class AgentDefinitionService {
                 .collect(Collectors.joining(" "));
     }
 
-    private static void validateAgents(List<AgentDefinition> agents) {
+    private static List<String> parseModels(String value, String agentId) {
+        if (value == null) throw new IllegalStateException("model is required for agent: " + agentId);
+        var ids = Arrays.stream(value.split(",", -1)).map(String::trim).toList();
+        if (ids.stream().anyMatch(String::isBlank) || ids.stream().distinct().count() != ids.size()) {
+            throw new IllegalStateException("model must contain non-blank, unique ids for agent: " + agentId);
+        }
+        return List.copyOf(ids);
+    }
+
+    private static void validateAgents(List<AgentDefinition> agents, ModelCatalogService catalog) {
         if (agents == null || agents.isEmpty()) {
             throw new IllegalStateException("Agent catalog is empty");
         }
@@ -288,8 +306,13 @@ public class AgentDefinitionService {
             if (agent.mode() == null) {
                 throw new IllegalStateException("mode is required for agent: " + agent.id());
             }
-            if (agent.defaultModel() == null || agent.defaultModel().isBlank()) {
-                throw new IllegalStateException("model is required for agent: " + agent.id());
+            if (agent.modelIds() == null || agent.modelIds().isEmpty()
+                    || agent.modelIds().stream().anyMatch(id -> id == null || id.isBlank())
+                    || agent.modelIds().stream().distinct().count() != agent.modelIds().size()) {
+                throw new IllegalStateException("model must contain non-blank, unique ids for agent: " + agent.id());
+            }
+            if (catalog != null) {
+                agent.modelIds().forEach(id -> catalog.resolveBundledModel(id));
             }
             if (agent.defaultThinkingLevel() == null) {
                 throw new IllegalStateException("reasoningEffort is required for agent: " + agent.id());

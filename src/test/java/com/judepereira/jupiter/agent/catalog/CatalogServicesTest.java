@@ -32,6 +32,15 @@ public class CatalogServicesTest {
     );
 
     @Test
+    public void unknownModelDoesNotResolveToProviderFirstModel() {
+        ModelCatalogService catalog = ModelCatalogTestSupport.modelCatalogService();
+
+        assertThatThrownBy(() -> catalog.resolveBundledModel("anthropic/claude-removed"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown model id");
+    }
+
+    @Test
     public void agentCatalogLoadsAllBundledAgentsWithExpectedDefaults() {
         AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
         List<AgentResource> resources = AGENT_RESOURCE_PATHS.stream()
@@ -48,12 +57,17 @@ public class CatalogServicesTest {
                 .containsExactly("explore", "apprentice", "test");
         assertThat(service.defaultAgent().id()).isEqualTo("plan");
 
-        resources.forEach(resource -> assertAgentMatchesResource(
-                service.getRequired(resource.id()),
-                resource,
-                wildcardPrimary,
-                wildcardSubagent
-        ));
+        ModelCatalogService modelCatalog = ModelCatalogTestSupport.modelCatalogService();
+        resources.forEach(resource -> {
+            assertAgentMatchesResource(
+                    service.getRequired(resource.id()),
+                    resource,
+                    wildcardPrimary,
+                    wildcardSubagent
+            );
+            assertThat(service.getRequired(resource.id()).modelIds())
+                    .allSatisfy(modelCatalog::resolveBundledModel);
+        });
     }
 
     @Test
@@ -139,16 +153,20 @@ public class CatalogServicesTest {
     }
 
     @Test
-    public void modelCatalogIncludesOnlyOpenAiGpt56SeriesFromFetchedJson() {
+    public void modelCatalogIncludesOpenAiGpt56AndAnthropicClaudeSeriesFromFetchedJson() {
         ModelCatalogService service = ModelCatalogTestSupport.modelCatalogService();
 
         assertThat(service.defaultModelId()).isEqualTo("openai/gpt-5.6-sol");
         assertThat(service.list()).extracting(ModelDefinition::id)
-                .containsExactly("openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
+                .containsExactly("openai/gpt-5.6-sol", "anthropic/claude-opus-5", "anthropic/claude-sonnet-5", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
         assertThat(service.list()).extracting(ModelDefinition::id)
                 .doesNotContain("openai/gpt-4.1", "openai/gpt-5.5", "openai/gpt-5.5-pro", "openai/gpt-5.60-preview");
         assertThat(service.list()).extracting(ModelDefinition::provider)
-                .containsOnly("openai");
+                .contains("openai", "anthropic");
+
+        ModelDefinition anthropic = service.getRequired("anthropic/claude-opus-5");
+        assertThat(anthropic.provider()).isEqualTo("anthropic");
+        assertThat(anthropic.apiModelId()).isEqualTo("claude-opus-5");
 
         ModelDefinition model = service.getRequired("openai/gpt-5.6-terra");
         assertThat(model.provider()).isEqualTo("openai");
@@ -249,7 +267,8 @@ public class CatalogServicesTest {
         assertThat(actual.name()).isEqualTo(displayName(expected.id()));
         assertThat(actual.description()).isEqualTo(expected.markdown().frontMatter().description());
         assertThat(actual.mode()).isEqualTo(expected.markdown().frontMatter().mode());
-        assertThat(actual.defaultModel()).isEqualTo(expected.markdown().frontMatter().model());
+        assertThat(actual.modelIds()).containsExactlyElementsOf(java.util.Arrays.stream(expected.markdown().frontMatter().model().split(","))
+                .map(String::trim).toList());
         assertThat(actual.defaultThinkingLevel()).isEqualTo(expected.markdown().frontMatter().reasoningEffort());
         assertThat(actual.textVerbosity()).isEqualTo(expected.markdown().frontMatter().textVerbosity());
         assertThat(actual.systemPrompt()).isEqualTo(expected.markdown().body());

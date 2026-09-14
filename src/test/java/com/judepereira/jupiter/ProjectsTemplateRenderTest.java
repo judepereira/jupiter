@@ -6,6 +6,7 @@ import com.judepereira.jupiter.ui.UiController.Session;
 import com.judepereira.jupiter.ui.UiController.UsagePoint;
 import com.judepereira.jupiter.ui.UiController.Workspace;
 import com.judepereira.jupiter.command.CommandCatalogService;
+import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.LifecycleHookSettings;
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
@@ -202,6 +203,25 @@ public class ProjectsTemplateRenderTest {
                 .isLessThan(html.indexOf("id=\"settings-help-tab\""));
         assertThat(html).contains("data-bs-toggle=\"pill\"", "aria-selected=\"true\"");
         assertThat(html.split("data-settings-env-row", -1)).hasSize(4);
+    }
+
+    @Test
+    public void anthropicAndModelsFragmentsRenderWithNullAndPopulatedContexts() {
+        SpringTemplateEngine engine = engine();
+        WebContext empty = webContext();
+        String emptyHtml = engine.process(new TemplateSpec("fragments/projects", Set.of("anthropicOAuthSection", "settingsModels"), TemplateMode.HTML, null), empty);
+        assertThat(emptyHtml).contains("Anthropic is not connected").doesNotContain("${view.message}");
+
+        String oobHtml = engine.process(new TemplateSpec("fragments/projects", Set.of("settingsModelsOob"), TemplateMode.HTML, null), empty);
+        assertThat(oobHtml).contains("id=\"settings-models\"").contains("hx-swap-oob=\"outerHTML:#settings-models\"");
+
+        WebContext populated = webContext();
+        populated.setVariable("modelGroups", java.util.Map.of("anthropic", List.of(new ModelDefinition(
+                "anthropic/claude-test", "Claude Test", "anthropic", "claude-test", false, true, 1000, 100, null, null, null))));
+        populated.setVariable("providerAvailability", java.util.Map.of("anthropic", true));
+        populated.setVariable("favouriteModelIds", List.of());
+        String populatedHtml = engine.process(new TemplateSpec("fragments/projects", Set.of("settingsModels"), TemplateMode.HTML, null), populated);
+        assertThat(populatedHtml).contains("anthropic", "Claude Test", "Connected");
     }
 
     @Test

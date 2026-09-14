@@ -80,9 +80,9 @@ public final class LangChain4jMessageMapper {
         AiMessage aiMessage = response.aiMessage();
         ModelResponseMetadata metadata = toModelResponseMetadata(response);
         if (aiMessage.hasToolExecutionRequests() && !aiMessage.toolExecutionRequests().isEmpty()) {
-            return new ModelResponse(aiMessage.text(), toToolCall(aiMessage.toolExecutionRequests().get(0)), metadata);
+            return new ModelResponse(aiMessage.text(), toToolCall(aiMessage.toolExecutionRequests().get(0)), metadata, null);
         }
-        return new ModelResponse(aiMessage.text(), null, metadata);
+        return new ModelResponse(aiMessage.text(), null, metadata, null);
     }
 
     private ModelResponseMetadata toModelResponseMetadata(ChatResponse response) {

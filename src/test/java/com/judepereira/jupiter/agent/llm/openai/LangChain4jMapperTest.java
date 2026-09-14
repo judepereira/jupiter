@@ -53,10 +53,10 @@ public class LangChain4jMapperTest {
     @Test
     public void converts_conversation_with_tool_calls_and_tool_results() {
         List<ChatMessage> messages = messageMapper.toChatMessages(List.of(
-                new Message(Message.Role.SYSTEM, "sys", null, null),
-                new Message(Message.Role.USER, "user", null, null),
-                new Message(Message.Role.ASSISTANT, null, null, List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt")))),
-                new Message(Message.Role.TOOL, "written", "call-123", null)
+                new Message(Message.Role.SYSTEM, "sys", null, null, null),
+                new Message(Message.Role.USER, "user", null, null, null),
+                new Message(Message.Role.ASSISTANT, null, null, List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt"))), null),
+                new Message(Message.Role.TOOL, "written", "call-123", null, null)
         ));
 
         assertInstanceOf(SystemMessage.class, messages.get(0));
@@ -166,6 +166,15 @@ public class LangChain4jMapperTest {
         assertEquals("gpt-5.4", response.getMetadata().modelId());
         assertEquals("STOP", response.getMetadata().finishReason());
         assertEquals(Map.of("createdAt", 123L, "completedAt", 456L, "serviceTier", "default"), response.getMetadata().providerMetadata());
+    }
+
+    @Test
+    public void ignoresProviderContentWhenMappingOpenAiMessages() {
+        var node = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("type", "thinking");
+        List<ChatMessage> mapped = messageMapper.toChatMessages(List.of(
+                new Message(Message.Role.ASSISTANT, "visible", null, null, List.of(node))));
+        assertInstanceOf(AiMessage.class, mapped.getFirst());
+        assertEquals("visible", ((AiMessage) mapped.getFirst()).text());
     }
 
     @Test

@@ -15,7 +15,7 @@ It combines coding agents, Git worktrees, persistent sessions, a real terminal, 
 - **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are stripped from managed child processes.
 - **It’s extendable.** MCP servers and Markdown-based slash commands plug into the harness without changing the core application.
 
-Jupiter’s model layer has provider abstractions, but v1 currently exposes OpenAI GPT-5.6-series models.
+Jupiter discovers OpenAI GPT-5.6-series and Anthropic Claude models from models.dev. Connect a provider in **Settings**, then choose its favourited models in the chat picker. Bundled agents use OpenAI first with Anthropic fallbacks: Plan and Engineer use Claude Opus 5, while Explore, Apprentice, and Test use Claude Sonnet 5. Agent-default and subagent runs use the first available provider before the request, while an explicit model choice is strict and never silently falls back. An implicit browser model choice is resolved again when the turn executes, and any fallback is attributed in the message/session; usage is recorded against the actual model. See [Models and Thinking](https://github.com/judepereira/jupiter/wiki/Models-and-Thinking), [OpenAI Authentication](https://github.com/judepereira/jupiter/wiki/OpenAI-Authentication), and [Anthropic Authentication](https://github.com/judepereira/jupiter/wiki/Anthropic-Authentication).
 
 ## Docker: the quickest way to run it
 
@@ -68,14 +68,9 @@ The key must be standard Base64 encoding of exactly 32 bytes.
 
 The slightly unusual stdin dance is intentional: the normal native startup path keeps `JUPITER_ENCRYPTION_KEY` out of the JVM environment, arguments, and system properties.
 
-## Connecting OpenAI
+## Connecting model providers
 
-You have two options:
-
-- set `OPENAI_API_KEY`, or
-- use the OpenAI device authorisation flow in **Settings**.
-
-If you connect through the browser flow, Jupiter stores the resulting credentials in encrypted database fields.
+Open **Settings → Model Providers** to connect an OpenAI subscription or Claude Code. OpenAI can also use `OPENAI_API_KEY`; Claude uses the hosted OAuth copy/paste-code flow described in [Anthropic Authentication](https://github.com/judepereira/jupiter/wiki/Anthropic-Authentication). Provider credentials and OAuth state are stored in encrypted database fields.
 
 ## Running Jupiter remotely
 
@@ -109,4 +104,4 @@ Run the test suite with:
 ./mvnw test
 ```
 
-There are unit, integration, template-rendering, and Playwright browser tests. Normal Maven test and package runs also generate disposable documentation screenshots under `target/documentation-screenshots`; see [Development and Testing](https://github.com/judepereira/jupiter/wiki/Development-and-Testing) for how to refresh the tracked wiki image catalog.
+There are unit, integration, template-rendering, and Playwright browser tests. Provider tests use fixtures and mocks; they do not use live OpenAI or Anthropic credentials. Normal Maven test and package runs also generate disposable documentation screenshots under `target/documentation-screenshots`; see [Development and Testing](https://github.com/judepereira/jupiter/wiki/Development-and-Testing) for how to refresh the tracked wiki image catalog.
