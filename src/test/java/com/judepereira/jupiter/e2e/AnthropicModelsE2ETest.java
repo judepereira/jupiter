@@ -95,7 +95,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     () -> claudeRow.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Toggle favourite")).click());
             assertThat(claudeRow.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Toggle favourite"))).hasText("★");
             page.locator("#settings-modal .btn-close").click();
-            page.reload();
             assertPicker(page, "OpenAI Test", "Claude Sonnet Test");
 
             // Disconnecting removes only that provider's model; reconnecting preserves the favourite.
@@ -106,7 +105,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
             assertThat(page.locator("#openai-oauth-section")).containsText("not connected");
             assertThat(modelRow(page, "OpenAI Test").locator(".settings-model-status")).hasText("Not connected");
             page.locator("#settings-modal .btn-close").click();
-            page.reload();
             assertPicker(page, "Claude Sonnet Test");
 
             openSettings(page);
@@ -116,7 +114,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
             assertThat(page.locator("#anthropic-oauth-section")).containsText("not connected");
             assertThat(modelRow(page, "Claude Sonnet Test").locator(".settings-model-status")).hasText("Not connected");
             page.locator("#settings-modal .btn-close").click();
-            page.reload();
             assertPicker(page);
             openSettings(page);
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect Claude")).click();
@@ -128,7 +125,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Complete authentication")).click());
             assertThat(page.locator("#anthropic-oauth-section")).containsText("Connected");
             page.locator("#settings-modal .btn-close").click();
-            page.reload();
             assertPicker(page, "Claude Sonnet Test");
         } finally {
             if (previousHome == null) System.clearProperty("user.home");

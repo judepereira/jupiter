@@ -56,8 +56,15 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("id=\"chat-agent-select\"", "id=\"chat-model-select\"", "id=\"chat-thinking-select\"");
+        assertThat(html).contains("data-default-model=\"openai/gpt-5.6-sol\"");
         assertThat(html).contains("class=\"chat-message-subtitle\"", "data-agent-label=\"Plan\"", "data-agent-id=\"plan\"", "data-model-id=\"openai/gpt-5.6-sol\"", "data-model-label=\"GPT-5.6 Sol\"", "data-thinking-level=\"HIGH\"");
         assertThat(html).doesNotContain("chat-message-meta", "chat-meta-chip", "Explore");
+
+        context.setVariable("agentDefaultModels", java.util.Map.of());
+        context.setVariable("selectedModel", modelService.getRequired("anthropic/claude-sonnet-5"));
+        String arbitraryFallbackHtml = engine.process("fragments/chat", context);
+        assertThat(arbitraryFallbackHtml).doesNotContain("data-default-model=");
+        assertThat(arbitraryFallbackHtml).contains("value=\"anthropic/claude-sonnet-5\"", "selected=\"selected\"");
     }
 
     @Test

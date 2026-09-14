@@ -94,6 +94,19 @@ class AnthropicOAuthServiceTests {
         }
     }
 
+    @Test
+    void forcedRefreshWithoutRefreshTokenReturnsEmptyInsteadOfRejectedToken() {
+        AnthropicOAuthProperties p = properties();
+        AppStateRepository repo = mock(AppStateRepository.class);
+        when(repo.loadAnthropicOAuthState()).thenReturn(Optional.of(
+                new AppStateRepository.AnthropicOAuthStateRow("old", null, Instant.now().plusSeconds(3600), "scope", null)));
+
+        AnthropicOAuthService service = new AnthropicOAuthService(p, new ObjectMapper(), HttpClient.newHttpClient(), repo, null);
+
+        assertThat(service.forceRefresh("old")).isEmpty();
+        verify(repo, never()).updateAnthropicOAuthState(any(), any(), any(), any(), any());
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {408, 429, 500, 503})
     void transientRefreshFailureRetainsCredentials(int status) throws Exception {

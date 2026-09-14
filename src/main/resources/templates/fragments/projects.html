@@ -654,17 +654,24 @@
 <th:block th:fragment="openaiOAuthResponse">
     <th:block th:replace="~{fragments/projects :: openaiOAuthSection}"></th:block>
     <th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
+    <th:block th:if="${chatControlsOob ?: false}" th:replace="~{fragments/chat :: chatControls}"></th:block>
 </th:block>
 
 <th:block th:fragment="anthropicOAuthResponse">
     <th:block th:replace="~{fragments/projects :: anthropicOAuthSection}"></th:block>
     <th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
+    <th:block th:if="${chatControlsOob ?: false}" th:replace="~{fragments/chat :: chatControls}"></th:block>
 </th:block>
 
 <th:block th:fragment="settingsModels">
     <section id="settings-models" class="settings-section" th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, favourites=${favouriteModelIds == null ? T(java.util.List).of() : favouriteModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}">
         <th:block th:replace="~{fragments/projects :: settingsModelsContent}"></th:block>
     </section>
+</th:block>
+
+<th:block th:fragment="settingsModelsWithChatControls">
+    <th:block th:replace="~{fragments/projects :: settingsModels}"></th:block>
+    <th:block th:replace="~{fragments/chat :: chatControls}"></th:block>
 </th:block>
 
 <th:block th:fragment="settingsModelsOob">

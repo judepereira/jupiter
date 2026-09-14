@@ -136,6 +136,89 @@ class AnthropicAgentModelClientTests {
                 .hasMessageContaining("multiple tool calls");
     }
 
+    @Test
+    void unauthorizedRequestRefreshesOnceAndRetriesExactlyOnce() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        try {
+            when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(
+                    response(401, "rejected"),
+                    response(200, "{\"content\":[],\"usage\":{}}"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
+        when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+                new ObjectMapper(), http);
+
+        client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of());
+
+        verify(http, times(2)).send(any(), any(HttpResponse.BodyHandler.class));
+        verify(oauth).forceRefresh("old");
+    }
+
+    @Test
+    void unauthorizedRequestDoesNotRetryWhenForcedRefreshHasNoReplacement() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        try {
+            when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(401, "rejected"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
+        when(oauth.forceRefresh("old")).thenReturn(Optional.empty());
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+                new ObjectMapper(), http);
+
+        assertThatThrownBy(() -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
+                .hasMessageContaining("forced refresh failed");
+        verify(http).send(any(), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void streamingUnauthorizedRequestRefreshesAndRetriesOnce() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        String stream = "event: message_stop\ndata: {\"type\":\"message_stop\"}\n";
+        try {
+            when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(
+                    response(401, java.util.stream.Stream.of("rejected")), response(200, stream.lines()));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
+        when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+                new ObjectMapper(), http);
+
+        client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(), null);
+
+        verify(http, times(2)).send(any(), any(HttpResponse.BodyHandler.class));
+        verify(oauth).forceRefresh("old");
+    }
+
+    @Test
+    void secondUnauthorizedResponseIsNotRetried() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        try {
+            when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(
+                    response(401, "first"), response(401, "second"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
+        when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+                new ObjectMapper(), http);
+
+        assertThatThrownBy(() -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
+                .hasMessageContaining("status 401");
+        verify(http, times(2)).send(any(), any(HttpResponse.BodyHandler.class));
+    }
+
     private static JsonNode requestBody(HttpRequest request) throws Exception {
         var publisher = request.bodyPublisher().orElseThrow();
         var bytes = new ByteArrayOutputStream();

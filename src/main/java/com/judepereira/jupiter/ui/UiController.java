@@ -980,6 +980,12 @@ public class UiController {
         populateSettingsModels(model);
     }
 
+    private void populateChatControlsOob(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        populateChatControlsModel(model, activeChatSelection(view));
+        model.addAttribute("chatControlsOob", true);
+    }
+
     private void populateSettingsModels(Model model) {
         var modelGroups = modelCatalogService.list().stream().collect(java.util.stream.Collectors.groupingBy(
                 ModelDefinition::provider, LinkedHashMap::new, java.util.stream.Collectors.toList()));
@@ -995,7 +1001,8 @@ public class UiController {
         modelCatalogService.getRequired(modelId);
         modelPreferencesService.setFavourite(modelId, favourite);
         populateSettingsModel(model);
-        return "fragments/projects :: settingsModels";
+        populateChatControlsOob(model);
+        return "fragments/projects :: settingsModelsWithChatControls";
     }
 
     @PostMapping("/ui/settings/commands/create")
@@ -1244,7 +1251,6 @@ public class UiController {
         var view = anthropicOAuthService.startAuthorization();
         populateSettingsModel(model);
         model.addAttribute("anthropicOAuthView", view);
-        model.addAttribute("anthropicModelsOob", true);
         return "fragments/projects :: anthropicOAuthResponse";
     }
 
@@ -1253,6 +1259,7 @@ public class UiController {
         var view = anthropicOAuthService.completeAuthorization(code);
         populateSettingsModel(model);
         model.addAttribute("anthropicOAuthView", view);
+        populateChatControlsOob(model);
         return "fragments/projects :: anthropicOAuthResponse";
     }
 
@@ -1261,6 +1268,7 @@ public class UiController {
         var view = anthropicOAuthService.disconnect();
         populateSettingsModel(model);
         model.addAttribute("anthropicOAuthView", view);
+        populateChatControlsOob(model);
         return "fragments/projects :: anthropicOAuthResponse";
     }
 
@@ -1269,6 +1277,7 @@ public class UiController {
         var disconnected = openAiOAuthService.resetConnectionState();
         populateSettingsModel(model);
         model.addAttribute("openAiOAuthView", disconnected);
+        populateChatControlsOob(model);
         return "fragments/projects :: openaiOAuthResponse";
     }
 
@@ -1276,6 +1285,7 @@ public class UiController {
     public String openAiOAuthStatus(Model model) {
         model.addAttribute("openAiOAuthView", openAiOAuthService.pollCurrentDeviceAuthorization());
         populateSettingsModel(model);
+        populateChatControlsOob(model);
         return "fragments/projects :: openaiOAuthResponse";
     }
 
@@ -1672,10 +1682,11 @@ public class UiController {
         List<AgentDefinition> agents = agentDefinitionService.listPrimaryAgents();
         model.addAttribute("agents", agents);
         List<ModelDefinition> pickerModels = modelPickerService == null ? modelCatalogService.list() : modelPickerService.listPickerModels();
-        // The browser compares its current value with this marker. It must describe the
-        // option actually rendered, not the agent's (possibly unavailable) preference.
+        // Only mark a rendered model implicit when it is one of the agent's preferences.
+        // The picker fallback is a real selection and must therefore be submitted explicitly.
         Map<String, String> agentDefaultModels = new LinkedHashMap<>();
-        agents.forEach(agent -> renderedModelFor(agent, pickerModels).ifPresent(modelDef -> agentDefaultModels.put(agent.id(), modelDef.id())));
+        agents.forEach(agent -> preferredModelInPicker(agent, pickerModels)
+                .ifPresent(modelDef -> agentDefaultModels.put(agent.id(), modelDef.id())));
         model.addAttribute("agentDefaultModels", agentDefaultModels);
         model.addAttribute("models", pickerModels);
         model.addAttribute("pickerEmpty", pickerModels.isEmpty());
@@ -1705,14 +1716,14 @@ public class UiController {
         return agentModelResolutionService.resolveForDisplay(agent).model();
     }
 
-    private Optional<ModelDefinition> renderedModelFor(AgentDefinition agent, List<ModelDefinition> pickerModels) {
-        if (pickerModels.isEmpty()) {
-            return Optional.empty();
-        }
+    private Optional<ModelDefinition> preferredModelInPicker(AgentDefinition agent, List<ModelDefinition> pickerModels) {
         return agent.modelIds().stream()
                 .flatMap(id -> pickerModels.stream().filter(model -> model.id().equals(id)))
-                .findFirst()
-                .or(() -> pickerModels.stream().findFirst());
+                .findFirst();
+    }
+
+    private Optional<ModelDefinition> renderedModelFor(AgentDefinition agent, List<ModelDefinition> pickerModels) {
+        return preferredModelInPicker(agent, pickerModels).or(() -> pickerModels.stream().findFirst());
     }
 
     private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {

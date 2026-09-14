@@ -118,11 +118,29 @@ public class AnthropicOAuthService {
     }
 
     public synchronized Optional<String> currentAccessToken() {
+        return accessToken(false, null);
+    }
+
+    /**
+     * Refreshes the credential that was used for a rejected request. If another
+     * request refreshed it while this thread was waiting for the lock, the new
+     * credential is reused instead of issuing a second refresh request.
+     */
+    public synchronized Optional<String> forceRefresh(String rejectedAccessToken) {
+        return accessToken(true, rejectedAccessToken);
+    }
+
+    private Optional<String> accessToken(boolean force, String rejectedAccessToken) {
         if (state.tokens() == null) return Optional.empty();
-        if (state.tokens().expiresAt() != null && Instant.now().plusSeconds(60)
+        if (!force && state.tokens().expiresAt() != null && Instant.now().plusSeconds(60)
                 .isBefore(state.tokens().expiresAt())) return Optional.of(state.tokens().accessToken());
-        if (state.tokens().refreshToken() == null || state.tokens().refreshToken().isBlank()) {
+        if (force && rejectedAccessToken != null && !rejectedAccessToken.equals(state.tokens().accessToken())) {
             return Optional.of(state.tokens().accessToken());
+        }
+        if (state.tokens().refreshToken() == null || state.tokens().refreshToken().isBlank()) {
+            // A forced refresh must not hand the rejected credential back to the caller.
+            // Otherwise the client would issue the same request again with the same token.
+            return Optional.empty();
         }
         try {
             Tokens previous = state.tokens();
