@@ -274,6 +274,7 @@ public final class DocumentationScreenshotFixture {
                 "openai/gpt-5.6-luna",
                 "MEDIUM",
                 null,
+                null,
                 assistantCompletedAt,
                 assistantStartedAt);
         repository.insertToolCallTrace(
@@ -305,7 +306,7 @@ public final class DocumentationScreenshotFixture {
                 "Thinking…",
                 null, null, true, false, true,
                 AGENT_ID, AGENT_NAME, MODEL_ID, THINKING,
-                null, null, startedAt.plusSeconds(1));
+                null, null, null, startedAt.plusSeconds(1));
     }
 
     private static long turn(AppStateRepository repository, long sessionId, long turnId, long firstSequence,
@@ -342,6 +343,7 @@ public final class DocumentationScreenshotFixture {
                 AGENT_NAME,
                 MODEL_ID,
                 THINKING,
+                null,
                 null,
                 assistantCompletedAt,
                 assistantStartedAt);

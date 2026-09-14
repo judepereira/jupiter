@@ -212,6 +212,9 @@ public class ProjectsTemplateRenderTest {
         String emptyHtml = engine.process(new TemplateSpec("fragments/projects", Set.of("anthropicOAuthSection", "settingsModels"), TemplateMode.HTML, null), empty);
         assertThat(emptyHtml).contains("Anthropic is not connected").doesNotContain("${view.message}");
 
+        String oobHtml = engine.process(new TemplateSpec("fragments/projects", Set.of("settingsModelsOob"), TemplateMode.HTML, null), empty);
+        assertThat(oobHtml).contains("id=\"settings-models\"").contains("hx-swap-oob=\"outerHTML:#settings-models\"");
+
         WebContext populated = webContext();
         populated.setVariable("modelGroups", java.util.Map.of("anthropic", List.of(new ModelDefinition(
                 "anthropic/claude-test", "Claude Test", "anthropic", "claude-test", false, true, 1000, 100, null, null, null))));

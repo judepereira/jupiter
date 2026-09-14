@@ -290,8 +290,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private String requireApiKey() {
-        String apiKey = openAiProperties.getApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
+        String apiKey = openAiProperties.effectiveApiKey();
+        if (!openAiProperties.hasApiKey()) {
             throw new IllegalStateException("OpenAI API key (openai.api-key) is required to call OpenAI provider");
         }
         return apiKey;

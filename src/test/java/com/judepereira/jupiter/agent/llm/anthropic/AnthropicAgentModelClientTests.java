@@ -20,6 +20,7 @@ import java.util.concurrent.Flow;
 import java.io.ByteArrayOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class AnthropicAgentModelClientTests {
@@ -36,10 +37,32 @@ class AnthropicAgentModelClientTests {
         assertThat(request.get().headers().firstValue("anthropic-version")).contains("2023-06-01");
         assertThat(request.get().headers().firstValue("anthropic-beta")).contains("oauth-2025-04-20");
         assertThat(request.get().headers().firstValue("x-api-key")).isEmpty();
+        assertThat(request.get().timeout()).contains(java.time.Duration.ofSeconds(120));
         var publisher = request.get().bodyPublisher().orElseThrow(); var bytes = new ByteArrayOutputStream(); publisher.subscribe(new Flow.Subscriber<>() { public void onSubscribe(Flow.Subscription s) { s.request(Long.MAX_VALUE); } public void onNext(java.nio.ByteBuffer b) { while (b.hasRemaining()) bytes.write(b.get()); } public void onError(Throwable t) {} public void onComplete() {} }); JsonNode body = new ObjectMapper().readTree(bytes.toString(StandardCharsets.UTF_8));
         assertThat(result.getAssistantText()).isEqualTo("ok");
         assertThat(body.path("system").asText()).isEqualTo("sys");
         assertThat(body.path("messages").get(0).path("content").get(0).path("text").asText()).isEqualTo("hello");
+    }
+
+    @Test
+    void interruptedRequestRestoresInterruptAndFailsClearly() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenThrow(new InterruptedException());
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
+        AnthropicProperties properties = new AnthropicProperties();
+        properties.setRequestTimeout(java.time.Duration.ofSeconds(7));
+        var client = new AnthropicAgentModelClient(properties, new AgentProperties(), oauth, new ObjectMapper(), http);
+
+        Thread.interrupted();
+        try {
+            assertThatThrownBy(() -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null)), List.of()))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Anthropic request cancelled");
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test void streamingAccumulatesTextToolAndUsage() throws Exception {

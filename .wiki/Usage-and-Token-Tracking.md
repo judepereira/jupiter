@@ -19,7 +19,7 @@ Hourly usage is grouped by project and model.
 
 When the provider returns the data, Jupiter stores input, output, total, cached-input, cache-write, and reasoning token counts.
 
-It also keeps the operation type, model identifiers, finish information, and selected provider metadata.
+It also keeps the operation type, model identifiers, finish information, and selected provider metadata. If an agent preference falls back before a request, usage is recorded against the actual model that handled the request; message attribution retains the preferred model separately.
 
 Normal agent turns and context-compaction requests have different operation values, which makes compaction overhead visible rather than burying it in everything else.
 

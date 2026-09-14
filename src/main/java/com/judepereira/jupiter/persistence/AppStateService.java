@@ -353,7 +353,7 @@ public class AppStateService {
         for (var message : repository.listMessagesThroughTurnId(sourceSessionId, assistantMessage.turnId())) {
             long copiedMessageId = repository.insertConversationMessage(forkedSessionId, UUID.randomUUID().toString(), message.role(), message.turnId(), message.sequence(), message.content(),
                     message.toolCallId(), message.toolCallsJson(), message.showInChat(), message.includeInModel(), message.pending(), message.agentId(), message.agentName(),
-                    message.modelId(), message.thinkingLevel(), message.compactedThroughTurnId(), message.completedAt(), message.createdAt());
+                    message.modelId(), message.thinkingLevel(), message.preferredModelId(), message.compactedThroughTurnId(), message.completedAt(), message.createdAt());
             messageIdRemap.put(message.id(), copiedMessageId);
         }
 
@@ -562,6 +562,7 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.agentName(),
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
+                assistantMetadata == null ? null : assistantMetadata.preferredModelId(),
                 null,
                 null,
                 now);
@@ -581,6 +582,7 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.agentName(),
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
+                assistantMetadata == null ? null : assistantMetadata.preferredModelId(),
                 null,
                 null,
                 now);
@@ -590,6 +592,15 @@ public class AppStateService {
 
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userText) {
         return appendUserMessageAndPendingAssistant(sessionId, null, null, userText);
+    }
+
+    @Transactional
+    public void updateAssistantModelMetadata(long sessionId, String assistantPublicId, String modelId, String preferredModelId) {
+        var message = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
+        if (!message.pending() || !"assistant".equals(message.role())) {
+            throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
+        }
+        repository.updateMessageMetadata(message.id(), modelId, preferredModelId);
     }
 
     @Transactional
@@ -805,7 +816,7 @@ public class AppStateService {
         long sequence = repository.nextMessageSequence(sessionId);
         String id = UUID.randomUUID().toString();
         repository.insertConversationMessage(sessionId, id, "info", turnId, sequence, content, null, null, true, false, false,
-                null, null, null, null, null, now, now);
+                null, null, null, null, null, null, now, now);
         ChatMessageView message = toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
         applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
         return message;
@@ -832,7 +843,7 @@ public class AppStateService {
         long sequence = repository.nextMessageSequence(sessionId);
         String id = UUID.randomUUID().toString();
         repository.insertConversationMessage(sessionId, id, "system", turnId, sequence, content, null, null, true, true, false,
-                null, null, null, null, compactedThroughTurnId, null, now);
+                null, null, null, null, null, compactedThroughTurnId, null, now);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
     }
 
@@ -947,7 +958,7 @@ public class AppStateService {
         }
         long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, ReviewSource.SESSION, null);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
-                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null, null, null, null, null, null, now);
+                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null, null, null, null, null, null, null, now);
         var workspace = repository.findWorkspace(workspaceId);
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateWorkspaceLastOpened(workspaceId, now);
@@ -1386,7 +1397,7 @@ public class AppStateService {
         return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(),
                 message.completedAt() == null ? null : message.completedAt().toEpochMilli(), toolCalls,
                 message.agentId() == null && message.agentName() == null && message.modelId() == null && message.thinkingLevel() == null ? null :
-                        new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel()));
+                        new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel(), message.preferredModelId()));
     }
 
     private static boolean isEagerTool(String toolName) {
@@ -1450,7 +1461,7 @@ public class AppStateService {
         long assistantToolCallSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant", assistantMessage.turnId(), assistantToolCallSequence,
                 "", null, json(List.of(new ToolCallPayload(trace.toolCallId(), trace.toolName(), trace.args()))), false, true, false,
-                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), null, null, now);
+                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), assistantMessage.preferredModelId(), null, null, now);
 
         long toolResultSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,

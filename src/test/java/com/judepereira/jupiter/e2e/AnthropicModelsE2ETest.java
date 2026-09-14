@@ -36,6 +36,7 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
         try (FixtureServer fixture = FixtureServer.start();
              RunningApp app = startApp(home, db, Map.of(
                      "models.dev.catalog-url", fixture.url("/catalog.json"),
+                     "openai.api-key", "",
                      "openai.oauth.issuer", fixture.baseUrl(),
                      "openai.oauth.client-id", "e2e-openai",
                      "anthropic.oauth.authorization-url", fixture.url("/claude/authorize"),
@@ -72,9 +73,9 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     response -> response.url().contains("/ui/settings/anthropic/complete") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Complete authentication")).click());
             assertThat(page.locator("#anthropic-oauth-section")).containsText("Connected");
+            assertThat(modelRow(page, "Claude Sonnet Test").filter(new Locator.FilterOptions().setHasText("Connected")).locator(".settings-model-status")).hasText("Connected");
             assertThat(fixture.anthropicTokenCalls.get()).isEqualTo(1);
 
-            // Reload the project view so its server-rendered picker reflects both connected providers.
             page.locator("#settings-modal .btn-close").click();
             page.waitForResponse(
                     response -> response.url().contains("/ui/projects/") && response.url().contains("/activate") && response.status() == 200,
@@ -103,6 +104,7 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     response -> response.url().contains("/ui/settings/openai/logout") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription")).click());
             assertThat(page.locator("#openai-oauth-section")).containsText("not connected");
+            assertThat(modelRow(page, "OpenAI Test").locator(".settings-model-status")).hasText("Not connected");
             page.locator("#settings-modal .btn-close").click();
             page.reload();
             assertPicker(page, "Claude Sonnet Test");
@@ -112,6 +114,7 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     response -> response.url().contains("/ui/settings/anthropic/disconnect") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Disconnect").setExact(true)).click());
             assertThat(page.locator("#anthropic-oauth-section")).containsText("not connected");
+            assertThat(modelRow(page, "Claude Sonnet Test").locator(".settings-model-status")).hasText("Not connected");
             page.locator("#settings-modal .btn-close").click();
             page.reload();
             assertPicker(page);
@@ -140,6 +143,10 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
         assertThat(page.locator("#settings-modal")).isVisible();
         page.locator("#settings-model-providers-tab").click();
         page.locator("#settings-model-providers.show.active").waitFor();
+    }
+
+    private static Locator modelRow(Page page, String modelName) {
+        return page.locator("#settings-models").first().locator(".settings-model-row").filter(new Locator.FilterOptions().setHasText(modelName));
     }
 
     private static void assertPicker(Page page, String... expected) {
@@ -193,7 +200,10 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
     private static final String CATALOG = """
             {"models": {
               "openai/gpt-5.6-sol": {"id":"openai/gpt-5.6-sol","name":"OpenAI Test","reasoning":false,"tool_call":true,"limit":{"context":1000,"output":100}},
-              "anthropic/claude-sonnet-4": {"id":"anthropic/claude-sonnet-4","name":"Claude Sonnet Test","reasoning":true,"tool_call":true,"release_date":"2026-01-01","limit":{"context":1000,"output":100}}
+              "openai/gpt-5.6-terra": {"id":"openai/gpt-5.6-terra","name":"Terra","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
+              "openai/gpt-5.6-luna": {"id":"openai/gpt-5.6-luna","name":"Luna","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
+              "anthropic/claude-sonnet-4": {"id":"anthropic/claude-sonnet-4","name":"Claude Sonnet Test","reasoning":true,"tool_call":true,"release_date":"2026-01-01","limit":{"context":1000,"output":100}},
+              "anthropic/claude-opus-4": {"id":"anthropic/claude-opus-4","name":"Claude Opus Test","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}}
             }}
             """;
 }

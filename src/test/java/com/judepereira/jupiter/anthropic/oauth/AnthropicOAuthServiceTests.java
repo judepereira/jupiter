@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -47,19 +49,36 @@ class AnthropicOAuthServiceTests {
         }
     }
 
+    @Test void bareAuthorizationCodeUsesPendingState() throws Exception {
+        AnthropicOAuthProperties p = properties();
+        AppStateRepository repo = mock(AppStateRepository.class);
+        try (Server server = new Server()) {
+            p.setTokenUrl(server.url("/token"));
+            AnthropicOAuthService s = new AnthropicOAuthService(p, new ObjectMapper(), HttpClient.newHttpClient(), repo, null);
+            s.startAuthorization();
+            s.completeAuthorization("bare-code");
+            assertThat(server.lastJson).containsEntry("code", "bare-code").containsKey("state");
+            assertThat(s.currentAccessToken()).contains("access");
+        }
+    }
+
     @Test void codeAndHashStateAreExchangedAndPersisted() throws Exception {
         AnthropicOAuthProperties p = properties();
         AppStateRepository repo = mock(AppStateRepository.class);
         try (Server server = new Server()) {
             p.setTokenUrl(server.url("/token"));
             AnthropicOAuthService s = new AnthropicOAuthService(p, new ObjectMapper(), HttpClient.newHttpClient(), repo, null);
-            String state = query(s.startAuthorization().authorizationUrl()).get("state");
+            Map<String, String> authorization = query(s.startAuthorization().authorizationUrl());
+            String state = authorization.get("state");
             s.completeAuthorization("bare-code#" + state);
             assertThat(s.currentAccessToken()).contains("access");
             verify(repo).updateAnthropicOAuthState(eq("access"), eq("new-refresh"), any(), eq("user:inference"), eq("{\"id\":\"a\"}"));
             assertThat(server.lastJson).containsEntry("grant_type", "authorization_code").containsEntry("code", "bare-code")
                     .containsEntry("state", state).containsEntry("redirect_uri", p.getRedirectUri())
                     .containsEntry("client_id", "client").containsKey("code_verifier");
+            assertThat(Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    MessageDigest.getInstance("SHA-256").digest(server.lastJson.get("code_verifier").getBytes(StandardCharsets.US_ASCII))))
+                    .isEqualTo(authorization.get("code_challenge"));
             assertThat(server.lastContentType).isEqualTo("application/json");
         }
     }
@@ -75,7 +94,53 @@ class AnthropicOAuthServiceTests {
         }
     }
 
-    @Test void refreshRotatesCredentialsAndFailureClearsState() throws Exception {
+    @ParameterizedTest
+    @ValueSource(ints = {408, 429, 500, 503})
+    void transientRefreshFailureRetainsCredentials(int status) throws Exception {
+        AnthropicOAuthProperties p = properties();
+        AppStateRepository repo = mock(AppStateRepository.class);
+        when(repo.loadAnthropicOAuthState()).thenReturn(Optional.of(new AppStateRepository.AnthropicOAuthStateRow("old", "refresh", Instant.now().minusSeconds(1), "scope", null)));
+        try (Server server = new Server()) {
+            p.setTokenUrl(server.url("/token"));
+            server.responseStatus = status;
+            AnthropicOAuthService s = new AnthropicOAuthService(p, new ObjectMapper(), HttpClient.newHttpClient(), repo, null);
+            assertThat(s.currentAccessToken()).isEmpty();
+            assertThat(s.isConnected()).isTrue();
+            verify(repo, never()).clearAnthropicOAuthState();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403})
+    void permanentRefreshFailureClearsCredentials(int status) throws Exception {
+        AnthropicOAuthProperties p = properties();
+        AppStateRepository repo = mock(AppStateRepository.class);
+        when(repo.loadAnthropicOAuthState()).thenReturn(Optional.of(new AppStateRepository.AnthropicOAuthStateRow("old", "refresh", Instant.now().minusSeconds(1), "scope", null)));
+        try (Server server = new Server()) {
+            p.setTokenUrl(server.url("/token"));
+            server.responseStatus = status;
+            AnthropicOAuthService s = new AnthropicOAuthService(p, new ObjectMapper(), HttpClient.newHttpClient(), repo, null);
+            assertThat(s.currentAccessToken()).isEmpty();
+            assertThat(s.isConnected()).isFalse();
+            assertThat(s.currentView().status()).isEqualTo(AnthropicOAuthService.Status.REFRESH_FAILED);
+            verify(repo).clearAnthropicOAuthState();
+        }
+    }
+
+    @Test void malformedRefreshResponseClearsCredentials() throws Exception {
+        AnthropicOAuthProperties p = properties();
+        AppStateRepository repo = mock(AppStateRepository.class);
+        when(repo.loadAnthropicOAuthState()).thenReturn(Optional.of(new AppStateRepository.AnthropicOAuthStateRow("old", "refresh", Instant.now().minusSeconds(1), "scope", null)));
+        try (Server server = new Server()) {
+            p.setTokenUrl(server.url("/token"));
+            server.malformed = true;
+            AnthropicOAuthService s = new AnthropicOAuthService(p, new ObjectMapper(), HttpClient.newHttpClient(), repo, null);
+            assertThat(s.currentAccessToken()).isEmpty();
+            verify(repo).clearAnthropicOAuthState();
+        }
+    }
+
+    @Test void refreshRotatesCredentialsAndTransientFailureRetainsState() throws Exception {
         AnthropicOAuthProperties p = properties();
         AppStateRepository repo = mock(AppStateRepository.class);
         when(repo.loadAnthropicOAuthState()).thenReturn(Optional.of(new AppStateRepository.AnthropicOAuthStateRow("old", "refresh", Instant.now().minusSeconds(1), "scope", null)));
@@ -90,8 +155,8 @@ class AnthropicOAuthServiceTests {
             assertThat(server.lastContentType).isEqualTo("application/json");
             server.fail = true;
             assertThat(s.currentAccessToken()).isEmpty();
-            verify(repo).clearAnthropicOAuthState();
-            assertThat(s.isConnected()).isFalse();
+            verify(repo, never()).clearAnthropicOAuthState();
+            assertThat(s.isConnected()).isTrue();
         }
     }
 
@@ -99,10 +164,10 @@ class AnthropicOAuthServiceTests {
     private static Map<String, String> query(String url) { Map<String, String> r = new HashMap<>(); for (String part : URI.create(url).getRawQuery().split("&")) { String[] x = part.split("=", 2); r.put(URLDecoder.decode(x[0], StandardCharsets.UTF_8), URLDecoder.decode(x[1], StandardCharsets.UTF_8)); } return r; }
 
     private static final class Server implements AutoCloseable {
-        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0); final AtomicInteger calls = new AtomicInteger(); volatile boolean fail; volatile Map<String, String> lastJson = Map.of(); volatile String lastContentType;
+        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0); final AtomicInteger calls = new AtomicInteger(); volatile boolean fail; volatile boolean malformed; volatile int responseStatus = 200; volatile Map<String, String> lastJson = Map.of(); volatile String lastContentType;
         Server() throws IOException { server.createContext("/token", this::token); server.start(); }
         String url(String path) { return "http://localhost:" + server.getAddress().getPort() + path; }
-        void token(HttpExchange e) throws IOException { calls.incrementAndGet(); String body = new String(e.getRequestBody().readAllBytes(), StandardCharsets.UTF_8); lastContentType = e.getRequestHeaders().getFirst("Content-Type"); try { lastJson = new ObjectMapper().readValue(body, Map.class); } catch (Exception ex) { lastJson = Map.of(); } boolean refresh = "refresh_token".equals(lastJson.get("grant_type")); byte[] out = (fail ? "{}" : "{\"access_token\":\"" + (refresh ? "rotated" : "access") + "\",\"refresh_token\":\"new-refresh\",\"expires_in\":" + (refresh ? "30" : "3600") + ",\"scope\":\"user:inference\",\"account\":{\"id\":\"a\"}} ").getBytes(StandardCharsets.UTF_8); e.sendResponseHeaders(fail ? 500 : 200, out.length); e.getResponseBody().write(out); e.close(); }
+        void token(HttpExchange e) throws IOException { calls.incrementAndGet(); String body = new String(e.getRequestBody().readAllBytes(), StandardCharsets.UTF_8); lastContentType = e.getRequestHeaders().getFirst("Content-Type"); try { lastJson = new ObjectMapper().readValue(body, Map.class); } catch (Exception ex) { lastJson = Map.of(); } boolean refresh = "refresh_token".equals(lastJson.get("grant_type")); byte[] out = (malformed ? "not-json" : (fail ? "{}" : "{\"access_token\":\"" + (refresh ? "rotated" : "access") + "\",\"refresh_token\":\"new-refresh\",\"expires_in\":" + (refresh ? "30" : "3600") + ",\"scope\":\"user:inference\",\"account\":{\"id\":\"a\"}} ")).getBytes(StandardCharsets.UTF_8); e.sendResponseHeaders(fail ? 500 : responseStatus, out.length); e.getResponseBody().write(out); e.close(); }
         public void close() { server.stop(0); }
     }
 }

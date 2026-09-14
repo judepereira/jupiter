@@ -1,7 +1,7 @@
 ---
 description: A read-only exploration subagent that finds codebase context
 mode: subagent
-model: openai/gpt-5.6-luna
+model: openai/gpt-5.6-luna, anthropic/claude-sonnet-4
 reasoningEffort: medium
 textVerbosity: low
 tools:

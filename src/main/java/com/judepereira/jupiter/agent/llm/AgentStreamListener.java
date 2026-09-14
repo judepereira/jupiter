@@ -4,6 +4,7 @@ import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 
 import java.util.List;
 
@@ -16,6 +17,8 @@ public interface AgentStreamListener {
     default void onTextDelta(String delta) {}
 
     default void onStatus(String status) {}
+
+    default void onModelResolved(String preferredModelId, ModelDefinition actualModel) {}
 
     default void onComplete(AgentTurnResult result) {}
 

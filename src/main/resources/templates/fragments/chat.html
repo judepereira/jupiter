@@ -23,7 +23,7 @@
                         <option th:each="agent : ${agents}"
                                 th:value="${agent.id}"
                                 th:selected="${selectedAgent != null and selectedAgent.id == agent.id}"
-                                th:attr="data-description=${agent.description}, data-default-model=${agent.defaultModel}, data-default-thinking=${agent.defaultThinkingLevel}, title=${agent.description}"
+                                th:attr="data-description=${agent.description}, data-default-model=${agentDefaultModels != null and agentDefaultModels.containsKey(agent.id) ? agentDefaultModels[agent.id] : agent.defaultModel}, data-default-thinking=${agent.defaultThinkingLevel}, title=${agent.description}"
                                 th:text="${agent.name + ' — ' + agent.description}"></option>
                     </select>
                 </label>

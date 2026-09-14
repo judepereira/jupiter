@@ -10,6 +10,9 @@ import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.agent.tools.impl.WriteFileTool;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -65,7 +68,7 @@ public class CodingAgentHarnessFakeModelTest {
         props.setMaxIterations(1);
         props.setWorkspaceRoot(tmp.toString());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), new ToolRegistry(), props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), new ToolRegistry(), props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
         var req = new AgentTurnRequest("sys", List.of(
                 new Message(Message.Role.USER, "u1", null, null),
                 new Message(Message.Role.ASSISTANT, "a1", null, null),
@@ -104,7 +107,7 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         var res = harness.runTurn(new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null)), null, null, null, null, null, null));
 
@@ -146,7 +149,7 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null)), null, null, null, null, null, null);
         var res = harness.runTurn(req);
         assertEquals("Done! final text.", res.getFinalText());
@@ -170,7 +173,7 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
         var res = harness.runTurn(new AgentTurnRequest("s", List.of(new Message(Message.Role.USER, "u", null, null)), null, null, null, null, null, null));
         assertEquals("Recovered final.", res.getFinalText());
         assertEquals(1, res.getTraces().size());
@@ -190,7 +193,7 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
         var res = harness.runTurn(new AgentTurnRequest("s", List.of(new Message(Message.Role.USER, "u", null, null)), null, null, null, null, null, null));
         assertTrue(res.getFinalText().toLowerCase().contains("max iterations"));
         // traces should be equal to maxIterations
@@ -218,7 +221,7 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         props.setMaxIterations(5);
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null)), null, null, null, null, null, null);
         // listener to capture deltas
@@ -255,7 +258,7 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null)), null, null, null, null, null, null);
         final boolean[] saw = new boolean[1];
@@ -301,7 +304,7 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         props.setMaxIterations(5);
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null)), null, null, null, null, null, null);
         StringBuilder acc = new StringBuilder();
@@ -331,7 +334,7 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
         var res = harness.runTurn(new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null)), null, null, null, null, null, null));
         assertEquals("Final recovered text", res.getFinalText());
         assertEquals(1, res.getTraces().size());

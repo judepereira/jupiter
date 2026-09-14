@@ -20,9 +20,13 @@ If no favourited model belongs to a connected provider, the picker is empty and 
 
 A catalogue model ID includes its provider, such as `openai/...` or `anthropic/...`. Jupiter derives the provider from the selected model and routes the request to that provider's client; the active agent's default does not override this routing.
 
-## Agent defaults
+## Agent defaults and fallback
 
-Bundled agents come with a preferred model and reasoning level, but the composer lets you override both for a primary turn.
+An agent Markdown file's `model:` value may be one model ID or a comma-separated, ordered preference list. Bundled agents list OpenAI first and the Anthropic equivalent second. For agent-default and subagent runs, Jupiter selects the first model in that order whose provider is available. Availability is checked before sending the request; Jupiter does not retry a failed model or API request with another model.
+
+An explicit model selected by the user is strict: if its provider is unavailable, the turn fails rather than silently falling back. When an agent-default or subagent preference falls back, generated message/session attribution retains the preferred model and records the actual model used. Token usage is attributed to the actual model.
+
+The composer lets you override the agent default and reasoning level for a primary turn.
 
 ## Thinking level
 

@@ -100,12 +100,19 @@ public class AnthropicOAuthService {
             throw new IllegalStateException("Anthropic authentication state mismatch");
         }
 
-        JsonNode payload = exchangeAuthorization(code, pending.verifier(), stateToExchange);
-        Tokens tokens = tokensFromPayload(payload, null);
-        repository.updateAnthropicOAuthState(tokens.accessToken(), tokens.refreshToken(), tokens.expiresAt(),
-                tokens.scopes(), tokens.accountJson());
-        pending = null;
-        state = State.connected(tokens);
+        State previousState = state;
+        try {
+            JsonNode payload = exchangeAuthorization(code, pending.verifier(), stateToExchange);
+            Tokens tokens = tokensFromPayload(payload, null);
+            repository.updateAnthropicOAuthState(tokens.accessToken(), tokens.refreshToken(), tokens.expiresAt(),
+                    tokens.scopes(), tokens.accountJson());
+            pending = null;
+            state = State.connected(tokens);
+        } catch (RuntimeException failure) {
+            // A failed authorization attempt must not discard credentials that were already usable.
+            state = previousState;
+            throw failure;
+        }
         if (eventPublisher != null) eventPublisher.publishEvent(new ProviderConnectedEvent("anthropic"));
         return view(null);
     }
@@ -124,9 +131,11 @@ public class AnthropicOAuthService {
                     refreshed.expiresAt(), refreshed.scopes(), refreshed.accountJson());
             state = State.connected(refreshed);
             return Optional.of(refreshed.accessToken());
-        } catch (RuntimeException failure) {
+        } catch (PermanentRefreshFailure failure) {
             repository.clearAnthropicOAuthState();
             state = State.failed("Anthropic token refresh failed.");
+            return Optional.empty();
+        } catch (TransientRefreshFailure failure) {
             return Optional.empty();
         }
     }
@@ -150,7 +159,7 @@ public class AnthropicOAuthService {
         body.put("client_id", required(properties.getClientId(), "client ID"));
         body.put("code_verifier", verifier);
         body.put("state", exchangeState);
-        return exchange(body);
+        return exchange(body, false);
     }
 
     private JsonNode exchangeRefresh(String refreshToken) {
@@ -158,10 +167,10 @@ public class AnthropicOAuthService {
         body.put("grant_type", "refresh_token");
         body.put("refresh_token", refreshToken);
         body.put("client_id", required(properties.getClientId(), "client ID"));
-        return exchange(body);
+        return exchange(body, true);
     }
 
-    private JsonNode exchange(ObjectNode body) {
+    private JsonNode exchange(ObjectNode body, boolean refresh) {
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(required(properties.getTokenUrl(), "token URL")))
                     .timeout(Duration.ofSeconds(15))
@@ -171,22 +180,46 @@ public class AnthropicOAuthService {
                     .build();
             HttpResponse<String> response = httpClient.send(request,
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() / 100 != 2) {
-                throw new IllegalStateException("Anthropic token request failed with status " + response.statusCode());
+            int status = response.statusCode();
+            if (status / 100 != 2) {
+                if (refresh && (status == 408 || status == 429 || status >= 500)) {
+                    throw new TransientRefreshFailure("Anthropic token refresh temporarily unavailable");
+                }
+                if (refresh && (status == 400 || status == 401 || status == 403)) {
+                    throw new PermanentRefreshFailure("Anthropic token refresh was rejected");
+                }
+                throw new IllegalStateException("Anthropic token request failed with status " + status);
             }
-            JsonNode json = objectMapper.readTree(response.body());
-            if (json == null || !json.isObject()) throw new IllegalStateException("Invalid Anthropic token response");
+            JsonNode json;
+            try {
+                json = objectMapper.readTree(response.body());
+            } catch (IOException e) {
+                if (refresh) throw new PermanentRefreshFailure("Malformed Anthropic token response");
+                throw new IllegalStateException("Invalid Anthropic token response", e);
+            }
+            if (json == null || !json.isObject()) {
+                if (refresh) throw new PermanentRefreshFailure("Malformed Anthropic token response");
+                throw new IllegalStateException("Invalid Anthropic token response");
+            }
             return json;
         } catch (IOException e) {
+            if (refresh) throw new TransientRefreshFailure("Anthropic token refresh request failed", e);
             throw new IllegalStateException("Anthropic token request failed", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            if (refresh) throw new TransientRefreshFailure("Anthropic token refresh request interrupted", e);
             throw new IllegalStateException("Anthropic token request interrupted", e);
         }
     }
 
     private Tokens tokensFromPayload(JsonNode payload, Tokens previous) {
-        String access = text(payload, "access_token");
+        String access;
+        try {
+            access = text(payload, "access_token");
+        } catch (RuntimeException failure) {
+            if (previous != null) throw new PermanentRefreshFailure("Missing Anthropic access token");
+            throw failure;
+        }
         String refresh = optional(payload, "refresh_token").orElse(previous == null ? null : previous.refreshToken());
         long seconds = payload.has("expires_in") ? payload.get("expires_in").asLong() : 3600;
         Instant expiry = Instant.now().plusSeconds(seconds);
@@ -230,6 +263,15 @@ public class AnthropicOAuthService {
     private static String form(String name, String value) {
         return URLEncoder.encode(name, StandardCharsets.UTF_8) + "="
                 + URLEncoder.encode(Objects.requireNonNull(value, name), StandardCharsets.UTF_8);
+    }
+
+    private static class TransientRefreshFailure extends RuntimeException {
+        private TransientRefreshFailure(String message) { super(message); }
+        private TransientRefreshFailure(String message, Throwable cause) { super(message, cause); }
+    }
+
+    private static class PermanentRefreshFailure extends RuntimeException {
+        private PermanentRefreshFailure(String message) { super(message); }
     }
 
     private record Pending(String verifier, String state) { }

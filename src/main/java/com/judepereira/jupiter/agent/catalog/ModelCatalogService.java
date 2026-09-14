@@ -7,6 +7,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.util.Collections;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,13 +54,27 @@ public class ModelCatalogService {
         return modelsById.getOrDefault(id, getRequired(DEFAULT_MODEL_ID));
     }
 
+    /** Resolves a bundled preference exactly; provider-wide substitution is not supported. */
+    public ModelDefinition resolveBundledModel(String id) {
+        return getRequired(id);
+    }
+
+    public boolean hasProviderModel(String provider) {
+        return models.stream().anyMatch(model -> model.provider().equals(provider));
+    }
+
     public String defaultModelId() {
         return DEFAULT_MODEL_ID;
     }
 
     private static List<ModelDefinition> loadModels(ObjectMapper objectMapper, RestClient restClient, String catalogUrl) {
         try {
-            String body = restClient.get().uri(catalogUrl).retrieve().body(String.class);
+            String body;
+            if (catalogUrl.startsWith("file:")) {
+                body = Files.readString(Path.of(URI.create(catalogUrl)));
+            } else {
+                body = restClient.get().uri(catalogUrl).retrieve().body(String.class);
+            }
             var root = objectMapper.readTree(body);
             var modelsNode = root.path("models");
             var openAiModels = StreamSupport.stream(Spliterators.spliteratorUnknownSize(modelsNode.fields(), 0), false)

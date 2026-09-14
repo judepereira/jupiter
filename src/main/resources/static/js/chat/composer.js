@@ -74,15 +74,31 @@ function syncChatDefaults(form) {
     const agentOption = getChatSelectOption(agentSelect);
     if (!agentOption || !agentOption.dataset) return;
 
-    modelSelect.value = agentOption.dataset.defaultModel;
+    const resolvedModel = agentOption.dataset.defaultModel;
+    if (resolvedModel && Array.from(modelSelect.options).some(option => option.value === resolvedModel)) {
+        modelSelect.value = resolvedModel;
+        form.dataset.modelExplicit = '0';
+    }
     thinkingSelect.value = agentOption.dataset.defaultThinking;
 }
 
 function bindChatControlListeners(form) {
     if (!form || form.dataset.chatControlsBound === '1') return;
     form.dataset.chatControlsBound = '1';
+    form.dataset.modelExplicit = '0';
+    form.addEventListener('htmx:configRequest', event => {
+        const agentOption = getChatSelectOption(form.querySelector('#chat-agent-select'));
+        const modelSelect = form.querySelector('#chat-model-select');
+        const parameters = event.detail && event.detail.parameters;
+        if (!parameters || !agentOption || !modelSelect) return;
+        if (agentOption.dataset.defaultModel === modelSelect.value && form.dataset.modelExplicit !== '1') {
+            delete parameters.modelId;
+        }
+    });
 
     const agentSelect = form.querySelector('#chat-agent-select');
+    const modelSelect = form.querySelector('#chat-model-select');
+    modelSelect?.addEventListener('change', () => { form.dataset.modelExplicit = '1'; });
     if (!agentSelect) return;
 
     agentSelect.addEventListener('change', () => syncChatDefaults(form));

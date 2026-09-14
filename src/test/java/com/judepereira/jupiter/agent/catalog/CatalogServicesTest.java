@@ -32,6 +32,15 @@ public class CatalogServicesTest {
     );
 
     @Test
+    public void unknownModelDoesNotResolveToProviderFirstModel() {
+        ModelCatalogService catalog = ModelCatalogTestSupport.modelCatalogService();
+
+        assertThatThrownBy(() -> catalog.resolveBundledModel("anthropic/claude-removed"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown model id");
+    }
+
+    @Test
     public void agentCatalogLoadsAllBundledAgentsWithExpectedDefaults() {
         AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
         List<AgentResource> resources = AGENT_RESOURCE_PATHS.stream()
@@ -144,7 +153,7 @@ public class CatalogServicesTest {
 
         assertThat(service.defaultModelId()).isEqualTo("openai/gpt-5.6-sol");
         assertThat(service.list()).extracting(ModelDefinition::id)
-                .containsExactly("openai/gpt-5.6-sol", "anthropic/claude-opus-4", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
+                .containsExactly("openai/gpt-5.6-sol", "anthropic/claude-opus-4", "anthropic/claude-sonnet-4", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
         assertThat(service.list()).extracting(ModelDefinition::id)
                 .doesNotContain("openai/gpt-4.1", "openai/gpt-5.5", "openai/gpt-5.5-pro", "openai/gpt-5.60-preview");
         assertThat(service.list()).extracting(ModelDefinition::provider)
@@ -253,7 +262,8 @@ public class CatalogServicesTest {
         assertThat(actual.name()).isEqualTo(displayName(expected.id()));
         assertThat(actual.description()).isEqualTo(expected.markdown().frontMatter().description());
         assertThat(actual.mode()).isEqualTo(expected.markdown().frontMatter().mode());
-        assertThat(actual.defaultModel()).isEqualTo(expected.markdown().frontMatter().model());
+        assertThat(actual.modelIds()).containsExactlyElementsOf(java.util.Arrays.stream(expected.markdown().frontMatter().model().split(","))
+                .map(String::trim).toList());
         assertThat(actual.defaultThinkingLevel()).isEqualTo(expected.markdown().frontMatter().reasoningEffort());
         assertThat(actual.textVerbosity()).isEqualTo(expected.markdown().frontMatter().textVerbosity());
         assertThat(actual.systemPrompt()).isEqualTo(expected.markdown().body());

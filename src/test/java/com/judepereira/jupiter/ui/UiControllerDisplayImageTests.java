@@ -46,9 +46,9 @@ class UiControllerDisplayImageTests {
 
         var skillComponents = com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents();
         var promptComposer = new com.judepereira.jupiter.agent.harness.SystemPromptComposer(skillComponents.renderer());
-        UiController controller = new UiController(new CodingAgentHarness(null, null, new AgentProperties(), null, null, null, null, null, promptComposer,
+        UiController controller = new UiController(new CodingAgentHarness(null, null, new AgentProperties(), null, null, com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.modelCatalogService()), null, null, null, promptComposer,
                 skillComponents.discovery(), skillComponents.resolver(), skillComponents.injector()), new AgentProperties(), appStateService,
-                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), null, null, null, org.mockito.Mockito.mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class),
+                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null, null, org.mockito.Mockito.mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))),

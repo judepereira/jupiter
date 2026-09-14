@@ -3,6 +3,7 @@ package com.judepereira.jupiter.agent.harness;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.AgentModelResolutionService;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
@@ -48,6 +49,7 @@ public class CodingAgentHarness {
     private final AgentProperties props;
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
+    private final AgentModelResolutionService agentModelResolutionService;
     private final AppStateService appStateService;
     private final TokenUsageService tokenUsageService;
     private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
@@ -59,6 +61,7 @@ public class CodingAgentHarness {
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
                               AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+                              AgentModelResolutionService agentModelResolutionService,
                               AppStateService appStateService, TokenUsageService tokenUsageService,
                               McpProjectMcpServerRuntimeManager mcpRuntimeManager,
                               SystemPromptComposer systemPromptComposer, SkillDiscoveryService skillDiscoveryService,
@@ -68,6 +71,7 @@ public class CodingAgentHarness {
         this.props = props;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
+        this.agentModelResolutionService = agentModelResolutionService;
         this.appStateService = appStateService;
         this.tokenUsageService = tokenUsageService;
         this.mcpRuntimeManager = mcpRuntimeManager;
@@ -87,7 +91,11 @@ public class CodingAgentHarness {
         Path workspace = Path.of(workspaceRoot);
         SkillCatalog skillCatalog = skillDiscoveryService.discover(workspace);
         AgentDefinition agent = resolveAgent(request);
-        ModelDefinition selectedModel = resolveModel(request, agent);
+        ModelResolution selectedResolution = resolveModel(request, agent);
+        ModelDefinition selectedModel = selectedResolution.model();
+        if (selectedModel != null) {
+            listener.onModelResolved(selectedResolution.preferredModelId(), selectedModel);
+        }
         AgentModelClient model = modelFactory.getClient(selectedModel == null ? props.getProvider() : selectedModel.provider());
         ThinkingLevel thinkingLevel = resolveThinkingLevel(request, agent);
         AgentModelOptions modelOptions = selectedModel == null ? null : new AgentModelOptions(
@@ -276,16 +284,19 @@ public class CodingAgentHarness {
         return agentDefinitionService.getRequired(request.getAgentId());
     }
 
-    private ModelDefinition resolveModel(AgentTurnRequest request, AgentDefinition agent) {
-        if (modelCatalogService == null) {
-            return null;
-        }
+    private ModelResolution resolveModel(AgentTurnRequest request, AgentDefinition agent) {
         String requestedModelId = request.getModelId();
         if (requestedModelId == null || requestedModelId.isBlank()) {
-            requestedModelId = agent == null ? props.getModel() : agent.defaultModel();
+            if (agent != null && agentModelResolutionService != null) {
+                var resolution = agentModelResolutionService.resolve(agent);
+                return new ModelResolution(resolution.preferredModelId(), resolution.model());
+            }
+            return new ModelResolution(null, modelCatalogService == null ? null : modelCatalogService.getRequired(props.getModel()));
         }
-        return modelCatalogService.getRequired(requestedModelId);
+        return new ModelResolution(null, modelCatalogService.getRequired(requestedModelId));
     }
+
+    private record ModelResolution(String preferredModelId, ModelDefinition model) {}
 
     private ThinkingLevel resolveThinkingLevel(AgentTurnRequest request, AgentDefinition agent) {
         if (request.getThinkingLevel() != null) {

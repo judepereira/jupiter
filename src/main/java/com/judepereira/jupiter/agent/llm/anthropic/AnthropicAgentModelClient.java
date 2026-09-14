@@ -171,6 +171,7 @@ public class AnthropicAgentModelClient implements AgentModelClient {
                 .header("anthropic-version", properties.getVersion())
                 .header("anthropic-beta", properties.getBeta())
                 .header("Content-Type", "application/json")
+                .timeout(properties.getRequestTimeout())
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .build();
     }

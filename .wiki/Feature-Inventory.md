@@ -25,6 +25,8 @@ This is the boring-but-useful v1 checklist. When a user-visible feature lands, r
 - primary Plan and Engineer agents
 - Explore, Apprentice, and Test subagents
 - per-turn agent, model, and thinking controls
+- ordered comma-separated agent model preferences, with availability-based pre-request fallback for agent-default and subagent runs
+- strict explicit model selection (no silent fallback), with preferred/actual attribution and actual-model usage accounting
 - dynamic models.dev catalogue for OpenAI GPT-5.6-series and Anthropic Claude models
 - global ordered model favourites
 - provider-aware chat picker with empty state
