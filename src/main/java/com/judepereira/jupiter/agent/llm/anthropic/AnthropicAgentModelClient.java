@@ -3,7 +3,6 @@ package com.judepereira.jupiter.agent.llm.anthropic;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.AnthropicProperties;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
@@ -24,6 +23,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -83,12 +83,13 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         try (Stream<String> lines = response.body()) {
             String event = null;
             StringBuilder text = new StringBuilder();
-            StringBuilder toolJson = new StringBuilder();
             ToolState tool = new ToolState();
             Usage usage = new Usage();
             String id = null;
             String model = null;
             String stopReason = null;
+            Map<Integer, StreamingBlock> activeBlocks = new HashMap<>();
+            Map<Integer, JsonNode> completedBlocks = new java.util.TreeMap<>();
 
             for (String line : (Iterable<String>) lines::iterator) {
                 if (Thread.currentThread().isInterrupted()) {
@@ -111,31 +112,52 @@ public class AnthropicAgentModelClient implements AgentModelClient {
                         usage.read(message.path("usage"));
                     }
                     case "content_block_start" -> {
+                        int index = requiredIndex(node);
                         JsonNode block = node.path("content_block");
-                        if ("tool_use".equals(value(block, "type"))) {
-                            tool.id = value(block, "id");
-                            tool.name = value(block, "name");
-                        }
+                        if (!block.isObject()) throw new IllegalStateException("Anthropic content block is missing");
+                        StreamingBlock state = new StreamingBlock((ObjectNode) block.deepCopy());
+                        if (activeBlocks.put(index, state) != null) throw new IllegalStateException("Anthropic content block index started twice: " + index);
+                        if ("tool_use".equals(value(block, "type"))) startTool(tool, value(block, "id"), value(block, "name"));
                     }
                     case "content_block_delta" -> {
+                        int index = requiredIndex(node);
+                        StreamingBlock state = activeBlocks.get(index);
+                        if (state == null) throw new IllegalStateException("Anthropic delta for unknown content block index: " + index);
                         JsonNode delta = node.path("delta");
-                        if ("text_delta".equals(value(delta, "type"))) {
-                            String part = value(delta, "text");
-                            text.append(part);
-                            if (onText != null) {
-                                onText.accept(part);
+                        String deltaType = value(delta, "type");
+                        if (deltaType == null) throw new IllegalStateException("Anthropic content block delta is missing its type");
+                        switch (deltaType) {
+                            case "text_delta" -> {
+                                String part = value(delta, "text");
+                                text.append(part);
+                                state.block.put("text", state.block.path("text").asText("") + part);
+                                if (onText != null) onText.accept(part);
                             }
-                        } else if ("input_json_delta".equals(value(delta, "type"))) {
-                            toolJson.append(value(delta, "partial_json"));
+                            case "input_json_delta" -> state.json.append(value(delta, "partial_json"));
+                            case "thinking_delta" -> state.block.put("thinking", state.block.path("thinking").asText("") + value(delta, "thinking"));
+                            case "signature_delta" -> state.block.put("signature", state.block.path("signature").asText("") + value(delta, "signature"));
+                            default -> throw new IllegalStateException("Unsupported Anthropic delta type: " + value(delta, "type"));
                         }
                     }
                     case "message_delta" -> {
                         stopReason = value(node.path("delta"), "stop_reason");
                         usage.read(node.path("usage"));
                     }
-                    case "message_stop" ->
-                            { return response(text.toString(), tool, toolJson.toString(), usage, id, model, stopReason); }
-                    case "ping", "content_block_stop" -> { }
+                    case "content_block_stop" -> {
+                        int index = requiredIndex(node);
+                        StreamingBlock state = activeBlocks.remove(index);
+                        if (state == null) throw new IllegalStateException("Anthropic content block stopped without start: " + index);
+                        if ("tool_use".equals(value(state.block, "type"))) {
+                            state.block.set("input", mapper.valueToTree(parseObject(state.json.toString())));
+                            tool.args = state.block.get("input");
+                        }
+                        completedBlocks.put(index, state.block);
+                    }
+                    case "message_stop" -> {
+                        if (!activeBlocks.isEmpty()) throw new IllegalStateException("Anthropic message stopped with unfinished content blocks");
+                        return response(text.toString(), tool, null, usage, id, model, stopReason, new ArrayList<>(completedBlocks.values()));
+                    }
+                    case "ping" -> { }
                     default -> throw new IllegalStateException("Unknown Anthropic SSE event: " + type);
                 }
                 event = null;
@@ -200,6 +222,9 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         }
         body.set("messages", mapper.valueToTree(converted));
 
+        if (!tools.isEmpty()) {
+            body.putObject("tool_choice").put("type", "auto").put("disable_parallel_tool_use", true);
+        }
         var toolNodes = body.putArray("tools");
         for (ToolDefinition tool : tools) {
             ObjectNode node = toolNodes.addObject();
@@ -210,26 +235,14 @@ public class AnthropicAgentModelClient implements AgentModelClient {
             node.set("input_schema", schema(tool.getSchema()));
         }
         if (options != null && options.supportsReasoning() && options.thinkingLevel() != null) {
-            body.putObject("thinking").put("type", "enabled")
-                    .put("budget_tokens", budget(options.thinkingLevel()));
+            body.putObject("thinking").put("type", "adaptive");
+            body.putObject("output_config").put("effort", options.thinkingLevel().name().toLowerCase());
         }
         return body;
     }
 
     private int maxTokens(AgentModelOptions options) {
-        int configured = properties.getMaxOutputTokens();
-        if (options != null && options.supportsReasoning() && options.thinkingLevel() != null) {
-            return Math.max(configured, budget(options.thinkingLevel()) + 1024);
-        }
-        return configured;
-    }
-
-    private int budget(ThinkingLevel level) {
-        return switch (level) {
-            case LOW -> 1024;
-            case MEDIUM -> 4096;
-            case HIGH -> 8192;
-        };
+        return properties.getMaxOutputTokens();
     }
 
     private JsonNode message(Message message) {
@@ -245,6 +258,11 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         }
         if (message.getContent() != null && !message.getContent().isBlank()) {
             content.addObject().put("type", "text").put("text", message.getContent());
+        }
+        if (message.getProviderContent() != null && !message.getProviderContent().isEmpty()) {
+            content.removeAll();
+            content.addAll(message.getProviderContent());
+            return node;
         }
         if (message.getToolCalls() != null) {
             for (ToolCall call : message.getToolCalls()) {
@@ -294,22 +312,28 @@ public class AnthropicAgentModelClient implements AgentModelClient {
     private ModelResponse parse(JsonNode node) {
         StringBuilder text = new StringBuilder();
         ToolState tool = new ToolState();
+        List<JsonNode> blocks = new ArrayList<>();
         for (JsonNode block : node.path("content")) {
+            blocks.add(block.deepCopy());
             if ("text".equals(value(block, "type"))) text.append(value(block, "text"));
             if ("tool_use".equals(value(block, "type"))) {
-                tool.id = value(block, "id");
-                tool.name = value(block, "name");
+                startTool(tool, value(block, "id"), value(block, "name"));
                 tool.args = block.path("input");
             }
         }
         Usage usage = new Usage();
         usage.read(node.path("usage"));
         return response(text.toString(), tool, null, usage, value(node, "id"), value(node, "model"),
-                value(node, "stop_reason"));
+                value(node, "stop_reason"), blocks);
     }
 
     private ModelResponse response(String text, ToolState tool, String rawArguments, Usage usage,
                                    String id, String model, String stopReason) {
+        return response(text, tool, rawArguments, usage, id, model, stopReason, List.of());
+    }
+
+    private ModelResponse response(String text, ToolState tool, String rawArguments, Usage usage,
+                                   String id, String model, String stopReason, List<JsonNode> providerContent) {
         Map<String, Object> arguments = tool.id == null ? null
                 : tool.args != null && !tool.args.isMissingNode() ? mapper.convertValue(tool.args, Map.class)
                 : parseObject(rawArguments);
@@ -317,7 +341,15 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         Integer total = usage.in == null || usage.out == null ? null : usage.in + usage.out;
         return new ModelResponse(text.isEmpty() ? null : text, call,
                 new ModelResponseMetadata(usage.in, usage.out, total, null, null, null, id, model,
-                        stopReason, Map.of()));
+                        stopReason, Map.of()), providerContent);
+    }
+
+    private void startTool(ToolState tool, String id, String name) {
+        if (tool.id != null) {
+            throw new IllegalStateException("Anthropic response contains multiple tool calls; parallel tool use is unsupported");
+        }
+        tool.id = id;
+        tool.name = name;
     }
 
     private Map<String, Object> parseObject(String input) {
@@ -339,6 +371,22 @@ public class AnthropicAgentModelClient implements AgentModelClient {
     private String value(JsonNode node, String field) {
         return node == null || node.path(field).isMissingNode() || node.path(field).isNull()
                 ? null : node.path(field).asText();
+    }
+
+    private int requiredIndex(JsonNode node) {
+        if (!node.has("index") || !node.path("index").canConvertToInt()) {
+            throw new IllegalStateException("Anthropic streaming event is missing a content block index");
+        }
+        return node.path("index").asInt();
+    }
+
+    private static final class StreamingBlock {
+        private final ObjectNode block;
+        private final StringBuilder json = new StringBuilder();
+
+        private StreamingBlock(ObjectNode block) {
+            this.block = block;
+        }
     }
 
     private static final class ToolState {

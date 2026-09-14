@@ -8,8 +8,8 @@ Jupiter agents are just Markdown files with YAML frontmatter. This keeps the pro
 
 v1 ships with two primary agents:
 
-- **Plan** — exposes read/search/image tools plus `task`; prefers GPT-5.6 Sol, then Claude Opus, with high reasoning.
-- **Engineer** — the coding agent; gets wildcard native/MCP access and delegation; prefers GPT-5.6 Terra, then Claude Opus, with medium reasoning.
+- **Plan** — exposes read/search/image tools plus `task`; prefers GPT-5.6 Sol, then Claude Opus 5, with high reasoning.
+- **Engineer** — the coding agent; gets wildcard native/MCP access and delegation; prefers GPT-5.6 Terra, then Claude Opus 5, with medium reasoning.
 
 The model list is ordered. Agent-default runs choose the first model whose provider is available before sending a request; an explicit user model remains strict. See [Models and Thinking](Models-and-Thinking) for fallback and attribution details.
 

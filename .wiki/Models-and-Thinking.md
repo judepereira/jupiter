@@ -22,15 +22,17 @@ A catalogue model ID includes its provider, such as `openai/...` or `anthropic/.
 
 ## Agent defaults and fallback
 
-An agent Markdown file's `model:` value may be one model ID or a comma-separated, ordered preference list. Bundled agents list OpenAI first and the Anthropic equivalent second. For agent-default and subagent runs, Jupiter selects the first model in that order whose provider is available. Availability is checked before sending the request; Jupiter does not retry a failed model or API request with another model.
+An agent Markdown file's `model:` value may be one model ID or a comma-separated, ordered preference list. Bundled agents use OpenAI first and Anthropic second: Plan and Engineer fall back to Claude Opus 5; Explore, Apprentice, and Test fall back to Claude Sonnet 5. For agent-default and subagent runs, Jupiter selects the first model in that order whose provider is available. Availability is checked before sending the request; Jupiter does not retry a failed model or API request with another model.
 
-An explicit model selected by the user is strict: if its provider is unavailable, the turn fails rather than silently falling back. When an agent-default or subagent preference falls back, generated message/session attribution retains the preferred model and records the actual model used. Token usage is attributed to the actual model.
+An implicit model choice from the browser is resolved again when the turn executes, so it reflects provider availability at execution time. An explicit model selected by the user is strict: if its provider is unavailable, the turn fails rather than silently falling back. When an implicit, agent-default, or subagent preference falls back, generated message/session attribution retains the preferred model and records the actual model used. Token usage is attributed to the actual model.
 
 The composer lets you override the agent default and reasoning level for a primary turn.
 
 ## Thinking level
 
-The selected thinking level is stored with the assistant message and passed into model requests that support it.
+The selected thinking level is stored with the assistant message and passed into model requests that support it. For Claude models, LOW, MEDIUM, and HIGH map to Anthropic adaptive thinking effort at the corresponding level. Thinking, signature, and redacted-thinking blocks from Claude are retained privately when needed to continue tool use; they are not rendered as assistant text.
+
+Anthropic tool requests disable parallel tool use. Jupiter does not yet support safely executing multiple tool calls from one Anthropic response.
 
 When you return to a session, Jupiter tries to restore the most recent assistant selection. If that model has disappeared from the catalogue, it falls back instead of leaving the UI in a broken state.
 

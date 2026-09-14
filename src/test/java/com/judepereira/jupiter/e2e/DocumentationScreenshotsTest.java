@@ -85,8 +85,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     private static final String MODEL_CATALOG_JSON = """
             {
               "models": {
-                "anthropic/claude-opus-4": {"id":"anthropic/claude-opus-4","name":"Claude Opus 4","reasoning":true,"tool_call":true,"limit":{"context":400000,"output":128000}},
-                "anthropic/claude-sonnet-4": {"id":"anthropic/claude-sonnet-4","name":"Claude Sonnet 4","reasoning":true,"tool_call":true,"limit":{"context":400000,"output":128000}},
+                "anthropic/claude-opus-5": {"id":"anthropic/claude-opus-5","name":"Claude Opus 5","reasoning":true,"tool_call":true,"limit":{"context":400000,"output":128000}},
+                "anthropic/claude-sonnet-5": {"id":"anthropic/claude-sonnet-5","name":"Claude Sonnet 5","reasoning":true,"tool_call":true,"limit":{"context":400000,"output":128000}},
                 "openai/gpt-5.5": {
                   "id": "openai/gpt-5.5",
                   "name": "GPT-5.5",

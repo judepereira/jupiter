@@ -18,6 +18,6 @@ Access and refresh tokens, expiry, scopes, and account data are stored in encryp
 
 Claude models are loaded alongside OpenAI GPT-5.6-series models from models.dev. Favourites are one global ordered list. The chat picker shows only favourited models whose provider is currently connected, in that order. If none qualify, it shows an empty picker and cannot send a chat turn.
 
-A model's catalogue ID determines its provider and therefore the model client used for the turn. A model retained in historical session metadata can remain unavailable after it disappears from the catalogue or its provider is disconnected; it is not silently made available.
+A model's catalogue ID determines its provider and therefore the model client used for the turn. A model retained in historical session metadata can remain unavailable after it disappears from the catalogue or its provider is disconnected; it is not silently made available. Claude requests use adaptive thinking when thinking is enabled, with Jupiter's LOW, MEDIUM, and HIGH levels mapped to the corresponding effort. Thinking, signature, and redacted-thinking blocks are kept privately for tool continuation and are not shown as assistant text. Anthropic parallel tool use is disabled because Jupiter does not yet safely support multiple tool calls in one response.
 
 The Settings model/provider statuses are refreshed in the same HTMX response as connect, disconnect, and authentication actions, so availability changes are shown immediately. Tests use fixtures and mocked HTTP; they do not use live Anthropic credentials.

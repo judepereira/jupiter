@@ -200,7 +200,7 @@ public class UiController {
             // Use the queue-time executable model for validation and compaction, but keep the
             // request implicit so the harness resolves availability again at execution time.
             if (implicitModel) {
-                selected = new ChatSelection(selected.selectedAgent(), modelResolution.model(), selected.selectedThinking(),
+                selected = new ChatSelection(selected.selectedAgent(), modelResolution.model(), selected.selectedThinking(), false,
                         selected.defaultAgent(), selected.defaultModel(), selected.defaultThinking());
             }
             String selectedModelId = selected.selectedModel().id();
@@ -1662,7 +1662,8 @@ public class UiController {
             ThinkingLevel selectedThinking = resolveThinkingLevelOrDefault(metadata.thinkingLevel(), selectedAgent.defaultThinkingLevel());
             AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
             ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, true,
+                    defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
         }
         return null;
     }
@@ -1670,13 +1671,19 @@ public class UiController {
     private void populateChatControlsModel(Model model, ChatSelection selection) {
         List<AgentDefinition> agents = agentDefinitionService.listPrimaryAgents();
         model.addAttribute("agents", agents);
-        model.addAttribute("agentDefaultModels", agents.stream().collect(Collectors.toMap(
-                AgentDefinition::id, agent -> resolveAgentModel(agent).id(), (first, second) -> first, LinkedHashMap::new)));
         List<ModelDefinition> pickerModels = modelPickerService == null ? modelCatalogService.list() : modelPickerService.listPickerModels();
+        // The browser compares its current value with this marker. It must describe the
+        // option actually rendered, not the agent's (possibly unavailable) preference.
+        Map<String, String> agentDefaultModels = new LinkedHashMap<>();
+        agents.forEach(agent -> renderedModelFor(agent, pickerModels).ifPresent(modelDef -> agentDefaultModels.put(agent.id(), modelDef.id())));
+        model.addAttribute("agentDefaultModels", agentDefaultModels);
         model.addAttribute("models", pickerModels);
         model.addAttribute("pickerEmpty", pickerModels.isEmpty());
-        ModelDefinition renderedModel = pickerModels.stream().anyMatch(candidate -> candidate.id().equals(selection.selectedModel().id()))
-                ? selection.selectedModel() : pickerModels.stream().findFirst().orElse(selection.selectedModel());
+        ModelDefinition renderedModel = selection.explicitModel()
+                ? pickerModels.stream().filter(candidate -> candidate.id().equals(selection.selectedModel().id())).findFirst()
+                        .or(() -> renderedModelFor(selection.selectedAgent(), pickerModels))
+                        .orElse(selection.selectedModel())
+                : renderedModelFor(selection.selectedAgent(), pickerModels).orElse(selection.selectedModel());
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
         model.addAttribute("defaultModel", selection.defaultModel());
@@ -1684,16 +1691,28 @@ public class UiController {
         model.addAttribute("selectedAgent", selection.selectedAgent());
         model.addAttribute("selectedModel", renderedModel);
         model.addAttribute("selectedThinking", selection.selectedThinking());
+        model.addAttribute("selectedModelExplicit", selection.explicitModel());
     }
 
     private ChatSelection defaultChatSelection() {
         AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
         ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-        return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+        return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), false,
+                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
     }
 
     private ModelDefinition resolveAgentModel(AgentDefinition agent) {
         return agentModelResolutionService.resolveForDisplay(agent).model();
+    }
+
+    private Optional<ModelDefinition> renderedModelFor(AgentDefinition agent, List<ModelDefinition> pickerModels) {
+        if (pickerModels.isEmpty()) {
+            return Optional.empty();
+        }
+        return agent.modelIds().stream()
+                .flatMap(id -> pickerModels.stream().filter(model -> model.id().equals(id)))
+                .findFirst()
+                .or(() -> pickerModels.stream().findFirst());
     }
 
     private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {
@@ -1702,7 +1721,8 @@ public class UiController {
         ModelDefinition selectedModel = modelId == null || modelId.isBlank() ? resolveAgentModel(selectedAgent) : modelCatalogService.getRequired(modelId);
         ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank() ? selectedAgent.defaultThinkingLevel() : ThinkingLevel.fromValue(thinkingLevel);
         ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-        return new ChatSelection(selectedAgent, selectedModel, selectedThinking, defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+        return new ChatSelection(selectedAgent, selectedModel, selectedThinking, modelId != null && !modelId.isBlank(),
+                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
     }
 
     private ThinkingLevel resolveThinkingLevelOrDefault(String value, ThinkingLevel fallback) {
@@ -2080,7 +2100,8 @@ public class UiController {
     public record DirectoryEntry(String name, String path, boolean directory) {}
 
     private record ChatSelection(AgentDefinition selectedAgent, ModelDefinition selectedModel, ThinkingLevel selectedThinking,
-                                  AgentDefinition defaultAgent, ModelDefinition defaultModel, ThinkingLevel defaultThinking) {}
+                                  boolean explicitModel, AgentDefinition defaultAgent, ModelDefinition defaultModel,
+                                  ThinkingLevel defaultThinking) {}
 
     private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {}
 

@@ -145,7 +145,7 @@ class ContextCompactionServiceTests {
             this.options.add(options);
             onDelta.accept("streamed ");
             onDelta.accept("summary");
-            return new ModelResponse("streamed summary", null, ModelResponseMetadata.empty());
+            return new ModelResponse("streamed summary", null, ModelResponseMetadata.empty(), null);
         }
     }
 }

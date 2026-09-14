@@ -1553,12 +1553,12 @@ public class AppStateService {
 
     private Message toModelMessage(AppStateRepository.ConversationMessageRow row) {
         return switch (row.role()) {
-            case "assistant" -> new Message(Message.Role.ASSISTANT, row.content(), null, toolCalls(row.toolCallsJson()));
-            case "tool" -> new Message(Message.Role.TOOL, row.content(), row.toolCallId(), null);
+            case "assistant" -> new Message(Message.Role.ASSISTANT, row.content(), null, toolCalls(row.toolCallsJson()), null);
+            case "tool" -> new Message(Message.Role.TOOL, row.content(), row.toolCallId(), null, null);
             case "system" -> row.compactedThroughTurnId() != null
-                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content(), null, null)
-                    : new Message(Message.Role.SYSTEM, row.content(), null, null);
-            case "user" -> new Message(Message.Role.USER, row.content(), null, null);
+                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content(), null, null, null)
+                    : new Message(Message.Role.SYSTEM, row.content(), null, null, null);
+            case "user" -> new Message(Message.Role.USER, row.content(), null, null, null);
             default -> throw new IllegalStateException("Unsupported role: " + row.role());
         };
     }

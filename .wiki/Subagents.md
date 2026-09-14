@@ -6,9 +6,9 @@ Subagents are how Jupiter delegates focused work without turning that work into 
 
 ## What ships with v1?
 
-- **Explore** — read-only codebase exploration; prefers GPT-5.6 Luna, then Claude Sonnet.
-- **Apprentice** — implementation work; prefers GPT-5.6 Luna, then Claude Sonnet.
-- **Test** — testing-focused work; prefers GPT-5.6 Luna, then Claude Sonnet.
+- **Explore** — read-only codebase exploration; prefers GPT-5.6 Luna, then Claude Sonnet 5.
+- **Apprentice** — implementation work; prefers GPT-5.6 Luna, then Claude Sonnet 5.
+- **Test** — testing-focused work; prefers GPT-5.6 Luna, then Claude Sonnet 5.
 
 These ordered preferences use the first available provider before the request. A failed model/API request is not retried with the next preference. Explicit user model selections remain strict; when a default falls back, the child session and generated message retain the preferred model and show the actual model used.
 

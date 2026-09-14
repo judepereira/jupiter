@@ -43,8 +43,8 @@ public class CodingAgentHarnessTaskToolTests {
                         "requestSummary", "Do the thing",
                         "task", "do the thing",
                         "expectedOutput", "done"
-                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
-                new ModelResponse("primary complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
+                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
+                new ModelResponse("primary complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null)
         ));
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp), agentService(primary),
@@ -52,7 +52,7 @@ public class CodingAgentHarnessTaskToolTests {
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "Primary system prompt",
-                List.of(new Message(Message.Role.USER, "hello", null, null)),
+                List.of(new Message(Message.Role.USER, "hello", null, null, null)),
                 tmp.toString(),
                 "primary",
                 null,
@@ -79,8 +79,8 @@ public class CodingAgentHarnessTaskToolTests {
                         "requestSummary", "Recursively call task",
                         "task", "recursively call task",
                         "expectedOutput", "never"
-                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty()),
-                new ModelResponse("subagent complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty())
+                )), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null),
+                new ModelResponse("subagent complete", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null)
         ));
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp), agentService(subagent),
@@ -88,7 +88,7 @@ public class CodingAgentHarnessTaskToolTests {
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest(
                 "Subagent system prompt",
-                List.of(new Message(Message.Role.USER, "hello", null, null)),
+                List.of(new Message(Message.Role.USER, "hello", null, null, null)),
                 tmp.toString(),
                 "engineer",
                 null,
@@ -184,7 +184,7 @@ public class CodingAgentHarnessTaskToolTests {
             capturedConversations.add(List.copyOf(conversation));
             capturedToolDefinitions.add(List.copyOf(tools));
             if (index >= responses.size()) {
-                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
+                return new ModelResponse("", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
             }
             return responses.get(index++);
         }

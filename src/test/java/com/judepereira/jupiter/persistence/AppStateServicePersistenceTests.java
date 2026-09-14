@@ -1396,7 +1396,7 @@ public class AppStateServicePersistenceTests {
             public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
                                                                          ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
                 service.markTurnsIncludeInModelFalse(sessionId, 5);
-                client.chat(List.of(new Message(Message.Role.SYSTEM, "Summarize", null, null), new Message(Message.Role.USER, "transcript", null, null)), List.of(),
+                client.chat(List.of(new Message(Message.Role.SYSTEM, "Summarize", null, null, null), new Message(Message.Role.USER, "transcript", null, null, null)), List.of(),
                         new AgentModelOptions(ignoredModel.id(), ignoredModel.apiModelId(), ignoredThinkingLevel, ignoredModel.supportsReasoning(), ignoredAgent.textVerbosity()));
                 return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 5L));
             }
@@ -1563,7 +1563,7 @@ public class AppStateServicePersistenceTests {
             conversations.add(List.copyOf(conversation));
             toolCalls.add(List.copyOf(tools));
             this.options.add(options);
-            return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
+            return new ModelResponse("compact summary", null, ModelResponseMetadata.empty(), null);
         }
 
         @Override

@@ -37,7 +37,7 @@ class TokenUsageLifecycleAndHarnessTests {
         long sessionId = appStateService.loadViewData().activeSession().id();
         String usageKey = repository.findSessionUsageContext(sessionId).orElseThrow().sessionUsageKey();
         tokenUsageService.recordModelResponse(sessionId, "model-history", "harness",
-                new ModelResponse("done", null, metadata(12, 8, 20)));
+                new ModelResponse("done", null, metadata(12, 8, 20), null));
 
         appStateService.closeSession(sessionId);
 
@@ -76,15 +76,15 @@ class TokenUsageLifecycleAndHarnessTests {
         ToolRegistry registry = new ToolRegistry();
         registry.register(new WriteFileTool());
         AgentModelClient model = new SequenceModel(List.of(
-                new ModelResponse(null, new ToolCall(null, "write_file", Map.of("path", "iteration.txt", "content", "written")), metadata(10, 4, 14)),
-                new ModelResponse("final response", null, metadata(15, 6, 21))));
+                new ModelResponse(null, new ToolCall(null, "write_file", Map.of("path", "iteration.txt", "content", "written")), metadata(10, 4, 14), null),
+                new ModelResponse("final response", null, metadata(15, 6, 21), null)));
         CodingAgentHarness harness = new CodingAgentHarness(
                 fakeFactory(model), registry, properties, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.modelCatalogService(),
                 com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.modelCatalogService()),
                 appStateService, tokenUsageService, null,
                 new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
 
-        AgentTurnRequest request = new AgentTurnRequest("system", List.of(new Message(Message.Role.USER, "user", null, null)), workspacePath.toString(),
+        AgentTurnRequest request = new AgentTurnRequest("system", List.of(new Message(Message.Role.USER, "user", null, null, null)), workspacePath.toString(),
                 null, "openai/gpt-5.6-sol", null, sessionId, null);
         assertThat(harness.runTurn(request).getFinalText()).isEqualTo("final response");
 

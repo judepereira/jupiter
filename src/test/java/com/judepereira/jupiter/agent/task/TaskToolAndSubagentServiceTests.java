@@ -112,7 +112,7 @@ public class TaskToolAndSubagentServiceTests {
         List<List<Message>> captured = new ArrayList<>();
         AgentModelClient model = (conversation, tools) -> {
             captured.add(List.copyOf(conversation));
-            return new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
+            return new ModelResponse("done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
         };
         CodingAgentHarness childHarness = realHarness(model, workspaceRoot);
 

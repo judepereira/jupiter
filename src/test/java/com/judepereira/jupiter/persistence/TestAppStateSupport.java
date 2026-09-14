@@ -208,14 +208,14 @@ public final class TestAppStateSupport {
 
             @Override
             public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
-                return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
+                return new ModelResponse("compact summary", null, ModelResponseMetadata.empty(), null);
             }
 
             @Override
             public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
                                                java.util.function.Consumer<String> onDelta) {
                 onDelta.accept("compact summary");
-                return new ModelResponse("compact summary", null, ModelResponseMetadata.empty());
+                return new ModelResponse("compact summary", null, ModelResponseMetadata.empty(), null);
             }
         };
 

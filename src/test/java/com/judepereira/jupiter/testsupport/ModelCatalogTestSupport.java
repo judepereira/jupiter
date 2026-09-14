@@ -55,23 +55,23 @@ public final class ModelCatalogTestSupport {
                     "output": 128000
                   }
                 },
-                "anthropic/claude-opus-4": {
-                  "id": "anthropic/claude-opus-4",
-                  "name": "Claude Opus 4",
+                "anthropic/claude-opus-5": {
+                  "id": "anthropic/claude-opus-5",
+                  "name": "Claude Opus 5",
                   "reasoning": true,
                   "tool_call": true,
-                  "release_date": "2026-02-15",
+                  "release_date": "2026-07-24",
                   "limit": {
                     "context": 200000,
                     "output": 32000
                   }
                 },
-                "anthropic/claude-sonnet-4": {
-                  "id": "anthropic/claude-sonnet-4",
-                  "name": "Claude Sonnet 4",
+                "anthropic/claude-sonnet-5": {
+                  "id": "anthropic/claude-sonnet-5",
+                  "name": "Claude Sonnet 5",
                   "reasoning": true,
                   "tool_call": true,
-                  "release_date": "2026-02-15",
+                  "release_date": "2026-06-30",
                   "limit": {"context": 200000, "output": 32000}
                 },
                 "openai/gpt-5.6-terra": {

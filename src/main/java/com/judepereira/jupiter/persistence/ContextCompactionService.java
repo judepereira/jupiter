@@ -81,8 +81,8 @@ public class ContextCompactionService {
         AgentModelOptions options = new AgentModelOptions(model.id(), model.apiModelId(), thinkingLevel, model.supportsReasoning(), agent.textVerbosity());
         StringBuilder streamedSummary = new StringBuilder();
         ModelResponse summaryResult = client.chatStreaming(List.of(
-                new Message(Message.Role.SYSTEM, SUMMARY_SYSTEM_PROMPT, null, null),
-                new Message(Message.Role.USER, transcript, null, null)
+                new Message(Message.Role.SYSTEM, SUMMARY_SYSTEM_PROMPT, null, null, null),
+                new Message(Message.Role.USER, transcript, null, null, null)
         ), List.of(), options, delta -> {
             if (delta != null) {
                 streamedSummary.append(delta);

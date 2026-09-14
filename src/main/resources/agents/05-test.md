@@ -1,7 +1,7 @@
 ---
 description: A seasoned test software engineer
 mode: subagent
-model: openai/gpt-5.6-luna, anthropic/claude-sonnet-4
+model: openai/gpt-5.6-luna, anthropic/claude-sonnet-5
 reasoningEffort: medium
 textVerbosity: low
 tools:

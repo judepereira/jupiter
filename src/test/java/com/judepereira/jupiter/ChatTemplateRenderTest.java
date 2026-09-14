@@ -46,6 +46,7 @@ public class ChatTemplateRenderTest {
                         new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null), "GPT-5.6 Sol")
         ));
         context.setVariable("agents", agentService.listPrimaryAgents());
+        context.setVariable("agentDefaultModels", java.util.Map.of("plan", "openai/gpt-5.6-sol"));
         context.setVariable("models", modelService.list());
         context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
         context.setVariable("selectedAgent", agentService.getRequired("plan"));

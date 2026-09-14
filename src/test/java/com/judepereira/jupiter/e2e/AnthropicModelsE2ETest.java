@@ -202,8 +202,8 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
               "openai/gpt-5.6-sol": {"id":"openai/gpt-5.6-sol","name":"OpenAI Test","reasoning":false,"tool_call":true,"limit":{"context":1000,"output":100}},
               "openai/gpt-5.6-terra": {"id":"openai/gpt-5.6-terra","name":"Terra","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
               "openai/gpt-5.6-luna": {"id":"openai/gpt-5.6-luna","name":"Luna","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
-              "anthropic/claude-sonnet-4": {"id":"anthropic/claude-sonnet-4","name":"Claude Sonnet Test","reasoning":true,"tool_call":true,"release_date":"2026-01-01","limit":{"context":1000,"output":100}},
-              "anthropic/claude-opus-4": {"id":"anthropic/claude-opus-4","name":"Claude Opus Test","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}}
+              "anthropic/claude-sonnet-5": {"id":"anthropic/claude-sonnet-5","name":"Claude Sonnet Test","reasoning":true,"tool_call":true,"release_date":"2026-01-01","limit":{"context":1000,"output":100}},
+              "anthropic/claude-opus-5": {"id":"anthropic/claude-opus-5","name":"Claude Opus Test","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}}
             }}
             """;
 }

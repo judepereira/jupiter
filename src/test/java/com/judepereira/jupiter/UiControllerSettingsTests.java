@@ -242,9 +242,9 @@ public class UiControllerSettingsTests {
         long sessionId = context.appStateService().loadViewData().activeSession().id();
         Instant hour = Instant.now().truncatedTo(ChronoUnit.HOURS);
         context.tokenUsageService().recordModelResponse(sessionId, "openai/gpt-5.6-sol", "chat",
-                new ModelResponse("ok", null, new ModelResponseMetadata(10, 5, 15, null, null, null, null, null, null, Map.of())));
+                new ModelResponse("ok", null, new ModelResponseMetadata(10, 5, 15, null, null, null, null, null, null, Map.of()), null));
         context.tokenUsageService().recordModelResponse(sessionId, "stale-model", "chat",
-                new ModelResponse("ok", null, new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of())));
+                new ModelResponse("ok", null, new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of()), null));
 
         ConcurrentModel model = new ConcurrentModel();
         assertThat(context.controller().settingsUsage("7d", model)).isEqualTo("fragments/projects :: settingsUsage");

@@ -34,7 +34,7 @@ public final class SkillContextInjector {
         List<Message> additions = new ArrayList<>();
         for (SkillDefinition skill : resolution.skills()) {
             try {
-                additions.add(new Message(Message.Role.USER, render(skill, load(skill)), null, null));
+                additions.add(new Message(Message.Role.USER, render(skill, load(skill)), null, null, null));
             } catch (Exception e) {
                 additions.add(failure(skill.name()));
             }
@@ -76,7 +76,7 @@ public final class SkillContextInjector {
     }
 
     private static Message failure(String name) {
-        return new Message(Message.Role.USER, "The requested skill `" + name + "` could not be loaded: invalid SKILL.md.", null, null);
+        return new Message(Message.Role.USER, "The requested skill `" + name + "` could not be loaded: invalid SKILL.md.", null, null, null);
     }
 
     private static String escape(String value) {

@@ -355,8 +355,8 @@ public class UiControllerAsyncStreamingTests {
                 conversations.add(List.copyOf(conversation));
                 return switch (index++) {
                     case 0 -> new com.judepereira.jupiter.agent.llm.dto.ModelResponse(null,
-                            new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "big_tool", java.util.Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
-                    default -> new com.judepereira.jupiter.agent.llm.dto.ModelResponse("all done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty());
+                            new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "big_tool", java.util.Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
+                    default -> new com.judepereira.jupiter.agent.llm.dto.ModelResponse("all done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
                 };
             }
         }
