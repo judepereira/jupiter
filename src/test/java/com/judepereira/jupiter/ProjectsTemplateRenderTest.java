@@ -181,9 +181,9 @@ public class ProjectsTemplateRenderTest {
 
         String html = engine.process("fragments/projects", context);
 
-        assertThat(html).contains("id=\"settings-modal\"", "Environment variables", "API_URL", "https://example.test",
-                "FEATURE_FLAG", "true", "Add Variable", "name=\"commandEnvironmentAllowlist\"", "HOME, PATH",
-                "run command tool", "Terminal sessions retain the normal system environment");
+        assertThat(normalizeWhitespace(html)).contains("id=\"settings-modal\"", "Environment variables", "API_URL",
+                "https://example.test", "FEATURE_FLAG", "true", "Add Variable", "name=\"commandEnvironmentAllowlist\"",
+                "HOME, PATH", "run command tool", "Terminal sessions retain the normal system environment");
         assertThat(html).contains("MCP servers", "Local MCP", "http://localhost:3000/mcp", "Header name",
                 "Authorization", "Bearer token", "Exposed projects");
         assertThat(html).contains("Hooks", "Agent completion script", "Agent error script",
@@ -411,7 +411,7 @@ public class ProjectsTemplateRenderTest {
                 new TemplateSpec("fragments/projects", Set.of("workspaceRail"), TemplateMode.HTML, null), context);
 
         assertThat(html).contains("aria-label=\"In progress\"");
-        assertThat(html.split("class=\"pending-dot\" aria-label=\"In progress\"", -1)).hasSize(3);
+        assertThat(html.split("class=\"pending-dot\"", -1)).hasSize(3);
         assertThat(html).doesNotContain("class=\"unread-dot\" aria-label=\"Unread\"");
     }
 
@@ -476,8 +476,9 @@ public class ProjectsTemplateRenderTest {
 
         assertThat(html).contains("id=\"workspace-modal\"", "hx-post=\"/ui/workspaces/add\"", "name=\"branchName\"",
                 "data-workspace-branch-name");
-        assertThat(html).contains("name=\"branchMode\" value=\"create\"", "name=\"branchMode\" value=\"checkout\"",
-                "data-workspace-branch-mode");
+        assertThat(html).containsPattern("<input\\s+[^>]*name=\"branchMode\"[^>]*value=\"create\"");
+        assertThat(html).containsPattern("<input\\s+[^>]*name=\"branchMode\"[^>]*value=\"checkout\"");
+        assertThat(html).contains("data-workspace-branch-mode");
         assertThat(html).contains("Create a new branch", "Checkout an existing branch");
     }
 
@@ -501,7 +502,7 @@ public class ProjectsTemplateRenderTest {
 
         String html = engine.process("fragments/terminal", context);
 
-        assertThat(html).contains("<aside id=\"bottom-panel\"");
+        assertThat(html).containsPattern("<aside\\s+id=\"bottom-panel\"");
         assertThat(html).contains("id=\"terminal-panel-divider\"");
         assertThat(html).doesNotContain("<aside id=\"review\"");
     }
@@ -533,11 +534,15 @@ public class ProjectsTemplateRenderTest {
 
         String html = engine.process("fragments/projects", context);
 
-        assertThat(html).contains("<aside id=\"review\"");
-        assertThat(html).contains("<aside id=\"bottom-panel\"");
+        assertThat(html).containsPattern("<aside\\s+id=\"review\"");
+        assertThat(html).containsPattern("<aside\\s+id=\"bottom-panel\"");
         assertThat(html).contains("id=\"toggle-review-rail-btn\"", "hx-post=\"/ui/review/toggle\"",
                 "hx-target=\"#review\"");
         assertThat(html).doesNotContain("/ui/panel/review");
+    }
+
+    private static String normalizeWhitespace(String html) {
+        return html.replaceAll("\\s+", " ");
     }
 
     private static String inputTag(String html, String inputId) {

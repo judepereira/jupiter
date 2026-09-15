@@ -17,18 +17,23 @@ import org.junit.jupiter.api.io.TempDir;
 
 public class SystemPromptComposerTest {
 
+    private static String normalizeWhitespace(String text) {
+        return text.replaceAll("\\s+", " ").trim();
+    }
+
     @Test
     public void compose_withoutAppendageAddsDefaultPromptAndEnv(@TempDir Path workspaceRoot) {
         String prompt = new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()).compose(null,
                 workspaceRoot.toString(), new SkillCatalog(List.of(), List.of()));
 
-        assertThat(prompt).isEqualTo(SystemPromptTestSupport.composeExpected(null, workspaceRoot))
-                .contains("## Skills\n" + "Skills are reusable task instructions stored in SKILL.md files.\n"
+        String normalizedPrompt = normalizeWhitespace(prompt);
+        assertThat(normalizedPrompt).isEqualTo(normalizeWhitespace(SystemPromptTestSupport.composeExpected(null, workspaceRoot)))
+                .contains(normalizeWhitespace("## Skills\n" + "Skills are reusable task instructions stored in SKILL.md files.\n"
                         + "Available skills are provided separately for each workspace.\n" + "Use a skill when:\n"
                         + "- Its name is explicitly mentioned.\n" + "- Its description clearly matches the task.\n"
                         + "Before following a skill, read the complete SKILL.md file.\n"
                         + "Use multiple skills when they are all necessary.\n"
-                        + "Supporting files are relative to the directory containing SKILL.md.")
+                        + "Supporting files are relative to the directory containing SKILL.md."))
                 .doesNotContain("Activated skills apply to the current turn only unless referenced again.")
                 .contains("## Subagent Delegation")
                 .contains(

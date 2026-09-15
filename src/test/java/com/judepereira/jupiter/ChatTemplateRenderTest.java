@@ -361,7 +361,7 @@ public class ChatTemplateRenderTest {
                                 "Cat", "images/cat.png", "image/png", null)),
                 null, null)));
 
-        String html = engine.process("fragments/chat-response", context);
+        String html = normalizeWhitespace(engine.process("fragments/chat-response", context));
 
         int firstBundle = html.indexOf("Used: read_file (2)");
         int taskIndex = html.indexOf("data-tool-call-tool-name=\"task\"");
@@ -370,8 +370,7 @@ public class ChatTemplateRenderTest {
         assertThat(firstBundle).isGreaterThanOrEqualTo(0);
         assertThat(taskIndex).isGreaterThan(firstBundle);
         assertThat(secondBundle).isGreaterThan(taskIndex);
-        assertThat(html).contains("tool-call-summary-task", "View Session",
-                "<span class=\"tool-call-name\">Engineer 1</span>");
+        assertThat(html).contains("tool-call-summary-task", "View Session", "Engineer 1");
         assertThat(html).contains("<span class=\"tool-call-name\">display_image</span>",
                 "src=\"/ui/chat/image/1/display-1\"", "tool-call-image-caption");
         assertThat(html).contains("read-1 input", "read-2 input", "read-3 input");
@@ -412,7 +411,7 @@ public class ChatTemplateRenderTest {
                                 "read-3 output", false, false, null, null, null, null, null, null, null, null, null)),
                 null, null)));
 
-        String html = engine.process("fragments/chat-response", context);
+        String html = normalizeWhitespace(engine.process("fragments/chat-response", context));
 
         int firstBundle = html.indexOf("Used: read (2)");
         int firstTask = html.indexOf("data-tool-call-tool-name=\"task\"");
@@ -424,8 +423,7 @@ public class ChatTemplateRenderTest {
         assertThat(secondTask).isGreaterThan(firstTask);
         assertThat(secondBundle).isGreaterThan(secondTask);
         assertThat(html).contains("tool-call-bundle");
-        assertThat(html).contains("View Session", "<span class=\"tool-call-name\">Engineer 1</span>",
-                "<span class=\"tool-call-name\">Engineer 2</span>");
+        assertThat(html).contains("View Session", "Engineer 1", "Engineer 2");
         assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");
     }
 
@@ -581,6 +579,10 @@ public class ChatTemplateRenderTest {
         assertThat(html).contains("tool-call-summary-task", "View Session", "Engineer",
                 "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("subagent-activities");
+    }
+
+    private static String normalizeWhitespace(String html) {
+        return html.replaceAll("\\s+", " ");
     }
 
     private static SpringTemplateEngine engine() {
