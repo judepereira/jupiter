@@ -197,6 +197,19 @@ public class UiControllerSettingsTests {
     }
 
     @Test
+    public void emptyModelSelectionReturnsValidationResponse(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        when(context.providerAvailabilityService().isAvailable("openai")).thenReturn(true);
+
+        ConcurrentModel model = new ConcurrentModel();
+        String view = context.controller().replaceSelectedModels("openai", null, model);
+
+        assertThat(view).isEqualTo("fragments/projects :: settingsModelsOobResponse");
+        assertThat(model.getAttribute("modelSelectionError")).isEqualTo("Select at least one model before saving.");
+        verify(context.modelPreferencesService(), never()).replaceSelectedModelIds(Mockito.anyString(), Mockito.any());
+    }
+
+    @Test
     public void logoutEndpointClearsOpenAiOAuthState(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
         OpenAiOAuthService.OpenAiOAuthView disconnected = new OpenAiOAuthService.OpenAiOAuthView(false, false,
@@ -410,13 +423,15 @@ public class UiControllerSettingsTests {
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)), executor);
 
         CommandCatalogService commandCatalogService = new CommandCatalogService(commandRoot.toString());
+        ModelPreferencesService modelPreferencesService = Mockito.mock(ModelPreferencesService.class);
+        ProviderAvailabilityService providerAvailabilityService = Mockito.mock(ProviderAvailabilityService.class);
         return new TestContext(appStateService, tokenUsageService, openAiOAuthService, mcpRuntimeManager,
-                gitAutoUpdateService, executor,
+                gitAutoUpdateService, executor, modelPreferencesService, providerAvailabilityService,
                 new UiController(mock(CodingAgentHarness.class), properties, appStateService,
                         new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
                         ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
-                        Mockito.mock(ModelPickerService.class), Mockito.mock(ModelPreferencesService.class),
-                        Mockito.mock(ProviderAvailabilityService.class), Mockito.mock(AnthropicOAuthService.class),
+                        Mockito.mock(ModelPickerService.class), modelPreferencesService, providerAvailabilityService,
+                        Mockito.mock(AnthropicOAuthService.class),
                         new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                         new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                                 (emitter, eventName, data) -> emitter
@@ -431,8 +446,9 @@ public class UiControllerSettingsTests {
 
     private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService,
             OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
-            GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor, UiController controller,
-            CommandCatalogService commandCatalogService) {
+            GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor,
+            ModelPreferencesService modelPreferencesService, ProviderAvailabilityService providerAvailabilityService,
+            UiController controller, CommandCatalogService commandCatalogService) {
     }
 
     private static final class QueuedExecutor extends AbstractExecutorService {

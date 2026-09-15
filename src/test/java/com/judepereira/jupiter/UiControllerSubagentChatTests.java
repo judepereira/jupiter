@@ -119,7 +119,8 @@ public class UiControllerSubagentChatTests {
     }
 
     @Test
-    public void loadPrimaryChatPrefersLatestAssistantMetadataForPrimaryControls(@TempDir Path workspaceRoot) {
+    public void loadPrimaryChatRestoresAgentIdentityAndUsesFrontmatterModelAndThinkingDefaults(
+            @TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
@@ -136,11 +137,12 @@ public class UiControllerSubagentChatTests {
         controller.loadPrimaryChat(model);
 
         assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
-        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.MEDIUM);
     }
 
     @Test
-    public void indexUsesLatestAssistantMetadataForActiveSessionControls(@TempDir Path workspaceRoot) {
+    public void indexRestoresAgentIdentityAndUsesFrontmatterModelAndThinkingDefaults(@TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
@@ -156,6 +158,7 @@ public class UiControllerSubagentChatTests {
 
         assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
         assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.MEDIUM);
     }
 
     private static UiController controller(AppStateService appStateService, Path workspaceRoot) {

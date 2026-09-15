@@ -579,6 +579,20 @@ public class AppStateServicePersistenceTests {
                 .satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
     }
     @Test
+    public void modelSelectionInitializationIsAtomicAndPreservesExistingRows() {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateRepository repository = context.repository();
+
+        repository.initializeSelectedModelIds("openai", List.of("openai/one", "openai/two"));
+        repository.initializeSelectedModelIds("openai", List.of("openai/three"));
+        repository.initializeSelectedModelIds("anthropic", List.of("anthropic/stale"));
+
+        assertThat(repository.loadSelectedModelIds("openai")).containsExactly("openai/one", "openai/two");
+        assertThat(repository.loadSelectedModelIds("anthropic")).containsExactly("anthropic/stale");
+    }
+
+    @Test
     public void assistantModelPreferencesAreEncryptedAndRoundTrip(@TempDir Path projectPath) {
         TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
         });
@@ -1510,7 +1524,7 @@ public class AppStateServicePersistenceTests {
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model",
                 ThinkingLevel.LOW, null, true, true, List.of());
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, false, 5000, 32, null,
-                null, null);
+                null, null, null, null, List.of("text"), List.of("text"));
 
         compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(),
                 "next user " + "q".repeat(20)).orElseThrow();
@@ -1575,7 +1589,7 @@ public class AppStateServicePersistenceTests {
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model",
                 ThinkingLevel.LOW, null, true, true, List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, false, 5000, 32, null,
-                null, null);
+                null, null, null, null, List.of("text"), List.of("text"));
 
         compactionService
                 .compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(), null)

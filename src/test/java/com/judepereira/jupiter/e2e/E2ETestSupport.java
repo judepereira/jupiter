@@ -23,7 +23,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -35,18 +34,19 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
 @ExtendWith(E2ETestSupport.SharedBrowserExtension.class)
+@ResourceLock("e2e-app-lifecycle")
 abstract class E2ETestSupport {
 
     private static final ExtensionContext.Namespace PLAYWRIGHT_NAMESPACE = ExtensionContext.Namespace
             .create(E2ETestSupport.class);
     private static final String SHARED_BROWSER_RESOURCE = "shared-browser";
     private static volatile SharedBrowser sharedBrowser;
-
     protected static Browser sharedBrowser() {
         SharedBrowser resource = sharedBrowser;
         if (resource == null) {
@@ -194,8 +194,7 @@ abstract class E2ETestSupport {
             AppStateRepository repository = bootstrap.context().getBean(AppStateRepository.class);
             repository.updateOpenAiOAuthState("e2e-access-token", "e2e-refresh-token", "e2e-id-token", "e2e-account",
                     Instant.now().plusSeconds(3600));
-            repository.updateProviderInitialized("openai", true);
-            repository.updateFavouriteModelIds(List.of("openai/gpt-5.6-sol"));
+            repository.replaceSelectedModelIds("openai", List.of("openai/gpt-5.6-sol"));
         } finally {
             bootstrap.close();
         }
@@ -206,9 +205,6 @@ abstract class E2ETestSupport {
             Class<?>... testConfigClasses) {
         String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize()
                 + "?journal_mode=WAL&foreign_keys=on&busy_timeout=30000";
-        Map<String, String> previousProperties = new HashMap<>();
-        overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
-        additionalProperties.forEach((key, value) -> overrideSystemProperty(previousProperties, key, value));
         Class<?>[] sources = Stream
                 .concat(Stream.of(Jupiter.class, TestEncryptionConfiguration.class), Arrays.stream(testConfigClasses))
                 .toArray(Class<?>[]::new);
@@ -239,10 +235,10 @@ abstract class E2ETestSupport {
                     "http://127.0.0.1:" + catalogServer.getAddress().getPort() + "/catalog.json");
         }
         properties.putAll(additionalProperties);
+        String[] applicationArguments = properties.entrySet().stream()
+                .map(entry -> "--" + entry.getKey() + "=" + entry.getValue()).toArray(String[]::new);
         ConfigurableApplicationContext context = new SpringApplicationBuilder(sources).web(WebApplicationType.SERVLET)
-                .properties(properties.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue())
-                        .toArray(String[]::new))
-                .run();
+                .run(applicationArguments);
 
         Integer port = context.getEnvironment().getProperty("local.server.port", Integer.class);
         if (port == null) {
@@ -253,22 +249,6 @@ abstract class E2ETestSupport {
         return new RunningApp(context, "http://localhost:" + port, () -> {
             if (finalCatalogServer != null) {
                 finalCatalogServer.stop(0);
-            }
-            restoreSystemProperties(previousProperties);
-        });
-    }
-
-    private static void overrideSystemProperty(Map<String, String> previousProperties, String key, String value) {
-        previousProperties.put(key, System.getProperty(key));
-        System.setProperty(key, value);
-    }
-
-    private static void restoreSystemProperties(Map<String, String> previousProperties) {
-        previousProperties.forEach((key, value) -> {
-            if (value == null) {
-                System.clearProperty(key);
-            } else {
-                System.setProperty(key, value);
             }
         });
     }

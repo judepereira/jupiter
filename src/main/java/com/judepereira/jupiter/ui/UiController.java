@@ -204,7 +204,7 @@ public class UiController {
             if (modelPickerService != null && modelPickerService.listPickerModels().stream()
                     .noneMatch(candidate -> candidate.id().equals(selectedModelId))) {
                 throw new IllegalArgumentException(
-                        "That model is no longer available. Choose an available favourite model in Settings.");
+                        "That model is no longer available. Choose an available model in Settings.");
             }
             if (view.activeSession() != null
                     && activeStreamRegistryService.hasActiveStreamForSession(view.activeSession().id())) {
@@ -1026,21 +1026,33 @@ public class UiController {
     private void populateSettingsModels(Model model) {
         var modelGroups = modelCatalogService.list().stream()
                 .collect(Collectors.groupingBy(ModelDefinition::provider, LinkedHashMap::new, Collectors.toList()));
+        var availability = modelGroups.keySet().stream().collect(Collectors.toMap(provider -> provider,
+                providerAvailabilityService::isAvailable, (left, right) -> right, LinkedHashMap::new));
         model.addAttribute("modelGroups", modelGroups);
-        model.addAttribute("providerAvailability",
-                modelGroups.keySet().stream().collect(Collectors.toMap(provider -> provider,
-                        providerAvailabilityService::isAvailable, (left, right) -> right, LinkedHashMap::new)));
-        model.addAttribute("favouriteModelIds", modelPreferencesService.favouriteModelIds());
+        model.addAttribute("providerAvailability", availability);
+        model.addAttribute("selectedModelIds",
+                availability.entrySet().stream().filter(Map.Entry::getValue)
+                        .collect(Collectors.toMap(Map.Entry::getKey,
+                                entry -> modelPreferencesService.selectedModelIds(entry.getKey()),
+                                (left, right) -> right, LinkedHashMap::new)));
     }
 
-    @PostMapping("/ui/settings/models/favourite")
-    public String toggleModelFavourite(@RequestParam String modelId,
-            @RequestParam(defaultValue = "true") boolean favourite, Model model) {
-        modelCatalogService.getRequired(modelId);
-        modelPreferencesService.setFavourite(modelId, favourite);
+    @PostMapping("/ui/settings/models")
+    public String replaceSelectedModels(@RequestParam String provider,
+            @RequestParam(value = "modelId", required = false) List<String> modelIds, Model model) {
+        if (!modelCatalogService.hasProviderModel(provider))
+            throw new IllegalArgumentException("Unsupported model provider: " + provider);
+        if (!providerAvailabilityService.isAvailable(provider))
+            throw new IllegalArgumentException("Model provider is not connected: " + provider);
+        if (modelIds == null || modelIds.isEmpty()) {
+            populateSettingsModel(model);
+            model.addAttribute("modelSelectionError", "Select at least one model before saving.");
+            return "fragments/projects :: settingsModelsOobResponse";
+        }
+        modelPreferencesService.replaceSelectedModelIds(provider, modelIds);
         populateSettingsModel(model);
         populateChatControlsOob(model);
-        return "fragments/projects :: settingsModelsWithChatControls";
+        return "fragments/projects :: settingsModelsOobResponse";
     }
 
     @PostMapping("/ui/settings/commands/create")
@@ -1724,13 +1736,11 @@ public class UiController {
             }
             ChatMessageMetadata metadata = message.metadata();
             AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
-            ModelDefinition selectedModel = modelCatalogService.getRequired(metadata.modelId());
-            ThinkingLevel selectedThinking = resolveThinkingLevelOrDefault(metadata.thinkingLevel(),
-                    selectedAgent.defaultThinkingLevel());
+            ModelDefinition selectedModel = resolveAgentModel(selectedAgent);
             AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
             ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, true, defaultAgent, defaultModel,
-                    defaultAgent.defaultThinkingLevel());
+            return new ChatSelection(selectedAgent, selectedModel, selectedAgent.defaultThinkingLevel(), false,
+                    defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
         }
         return null;
     }
@@ -1741,21 +1751,22 @@ public class UiController {
         List<ModelDefinition> pickerModels = modelPickerService == null
                 ? modelCatalogService.list()
                 : modelPickerService.listPickerModels();
-        // Only mark a rendered model implicit when it is one of the agent's
-        // preferences.
-        // The picker fallback is a real selection and must therefore be submitted
-        // explicitly.
         Map<String, String> agentDefaultModels = new LinkedHashMap<>();
-        agents.forEach(agent -> preferredModelInPicker(agent, pickerModels)
-                .ifPresent(modelDef -> agentDefaultModels.put(agent.id(), modelDef.id())));
+        agents.forEach(agent -> {
+            try {
+                ModelDefinition defaultModel = resolveAgentModel(agent);
+                if (defaultModel != null) {
+                    agentDefaultModels.put(agent.id(), defaultModel.id());
+                }
+            } catch (IllegalStateException ignored) {
+                // Keep an unavailable agent visibly unselected rather than choosing a
+                // selected model.
+            }
+        });
         model.addAttribute("agentDefaultModels", agentDefaultModels);
         model.addAttribute("models", pickerModels);
         model.addAttribute("pickerEmpty", pickerModels.isEmpty());
-        ModelDefinition renderedModel = selection.explicitModel()
-                ? pickerModels.stream().filter(candidate -> candidate.id().equals(selection.selectedModel().id()))
-                        .findFirst().or(() -> renderedModelFor(selection.selectedAgent(), pickerModels))
-                        .orElse(selection.selectedModel())
-                : renderedModelFor(selection.selectedAgent(), pickerModels).orElse(selection.selectedModel());
+        ModelDefinition renderedModel = selection.selectedModel();
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
         model.addAttribute("defaultModel", selection.defaultModel());
@@ -1774,17 +1785,11 @@ public class UiController {
     }
 
     private ModelDefinition resolveAgentModel(AgentDefinition agent) {
-        return agentModelResolutionService.resolveForDisplay(agent).model();
-    }
-
-    private Optional<ModelDefinition> preferredModelInPicker(AgentDefinition agent,
-            List<ModelDefinition> pickerModels) {
-        return agent.modelIds().stream().flatMap(id -> pickerModels.stream().filter(model -> model.id().equals(id)))
-                .findFirst();
-    }
-
-    private Optional<ModelDefinition> renderedModelFor(AgentDefinition agent, List<ModelDefinition> pickerModels) {
-        return preferredModelInPicker(agent, pickerModels).or(() -> pickerModels.stream().findFirst());
+        try {
+            return agentModelResolutionService.resolve(agent).model();
+        } catch (IllegalStateException e) {
+            return null;
+        }
     }
 
     private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {
@@ -1801,18 +1806,6 @@ public class UiController {
         ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
         return new ChatSelection(selectedAgent, selectedModel, selectedThinking, modelId != null && !modelId.isBlank(),
                 defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
-    }
-
-    private ThinkingLevel resolveThinkingLevelOrDefault(String value, ThinkingLevel fallback) {
-        if (value == null || value.isBlank()) {
-            return fallback;
-        }
-        try {
-            return ThinkingLevel.fromValue(value);
-        } catch (IllegalArgumentException e) {
-            log.warn("Ignoring stale chat thinking level metadata '{}'; using {}", value, fallback);
-            return fallback;
-        }
     }
 
     private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {

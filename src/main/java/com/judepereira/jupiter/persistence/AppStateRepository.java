@@ -25,6 +25,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 @RequiredArgsConstructor
@@ -379,46 +380,38 @@ public class AppStateRepository {
                 new MapSqlParameterSource());
     }
 
-    public List<String> loadFavouriteModelIds() {
-        String json = jdbc.queryForObject("SELECT favourite_model_ids_json FROM app_state WHERE id = 1",
-                new MapSqlParameterSource(), String.class);
-        if (json == null)
-            return List.of();
-        try {
-            return List.copyOf(objectMapper.readValue(dec("app_state", "favourite_model_ids_json", json),
-                    objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)));
-        } catch (Exception e) {
-            throw new IllegalStateException("Invalid favourite model ids", e);
+    public List<String> loadSelectedModelIds(String provider) {
+        return jdbc.query(
+                "SELECT model_id FROM provider_model_selections WHERE provider = :provider ORDER BY model_id ASC",
+                new MapSqlParameterSource("provider", provider), (rs, rowNum) -> rs.getString("model_id"));
+    }
+
+    @Transactional
+    public void initializeSelectedModelIds(String provider, Collection<String> modelIds) {
+        var ids = modelIds.stream().distinct().toList();
+        if (ids.isEmpty())
+            return;
+
+        var values = new StringBuilder("SELECT :modelId0 AS model_id");
+        var params = new MapSqlParameterSource("provider", provider).addValue("modelId0", ids.get(0));
+        for (int i = 1; i < ids.size(); i++) {
+            values.append(" UNION ALL SELECT :modelId").append(i);
+            params.addValue("modelId" + i, ids.get(i));
         }
+        jdbc.update(
+                "INSERT OR IGNORE INTO provider_model_selections (provider, model_id) "
+                        + "SELECT :provider, model_id FROM (" + values + ") "
+                        + "WHERE NOT EXISTS (SELECT 1 FROM provider_model_selections WHERE provider = :provider)",
+                params);
     }
 
-    public void updateFavouriteModelIds(List<String> modelIds) {
-        try {
-            String json = objectMapper.writeValueAsString(modelIds);
-            jdbc.update("UPDATE app_state SET favourite_model_ids_json = :ids WHERE id = 1",
-                    new MapSqlParameterSource("ids", enc("app_state", "favourite_model_ids_json", json)));
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not serialize favourite model ids", e);
-        }
-    }
-
-    public boolean isProviderInitialized(String provider) {
-        String column = providerColumn(provider);
-        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT " + column + " FROM app_state WHERE id = 1",
-                new MapSqlParameterSource(), Boolean.class));
-    }
-
-    public void updateProviderInitialized(String provider, boolean initialized) {
-        jdbc.update("UPDATE app_state SET " + providerColumn(provider) + " = :initialized WHERE id = 1",
-                new MapSqlParameterSource("initialized", initialized));
-    }
-
-    private static String providerColumn(String provider) {
-        return switch (provider) {
-            case "openai" -> "openai_initialized";
-            case "anthropic" -> "anthropic_initialized";
-            default -> throw new IllegalArgumentException("Unknown provider: " + provider);
-        };
+    @Transactional
+    public void replaceSelectedModelIds(String provider, Collection<String> modelIds) {
+        var params = new MapSqlParameterSource("provider", provider);
+        jdbc.update("DELETE FROM provider_model_selections WHERE provider = :provider", params);
+        jdbc.batchUpdate("INSERT INTO provider_model_selections (provider, model_id) VALUES (:provider, :modelId)",
+                modelIds.stream().distinct().map(modelId -> new MapSqlParameterSource().addValue("provider", provider)
+                        .addValue("modelId", modelId)).toArray(MapSqlParameterSource[]::new));
     }
 
     void updateAppState(Long projectId, Long workspaceId, Long sessionId) {
