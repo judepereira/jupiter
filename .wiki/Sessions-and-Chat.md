@@ -6,13 +6,15 @@ A session is a persisted coding conversation inside one workspace.
 
 ## More than one session
 
-You can create several sessions for the same workspace and switch between them from the rail. Messages, tool traces, drafts, and review state all live on the server.
+You can create several sessions for the same workspace and switch between them from the rail. Messages, tool traces,
+drafts, and review state all live on the server.
 
 ## Streaming and reconnects
 
 Assistant text and tool activity stream over Server-Sent Events.
 
-Jupiter persists partial assistant output while a turn is running. If the browser connection drops, the UI can attach again to the active server-side stream instead of pretending the turn never happened.
+Jupiter persists partial assistant output while a turn is running. If the browser connection drops, the UI can attach
+again to the active server-side stream instead of pretending the turn never happened.
 
 ## Stopping a turn
 
@@ -24,7 +26,8 @@ Unsent composer text is saved per session, which means you can navigate elsewher
 
 ## Message details
 
-Completed assistant messages record the agent, model, thinking level, duration, and completion time. Markdown is rendered with Marked and sanitized with DOMPurify.
+Completed assistant messages record the agent, model, thinking level, duration, and completion time. Markdown is
+rendered with Marked and sanitized with DOMPurify.
 
 ## Forking
 

@@ -1,6 +1,7 @@
 # Reverse Proxy and HTTPS
 
-Jupiter works behind a TLS-terminating reverse proxy, but the proxy needs to understand that not every request is a short-lived HTML response.
+Jupiter works behind a TLS-terminating reverse proxy, but the proxy needs to understand that not every request is a
+short-lived HTML response.
 
 ## Three things the proxy must support
 
@@ -20,7 +21,8 @@ Jupiter understands the usual comma-separated proxy-header form when deciding wh
 
 ## Basic auth still needs TLS
 
-Credentials are sent on every protected request, including static resources, SSE connections, and the WebSocket handshake.
+Credentials are sent on every protected request, including static resources, SSE connections, and the WebSocket
+handshake.
 
 Basic auth does not encrypt any of that. Use HTTPS outside a trusted local network.
 

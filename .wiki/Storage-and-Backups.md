@@ -20,7 +20,8 @@ Flyway handles schema migrations at startup.
 
 ## What’s actually in the database?
 
-Projects, workspaces, sessions, messages, tool traces, review state, project settings, MCP configuration, OAuth state, Git-update state, lifecycle-hook settings, and token usage.
+Projects, workspaces, sessions, messages, tool traces, review state, project settings, MCP configuration, OAuth state,
+Git-update state, lifecycle-hook settings, and token usage.
 
 Sensitive text fields are encrypted at the persistence boundary.
 
@@ -41,4 +42,5 @@ With WAL enabled, copying only `jupiter.sqlite` while the application is active 
 
 ## Restore
 
-Restore the database state and start Jupiter with the original key. A mismatched key is rejected during encrypted-state validation.
+Restore the database state and start Jupiter with the original key. A mismatched key is rejected during encrypted-state
+validation.

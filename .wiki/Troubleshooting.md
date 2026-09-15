@@ -6,7 +6,8 @@ Most Jupiter failures fall into a few predictable buckets. Check these before di
 
 Use the same Base64 key that created or migrated the existing database.
 
-Do **not** generate a fresh key for an existing `~/.jupiter` directory. That creates a new secret, not a clever way to recover the old one.
+Do **not** generate a fresh key for an existing `~/.jupiter` directory. That creates a new secret, not a clever way to
+recover the old one.
 
 ## “ripgrep is unavailable”
 
@@ -38,7 +39,8 @@ Also check whether two connected servers are producing the same effective tool n
 
 ## Automatic Git update keeps getting skipped
 
-If the branch has no upstream, Jupiter needs either `origin` or exactly one unambiguous remote with the same branch name.
+If the branch has no upstream, Jupiter needs either `origin` or exactly one unambiguous remote with the same branch
+name.
 
 ## Jupiter asks before closing a workspace
 

@@ -24,7 +24,8 @@ Everything except exactly:
 GET /health
 ```
 
-That means the UI, static files, error routes, SSE connections, and WebSocket handshakes all require credentials once auth is enabled.
+That means the UI, static files, error routes, SSE connections, and WebSocket handshakes all require credentials once
+auth is enabled.
 
 ## Comparison behaviour
 

@@ -1,13 +1,15 @@
 # Security Model
 
-Jupiter is powerful software running next to real source code. Credentials are kept out of places they don’t belong, but it’s important not to confuse those protections with a sandbox.
+Jupiter is powerful software running next to real source code. Credentials are kept out of places they don’t belong, but
+it’s important not to confuse those protections with a sandbox.
 
 ## What Jupiter does protect
 
 - Sensitive persisted text is encrypted with authenticated encryption at the repository boundary.
 - Normal native startup reads the master key from stdin rather than Java environment variables or arguments.
 - Linux startup applies `PR_SET_DUMPABLE=0`; the recommended Java launch also disables JVM attach.
-- Jupiter’s encryption and HTTP-auth credentials are removed before managed child processes start. This specific sanitizer does not include `OPENAI_API_KEY`.
+- Jupiter’s encryption and HTTP-auth credentials are removed before managed child processes start. This specific
+  sanitizer does not include `OPENAI_API_KEY`.
 - Agent `run_command` only receives allowlisted host variables plus project variables.
 - Optional Basic auth protects every route except `GET /health`.
 - Agent-displayed images disable MIME sniffing and caching.
@@ -32,6 +34,8 @@ v1 also has no multi-user authorisation, per-project ACLs, container-per-agent i
 
 Only give Jupiter access to users you trust with powerful development access on that host.
 
-If you need a stronger boundary, put Jupiter itself inside a VM, container, or dedicated host designed around the repositories and credentials it may reach.
+If you need a stronger boundary, put Jupiter itself inside a VM, container, or dedicated host designed around the
+repositories and credentials it may reach.
 
-See [Encryption and Key Management](Encryption-and-Key-Management) and [Process and Credential Isolation](Process-and-Credential-Isolation).
+See [Encryption and Key Management](Encryption-and-Key-Management) and
+[Process and Credential Isolation](Process-and-Credential-Isolation).

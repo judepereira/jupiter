@@ -18,7 +18,8 @@ On smaller screens this turns into the mobile navigation rail rather than squeez
 
 ## Chat
 
-The centre panel streams assistant text and tool activity. The composer is also where you choose the agent, model, and thinking level for the next turn.
+The centre panel streams assistant text and tool activity. The composer is also where you choose the agent, model, and
+thinking level for the next turn.
 
 ## Review
 
@@ -30,6 +31,7 @@ The bottom panel contains one or more real PTY terminals for the active workspac
 
 ## Settings and notifications
 
-Project environment, MCP servers, lifecycle hooks, Git updates, usage, and OpenAI connection settings all live in **Settings**.
+Project environment, MCP servers, lifecycle hooks, Git updates, usage, and OpenAI connection settings all live in
+**Settings**.
 
 Warnings and errors appear as system balloons, so failures don’t disappear into server logs unless they really have to.
