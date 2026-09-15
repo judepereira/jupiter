@@ -1,6 +1,7 @@
 # Keyboard Shortcuts
 
-There are only a few global shortcuts at the moment — enough to save clicks without turning Jupiter into a keyboard-memory test.
+There are only a few global shortcuts at the moment — enough to save clicks without turning Jupiter into a
+keyboard-memory test.
 
 |        Shortcut        |          Action           |
 |------------------------|---------------------------|

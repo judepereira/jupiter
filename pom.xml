@@ -259,6 +259,9 @@
                         </excludes>
                         <flexmark>
                             <emulationProfile>COMMONMARK</emulationProfile>
+                            <formatterOptions>
+                                <rightMargin>120</rightMargin>
+                            </formatterOptions>
                         </flexmark>
                     </markdown>
                 </configuration>

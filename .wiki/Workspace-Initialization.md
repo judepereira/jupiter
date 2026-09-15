@@ -1,6 +1,7 @@
 # Workspace Initialization
 
-Some repositories need a little setup before they’re useful. Workspace initialization lets you automate that setup every time Jupiter creates a new worktree.
+Some repositories need a little setup before they’re useful. Workspace initialization lets you automate that setup every
+time Jupiter creates a new worktree.
 
 ## Configure it
 
@@ -15,11 +16,13 @@ Jupiter doesn’t try to understand Maven, npm, or any other build system here. 
 
 ## What happens after workspace creation?
 
-Jupiter creates a real terminal called **Workspace Init**, opens the bottom panel, and writes the configured commands into it.
+Jupiter creates a real terminal called **Workspace Init**, opens the bottom panel, and writes the configured commands
+into it.
 
 The terminal starts inside the new workspace directory.
 
-Project environment variables are available. Jupiter’s encryption and HTTP-authentication credentials are removed before the terminal process starts.
+Project environment variables are available. Jupiter’s encryption and HTTP-authentication credentials are removed before
+the terminal process starts.
 
 ## Why make it visible?
 

@@ -1,6 +1,7 @@
 # Remote Deployment
 
-Remote access is a primary use case for Jupiter, but there’s an important distinction between “remote” and “publicly exposed to the internet”.
+Remote access is a primary use case for Jupiter, but there’s an important distinction between “remote” and “publicly
+exposed to the internet”.
 
 ## Recommended setup: a private network
 
@@ -23,7 +24,8 @@ See [Reverse Proxy and HTTPS](Reverse-Proxy-and-HTTPS).
 
 ## The trust model
 
-A user who can successfully access Jupiter can run coding agents and use an interactive shell against your source environment.
+A user who can successfully access Jupiter can run coding agents and use an interactive shell against your source
+environment.
 
 Basic auth is an access gate. It is **not** per-user authorisation, repository ACLs, or sandboxing.
 
@@ -31,4 +33,5 @@ So, don’t share one Jupiter instance between mutually untrusted users.
 
 ## Backups
 
-Back up `~/.jupiter/jupiter.sqlite` and the matching encryption key separately. See [Storage and Backups](Storage-and-Backups).
+Back up `~/.jupiter/jupiter.sqlite` and the matching encryption key separately. See
+[Storage and Backups](Storage-and-Backups).

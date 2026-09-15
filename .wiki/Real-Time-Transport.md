@@ -1,6 +1,7 @@
 # Real-Time Transport
 
-Jupiter uses SSE where traffic mostly flows from server to browser, and WebSockets where it genuinely needs two-way traffic.
+Jupiter uses SSE where traffic mostly flows from server to browser, and WebSockets where it genuinely needs two-way
+traffic.
 
 ## Server-Sent Events
 

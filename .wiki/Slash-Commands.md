@@ -1,6 +1,7 @@
 # Slash Commands
 
-Slash commands are Markdown files with YAML frontmatter. They’re deliberately simple enough that adding one doesn’t require touching Java.
+Slash commands are Markdown files with YAML frontmatter. They’re deliberately simple enough that adding one doesn’t
+require touching Java.
 
 ![Slash command picker](images/slash-commands.png)
 

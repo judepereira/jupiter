@@ -26,9 +26,11 @@ env -u JUPITER_ENCRYPTION_KEY java \
 
 The Base64 value must decode to exactly 32 bytes.
 
-The command looks a little more elaborate than `java -jar`, but there’s a reason for it: the key never needs to live in the target JVM environment or command line.
+The command looks a little more elaborate than `java -jar`, but there’s a reason for it: the key never needs to live in
+the target JVM environment or command line.
 
-`--enable-native-access=ALL-UNNAMED` allows Jupiter’s Linux process-hardening call; `-XX:+DisableAttachMechanism` disables JVM attach.
+`--enable-native-access=ALL-UNNAMED` allows Jupiter’s Linux process-hardening call; `-XX:+DisableAttachMechanism`
+disables JVM attach.
 
 ## Enter the key interactively
 
@@ -46,4 +48,5 @@ env -u JUPITER_ENCRYPTION_KEY java \
 
 ## Why not `spring-boot:run`?
 
-For production-like use, the packaged JAR is recommended. It makes stdin ownership and the JVM hardening flags explicit instead of relying on Maven to mediate them correctly.
+For production-like use, the packaged JAR is recommended. It makes stdin ownership and the JVM hardening flags explicit
+instead of relying on Maven to mediate them correctly.
