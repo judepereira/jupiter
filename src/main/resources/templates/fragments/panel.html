@@ -1,4 +1,6 @@
 <!doctype html>
 <div th:fragment="panel(panelName)">
-    <div class="panel-placeholder" th:attr="data-panel-name=${panelName}">Panel: <span th:text="${panelName}"></span></div>
+    <div class="panel-placeholder" th:attr="data-panel-name=${panelName}">
+        Panel: <span th:text="${panelName}"></span>
+    </div>
 </div>

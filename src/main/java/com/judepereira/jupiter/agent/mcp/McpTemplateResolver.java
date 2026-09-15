@@ -36,7 +36,8 @@ final class McpTemplateResolver {
 
         Map<String, String> resolved = new LinkedHashMap<>();
         for (McpServerHeader header : headers) {
-            resolved.put(header.name(), resolve("MCP header " + header.name(), header.value(), projectEnvironmentVariables));
+            resolved.put(header.name(),
+                    resolve("MCP header " + header.name(), header.value(), projectEnvironmentVariables));
         }
         return Map.copyOf(resolved);
     }

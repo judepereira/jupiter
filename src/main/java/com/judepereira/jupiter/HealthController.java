@@ -11,11 +11,8 @@ class HealthController {
 
     @GetMapping(value = "/health", produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<HealthResponse> health() {
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .header(HttpHeaders.PRAGMA, "no-cache")
-                .header(HttpHeaders.EXPIRES, "0")
-                .body(new HealthResponse("UP"));
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").header(HttpHeaders.PRAGMA, "no-cache")
+                .header(HttpHeaders.EXPIRES, "0").body(new HealthResponse("UP"));
     }
 
     record HealthResponse(String status) {

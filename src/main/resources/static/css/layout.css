@@ -45,7 +45,6 @@
     grid-row: 1 / span 2;
 }
 
-
 .bottom-rail {
     position: fixed;
     left: 0;
@@ -65,7 +64,6 @@
     align-items: center;
     justify-content: flex-start;
 }
-
 
 .rail .panel-placeholder {
     display: none;
@@ -137,7 +135,7 @@
     padding: 0;
     margin: 0 8px 0 0;
     overflow: hidden;
-    border-top: 1px solid #dce5f2
+    border-top: 1px solid #dce5f2;
 }
 
 /* Divider between left rail and left panel */

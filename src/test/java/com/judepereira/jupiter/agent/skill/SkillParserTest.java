@@ -1,21 +1,22 @@
 package com.judepereira.jupiter.agent.skill;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 class SkillParserTest {
-    @TempDir Path temp;
+    @TempDir
+    Path temp;
 
     @Test
     void parsesOnlyFrontmatterAndIgnoresUnknownMetadata() throws Exception {
         Path directory = Files.createDirectory(temp.resolve("demo-skill"));
-        Files.writeString(directory.resolve("SKILL.md"), "---\nname: demo-skill\ndescription: A demo\nunknown: value\n---\n# Body\n");
+        Files.writeString(directory.resolve("SKILL.md"),
+                "---\nname: demo-skill\ndescription: A demo\nunknown: value\n---\n# Body\n");
 
         var result = new SkillParser().parse(directory.resolve("SKILL.md"), SkillScope.REPOSITORY);
 
@@ -34,7 +35,8 @@ class SkillParserTest {
     @Test
     void rejectsBlankDescription() throws Exception {
         Path directory = Files.createDirectory(temp.resolve("blank-description"));
-        Files.writeString(directory.resolve("SKILL.md"), "---\nname: blank-description\ndescription: \"   \\t\"\n---\n");
+        Files.writeString(directory.resolve("SKILL.md"),
+                "---\nname: blank-description\ndescription: \"   \\t\"\n---\n");
 
         var result = new SkillParser().parse(directory.resolve("SKILL.md"), SkillScope.REPOSITORY);
 

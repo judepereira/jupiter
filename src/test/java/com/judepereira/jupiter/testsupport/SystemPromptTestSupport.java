@@ -13,7 +13,8 @@ public final class SystemPromptTestSupport {
     }
 
     public static String defaultSystemPrompt() {
-        try (InputStream inputStream = SystemPromptTestSupport.class.getResourceAsStream(DEFAULT_SYSTEM_PROMPT_RESOURCE)) {
+        try (InputStream inputStream = SystemPromptTestSupport.class
+                .getResourceAsStream(DEFAULT_SYSTEM_PROMPT_RESOURCE)) {
             if (inputStream == null) {
                 throw new IllegalStateException("Missing test resource: " + DEFAULT_SYSTEM_PROMPT_RESOURCE);
             }
@@ -24,12 +25,8 @@ public final class SystemPromptTestSupport {
     }
 
     public static String envAppendage(Path workspaceRoot) {
-        return "<env>\n" +
-                "Working directory: " + workspaceRoot.toAbsolutePath().normalize() + "\n" +
-                "Current date: " + LocalDate.now() + "\n" +
-                "Operating system: Ubuntu Linux\n" +
-                "Shell: bash\n" +
-                "</env>";
+        return "<env>\n" + "Working directory: " + workspaceRoot.toAbsolutePath().normalize() + "\n" + "Current date: "
+                + LocalDate.now() + "\n" + "Operating system: Ubuntu Linux\n" + "Shell: bash\n" + "</env>";
     }
 
     public static String composeExpected(String appendage, Path workspaceRoot) {

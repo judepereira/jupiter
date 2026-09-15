@@ -1,16 +1,15 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.judepereira.jupiter.security.EncryptionKey;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
-import org.junit.jupiter.api.Test;
-
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
 
 class JupiterBootstrapTests {
     private static final String KEY = TestEncryptionSupport.KEY;
@@ -32,9 +31,7 @@ class JupiterBootstrapTests {
         }, ignored -> {
             events.add("key");
             throw new AssertionError("key reader must not run");
-        }, ignored -> events.add("start")))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("hardening failed");
+        }, ignored -> events.add("start"))).isInstanceOf(IllegalStateException.class).hasMessage("hardening failed");
 
         assertThat(events).containsExactly("harden");
     }

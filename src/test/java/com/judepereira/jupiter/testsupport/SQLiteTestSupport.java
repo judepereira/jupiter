@@ -1,12 +1,11 @@
 package com.judepereira.jupiter.testsupport;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import javax.sql.DataSource;
 import org.assertj.core.api.Assertions;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.sqlite.SQLiteDataSource;
-
-import javax.sql.DataSource;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 public final class SQLiteTestSupport {
 
@@ -21,7 +20,8 @@ public final class SQLiteTestSupport {
         }
 
         SQLiteDataSource dataSource = new SQLiteDataSource();
-        dataSource.setUrl("jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize() + "?journal_mode=WAL&foreign_keys=on");
+        dataSource.setUrl(
+                "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize() + "?journal_mode=WAL&foreign_keys=on");
         return dataSource;
     }
 

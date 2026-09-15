@@ -1,31 +1,33 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
+import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
-import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.microsoft.playwright.ConsoleMessage;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.ConsoleMessage;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReviewSourceE2ETest extends E2ETestSupport {
 
@@ -35,7 +37,8 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         Path projectDir = fakeHome.resolve("sample-repo");
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-        Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "ReviewSourceE2ETest"));
+        Path screenshotsDir = Files
+                .createDirectories(Path.of("target", "playwright-screenshots", "ReviewSourceE2ETest"));
 
         initGitRepoWithInitialCommit(projectDir);
         Files.writeString(projectDir.resolve("outside-git-only.txt"), "outside git change\n");
@@ -45,7 +48,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
 
         try {
             try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
@@ -67,21 +70,25 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 page.reload();
                 assertThat(page.locator("#review .review-source-select")).isVisible();
 
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt"))).hasCount(1);
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt"))).hasCount(0);
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt")))
+                        .hasCount(1);
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt")))
+                        .hasCount(0);
 
                 page.waitForResponse(
                         response -> response.url().contains("/ui/review/source") && response.status() == 200,
                         () -> page.locator("#review .review-source-select").selectOption("GIT"));
 
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt"))).hasCount(1);
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt"))).hasCount(1);
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt")))
+                        .hasCount(1);
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt")))
+                        .hasCount(1);
                 captureScreenshot(page, screenshotsDir, "02-git-source.png");
 
-                var outsideFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt"));
+                var outsideFileButton = page.getByRole(AriaRole.BUTTON,
+                        new Page.GetByRoleOptions().setName("outside-git-only.txt"));
                 assertThat(outsideFileButton).hasCount(1);
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         outsideFileButton::click);
 
                 assertThat(outsideFileButton).containsClass("active");
@@ -111,9 +118,9 @@ class ReviewSourceE2ETest extends E2ETestSupport {
 
         try {
             try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
-                List<String> consoleErrors = new java.util.concurrent.CopyOnWriteArrayList<>();
+                List<String> consoleErrors = new CopyOnWriteArrayList<>();
                 page.onConsoleMessage(message -> {
                     if (message.type().equals("error")) {
                         consoleErrors.add(formatConsoleMessage(message));
@@ -128,10 +135,9 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 AppStateService appStateService = app.context().getBean(AppStateService.class);
                 AppStateView view = appStateService.loadViewData();
                 long sessionId = view.activeSession().id();
-                appStateService.addChangedFilesToSession(sessionId, List.of(
-                        new ChangedFileDraft("first-review-file.txt", "first file diff\n"),
-                        new ChangedFileDraft("second-review-file.txt", "second file diff\n")
-                ));
+                appStateService.addChangedFilesToSession(sessionId,
+                        List.of(new ChangedFileDraft("first-review-file.txt", "first file diff\n"),
+                                new ChangedFileDraft("second-review-file.txt", "second file diff\n")));
 
                 page.reload();
 
@@ -140,20 +146,20 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                         () -> page.locator("#toggle-review-rail-btn").click());
                 assertThat(page.locator("#review .review-source-select")).isVisible();
 
-                var firstFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("first-review-file.txt"));
-                var secondFileButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("second-review-file.txt"));
+                var firstFileButton = page.getByRole(AriaRole.BUTTON,
+                        new Page.GetByRoleOptions().setName("first-review-file.txt"));
+                var secondFileButton = page.getByRole(AriaRole.BUTTON,
+                        new Page.GetByRoleOptions().setName("second-review-file.txt"));
 
                 firstFileButton.waitFor();
                 secondFileButton.waitFor();
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         firstFileButton::click);
                 assertReviewFileButtonActiveState(firstFileButton, true);
                 assertDiffViewer(page, "first file diff\n");
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         firstFileButton::click);
                 assertReviewFileButtonActiveState(firstFileButton, false);
                 assertThat(page.locator("#diff-content")).hasCount(0);
@@ -161,15 +167,13 @@ class ReviewSourceE2ETest extends E2ETestSupport {
 
                 consoleErrors.clear();
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         secondFileButton::click);
                 assertReviewFileButtonActiveState(secondFileButton, true);
                 assertDiffViewer(page, "second file diff\n");
                 assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
                         secondFileButton::click);
                 assertReviewFileButtonActiveState(secondFileButton, false);
                 assertThat(page.locator("#diff-content")).hasCount(0);
@@ -221,7 +225,11 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
@@ -235,8 +243,8 @@ class ReviewSourceE2ETest extends E2ETestSupport {
                 }
 
                 ToolCallTrace trace = new ToolCallTrace("tool-1-0", "write_file",
-                        Map.of("path", "session-edit.txt", "content", "session edit"), true,
-                        "wrote session-edit.txt", Map.of("path", "session-edit.txt"));
+                        Map.of("path", "session-edit.txt", "content", "session edit"), true, "wrote session-edit.txt",
+                        Map.of("path", "session-edit.txt"));
                 AgentTurnResult result = new AgentTurnResult("done", List.of(trace));
                 listener.onComplete(result);
                 return result;

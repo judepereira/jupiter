@@ -1,18 +1,18 @@
 package com.judepereira.jupiter.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.Locator.WaitForOptions;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ViewportSize;
 import com.microsoft.playwright.options.WaitForSelectorState;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class MobileSystemBalloonPositionE2ETest extends E2ETestSupport {
 
@@ -21,22 +21,20 @@ class MobileSystemBalloonPositionE2ETest extends E2ETestSupport {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-        Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "MobileSystemBalloonPositionE2ETest"));
+        Path screenshotsDir = Files
+                .createDirectories(Path.of("target", "playwright-screenshots", "MobileSystemBalloonPositionE2ETest"));
 
         String previousHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile);
-             BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
-                     .setViewportSize(new ViewportSize(390, 844))
-                     .setIsMobile(true)
-                     .setHasTouch(true))) {
+                BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
+                        .setViewportSize(new ViewportSize(390, 844)).setIsMobile(true).setHasTouch(true))) {
             Page page = context.newPage();
 
             page.navigate(app.baseUrl());
             page.waitForLoadState();
-            page.locator("#system-balloon-root").waitFor(new com.microsoft.playwright.Locator.WaitForOptions()
-                    .setState(WaitForSelectorState.ATTACHED));
+            page.locator("#system-balloon-root").waitFor(new WaitForOptions().setState(WaitForSelectorState.ATTACHED));
 
             var balloon = addTestBalloon(page, app, "Mobile system balloon",
                     "Verify the mobile top offset and wrapping.");
@@ -83,8 +81,10 @@ class MobileSystemBalloonPositionE2ETest extends E2ETestSupport {
             assertThat(rootBottomEdge).isLessThan(bottomRailTop);
             assertThat(balloonTop).isGreaterThanOrEqualTo(rootTop);
             assertThat(balloonBottomEdge).isLessThanOrEqualTo(rootBottomEdge);
-            assertThat(((Number) geometry.get("balloonRectWidth")).doubleValue()).isLessThanOrEqualTo(((Number) geometry.get("rootRectWidth")).doubleValue());
-            assertThat(((Number) geometry.get("balloonRectRight")).doubleValue()).isGreaterThanOrEqualTo(((Number) geometry.get("rootRectRight")).doubleValue());
+            assertThat(((Number) geometry.get("balloonRectWidth")).doubleValue())
+                    .isLessThanOrEqualTo(((Number) geometry.get("rootRectWidth")).doubleValue());
+            assertThat(((Number) geometry.get("balloonRectRight")).doubleValue())
+                    .isGreaterThanOrEqualTo(((Number) geometry.get("rootRectRight")).doubleValue());
             assertThat(((Number) geometry.get("balloonRectLeft")).doubleValue())
                     .isGreaterThanOrEqualTo(((Number) geometry.get("rootRectLeft")).doubleValue());
             assertThat(((Number) geometry.get("balloonRectHeight")).doubleValue()).isGreaterThan(0.0);

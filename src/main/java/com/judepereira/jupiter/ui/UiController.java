@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.ui;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.*;
 import com.judepereira.jupiter.agent.config.AgentProperties;
@@ -15,47 +16,34 @@ import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
-import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandCatalogService.CommandDefinition;
 import com.judepereira.jupiter.command.CommandCatalogService.CommandKind;
 import com.judepereira.jupiter.command.CommandCatalogService.CommandMutationException;
+import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
 import com.judepereira.jupiter.config.PublicRequestScheme;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.ContextCompactionService;
-import com.judepereira.jupiter.persistence.TokenUsageService;
 import com.judepereira.jupiter.persistence.GitWorktreeException;
 import com.judepereira.jupiter.persistence.InvalidGitBranchNameException;
-import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.persistence.Persistence.*;
+import com.judepereira.jupiter.persistence.TokenUsageService;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.terminal.TerminalHandle;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalPanelState;
 import com.judepereira.jupiter.terminal.TerminalStateService;
+import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
+import com.judepereira.jupiter.ui.ChatPresentationService.ToolCallView;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
@@ -71,9 +59,19 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-
-import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
-import com.judepereira.jupiter.ui.ChatPresentationService.ToolCallView;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Log4j2
 @Controller
@@ -119,21 +117,20 @@ public class UiController {
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-                        AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                        AgentModelResolutionService agentModelResolutionService, ModelPickerService modelPickerService, ModelPreferencesService modelPreferencesService,
-                        ProviderAvailabilityService providerAvailabilityService,
-                        AnthropicOAuthService anthropicOAuthService,
-                        SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
-                        ActiveStreamRegistryService activeStreamRegistryService,
-                        TerminalManager terminalManager,
-                        TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-                        ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
-                        CommandStreamService commandStreamService, CommandCatalogService commandCatalogService,
-                        McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
-                        ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
-                        HttpAuthProperties httpAuthProperties,
-                        GitAutoUpdateService gitAutoUpdateService, ManualGitPullCoordinator manualGitPullCoordinator,
-                        @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
+            AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+            AgentModelResolutionService agentModelResolutionService, ModelPickerService modelPickerService,
+            ModelPreferencesService modelPreferencesService, ProviderAvailabilityService providerAvailabilityService,
+            AnthropicOAuthService anthropicOAuthService, SystemBalloonService systemBalloonService,
+            WorkspaceRailRefreshService workspaceRailRefreshService,
+            ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
+            TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
+            ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
+            CommandStreamService commandStreamService, CommandCatalogService commandCatalogService,
+            McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
+            ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
+            HttpAuthProperties httpAuthProperties, GitAutoUpdateService gitAutoUpdateService,
+            ManualGitPullCoordinator manualGitPullCoordinator,
+            @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion) {
         this.harness = harness;
         this.agentProperties = agentProperties;
         this.appStateService = appStateService;
@@ -173,19 +170,16 @@ public class UiController {
         return "index";
     }
 
-    public String sendMessage(@RequestParam("message") String message,
-                              Model model,
-                              HttpServletRequest request) {
+    public String sendMessage(@RequestParam("message") String message, Model model, HttpServletRequest request) {
         return sendMessage(message, null, null, null, model, request);
     }
 
     @PostMapping("/ui/chat/send")
     public String sendMessage(@RequestParam("message") String message,
-                              @RequestParam(value = "agentId", required = false) String agentId,
-                              @RequestParam(value = "modelId", required = false) String modelId,
-                              @RequestParam(value = "thinkingLevel", required = false) String thinkingLevel,
-                              Model model,
-                              HttpServletRequest request) {
+            @RequestParam(value = "agentId", required = false) String agentId,
+            @RequestParam(value = "modelId", required = false) String modelId,
+            @RequestParam(value = "thinkingLevel", required = false) String thinkingLevel, Model model,
+            HttpServletRequest request) {
         List<ChatMessage> newChatMessages = new ArrayList<>();
         AppStateView view = appStateService.loadViewData();
         SessionView session = null;
@@ -197,17 +191,23 @@ public class UiController {
             AgentModelResolutionService.ModelResolution modelResolution = implicitModel
                     ? agentModelResolutionService.resolve(selected.selectedAgent())
                     : new AgentModelResolutionService.ModelResolution(null, selected.selectedModel());
-            // Use the queue-time executable model for validation and compaction, but keep the
-            // request implicit so the harness resolves availability again at execution time.
+            // Use the queue-time executable model for validation and compaction, but keep
+            // the
+            // request implicit so the harness resolves availability again at execution
+            // time.
             if (implicitModel) {
-                selected = new ChatSelection(selected.selectedAgent(), modelResolution.model(), selected.selectedThinking(), false,
-                        selected.defaultAgent(), selected.defaultModel(), selected.defaultThinking());
+                selected = new ChatSelection(selected.selectedAgent(), modelResolution.model(),
+                        selected.selectedThinking(), false, selected.defaultAgent(), selected.defaultModel(),
+                        selected.defaultThinking());
             }
             String selectedModelId = selected.selectedModel().id();
-            if (modelPickerService != null && modelPickerService.listPickerModels().stream().noneMatch(candidate -> candidate.id().equals(selectedModelId))) {
-                throw new IllegalArgumentException("That model is no longer available. Choose an available favourite model in Settings.");
+            if (modelPickerService != null && modelPickerService.listPickerModels().stream()
+                    .noneMatch(candidate -> candidate.id().equals(selectedModelId))) {
+                throw new IllegalArgumentException(
+                        "That model is no longer available. Choose an available favourite model in Settings.");
             }
-            if (view.activeSession() != null && activeStreamRegistryService.hasActiveStreamForSession(view.activeSession().id())) {
+            if (view.activeSession() != null
+                    && activeStreamRegistryService.hasActiveStreamForSession(view.activeSession().id())) {
                 throw new IllegalStateException("A chat stream is already active for the current session");
             }
             shellRefresh = view.activeSession() == null;
@@ -222,20 +222,25 @@ public class UiController {
             String user = message.trim();
             String assistantId = UUID.randomUUID().toString();
             String userId = UUID.randomUUID().toString();
-            ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(), selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name(),
+            ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(),
+                    selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name(),
                     implicitModel && modelResolution.fallback() ? modelResolution.preferredModelId() : null);
-            Optional<ChatMessageView> summaryMessage = contextCompactionService.compactIfNeeded(session.id(), selected.selectedAgent(), selected.selectedModel(),
-                    selected.selectedThinking(), workspaceRoot, user);
+            Optional<ChatMessageView> summaryMessage = contextCompactionService.compactIfNeeded(session.id(),
+                    selected.selectedAgent(), selected.selectedModel(), selected.selectedThinking(), workspaceRoot,
+                    user);
             summaryMessage.ifPresent(summary -> newChatMessages.add(toChatMessage(summary)));
-            QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId, assistantId, user, metadata);
+            QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId,
+                    assistantId, user, metadata);
             newChatMessages.add(toChatMessage(queued.userMessage()));
             newChatMessages.add(toChatMessage(queued.assistantMessage()));
 
             List<Message> conversationHistory = new ArrayList<>(appStateService.buildConversationHistory(session.id()));
             CancellationToken cancellationToken = new CancellationToken();
             ActiveStream activeStream = ActiveStream.create(new PendingStream(session.id(), workspaceRoot,
-                    new AgentTurnRequest(null, conversationHistory, workspaceRoot,
-                            selected.selectedAgent().id(), implicitModel ? null : selected.selectedModel().id(), selected.selectedThinking(), session.id(), cancellationToken)), cancellationToken);
+                    new AgentTurnRequest(null, conversationHistory, workspaceRoot, selected.selectedAgent().id(),
+                            implicitModel ? null : selected.selectedModel().id(), selected.selectedThinking(),
+                            session.id(), cancellationToken)),
+                    cancellationToken);
             activeStreams.put(assistantId, activeStream);
             try {
                 activeStreamRegistryService.register(assistantId, session.id(), workspaceRoot);
@@ -243,7 +248,9 @@ public class UiController {
             } catch (Exception e) {
                 activeStreams.remove(assistantId, activeStream);
                 activeStreamRegistryService.unregister(assistantId);
-                throw e instanceof RuntimeException runtime ? runtime : new IllegalStateException("Failed to queue active stream", e);
+                throw e instanceof RuntimeException runtime
+                        ? runtime
+                        : new IllegalStateException("Failed to queue active stream", e);
             }
 
             view = appStateService.loadViewData();
@@ -255,11 +262,13 @@ public class UiController {
         model.addAttribute("newChatMessages", List.copyOf(newChatMessages));
         model.addAttribute("pendingStreamBaseUrl", "/ui/chat/stream");
         model.addAttribute("subagentView", false);
-        boolean hasPending = view.activeSessionDetail() != null && view.activeSessionDetail().chatMessages().stream().anyMatch(ChatMessageView::pending);
+        boolean hasPending = view.activeSessionDetail() != null
+                && view.activeSessionDetail().chatMessages().stream().anyMatch(ChatMessageView::pending);
         model.addAttribute("hasPending", hasPending);
         model.addAttribute("shellRefresh", shellRefresh);
         model.addAttribute("includeChatContainer", false);
-        model.addAttribute("reviewOob", shellRefresh || (view.activeSessionDetail() != null && !hasPending && view.activeSessionDetail().reviewPanelOpen()));
+        model.addAttribute("reviewOob", shellRefresh
+                || (view.activeSessionDetail() != null && !hasPending && view.activeSessionDetail().reviewPanelOpen()));
         return "fragments/chat-response :: response";
     }
 
@@ -267,7 +276,8 @@ public class UiController {
     public String loadFile(@PathVariable("id") int id, Model model) {
         AppStateView view = appStateService.loadViewData();
         if (view.activeSession() != null && view.activeSessionDetail() != null) {
-            ChangedFileView found = view.activeSessionDetail().changedFiles().stream().filter(f -> f.id() != null && f.id() == id).findFirst().orElse(null);
+            ChangedFileView found = view.activeSessionDetail().changedFiles().stream()
+                    .filter(f -> f.id() != null && f.id() == id).findFirst().orElse(null);
             if (found != null) {
                 appStateService.selectSessionChangedFile(view.activeSession().id(), id);
                 view = appStateService.loadViewData();
@@ -284,10 +294,8 @@ public class UiController {
     }
 
     @GetMapping("/ui/review/file")
-    public String loadFile(@RequestParam("source") ReviewSource source,
-                           @RequestParam("key") String key,
-                           @RequestParam(value = "close", defaultValue = "false") boolean close,
-                           Model model) {
+    public String loadFile(@RequestParam("source") ReviewSource source, @RequestParam("key") String key,
+            @RequestParam(value = "close", defaultValue = "false") boolean close, Model model) {
         return loadReviewFile(source, key, close, model);
     }
 
@@ -301,10 +309,12 @@ public class UiController {
                     appStateService.clearSessionChangedFileSelection(sessionId);
                 }
             } else if (source == ReviewSource.GIT) {
-                selectedFile = appStateService.selectGitChangedFile(sessionId, key.startsWith("git:") ? key.substring(4) : key);
+                selectedFile = appStateService.selectGitChangedFile(sessionId,
+                        key.startsWith("git:") ? key.substring(4) : key);
                 appStateService.switchReviewSource(sessionId, source);
             } else {
-                appStateService.selectSessionChangedFile(sessionId, Integer.parseInt(key.startsWith("session:") ? key.substring(8) : key));
+                appStateService.selectSessionChangedFile(sessionId,
+                        Integer.parseInt(key.startsWith("session:") ? key.substring(8) : key));
                 view = appStateService.loadViewData();
                 selectedFile = view.activeSessionDetail().selectedFile();
             }
@@ -330,7 +340,8 @@ public class UiController {
         ActiveStream active = activeStreams.get(assistantId);
         if (active == null || active.finished().get()) {
             try {
-                emitter.send(SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
+                emitter.send(
+                        SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
             } catch (Exception ignored) {
             }
             emitter.complete();
@@ -365,7 +376,8 @@ public class UiController {
         AgentStreamListener listener = new AgentStreamListener() {
             @Override
             public void onModelResolved(String preferredModelId, ModelDefinition actualModel) {
-                appStateService.updateAssistantModelMetadata(pending.sessionId(), assistantId, actualModel.id(), preferredModelId);
+                appStateService.updateAssistantModelMetadata(pending.sessionId(), assistantId, actualModel.id(),
+                        preferredModelId);
             }
 
             @Override
@@ -376,7 +388,8 @@ public class UiController {
                     }
                     active.cancellationToken().throwIfCancelled();
                     accumulated.append(delta);
-                    appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, accumulated.toString());
+                    appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId,
+                            accumulated.toString());
                     broadcastEvent(active, assistantId, "delta", Map.of("text", delta));
                 } catch (Exception e) {
                     onError(e);
@@ -392,9 +405,11 @@ public class UiController {
             public void onToolCallStarted(ToolCallTrace trace) {
                 try {
                     if (trace != null) {
-                        appStateService.startToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace));
+                        appStateService.startToolCallTrace(pending.sessionId(), assistantId,
+                                toToolCallTraceInput(trace));
                         if (chatToolCallHtmlService != null) {
-                            broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.toolStarted(pending.sessionId(), assistantId));
+                            broadcastToolCallHtml(active, assistantId,
+                                    chatToolCallHtmlService.toolStarted(pending.sessionId(), assistantId));
                         }
                     }
                     broadcastEvent(active, assistantId, "tool_call_started", trace);
@@ -405,12 +420,8 @@ public class UiController {
 
             @Override
             public void onToolCallProgress(String toolCallId, String toolName, String eventName, Object payload) {
-                broadcastEvent(active, assistantId, "tool_call_progress", Map.of(
-                        "toolCallId", toolCallId,
-                        "toolName", toolName,
-                        "eventName", eventName,
-                        "payload", payload
-                ));
+                broadcastEvent(active, assistantId, "tool_call_progress", Map.of("toolCallId", toolCallId, "toolName",
+                        toolName, "eventName", eventName, "payload", payload));
                 if ("subagent_started".equals(eventName) && chatToolCallHtmlService != null) {
                     broadcastToolCallHtml(active, assistantId,
                             chatToolCallHtmlService.subagentStarted(pending.sessionId(), assistantId, toolCallId));
@@ -420,9 +431,11 @@ public class UiController {
             @Override
             public void onToolCallTrace(ToolCallTrace trace) {
                 try {
-                    ToolCallView v = chatPresentationService.toToolCallView(appStateService.appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
+                    ToolCallView v = chatPresentationService.toToolCallView(appStateService
+                            .appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
                     if (chatToolCallHtmlService != null) {
-                        broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService.toolCompleted(pending.sessionId(), assistantId, trace.getToolCallId()));
+                        broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService
+                                .toolCompleted(pending.sessionId(), assistantId, trace.getToolCallId()));
                     }
                     broadcastEvent(active, assistantId, "tool_call", v);
                 } catch (Exception e) {
@@ -443,8 +456,9 @@ public class UiController {
                         ? currentRequest.getThinkingLevel()
                         : (requestAgent == null ? null : requestAgent.defaultThinkingLevel());
 
-                Optional<ChatMessageView> summary = contextCompactionService.compactIfNeeded(currentRequest.getSessionId(), requestAgent,
-                        requestModel, requestThinking, pending.workspaceRoot(), null);
+                Optional<ChatMessageView> summary = contextCompactionService.compactIfNeeded(
+                        currentRequest.getSessionId(), requestAgent, requestModel, requestThinking,
+                        pending.workspaceRoot(), null);
                 if (summary.isEmpty()) {
                     return conversation;
                 }
@@ -458,8 +472,11 @@ public class UiController {
             public void onComplete(AgentTurnResult result) {
                 try {
                     String finalText = result.getFinalText() == null ? "" : result.getFinalText();
-                    List<ToolCallTraceInput> traces = result.getTraces() == null ? List.of() : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
-                    ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(), assistantId, finalText, traces);
+                    List<ToolCallTraceInput> traces = result.getTraces() == null
+                            ? List.of()
+                            : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
+                    ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(),
+                            assistantId, finalText, traces);
                     dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, pending.sessionId());
                     processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
                     finalizeStreamSuccess(active, assistantId, completedMessage, completed);
@@ -477,12 +494,14 @@ public class UiController {
                         if (runner != null) {
                             runner.interrupt();
                         }
-                        ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(pending.sessionId(), assistantId, accumulated.toString());
+                        ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(pending.sessionId(),
+                                assistantId, accumulated.toString());
                         finalizeStreamStopped(active, assistantId, stoppedMessage, completed);
                         return;
                     }
                     String normalizedMessage = normalizeProviderErrorMessage(e);
-                    ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
+                    ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(),
+                            assistantId, "Agent execution failed: " + normalizedMessage);
                     dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, pending.sessionId());
                     log.error("Execution failure!", e);
                     finalizeStreamError(active, assistantId, normalizedMessage, failedMessage, e, completed);
@@ -506,11 +525,14 @@ public class UiController {
     private void listenerStartFailed(ActiveStream active, String assistantId, Exception e, SseEmitter emitter) {
         try {
             String normalizedMessage = normalizeProviderErrorMessage(e);
-            ChatMessageView failedMessage = appStateService.failAssistantMessage(active.pendingStream().sessionId(), assistantId, "Agent execution failed: " + normalizedMessage);
-            dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, active.pendingStream().sessionId());
+            ChatMessageView failedMessage = appStateService.failAssistantMessage(active.pendingStream().sessionId(),
+                    assistantId, "Agent execution failed: " + normalizedMessage);
+            dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED,
+                    active.pendingStream().sessionId());
             log.error("Execution failure!", e);
             broadcastToolCallHostSnapshot(active, assistantId);
-            broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
+            broadcastEvent(active, assistantId, "error",
+                    Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
         } catch (Exception ignored) {
         } finally {
             active.finished().set(true);
@@ -575,7 +597,8 @@ public class UiController {
         }
     }
 
-    private void sendEventToEmitter(ActiveStream active, String assistantId, SseEmitter emitter, String name, Object payload) {
+    private void sendEventToEmitter(ActiveStream active, String assistantId, SseEmitter emitter, String name,
+            Object payload) {
         try {
             emitter.send(SseEmitter.event().name(name).data(SseJson.writeValueAsString(payload)));
         } catch (Exception e) {
@@ -584,7 +607,8 @@ public class UiController {
         }
     }
 
-    private void finalizeStreamSuccess(ActiveStream active, String assistantId, ChatMessageView completedMessage, AtomicBoolean completed) {
+    private void finalizeStreamSuccess(ActiveStream active, String assistantId, ChatMessageView completedMessage,
+            AtomicBoolean completed) {
         if (!completed.compareAndSet(false, true)) {
             return;
         }
@@ -593,12 +617,14 @@ public class UiController {
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
         broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "done", Map.of("text", completedMessage.text(), "completedTs", completedMessage.completedTs()));
+        broadcastEvent(active, assistantId, "done",
+                Map.of("text", completedMessage.text(), "completedTs", completedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
     }
 
-    private void finalizeStreamError(ActiveStream active, String assistantId, String normalizedMessage, ChatMessageView failedMessage, Exception e, AtomicBoolean completed) {
+    private void finalizeStreamError(ActiveStream active, String assistantId, String normalizedMessage,
+            ChatMessageView failedMessage, Exception e, AtomicBoolean completed) {
         if (!completed.compareAndSet(false, true)) {
             return;
         }
@@ -607,12 +633,14 @@ public class UiController {
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
         broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "error", Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
+        broadcastEvent(active, assistantId, "error",
+                Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
     }
 
-    private void finalizeStreamStopped(ActiveStream active, String assistantId, ChatMessageView stoppedMessage, AtomicBoolean completed) {
+    private void finalizeStreamStopped(ActiveStream active, String assistantId, ChatMessageView stoppedMessage,
+            AtomicBoolean completed) {
         if (!completed.compareAndSet(false, true)) {
             return;
         }
@@ -621,7 +649,8 @@ public class UiController {
         activeStreams.remove(assistantId, active);
         activeStreamRegistryService.unregister(assistantId);
         broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
+        broadcastEvent(active, assistantId, "stopped",
+                Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
     }
@@ -636,12 +665,14 @@ public class UiController {
             runner.interrupt();
         }
         try {
-            ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(active.pendingStream().sessionId(), assistantId, active.accumulatedText().get().toString());
+            ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(active.pendingStream().sessionId(),
+                    assistantId, active.accumulatedText().get().toString());
             active.finished().set(true);
             activeStreams.remove(assistantId, active);
             activeStreamRegistryService.unregister(assistantId);
             broadcastToolCallHostSnapshot(active, assistantId);
-            broadcastEvent(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
+            broadcastEvent(active, assistantId, "stopped",
+                    Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
             completeEmitters(active);
             appStateService.publishWorkspaceRailRefresh();
         } catch (Exception e) {
@@ -671,16 +702,20 @@ public class UiController {
         }
 
         String targetAssistantId = assistantId;
-        ActiveStream active = targetAssistantId == null || targetAssistantId.isBlank() ? null : activeStreams.get(targetAssistantId);
+        ActiveStream active = targetAssistantId == null || targetAssistantId.isBlank()
+                ? null
+                : activeStreams.get(targetAssistantId);
         if (active != null && active.pendingStream().sessionId() != session.id()) {
             throw new IllegalStateException("Assistant stream does not belong to the active session");
         }
         if (active == null) {
-            active = activeStreams.values().stream().filter(s -> s.pendingStream().sessionId() == session.id()).findFirst().orElse(null);
+            active = activeStreams.values().stream().filter(s -> s.pendingStream().sessionId() == session.id())
+                    .findFirst().orElse(null);
         }
         if (active == null) {
             if (targetAssistantId != null && !targetAssistantId.isBlank()) {
-                Long streamSessionId = activeStreamRegistryService.sessionIdForAssistantId(targetAssistantId).orElse(null);
+                Long streamSessionId = activeStreamRegistryService.sessionIdForAssistantId(targetAssistantId)
+                        .orElse(null);
                 if (streamSessionId != null && streamSessionId != session.id()) {
                     throw new IllegalStateException("Assistant stream does not belong to the active session");
                 }
@@ -697,11 +732,8 @@ public class UiController {
 
         if (targetAssistantId == null || targetAssistantId.isBlank()) {
             ActiveStream targetActive = active;
-            targetAssistantId = activeStreams.entrySet().stream()
-                    .filter(entry -> entry.getValue() == targetActive)
-                    .map(Map.Entry::getKey)
-                    .findFirst()
-                    .orElseThrow();
+            targetAssistantId = activeStreams.entrySet().stream().filter(entry -> entry.getValue() == targetActive)
+                    .map(Map.Entry::getKey).findFirst().orElseThrow();
         }
         stopActiveStream(targetAssistantId, active);
         view = appStateService.loadViewData();
@@ -718,7 +750,8 @@ public class UiController {
     }
 
     @GetMapping("/ui/chat/image/{sessionId}/{toolCallId}")
-    ResponseEntity<byte[]> streamDisplayImage(@PathVariable long sessionId, @PathVariable String toolCallId) throws Exception {
+    ResponseEntity<byte[]> streamDisplayImage(@PathVariable long sessionId, @PathVariable String toolCallId)
+            throws Exception {
         AppStateService.DisplayImageView view = appStateService.loadDisplayImageView(sessionId, toolCallId);
         Path workspace = Path.of(view.workspaceRoot());
         Path resolved = FileUtils.resolveWorkspacePath(workspace, view.path());
@@ -730,11 +763,8 @@ public class UiController {
             throw new IllegalStateException("Unsupported image type: " + view.path());
         }
         byte[] bytes = Files.readAllBytes(resolved);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_TYPE, mediaType)
-                .header("X-Content-Type-Options", "nosniff")
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(bytes);
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_TYPE, mediaType)
+                .header("X-Content-Type-Options", "nosniff").header(HttpHeaders.CACHE_CONTROL, "no-store").body(bytes);
     }
 
     @GetMapping("/ui/chat/primary")
@@ -761,11 +791,13 @@ public class UiController {
 
         SubagentSessionDetailView subagent = appStateService.loadSubagentSessionDetail(sessionId);
         if (subagent.parentSessionId() == null || subagent.parentSessionId() != view.activeSession().id()) {
-            throw new IllegalStateException("Subagent session does not belong to the active primary session: " + sessionId);
+            throw new IllegalStateException(
+                    "Subagent session does not belong to the active primary session: " + sessionId);
         }
 
         populateChatControlsModel(model, defaultChatSelection());
-        populateChatModel(model, subagent.sessionDetail().chatMessages(), true, subagent.subagentAgentName(), subagent.subagentAgentId(), sessionId);
+        populateChatModel(model, subagent.sessionDetail().chatMessages(), true, subagent.subagentAgentName(),
+                subagent.subagentAgentId(), sessionId);
         return "fragments/chat :: chat";
     }
 
@@ -789,7 +821,7 @@ public class UiController {
 
     @GetMapping("/ui/system-balloons/stream")
     public SseEmitter systemBalloonStream(@RequestParam(value = "shellId", required = false) String shellId,
-                                           HttpServletRequest request) {
+            HttpServletRequest request) {
         SseEmitter emitter = systemBalloonService.connect();
         if (systemBalloonService.markShellInitialized(shellId)) {
             sendInitialMcpFailureBalloons(emitter);
@@ -835,7 +867,8 @@ public class UiController {
     @PostMapping("/ui/panel/review")
     public String openReviewPanel(Model model) {
         AppStateView view = currentViewWithSessionIfNeeded(false);
-        if (view.activeSession() != null && (view.activeSessionDetail() == null || !view.activeSessionDetail().reviewPanelOpen())) {
+        if (view.activeSession() != null
+                && (view.activeSessionDetail() == null || !view.activeSessionDetail().reviewPanelOpen())) {
             appStateService.toggleReviewPanel(view.activeSession().id());
             view = appStateService.loadViewData();
         }
@@ -854,7 +887,8 @@ public class UiController {
                 terminalStateService.closeTerminalPane(view.activeWorkspace().id());
             } else {
                 if (state.terminalTabs().isEmpty()) {
-                    TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), activeProjectEnvironmentVariables(view));
+                    TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(),
+                            activeProjectEnvironmentVariables(view));
                     terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
                 }
                 terminalStateService.openTerminalPane(view.activeWorkspace().id());
@@ -870,7 +904,8 @@ public class UiController {
     public String newTerminal(Model model) {
         AppStateView view = appStateService.loadViewData();
         if (view.activeWorkspace() != null) {
-            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), activeProjectEnvironmentVariables(view));
+            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(),
+                    activeProjectEnvironmentVariables(view));
             terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
             terminalStateService.openTerminalPane(view.activeWorkspace().id());
             view = appStateService.loadViewData();
@@ -932,7 +967,9 @@ public class UiController {
         model.addAttribute("branchName", "");
         model.addAttribute("branchMode", "create");
         model.addAttribute("createBranch", true);
-        return view.activeProject() == null ? "fragments/projects :: modalClose" : "fragments/projects :: workspaceModal";
+        return view.activeProject() == null
+                ? "fragments/projects :: modalClose"
+                : "fragments/projects :: workspaceModal";
     }
 
     @GetMapping("/ui/projects/directory")
@@ -987,17 +1024,18 @@ public class UiController {
     }
 
     private void populateSettingsModels(Model model) {
-        var modelGroups = modelCatalogService.list().stream().collect(java.util.stream.Collectors.groupingBy(
-                ModelDefinition::provider, LinkedHashMap::new, java.util.stream.Collectors.toList()));
+        var modelGroups = modelCatalogService.list().stream()
+                .collect(Collectors.groupingBy(ModelDefinition::provider, LinkedHashMap::new, Collectors.toList()));
         model.addAttribute("modelGroups", modelGroups);
-        model.addAttribute("providerAvailability", modelGroups.keySet().stream().collect(java.util.stream.Collectors.toMap(
-                provider -> provider, providerAvailabilityService::isAvailable, (left, right) -> right, LinkedHashMap::new)));
+        model.addAttribute("providerAvailability",
+                modelGroups.keySet().stream().collect(Collectors.toMap(provider -> provider,
+                        providerAvailabilityService::isAvailable, (left, right) -> right, LinkedHashMap::new)));
         model.addAttribute("favouriteModelIds", modelPreferencesService.favouriteModelIds());
     }
 
     @PostMapping("/ui/settings/models/favourite")
     public String toggleModelFavourite(@RequestParam String modelId,
-                                       @RequestParam(defaultValue = "true") boolean favourite, Model model) {
+            @RequestParam(defaultValue = "true") boolean favourite, Model model) {
         modelCatalogService.getRequired(modelId);
         modelPreferencesService.setFavourite(modelId, favourite);
         populateSettingsModel(model);
@@ -1007,26 +1045,24 @@ public class UiController {
 
     @PostMapping("/ui/settings/commands/create")
     public String createCommand(@RequestParam(value = "id", required = false) String id,
-                                @RequestParam(value = "name", required = false) String name,
-                                @RequestParam(value = "description", required = false) String description,
-                                @RequestParam(value = "type", required = false) String type,
-                                @RequestParam(value = "body", required = false) String body,
-                                @RequestParam(value = "workingDir", required = false) String workingDir,
-                                @RequestParam(value = "timeoutSeconds", required = false) String timeout,
-                                Model model) {
+            @RequestParam(value = "name", required = false) String name,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "body", required = false) String body,
+            @RequestParam(value = "workingDir", required = false) String workingDir,
+            @RequestParam(value = "timeoutSeconds", required = false) String timeout, Model model) {
         return mutateCommand(model, null, id, name, description, type, body, workingDir, timeout, false);
     }
 
     @PostMapping("/ui/settings/commands/{originalId}/update")
     public String updateCommand(@PathVariable String originalId,
-                                @RequestParam(value = "id", required = false) String id,
-                                @RequestParam(value = "name", required = false) String name,
-                                @RequestParam(value = "description", required = false) String description,
-                                @RequestParam(value = "type", required = false) String type,
-                                @RequestParam(value = "body", required = false) String body,
-                                @RequestParam(value = "workingDir", required = false) String workingDir,
-                                @RequestParam(value = "timeoutSeconds", required = false) String timeout,
-                                Model model) {
+            @RequestParam(value = "id", required = false) String id,
+            @RequestParam(value = "name", required = false) String name,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "body", required = false) String body,
+            @RequestParam(value = "workingDir", required = false) String workingDir,
+            @RequestParam(value = "timeoutSeconds", required = false) String timeout, Model model) {
         return mutateCommand(model, originalId, id, name, description, type, body, workingDir, timeout, true);
     }
 
@@ -1043,7 +1079,7 @@ public class UiController {
     }
 
     private String mutateCommand(Model model, String originalId, String id, String name, String description,
-                                 String type, String body, String workingDir, String timeout, boolean update) {
+            String type, String body, String workingDir, String timeout, boolean update) {
         CommandDefinition submitted = null;
         try {
             CommandKind kind = parseKind(type);
@@ -1056,16 +1092,18 @@ public class UiController {
             }
             return renderCommands(model, update ? "Command updated." : "Command added.", null, null, null, null);
         } catch (CommandMutationException | IllegalArgumentException e) {
-            // A null type is intentional when parsing failed: Thymeleaf can still render the submitted form safely.
+            // A null type is intentional when parsing failed: Thymeleaf can still render
+            // the submitted form safely.
             if (submitted == null) {
                 submitted = new CommandDefinition(id, name, description, null, body, workingDir, null);
             }
-            return renderCommands(model, null, safeCommandError(e), submitted, originalId, update ? "update" : "create");
+            return renderCommands(model, null, safeCommandError(e), submitted, originalId,
+                    update ? "update" : "create");
         }
     }
 
     private String renderCommands(Model model, String success, String error, CommandDefinition submitted,
-                                  String submittedOriginalId, String submittedOperation) {
+            String submittedOriginalId, String submittedOperation) {
         model.addAttribute("customCommands", commandCatalogService.listCustom());
         model.addAttribute("commandSuccess", success);
         model.addAttribute("commandError", error);
@@ -1116,13 +1154,15 @@ public class UiController {
         Instant to = Instant.now().truncatedTo(ChronoUnit.HOURS).plus(1, ChronoUnit.HOURS);
         Instant from = to.minus(hours, ChronoUnit.HOURS);
         List<UsagePoint> points = tokenUsageService.findProjectHourlyUsage(view.activeProject().id(), from, to).stream()
-                .map(row -> new UsagePoint(row.hourStartUtc().toString(), resolveModelLabel(row.modelKey()), row.modelKey(),
-                        row.requestCount(), row.inputTokenCount(), row.outputTokenCount(), row.totalTokenCount()))
+                .map(row -> new UsagePoint(row.hourStartUtc().toString(), resolveModelLabel(row.modelKey()),
+                        row.modelKey(), row.requestCount(), row.inputTokenCount(), row.outputTokenCount(),
+                        row.totalTokenCount()))
                 .toList();
-        model.addAttribute("usageRange", range.equals("7d") || range.equals("30d") || range.equals("60d") ? range : "24h");
+        model.addAttribute("usageRange",
+                range.equals("7d") || range.equals("30d") || range.equals("60d") ? range : "24h");
         try {
             model.addAttribute("usageJson", SseJson.writeValueAsString(points));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialize usage data", e);
         }
         return "fragments/projects :: settingsUsage";
@@ -1133,8 +1173,7 @@ public class UiController {
             @RequestParam(name = "assistantCompletedScript", required = false) String assistantCompletedScript,
             @RequestParam(name = "assistantErroredScript", required = false) String assistantErroredScript,
             @RequestParam(name = "subagentCompletedScript", required = false) String subagentCompletedScript,
-            @RequestParam("timeoutSeconds") int timeoutSeconds,
-            Model model) {
+            @RequestParam("timeoutSeconds") int timeoutSeconds, Model model) {
         appStateService.updateLifecycleHookSettings(new LifecycleHookSettings(assistantCompletedScript,
                 assistantErroredScript, subagentCompletedScript, timeoutSeconds));
         return "fragments/projects :: modalClose";
@@ -1148,11 +1187,12 @@ public class UiController {
 
     @PostMapping("/ui/settings/apply")
     public String applySettings(@RequestParam("workspaceInitCommands") String workspaceInitCommands,
-                                @RequestParam(name = "commandEnvironmentAllowlist", required = false) String commandEnvironmentAllowlist,
-                                @RequestParam(name = "environmentVariableNames", required = false) List<String> environmentVariableNames,
-                                @RequestParam(name = "environmentVariableValues", required = false) List<String> environmentVariableValues,
-                                Model model) {
-        return applySettingsInternal(workspaceInitCommands, commandEnvironmentAllowlist, environmentVariableNames, environmentVariableValues, model);
+            @RequestParam(name = "commandEnvironmentAllowlist", required = false) String commandEnvironmentAllowlist,
+            @RequestParam(name = "environmentVariableNames", required = false) List<String> environmentVariableNames,
+            @RequestParam(name = "environmentVariableValues", required = false) List<String> environmentVariableValues,
+            Model model) {
+        return applySettingsInternal(workspaceInitCommands, commandEnvironmentAllowlist, environmentVariableNames,
+                environmentVariableValues, model);
     }
 
     @PostMapping("/ui/settings/mcp/apply")
@@ -1160,26 +1200,28 @@ public class UiController {
         return applyMcpSettingsInternal(mcpCatalogJson, model);
     }
 
-    String applySettingsInternal(String workspaceInitCommands,
-                                 String commandEnvironmentAllowlist,
-                                 List<String> environmentVariableNames,
-                                 List<String> environmentVariableValues,
-                                 Model model) {
+    String applySettingsInternal(String workspaceInitCommands, String commandEnvironmentAllowlist,
+            List<String> environmentVariableNames, List<String> environmentVariableValues, Model model) {
         AppStateView view = appStateService.loadViewData();
         if (view.activeProject() == null) {
             return "fragments/projects :: modalClose";
         }
 
         List<ProjectEnvironmentVariable> environmentVariables = new ArrayList<>();
-        int count = Math.max(environmentVariableNames == null ? 0 : environmentVariableNames.size(), environmentVariableValues == null ? 0 : environmentVariableValues.size());
+        int count = Math.max(environmentVariableNames == null ? 0 : environmentVariableNames.size(),
+                environmentVariableValues == null ? 0 : environmentVariableValues.size());
         for (int i = 0; i < count; i++) {
-            String name = environmentVariableNames != null && i < environmentVariableNames.size() ? environmentVariableNames.get(i) : null;
-            String value = environmentVariableValues != null && i < environmentVariableValues.size() ? environmentVariableValues.get(i) : null;
+            String name = environmentVariableNames != null && i < environmentVariableNames.size()
+                    ? environmentVariableNames.get(i)
+                    : null;
+            String value = environmentVariableValues != null && i < environmentVariableValues.size()
+                    ? environmentVariableValues.get(i)
+                    : null;
             environmentVariables.add(new ProjectEnvironmentVariable(name, value));
         }
 
-        appStateService.updateProjectSettings(view.activeProject().id(), workspaceInitCommands,
-                environmentVariables, commandEnvironmentAllowlist);
+        appStateService.updateProjectSettings(view.activeProject().id(), workspaceInitCommands, environmentVariables,
+                commandEnvironmentAllowlist);
         reloadMcpRuntimeForProject(view.activeProject().id());
         return "fragments/projects :: modalClose";
     }
@@ -1207,15 +1249,22 @@ public class UiController {
         Set<Long> payloadServerIds = payload.serverIds();
         List<McpServerPayload> servers = payload.servers() == null ? List.of() : payload.servers();
         for (McpServerPayload server : servers) {
-            List<McpServerHeader> headers = server.headers() == null ? List.of() : server.headers().stream().map(header -> new McpServerHeader(header.name(), header.value())).toList();
-            List<Long> exposedProjectIds = server.exposedProjectIds() == null ? List.of() : List.copyOf(server.exposedProjectIds());
+            List<McpServerHeader> headers = server.headers() == null
+                    ? List.of()
+                    : server.headers().stream().map(header -> new McpServerHeader(header.name(), header.value()))
+                            .toList();
+            List<Long> exposedProjectIds = server.exposedProjectIds() == null
+                    ? List.of()
+                    : List.copyOf(server.exposedProjectIds());
             McpServerView saved;
             if (server.id() != null && currentById.containsKey(server.id())) {
                 McpServerView current = currentById.get(server.id());
                 affectedProjects.addAll(current.exposedProjectIds());
-                saved = appStateService.updateMcpServer(server.id(), server.name(), server.url(), server.enabled(), headers, exposedProjectIds);
+                saved = appStateService.updateMcpServer(server.id(), server.name(), server.url(), server.enabled(),
+                        headers, exposedProjectIds);
             } else {
-                saved = appStateService.createMcpServer(server.name(), server.url(), server.enabled(), headers, exposedProjectIds);
+                saved = appStateService.createMcpServer(server.name(), server.url(), server.enabled(), headers,
+                        exposedProjectIds);
             }
             affectedProjects.addAll(saved.exposedProjectIds());
         }
@@ -1296,7 +1345,8 @@ public class UiController {
             systemBalloonService.publishWarning("Git Pull", "No active workspace is selected.");
             addGitPullModel(model, null);
         } else {
-            ManualGitPullCoordinator.DispatchResult result = manualGitPullCoordinator().dispatch(view.activeWorkspace().id());
+            ManualGitPullCoordinator.DispatchResult result = manualGitPullCoordinator()
+                    .dispatch(view.activeWorkspace().id());
             addGitPullModel(model, view.activeWorkspace(), result != ManualGitPullCoordinator.DispatchResult.FAILED);
         }
         return "fragments/projects :: gitPullControl";
@@ -1306,7 +1356,8 @@ public class UiController {
     public String gitPullStatus(@PathVariable long workspaceId, Model model) {
         AppStateView view = appStateService.loadViewData();
         WorkspaceView workspace = view.activeWorkspace() != null && view.activeWorkspace().id() == workspaceId
-                ? view.activeWorkspace() : null;
+                ? view.activeWorkspace()
+                : null;
         addGitPullModel(model, workspace, workspace != null && manualGitPullCoordinator().isPulling(workspace.id()));
         return "fragments/projects :: gitPullControl";
     }
@@ -1333,8 +1384,7 @@ public class UiController {
 
     @PostMapping("/ui/workspaces/add")
     public String addWorkspace(@RequestParam("branchName") String branchName,
-                               @RequestParam(name = "branchMode", defaultValue = "create") String branchMode,
-                               Model model) {
+            @RequestParam(name = "branchMode", defaultValue = "create") String branchMode, Model model) {
         AppStateView view = appStateService.loadViewData();
         String trimmedBranchName = branchName.trim();
         BranchMode parsedBranchMode = BranchMode.fromValue(branchMode);
@@ -1381,10 +1431,12 @@ public class UiController {
         view = appStateService.loadViewData();
         String workspaceInitCommands = view.activeProject().workspaceInitCommands();
         if (workspaceInitCommands != null && !workspaceInitCommands.isBlank()) {
-            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), "Workspace Init", activeProjectEnvironmentVariables(view));
+            TerminalHandle terminal = terminalManager.createTerminal(view.activeWorkspace().path(), "Workspace Init",
+                    activeProjectEnvironmentVariables(view));
             terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
             terminalStateService.openTerminalPane(view.activeWorkspace().id());
-            terminalManager.write(terminal.id(), workspaceInitCommands.endsWith("\n") ? workspaceInitCommands : workspaceInitCommands + "\n");
+            terminalManager.write(terminal.id(),
+                    workspaceInitCommands.endsWith("\n") ? workspaceInitCommands : workspaceInitCommands + "\n");
         }
         populateProjectModel(model, view);
         populateSessionModel(model, view);
@@ -1520,7 +1572,9 @@ public class UiController {
     private void populateSessionModel(Model model, AppStateView view) {
         SessionView session = view.activeSession();
         SessionDetailView detail = view.activeSessionDetail();
-        TerminalPanelState terminalState = view.activeWorkspace() == null ? new TerminalPanelState("none", List.of(), null, false) : terminalStateService.snapshot(view.activeWorkspace().id());
+        TerminalPanelState terminalState = view.activeWorkspace() == null
+                ? new TerminalPanelState("none", List.of(), null, false)
+                : terminalStateService.snapshot(view.activeWorkspace().id());
         if (session == null) {
             model.addAttribute("chatMessages", List.of());
             model.addAttribute("subagentView", false);
@@ -1563,8 +1617,8 @@ public class UiController {
         model.addAttribute("panelMode", terminalState.bottomPanelMode());
     }
 
-    private void populateChatModel(Model model, List<ChatMessageView> chatMessages, boolean subagentView, String subagentAgentName, String subagentAgentId,
-                                    Long subagentSessionId) {
+    private void populateChatModel(Model model, List<ChatMessageView> chatMessages, boolean subagentView,
+            String subagentAgentName, String subagentAgentId, Long subagentSessionId) {
         model.addAttribute("chatMessages", chatMessages.stream().map(this::toChatMessage).toList());
         model.addAttribute("hasPending", chatMessages.stream().anyMatch(ChatMessageView::pending));
         model.addAttribute("reviewOob", false);
@@ -1577,7 +1631,8 @@ public class UiController {
     }
 
     private boolean isTerminalPanelOpen(AppStateView view) {
-        return view.activeWorkspace() != null && terminalStateService.snapshot(view.activeWorkspace().id()).bottomPanelOpen();
+        return view.activeWorkspace() != null
+                && terminalStateService.snapshot(view.activeWorkspace().id()).bottomPanelOpen();
     }
 
     private void populateProjectModel(Model model, AppStateView view) {
@@ -1587,11 +1642,13 @@ public class UiController {
         model.addAttribute("mcpServers", appStateService.listMcpServers());
         model.addAttribute("activeProject", toProject(view.activeProject()));
         model.addAttribute("workspaces", view.workspaces().stream().map(this::toWorkspace).toList());
-        model.addAttribute("workspaceActions", view.workspaces().stream().map(workspace -> toWorkspaceAction(view.activeProject(), workspace)).toList());
+        model.addAttribute("workspaceActions", view.workspaces().stream()
+                .map(workspace -> toWorkspaceAction(view.activeProject(), workspace)).toList());
         model.addAttribute("activeWorkspace", toWorkspace(view.activeWorkspace()));
         model.addAttribute("sessions", view.sessions().stream().map(this::toSession).toList());
         model.addAttribute("activeSession", toSession(view.activeSession()));
-        model.addAttribute("reviewPanelOpen", view.activeSessionDetail() != null && view.activeSessionDetail().reviewPanelOpen());
+        model.addAttribute("reviewPanelOpen",
+                view.activeSessionDetail() != null && view.activeSessionDetail().reviewPanelOpen());
         model.addAttribute("shellRefresh", false);
         model.addAttribute("includeChatContainer", false);
         model.addAttribute("appVersion", appVersion);
@@ -1641,8 +1698,7 @@ public class UiController {
                 continue;
             }
 
-            systemBalloonService.publishWarning(emitter,
-                    "MCP server failed: " + project.name() + " / " + server.name(),
+            systemBalloonService.publishWarning(emitter, "MCP server failed: " + project.name() + " / " + server.name(),
                     "An MCP server is unavailable for the active project.");
         }
     }
@@ -1669,11 +1725,12 @@ public class UiController {
             ChatMessageMetadata metadata = message.metadata();
             AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
             ModelDefinition selectedModel = modelCatalogService.getRequired(metadata.modelId());
-            ThinkingLevel selectedThinking = resolveThinkingLevelOrDefault(metadata.thinkingLevel(), selectedAgent.defaultThinkingLevel());
+            ThinkingLevel selectedThinking = resolveThinkingLevelOrDefault(metadata.thinkingLevel(),
+                    selectedAgent.defaultThinkingLevel());
             AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
             ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, true,
-                    defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, true, defaultAgent, defaultModel,
+                    defaultAgent.defaultThinkingLevel());
         }
         return null;
     }
@@ -1681,9 +1738,13 @@ public class UiController {
     private void populateChatControlsModel(Model model, ChatSelection selection) {
         List<AgentDefinition> agents = agentDefinitionService.listPrimaryAgents();
         model.addAttribute("agents", agents);
-        List<ModelDefinition> pickerModels = modelPickerService == null ? modelCatalogService.list() : modelPickerService.listPickerModels();
-        // Only mark a rendered model implicit when it is one of the agent's preferences.
-        // The picker fallback is a real selection and must therefore be submitted explicitly.
+        List<ModelDefinition> pickerModels = modelPickerService == null
+                ? modelCatalogService.list()
+                : modelPickerService.listPickerModels();
+        // Only mark a rendered model implicit when it is one of the agent's
+        // preferences.
+        // The picker fallback is a real selection and must therefore be submitted
+        // explicitly.
         Map<String, String> agentDefaultModels = new LinkedHashMap<>();
         agents.forEach(agent -> preferredModelInPicker(agent, pickerModels)
                 .ifPresent(modelDef -> agentDefaultModels.put(agent.id(), modelDef.id())));
@@ -1691,8 +1752,8 @@ public class UiController {
         model.addAttribute("models", pickerModels);
         model.addAttribute("pickerEmpty", pickerModels.isEmpty());
         ModelDefinition renderedModel = selection.explicitModel()
-                ? pickerModels.stream().filter(candidate -> candidate.id().equals(selection.selectedModel().id())).findFirst()
-                        .or(() -> renderedModelFor(selection.selectedAgent(), pickerModels))
+                ? pickerModels.stream().filter(candidate -> candidate.id().equals(selection.selectedModel().id()))
+                        .findFirst().or(() -> renderedModelFor(selection.selectedAgent(), pickerModels))
                         .orElse(selection.selectedModel())
                 : renderedModelFor(selection.selectedAgent(), pickerModels).orElse(selection.selectedModel());
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
@@ -1708,17 +1769,17 @@ public class UiController {
     private ChatSelection defaultChatSelection() {
         AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
         ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-        return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), false,
-                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+        return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), false, defaultAgent,
+                defaultModel, defaultAgent.defaultThinkingLevel());
     }
 
     private ModelDefinition resolveAgentModel(AgentDefinition agent) {
         return agentModelResolutionService.resolveForDisplay(agent).model();
     }
 
-    private Optional<ModelDefinition> preferredModelInPicker(AgentDefinition agent, List<ModelDefinition> pickerModels) {
-        return agent.modelIds().stream()
-                .flatMap(id -> pickerModels.stream().filter(model -> model.id().equals(id)))
+    private Optional<ModelDefinition> preferredModelInPicker(AgentDefinition agent,
+            List<ModelDefinition> pickerModels) {
+        return agent.modelIds().stream().flatMap(id -> pickerModels.stream().filter(model -> model.id().equals(id)))
                 .findFirst();
     }
 
@@ -1728,9 +1789,15 @@ public class UiController {
 
     private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {
         AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-        AgentDefinition selectedAgent = agentId == null || agentId.isBlank() ? defaultAgent : agentDefinitionService.getRequired(agentId);
-        ModelDefinition selectedModel = modelId == null || modelId.isBlank() ? resolveAgentModel(selectedAgent) : modelCatalogService.getRequired(modelId);
-        ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank() ? selectedAgent.defaultThinkingLevel() : ThinkingLevel.fromValue(thinkingLevel);
+        AgentDefinition selectedAgent = agentId == null || agentId.isBlank()
+                ? defaultAgent
+                : agentDefinitionService.getRequired(agentId);
+        ModelDefinition selectedModel = modelId == null || modelId.isBlank()
+                ? resolveAgentModel(selectedAgent)
+                : modelCatalogService.getRequired(modelId);
+        ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank()
+                ? selectedAgent.defaultThinkingLevel()
+                : ThinkingLevel.fromValue(thinkingLevel);
         ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
         return new ChatSelection(selectedAgent, selectedModel, selectedThinking, modelId != null && !modelId.isBlank(),
                 defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
@@ -1749,7 +1816,8 @@ public class UiController {
     }
 
     private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {
-        model.addAttribute("workspace", new Workspace(inspection.workspaceId(), inspection.workspaceName(), inspection.workspacePath(), false, RailStatus.NONE));
+        model.addAttribute("workspace", new Workspace(inspection.workspaceId(), inspection.workspaceName(),
+                inspection.workspacePath(), false, RailStatus.NONE));
         model.addAttribute("workspaceId", inspection.workspaceId());
         model.addAttribute("workspaceName", inspection.workspaceName());
         model.addAttribute("workspacePath", inspection.workspacePath());
@@ -1769,10 +1837,12 @@ public class UiController {
 
     private List<DirectoryEntry> listDirectoryEntries(Path path) {
         try (var stream = Files.list(path)) {
-            return stream
-                    .filter(Files::isDirectory)
-                    .map(entry -> new DirectoryEntry(entry.getFileName().toString(), entry.toString(), Files.isDirectory(entry)))
-                    .sorted(Comparator.comparing((DirectoryEntry entry) -> entry.name().startsWith(".")).thenComparing(DirectoryEntry::name, String.CASE_INSENSITIVE_ORDER).thenComparing(DirectoryEntry::name))
+            return stream.filter(Files::isDirectory)
+                    .map(entry -> new DirectoryEntry(entry.getFileName().toString(), entry.toString(),
+                            Files.isDirectory(entry)))
+                    .sorted(Comparator.comparing((DirectoryEntry entry) -> entry.name().startsWith("."))
+                            .thenComparing(DirectoryEntry::name, String.CASE_INSENSITIVE_ORDER)
+                            .thenComparing(DirectoryEntry::name))
                     .toList();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -1796,7 +1866,8 @@ public class UiController {
             pb.directory(new File(root.toAbsolutePath().normalize().toString()));
             Process p = pb.start();
             StringBuilder out = new StringBuilder();
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+            try (BufferedReader r = new BufferedReader(
+                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = r.readLine()) != null) {
                     out.append(line).append('\n');
@@ -1893,14 +1964,19 @@ public class UiController {
         return chatPresentationService.toChatMessage(view, this::resolveModelLabel);
     }
 
-    public record UsagePoint(String hour, String modelLabel, String modelKey, long requests, Long input, Long output, Long total) {}
+    public record UsagePoint(String hour, String modelLabel, String modelKey, long requests, Long input, Long output,
+            Long total) {
+    }
 
     private ChangedFile toChangedFile(ChangedFileView view) {
         return view == null ? null : new ChangedFile(view.key(), view.source(), view.id(), view.path(), view.diff());
     }
 
     private Project toProject(ProjectView view) {
-        return view == null ? null : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(), view.environmentVariables(), view.commandEnvironmentAllowlist());
+        return view == null
+                ? null
+                : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(),
+                        view.environmentVariables(), view.commandEnvironmentAllowlist());
     }
 
     private Map<String, String> activeProjectEnvironmentVariables(AppStateView view) {
@@ -1908,7 +1984,9 @@ public class UiController {
     }
 
     private Workspace toWorkspace(WorkspaceView view) {
-        return view == null ? null : new Workspace(view.id(), view.name(), view.path(), view.unread(), view.railStatus());
+        return view == null
+                ? null
+                : new Workspace(view.id(), view.name(), view.path(), view.unread(), view.railStatus());
     }
 
     private WorkspaceAction toWorkspaceAction(ProjectView activeProject, WorkspaceView workspace) {
@@ -1921,7 +1999,8 @@ public class UiController {
     }
 
     private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
-        return new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(), trace.getTextSummary(), trace.getMachineSummary());
+        return new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(),
+                trace.getTextSummary(), trace.getMachineSummary());
     }
 
     private String directoryDisplayName(Path path) {
@@ -2039,15 +2118,15 @@ public class UiController {
         }
     }
 
-    private record McpServerPayload(Long id, String name, String url, boolean enabled, List<McpServerHeaderPayload> headers, List<Long> exposedProjectIds) {
+    private record McpServerPayload(Long id, String name, String url, boolean enabled,
+            List<McpServerHeaderPayload> headers, List<Long> exposedProjectIds) {
     }
 
     private record McpServerHeaderPayload(String name, String value) {
     }
 
     private enum BranchMode {
-        CREATE("create"),
-        CHECKOUT("checkout");
+        CREATE("create"), CHECKOUT("checkout");
 
         private final String value;
 
@@ -2070,18 +2149,22 @@ public class UiController {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderErrorPayload(ProviderError error, ProviderDetail detail) {}
+    private record ProviderErrorPayload(ProviderError error, ProviderDetail detail) {
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderError(String message, String code) {}
+    private record ProviderError(String message, String code) {
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderDetail(String message, String code) {}
+    private record ProviderDetail(String message, String code) {
+    }
 
-    public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {}
+    public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {
+    }
 
-    public record Project(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables,
-                          String commandEnvironmentAllowlist) {
+    public record Project(long id, String name, String path, String workspaceInitCommands,
+            List<ProjectEnvironmentVariable> environmentVariables, String commandEnvironmentAllowlist) {
     }
 
     public record Workspace(long id, String name, String path, boolean unread, RailStatus railStatus) {
@@ -2095,7 +2178,8 @@ public class UiController {
         }
     }
 
-    public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {}
+    public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {
+    }
 
     public record Session(long id, String name, boolean unread, RailStatus railStatus) {
 
@@ -2108,20 +2192,24 @@ public class UiController {
         }
     }
 
-    public record DirectoryEntry(String name, String path, boolean directory) {}
+    public record DirectoryEntry(String name, String path, boolean directory) {
+    }
 
-    private record ChatSelection(AgentDefinition selectedAgent, ModelDefinition selectedModel, ThinkingLevel selectedThinking,
-                                  boolean explicitModel, AgentDefinition defaultAgent, ModelDefinition defaultModel,
-                                  ThinkingLevel defaultThinking) {}
+    private record ChatSelection(AgentDefinition selectedAgent, ModelDefinition selectedModel,
+            ThinkingLevel selectedThinking, boolean explicitModel, AgentDefinition defaultAgent,
+            ModelDefinition defaultModel, ThinkingLevel defaultThinking) {
+    }
 
-    private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {}
+    private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {
+    }
 
-    private record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean started,
-                                AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,
-                                CancellationToken cancellationToken, AtomicReference<StringBuilder> accumulatedText) {
+    private record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters,
+            AtomicBoolean started, AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,
+            CancellationToken cancellationToken, AtomicReference<StringBuilder> accumulatedText) {
         private static ActiveStream create(PendingStream pendingStream, CancellationToken cancellationToken) {
-            return new ActiveStream(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false),
-                    new AtomicBoolean(false), new AtomicReference<>(), cancellationToken, new AtomicReference<>(new StringBuilder()));
+            return new ActiveStream(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false),
+                    new AtomicBoolean(false), new AtomicBoolean(false), new AtomicReference<>(), cancellationToken,
+                    new AtomicReference<>(new StringBuilder()));
         }
     }
 }

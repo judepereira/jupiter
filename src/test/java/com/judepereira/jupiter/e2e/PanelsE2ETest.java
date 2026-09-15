@@ -1,25 +1,26 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PanelsE2ETest extends E2ETestSupport {
 
@@ -38,7 +39,7 @@ class PanelsE2ETest extends E2ETestSupport {
 
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
@@ -108,7 +109,7 @@ class PanelsE2ETest extends E2ETestSupport {
 
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
@@ -156,10 +157,12 @@ class PanelsE2ETest extends E2ETestSupport {
 
     private void assertShortcutCyclesSelect(Page page, String selectSelector, String shortcut) {
         @SuppressWarnings("unchecked")
-        List<String> values = (List<String>) page.locator(selectSelector + " option").evaluateAll("options => options.map(option => option.value)");
+        List<String> values = (List<String>) page.locator(selectSelector + " option")
+                .evaluateAll("options => options.map(option => option.value)");
         String currentValue = page.locator(selectSelector).inputValue();
         int currentIndex = values.indexOf(currentValue);
-        assertTrue(currentIndex >= 0, () -> selectSelector + " current value not found in options: " + currentValue + " / " + values);
+        assertTrue(currentIndex >= 0,
+                () -> selectSelector + " current value not found in options: " + currentValue + " / " + values);
 
         String expectedNextValue = values.get((currentIndex + 1) % values.size());
         page.keyboard().press(shortcut);
@@ -186,13 +189,17 @@ class PanelsE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 listener.onTextDelta(ASSISTANT_REPLY);
-                AgentTurnResult result = new AgentTurnResult(ASSISTANT_REPLY, java.util.List.of());
+                AgentTurnResult result = new AgentTurnResult(ASSISTANT_REPLY, List.of());
                 listener.onComplete(result);
                 return result;
             }

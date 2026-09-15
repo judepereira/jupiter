@@ -1,35 +1,47 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
+import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
+import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
+import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.config.HttpAuthProperties;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
+import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
+import com.judepereira.jupiter.persistence.AppStateRepository;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
-import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
-import com.judepereira.jupiter.ui.UiController;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ui.ConcurrentModel;
-import org.springframework.ui.Model;
-
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.ui.Model;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public class UiControllerSubagentChatTests {
 
@@ -39,11 +51,15 @@ public class UiControllerSubagentChatTests {
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long parentSessionId = appStateService.loadViewData().activeSession().id();
 
-        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
-        long childSessionId = appStateService.createHiddenSubagentSession(parentSessionId, "parent-tool-call", subagent);
-        QueuedChatTurn turn = appStateService.appendUserMessageAndPendingAssistant(childSessionId, "Primary task:\nwrite a file");
-        appStateService.completeAssistantMessage(childSessionId, turn.assistantMessage().id(), "child final", List.of());
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent prompt",
+                AgentMode.SUBAGENT, "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true,
+                List.of("write_file"));
+        long childSessionId = appStateService.createHiddenSubagentSession(parentSessionId, "parent-tool-call",
+                subagent);
+        QueuedChatTurn turn = appStateService.appendUserMessageAndPendingAssistant(childSessionId,
+                "Primary task:\nwrite a file");
+        appStateService.completeAssistantMessage(childSessionId, turn.assistantMessage().id(), "child final",
+                List.of());
 
         UiController controller = controller(appStateService, workspaceRoot);
 
@@ -66,7 +82,8 @@ public class UiControllerSubagentChatTests {
         assertThat(subagentModel.getAttribute("subagentAgentName")).isEqualTo("Engineer");
         assertThat(subagentModel.getAttribute("subagentAgentId")).isEqualTo("engineer");
         assertThat(subagentModel.getAttribute("subagentSessionId")).isEqualTo(childSessionId);
-        assertThat((List<ChatPresentationService.ChatMessage>) subagentModel.getAttribute("chatMessages")).extracting(ChatPresentationService.ChatMessage::text)
+        assertThat((List<ChatPresentationService.ChatMessage>) subagentModel.getAttribute("chatMessages"))
+                .extracting(ChatPresentationService.ChatMessage::text)
                 .contains("Primary task:\nwrite a file", "child final");
 
         Model backModel = new ConcurrentModel();
@@ -107,7 +124,8 @@ public class UiControllerSubagentChatTests {
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH", null);
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH",
+                null);
         appStateService.appendVisibleSystemMessage(sessionId, "summary one");
         appStateService.appendVisibleSystemMessage(sessionId, "summary two");
         appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
@@ -117,8 +135,8 @@ public class UiControllerSubagentChatTests {
         Model model = new ConcurrentModel();
         controller.loadPrimaryChat(model);
 
-        assertThat(((com.judepereira.jupiter.agent.catalog.AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
-        assertThat(((com.judepereira.jupiter.agent.catalog.ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
     }
 
     @Test
@@ -127,7 +145,8 @@ public class UiControllerSubagentChatTests {
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH", null);
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH",
+                null);
         appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
         appStateService.completeAssistantMessage(sessionId, "assistant-1", "done", List.of());
 
@@ -135,8 +154,8 @@ public class UiControllerSubagentChatTests {
         Model model = new ConcurrentModel();
         controller.index(model);
 
-        assertThat(((com.judepereira.jupiter.agent.catalog.AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
-        assertThat(((com.judepereira.jupiter.agent.catalog.ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
+        assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
     }
 
     private static UiController controller(AppStateService appStateService, Path workspaceRoot) {
@@ -144,12 +163,25 @@ public class UiControllerSubagentChatTests {
         props.setWorkspaceRoot(workspaceRoot.toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
         TerminalStateService terminalStateService = new TerminalStateService();
-        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector());
         AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper());
         var modelCatalog = ModelCatalogTestSupport.modelCatalogService();
-        var balloonService = new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L));
+        var balloonService = new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L));
         var contextCompactionService = TestAppStateSupport.contextCompactionService(appStateService);
-        var openAiOAuthService = new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class), null);
-        return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null, org.mockito.Mockito.mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class), balloonService, new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, terminalStateService, openAiOAuthService, contextCompactionService, null, mock(CommandStreamService.class), new com.judepereira.jupiter.command.CommandCatalogService(""), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(com.judepereira.jupiter.git.GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "test");
+        var openAiOAuthService = new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(),
+                HttpClient.newHttpClient(), mock(AppStateRepository.class), null);
+        return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
+                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+                Mockito.mock(AnthropicOAuthService.class), balloonService,
+                new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
+                        (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
+                appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
+                openAiOAuthService, contextCompactionService, null, mock(CommandStreamService.class),
+                new CommandCatalogService(""), null, new ChatPresentationService(), null, null,
+                new HttpAuthProperties(), mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class),
+                "test");
     }
 }

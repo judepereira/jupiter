@@ -42,13 +42,17 @@ public sealed interface ToolParameter permits ToolParameter.StringParameter, Too
         return new ArrayParameter(name, description, items);
     }
 
-    record StringParameter(String name, String description) implements ToolParameter {}
+    record StringParameter(String name, String description) implements ToolParameter {
+    }
 
-    record IntegerParameter(String name, String description) implements ToolParameter {}
+    record IntegerParameter(String name, String description) implements ToolParameter {
+    }
 
-    record NumberParameter(String name, String description) implements ToolParameter {}
+    record NumberParameter(String name, String description) implements ToolParameter {
+    }
 
-    record BooleanParameter(String name, String description) implements ToolParameter {}
+    record BooleanParameter(String name, String description) implements ToolParameter {
+    }
 
     record EnumParameter(String name, String description, List<String> values) implements ToolParameter {
         public EnumParameter {
@@ -56,8 +60,13 @@ public sealed interface ToolParameter permits ToolParameter.StringParameter, Too
         }
     }
 
-    record ObjectParameter(String name, String description, ToolSchema schema) implements ToolParameter {}
+    record ObjectParameter(String name, String description, ToolSchema schema) implements ToolParameter {
+    }
 
-    /** Array item parameters have a null name because items are not object properties. */
-    record ArrayParameter(String name, String description, ToolParameter items) implements ToolParameter {}
+    /**
+     * Array item parameters have a null name because items are not object
+     * properties.
+     */
+    record ArrayParameter(String name, String description, ToolParameter items) implements ToolParameter {
+    }
 }

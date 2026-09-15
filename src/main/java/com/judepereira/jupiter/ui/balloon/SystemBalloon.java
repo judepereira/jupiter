@@ -7,17 +7,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record SystemBalloon(
-        UUID id,
-        Type type,
-        String title,
-        String body,
-        Instant createdAt
-) {
+public record SystemBalloon(UUID id, Type type, String title, String body, Instant createdAt) {
     public enum Type {
-        ERROR("error"),
-        SUCCESS("success"),
-        WARNING("warning");
+        ERROR("error"), SUCCESS("success"), WARNING("warning");
 
         private final String value;
 

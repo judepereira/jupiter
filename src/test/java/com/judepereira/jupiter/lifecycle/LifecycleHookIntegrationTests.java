@@ -1,32 +1,5 @@
 package com.judepereira.jupiter.lifecycle;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.judepereira.jupiter.agent.catalog.AgentDefinition;
-import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
-import com.judepereira.jupiter.agent.catalog.AgentMode;
-import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
-import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
-import com.judepereira.jupiter.agent.harness.AgentTurnResult;
-import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
-import com.judepereira.jupiter.agent.harness.ToolCallTrace;
-import com.judepereira.jupiter.agent.harness.StreamCancelledException;
-import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.judepereira.jupiter.agent.task.SubagentTaskService;
-import com.judepereira.jupiter.persistence.AppStateService;
-import com.judepereira.jupiter.persistence.TestAppStateSupport;
-import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
-import com.judepereira.jupiter.ui.UiController;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.ui.ConcurrentModel;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -39,6 +12,39 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentDefinition;
+import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
+import com.judepereira.jupiter.agent.config.AgentProperties;
+import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
+import com.judepereira.jupiter.agent.harness.AgentTurnResult;
+import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
+import com.judepereira.jupiter.agent.harness.ToolCallTrace;
+import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.agent.task.SubagentTaskService;
+import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.TestAppStateSupport;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
+import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
+import com.judepereira.jupiter.ui.UiController;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.ui.ConcurrentModel;
 
 class LifecycleHookIntegrationTests {
 
@@ -56,8 +62,8 @@ class LifecycleHookIntegrationTests {
         controller.streamChat(assistantId);
         TestAppStateSupport.awaitAssistantCompletion(controller, assistantId);
 
-        var event = org.mockito.ArgumentCaptor.forClass(LifecycleHookService.LifecycleEvent.class);
-        var session = org.mockito.ArgumentCaptor.forClass(Long.class);
+        var event = ArgumentCaptor.forClass(LifecycleHookService.LifecycleEvent.class);
+        var session = ArgumentCaptor.forClass(Long.class);
         verify(hooks).dispatch(event.capture(), session.capture());
         assertThat(event.getValue()).isEqualTo(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED);
         assertThat(session.getValue()).isPositive();
@@ -91,8 +97,8 @@ class LifecycleHookIntegrationTests {
     @Test
     void dispatchFailureCannotChangePrimaryPersistence(@TempDir Path workspaceRoot) {
         LifecycleHookService hooks = mock(LifecycleHookService.class);
-        doReturn(CompletableFuture.failedFuture(new IllegalStateException("hook failed")))
-                .when(hooks).dispatch(any(), anyLong());
+        doReturn(CompletableFuture.failedFuture(new IllegalStateException("hook failed"))).when(hooks).dispatch(any(),
+                anyLong());
         CodingAgentHarness harness = harness((request, listener) -> {
             listener.onComplete(new AgentTurnResult("done", List.of()));
             return new AgentTurnResult("done", List.of());
@@ -115,13 +121,15 @@ class LifecycleHookIntegrationTests {
         Path changedFile = workspaceRoot.resolve("changed.txt");
         Files.writeString(changedFile, "changed");
         CodingAgentHarness harness = harness((request, listener) -> {
-            ToolCallTrace trace = new ToolCallTrace("tool", "write_file", Map.of("path", "changed.txt"), true, "done", Map.of("path", "changed.txt"));
+            ToolCallTrace trace = new ToolCallTrace("tool", "write_file", Map.of("path", "changed.txt"), true, "done",
+                    Map.of("path", "changed.txt"));
             listener.onToolCallTrace(trace);
             AgentTurnResult result = new AgentTurnResult("done", List.of(trace));
             listener.onComplete(result);
             return result;
         });
-        SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()), provider(harness), hooks);
+        SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()),
+                provider(harness), hooks);
         service.runTask(request(parentSessionId, workspaceRoot));
 
         var order = inOrder(appStateService, hooks);
@@ -141,7 +149,8 @@ class LifecycleHookIntegrationTests {
         });
         Files.writeString(workspaceRoot.resolve("changed.txt"), "changed");
 
-        SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()), provider(harness), hooks);
+        SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()),
+                provider(harness), hooks);
         var result = service.runTask(request(parentSessionId, workspaceRoot));
 
         assertThat(result.success()).isFalse();
@@ -168,15 +177,15 @@ class LifecycleHookIntegrationTests {
         var success = successService.runTask(request(parentSessionId, workspaceRoot));
         assertThat(success.success()).isTrue();
         verify(successHooks).dispatch(eq(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED), eq(parentSessionId));
-        verify(successHooks, org.mockito.Mockito.never()).dispatch(
-                anyOf(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED), anyLong());
+        verify(successHooks, Mockito.never()).dispatch(anyOf(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED,
+                LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED), anyLong());
 
         LifecycleHookService errorHooks = hookMock();
         CodingAgentHarness errorHarness = harness((request, listener) -> {
             throw new IllegalStateException("child failed");
         });
-        SubagentTaskService errorService = new SubagentTaskService(appStateService, definitions,
-                provider(errorHarness), errorHooks);
+        SubagentTaskService errorService = new SubagentTaskService(appStateService, definitions, provider(errorHarness),
+                errorHooks);
         var error = errorService.runTask(request(parentSessionId, workspaceRoot));
         assertThat(error.success()).isFalse();
         verify(errorHooks).dispatch(eq(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED), eq(parentSessionId));
@@ -206,18 +215,19 @@ class LifecycleHookIntegrationTests {
     }
 
     private static UiController controller(CodingAgentHarness harness, Path workspaceRoot, LifecycleHookService hooks) {
-        return TestAppStateSupport.controller(harness, properties(workspaceRoot), ModelCatalogTestSupport.modelCatalogService(), hooks);
+        return TestAppStateSupport.controller(harness, properties(workspaceRoot),
+                ModelCatalogTestSupport.modelCatalogService(), hooks);
     }
 
     private static String sendAndGetAssistantId(UiController controller) {
         ConcurrentModel model = new ConcurrentModel();
         controller.sendMessage("go", model, null);
         List<?> messages = (List<?>) model.getAttribute("chatMessages");
-        return ((com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage) messages.get(messages.size() - 1)).id();
+        return ((ChatMessage) messages.get(messages.size() - 1)).id();
     }
 
-    private static com.judepereira.jupiter.agent.config.AgentProperties properties(Path workspaceRoot) {
-        var properties = new com.judepereira.jupiter.agent.config.AgentProperties();
+    private static AgentProperties properties(Path workspaceRoot) {
+        var properties = new AgentProperties();
         properties.setWorkspaceRoot(workspaceRoot.toString());
         return properties;
     }
@@ -229,8 +239,8 @@ class LifecycleHookIntegrationTests {
     }
 
     private static AgentDefinition subagent() {
-        return new AgentDefinition("worker", "Worker", "", "worker prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.LOW, null, true, true, List.of());
+        return new AgentDefinition("worker", "Worker", "", "worker prompt", AgentMode.SUBAGENT, "openai/gpt-5.5",
+                ThinkingLevel.LOW, null, true, true, List.of());
     }
 
     private static AgentDefinitionService definitions(AgentDefinition subagent) {
@@ -267,7 +277,10 @@ class LifecycleHookIntegrationTests {
     }
 
     private static CodingAgentHarness harness(HarnessBehavior behavior) {
-        return new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        return new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 return behavior.run(request, listener);
@@ -276,7 +289,7 @@ class LifecycleHookIntegrationTests {
     }
 
     private static LifecycleHookService.LifecycleEvent anyOf(LifecycleHookService.LifecycleEvent first,
-                                                               LifecycleHookService.LifecycleEvent second) {
-        return org.mockito.ArgumentMatchers.argThat(event -> event == first || event == second);
+            LifecycleHookService.LifecycleEvent second) {
+        return ArgumentMatchers.argThat(event -> event == first || event == second);
     }
 }

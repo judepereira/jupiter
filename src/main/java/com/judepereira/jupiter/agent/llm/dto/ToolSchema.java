@@ -3,7 +3,7 @@ package com.judepereira.jupiter.agent.llm.dto;
 import java.util.List;
 
 public record ToolSchema(String description, List<ToolParameter> properties, List<String> required,
-                         Boolean additionalProperties) {
+        Boolean additionalProperties) {
 
     public ToolSchema {
         properties = List.copyOf(properties);

@@ -1,32 +1,27 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.integer;
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
-import lombok.val;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.integer;
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+import lombok.val;
 
 public class ReadFileTool implements AgentTool {
-    private static final ToolDefinition DEF = ToolDefinition.builtIn(
-            "read_file",
+    private static final ToolDefinition DEF = ToolDefinition.builtIn("read_file",
             "Read a file from the workspace (utf-8) with optional line range",
-            ToolSchema.object(
-                    string("path", "relative file path to read"),
+            ToolSchema.object(string("path", "relative file path to read"),
                     integer("startLine", "optional 1-based start line"),
-                    integer("endLine", "optional 1-based end line")
-            ).required("path")
-    );
+                    integer("endLine", "optional 1-based end line")).required("path"));
 
     @Override
     public String name() {

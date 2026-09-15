@@ -1,11 +1,24 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
+import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
+import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.config.HttpAuthProperties;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
+import com.judepereira.jupiter.persistence.AppStateRepository;
+import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
 import com.judepereira.jupiter.terminal.TerminalHandle;
@@ -13,24 +26,24 @@ import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.terminal.TerminalTab;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ui.ConcurrentModel;
-
 import java.io.IOException;
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public class UiControllerTerminalTests {
 
@@ -41,18 +54,20 @@ public class UiControllerTerminalTests {
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long projectId = context.appStateService().loadViewData().activeProject().id();
-        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
+        context.appStateService().updateProjectEnvironmentVariables(projectId,
+                List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
 
         ConcurrentModel model = new ConcurrentModel();
         String view = controller.openTerminalPanel(model);
 
         assertThat(view).isEqualTo("fragments/terminal :: panel");
         assertThat(terminalTabs(model)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+                .containsExactly(Assertions.tuple("Terminal 1", true));
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-1");
         assertThat(bottomPanelMode(model)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(model)).isTrue();
-        verify(context.terminalManager()).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString()), eq(Map.of("API_URL", "https://example.test")));
+        verify(context.terminalManager()).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString()),
+                eq(Map.of("API_URL", "https://example.test")));
     }
 
     @Test
@@ -62,7 +77,8 @@ public class UiControllerTerminalTests {
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long projectId = context.appStateService().loadViewData().activeProject().id();
-        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
+        context.appStateService().updateProjectEnvironmentVariables(projectId,
+                List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
 
         controller.openTerminalPanel(new ConcurrentModel());
 
@@ -70,7 +86,7 @@ public class UiControllerTerminalTests {
         controller.openTerminalPanel(closedModel);
 
         assertThat(terminalTabs(closedModel)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+                .containsExactly(Assertions.tuple("Terminal 1", true));
         assertThat(activeTerminal(closedModel).id()).isEqualTo("terminal-1");
         assertThat(bottomPanelMode(closedModel)).isEqualTo("none");
         assertThat(bottomPanelOpen(closedModel)).isFalse();
@@ -79,11 +95,12 @@ public class UiControllerTerminalTests {
         controller.openTerminalPanel(reopenedModel);
 
         assertThat(terminalTabs(reopenedModel)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+                .containsExactly(Assertions.tuple("Terminal 1", true));
         assertThat(activeTerminal(reopenedModel).id()).isEqualTo("terminal-1");
         assertThat(bottomPanelMode(reopenedModel)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(reopenedModel)).isTrue();
-        verify(context.terminalManager()).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString()), eq(Map.of("API_URL", "https://example.test")));
+        verify(context.terminalManager()).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString()),
+                eq(Map.of("API_URL", "https://example.test")));
     }
 
     @Test
@@ -96,13 +113,14 @@ public class UiControllerTerminalTests {
 
         controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
         long projectId = context.appStateService().loadViewData().activeProject().id();
-        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
+        context.appStateService().updateProjectEnvironmentVariables(projectId,
+                List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
         long workspaceAId = context.appStateService().loadViewData().activeWorkspace().id();
 
         ConcurrentModel openModel = new ConcurrentModel();
         controller.openTerminalPanel(openModel);
         assertThat(terminalTabs(openModel)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+                .containsExactly(Assertions.tuple("Terminal 1", true));
 
         String uniqueBranchName = baseBranchName + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         ConcurrentModel workspaceBModel = new ConcurrentModel();
@@ -119,7 +137,7 @@ public class UiControllerTerminalTests {
 
         assertThat(switchedBackModel.getAttribute("terminalOob")).isEqualTo(true);
         assertThat(terminalTabs(switchedBackModel)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+                .containsExactly(Assertions.tuple("Terminal 1", true));
         assertThat(activeTerminal(switchedBackModel).id()).isEqualTo("terminal-1");
         assertThat(bottomPanelMode(switchedBackModel)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(switchedBackModel)).isTrue();
@@ -141,7 +159,7 @@ public class UiControllerTerminalTests {
 
         assertThat(sessionTwoModel.getAttribute("terminalOob")).isEqualTo(true);
         assertThat(terminalTabs(sessionTwoModel)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+                .containsExactly(Assertions.tuple("Terminal 1", true));
         assertThat(activeTerminal(sessionTwoModel).id()).isEqualTo("terminal-1");
 
         ConcurrentModel backToSessionOneModel = new ConcurrentModel();
@@ -149,15 +167,18 @@ public class UiControllerTerminalTests {
 
         assertThat(backToSessionOneModel.getAttribute("terminalOob")).isEqualTo(true);
         assertThat(terminalTabs(backToSessionOneModel)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("Terminal 1", true));
+                .containsExactly(Assertions.tuple("Terminal 1", true));
         assertThat(activeTerminal(backToSessionOneModel).id()).isEqualTo("terminal-1");
         assertThat(backToSessionOneModel.getAttribute("includeChatContainer")).isEqualTo(true);
         assertThat((List<?>) backToSessionOneModel.getAttribute("agents")).isNotEmpty();
         assertThat((List<?>) backToSessionOneModel.getAttribute("models")).isNotEmpty();
         assertThat(backToSessionOneModel.getAttribute("thinkingLevels")).isEqualTo(List.of(ThinkingLevel.values()));
-        assertThat(backToSessionOneModel.getAttribute("selectedAgent")).isEqualTo(backToSessionOneModel.getAttribute("defaultAgent"));
-        assertThat(backToSessionOneModel.getAttribute("selectedModel")).isEqualTo(backToSessionOneModel.getAttribute("defaultModel"));
-        assertThat(backToSessionOneModel.getAttribute("selectedThinking")).isEqualTo(backToSessionOneModel.getAttribute("defaultThinking"));
+        assertThat(backToSessionOneModel.getAttribute("selectedAgent"))
+                .isEqualTo(backToSessionOneModel.getAttribute("defaultAgent"));
+        assertThat(backToSessionOneModel.getAttribute("selectedModel"))
+                .isEqualTo(backToSessionOneModel.getAttribute("defaultModel"));
+        assertThat(backToSessionOneModel.getAttribute("selectedThinking"))
+                .isEqualTo(backToSessionOneModel.getAttribute("defaultThinking"));
     }
 
     @Test
@@ -167,7 +188,8 @@ public class UiControllerTerminalTests {
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long projectId = context.appStateService().loadViewData().activeProject().id();
-        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
+        context.appStateService().updateProjectEnvironmentVariables(projectId,
+                List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
         controller.openTerminalPanel(new ConcurrentModel());
 
         ConcurrentModel model = new ConcurrentModel();
@@ -175,17 +197,18 @@ public class UiControllerTerminalTests {
 
         assertThat(view).isEqualTo("fragments/terminal :: panel");
         assertThat(terminalTabs(model)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(
-                        org.assertj.core.api.Assertions.tuple("Terminal 1", false),
-                        org.assertj.core.api.Assertions.tuple("Terminal 2", true));
+                .containsExactly(Assertions.tuple("Terminal 1", false), Assertions.tuple("Terminal 2", true));
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-2");
         assertThat(bottomPanelMode(model)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(model)).isTrue();
-        verify(context.terminalManager(), times(2)).createTerminal(eq(workspaceRoot.toAbsolutePath().normalize().toString()), eq(Map.of("API_URL", "https://example.test")));
+        verify(context.terminalManager(), times(2)).createTerminal(
+                eq(workspaceRoot.toAbsolutePath().normalize().toString()),
+                eq(Map.of("API_URL", "https://example.test")));
     }
 
     @Test
-    public void creatingWorkspaceRunsWorkspaceInitCommandsInWorkspaceInitTerminal(@TempDir Path projectRoot) throws Exception {
+    public void creatingWorkspaceRunsWorkspaceInitCommandsInWorkspaceInitTerminal(@TempDir Path projectRoot)
+            throws Exception {
         initGitRepo(projectRoot);
 
         TestContext context = newContext(projectRoot);
@@ -193,9 +216,9 @@ public class UiControllerTerminalTests {
 
         controller.addProject("Alpha", projectRoot.toString(), new ConcurrentModel());
         long projectId = context.appStateService().loadViewData().activeProject().id();
-        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(
-                new ProjectEnvironmentVariable("API_URL", "https://example.test"),
-                new ProjectEnvironmentVariable("PROJECT_ENV", "alpha")));
+        context.appStateService().updateProjectEnvironmentVariables(projectId,
+                List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test"),
+                        new ProjectEnvironmentVariable("PROJECT_ENV", "alpha")));
         String commands = "echo init-one\npwd\ntouch init-ran.txt";
         context.appStateService().updateProjectWorkspaceInitCommands(projectId, commands);
 
@@ -204,24 +227,22 @@ public class UiControllerTerminalTests {
         String view = controller.addWorkspace(branchName, "create", model);
 
         Path worktreePath = projectRoot.toAbsolutePath().normalize().resolveSibling(".trees")
-                .resolve(projectRoot.getFileName().toString())
-                .resolve(branchName)
-                .toAbsolutePath()
-                .normalize();
+                .resolve(projectRoot.getFileName().toString()).resolve(branchName).toAbsolutePath().normalize();
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
         assertThat(terminalTabs(model)).extracting(TerminalTab::title, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("Workspace Init", true));
+                .containsExactly(Assertions.tuple("Workspace Init", true));
         assertThat(bottomPanelMode(model)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(model)).isTrue();
-        assertThat(context.terminalStateService().snapshot(context.appStateService().loadViewData().activeWorkspace().id()).bottomPanelOpen()).isTrue();
-        verify(context.terminalManager()).createTerminal(eq(worktreePath.toString()), eq("Workspace Init"), eq(Map.of(
-                "API_URL", "https://example.test",
-                "PROJECT_ENV", "alpha")));
+        assertThat(context.terminalStateService()
+                .snapshot(context.appStateService().loadViewData().activeWorkspace().id()).bottomPanelOpen()).isTrue();
+        verify(context.terminalManager()).createTerminal(eq(worktreePath.toString()), eq("Workspace Init"),
+                eq(Map.of("API_URL", "https://example.test", "PROJECT_ENV", "alpha")));
         verify(context.terminalManager()).write(anyString(), eq(commands + "\n"));
     }
 
     @Test
-    public void creatingWorkspaceWithBlankWorkspaceInitCommandsDoesNotAutoCreateATerminal(@TempDir Path projectRoot) throws Exception {
+    public void creatingWorkspaceWithBlankWorkspaceInitCommandsDoesNotAutoCreateATerminal(@TempDir Path projectRoot)
+            throws Exception {
         initGitRepo(projectRoot);
 
         TestContext context = newContext(projectRoot);
@@ -243,7 +264,8 @@ public class UiControllerTerminalTests {
     }
 
     @Test
-    public void creatingWorkspaceWithNullWorkspaceInitCommandsDoesNotAutoCreateATerminal(@TempDir Path projectRoot) throws Exception {
+    public void creatingWorkspaceWithNullWorkspaceInitCommandsDoesNotAutoCreateATerminal(@TempDir Path projectRoot)
+            throws Exception {
         initGitRepo(projectRoot);
 
         TestContext context = newContext(projectRoot);
@@ -271,7 +293,8 @@ public class UiControllerTerminalTests {
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long projectId = context.appStateService().loadViewData().activeProject().id();
-        context.appStateService().updateProjectEnvironmentVariables(projectId, List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
+        context.appStateService().updateProjectEnvironmentVariables(projectId,
+                List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test")));
         controller.openTerminalPanel(new ConcurrentModel());
         controller.newTerminal(new ConcurrentModel());
 
@@ -280,9 +303,7 @@ public class UiControllerTerminalTests {
 
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-1");
         assertThat(terminalTabs(model)).extracting(TerminalTab::id, TerminalTab::active)
-                .containsExactly(
-                        org.assertj.core.api.Assertions.tuple("terminal-1", true),
-                        org.assertj.core.api.Assertions.tuple("terminal-2", false));
+                .containsExactly(Assertions.tuple("terminal-1", true), Assertions.tuple("terminal-2", false));
         assertThat(bottomPanelMode(model)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(model)).isTrue();
     }
@@ -301,7 +322,7 @@ public class UiControllerTerminalTests {
 
         assertThat(view).isEqualTo("fragments/terminal :: panel");
         assertThat(terminalTabs(model)).extracting(TerminalTab::id, TerminalTab::active)
-                .containsExactly(org.assertj.core.api.Assertions.tuple("terminal-1", true));
+                .containsExactly(Assertions.tuple("terminal-1", true));
         assertThat(activeTerminal(model).id()).isEqualTo("terminal-1");
         assertThat(bottomPanelMode(model)).isEqualTo("terminal");
         assertThat(bottomPanelOpen(model)).isTrue();
@@ -342,10 +363,7 @@ public class UiControllerTerminalTests {
         AgentProperties properties = new AgentProperties();
         properties.setWorkspaceRoot(workspaceRoot.toAbsolutePath().normalize().toString());
 
-        return new TestContext(
-                TestAppStateSupport.appStateService(),
-                new TerminalStateService(),
-                terminalManager,
+        return new TestContext(TestAppStateSupport.appStateService(), new TerminalStateService(), terminalManager,
                 properties);
     }
 
@@ -360,9 +378,7 @@ public class UiControllerTerminalTests {
     }
 
     private static void runGit(Path workingDirectory, String... command) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command)
-                .directory(workingDirectory.toFile())
-                .redirectErrorStream(true)
+        Process process = new ProcessBuilder(command).directory(workingDirectory.toFile()).redirectErrorStream(true)
                 .start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
@@ -388,14 +404,24 @@ public class UiControllerTerminalTests {
         return Boolean.TRUE.equals(model.getAttribute("bottomPanelOpen"));
     }
 
-    private record TestContext(
-            com.judepereira.jupiter.persistence.AppStateService appStateService,
-            TerminalStateService terminalStateService,
-            TerminalManager terminalManager,
-            AgentProperties properties) {
+    private record TestContext(AppStateService appStateService, TerminalStateService terminalStateService,
+            TerminalManager terminalManager, AgentProperties properties) {
 
-            private UiController controller() {
-            return new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null, null, org.mockito.Mockito.mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, terminalStateService, new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class), null), TestAppStateSupport.contextCompactionService(appStateService), null, mock(CommandStreamService.class), new com.judepereira.jupiter.command.CommandCatalogService(""), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(com.judepereira.jupiter.git.GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
-            }
+        private UiController controller() {
+            return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
+                    new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                    ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null,
+                    null, null, Mockito.mock(AnthropicOAuthService.class),
+                    new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                    new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
+                            (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
+                    appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
+                    new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
+                            mock(AppStateRepository.class), null),
+                    TestAppStateSupport.contextCompactionService(appStateService), null,
+                    mock(CommandStreamService.class), new CommandCatalogService(""), null,
+                    new ChatPresentationService(), null, null, new HttpAuthProperties(),
+                    mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
         }
+    }
 }

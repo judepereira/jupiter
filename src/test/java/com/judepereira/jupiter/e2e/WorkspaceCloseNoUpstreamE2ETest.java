@@ -1,22 +1,24 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
 class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
 
@@ -34,7 +36,7 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
 
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
@@ -48,18 +50,22 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
                 page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create workspace")).click();
 
                 assertThat(page.locator(".workspace-group")).hasCount(2);
-                assertThat(page.locator(".workspace-group").nth(1).locator(".workspace-label")).hasText("feature-clean-close");
+                assertThat(page.locator(".workspace-group").nth(1).locator(".workspace-label"))
+                        .hasText("feature-clean-close");
 
                 var branchRow = page.locator(".workspace-group").nth(1).locator(".workspace-row");
                 branchRow.hover();
-                var closeButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Close workspace"));
+                var closeButton = page.getByRole(AriaRole.BUTTON,
+                        new Page.GetByRoleOptions().setName("Close workspace"));
                 assertThat(closeButton).isVisible();
                 closeButton.click();
 
                 assertThat(page.locator("#workspace-close-modal")).isVisible();
-                assertThat(page.locator("#workspace-close-modal")).containsText("Local commits detected, that haven't been pushed");
+                assertThat(page.locator("#workspace-close-modal"))
+                        .containsText("Local commits detected, that haven't been pushed");
                 assertThat(page.locator(".workspace-group")).hasCount(2);
-                assertThat(page.locator(".workspace-group .workspace-label")).containsText(new String[]{"Default Workspace", "feature-clean-close"});
+                assertThat(page.locator(".workspace-group .workspace-label"))
+                        .containsText(new String[]{"Default Workspace", "feature-clean-close"});
             }
         } finally {
             if (previousHome == null) {
@@ -76,10 +82,13 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                    new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                    SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                    SkillTestSupport.defaultComponents().injector()) {
                 @Override
                 public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                    AgentTurnResult result = new AgentTurnResult("Deterministic assistant reply", java.util.List.of());
+                    AgentTurnResult result = new AgentTurnResult("Deterministic assistant reply", List.of());
                     listener.onComplete(result);
                     return result;
                 }

@@ -1,9 +1,22 @@
 <!doctype html>
-<div th:fragment="chat" id="chat-container" th:attr="hx-swap-oob=${shellRefresh ?: false} ? 'outerHTML' : null, data-subagent-session-id=${subagentView ?: false} ? ${subagentSessionId} : null, data-session-id=${activeSession != null ? activeSession.id : null}" th:with="pendingStreamUrlPrefix=${'/ui/chat/stream'}, sessionId=${activeSession != null ? activeSession.id : null}">
+<div
+    th:fragment="chat"
+    id="chat-container"
+    th:attr="hx-swap-oob=${shellRefresh ?: false} ? 'outerHTML' : null, data-subagent-session-id=${subagentView ?: false} ? ${subagentSessionId} : null, data-session-id=${activeSession != null ? activeSession.id : null}"
+    th:with="pendingStreamUrlPrefix=${'/ui/chat/stream'}, sessionId=${activeSession != null ? activeSession.id : null}"
+>
     <!-- HTMX polling attributes are applied to the messages list when hasPending is true -->
     <section id="chat" class="chat-shell">
         <div th:if="${subagentView ?: false}" class="subagent-bar">
-            <button type="button" class="btn btn-outline-primary btn-sm subagent-back-button" hx-get="/ui/chat/primary" hx-target="#chat-container" hx-swap="outerHTML">Back</button>
+            <button
+                type="button"
+                class="btn btn-outline-primary btn-sm subagent-back-button"
+                hx-get="/ui/chat/primary"
+                hx-target="#chat-container"
+                hx-swap="outerHTML"
+            >
+                Back
+            </button>
             <span class="subagent-bar-label">Subagent:</span>
             <strong class="subagent-bar-name" th:text="${subagentAgentName}"></strong>
         </div>
@@ -11,20 +24,37 @@
         <div id="chat-history" class="messages" aria-live="polite">
             <!-- Message list fragment: do not use polling; SSE binds to pending assistant rows -->
             <ul id="chat-messages-list" th:fragment="messages">
-                <th:block th:replace="~{fragments/chat-rows :: rows(messages=${chatMessages}, pendingStreamUrlPrefix=${pendingStreamUrlPrefix}, subagentView=${subagentView}, fullMode=${false})}"></th:block>
+                <th:block
+                    th:replace="~{fragments/chat-rows :: rows(messages=${chatMessages}, pendingStreamUrlPrefix=${pendingStreamUrlPrefix}, subagentView=${subagentView}, fullMode=${false})}"
+                ></th:block>
             </ul>
         </div>
 
-        <form th:if="${!(subagentView ?: false)}" id="chat-send-form" class="chat-form" hx-post="/ui/chat/send" hx-target="#chat-messages-list" hx-swap="beforeend" th:attr="data-session-id=${activeSession != null ? activeSession.id : null}, data-model-explicit=${selectedModelExplicit}">
-            <div id="chat-controls" class="chat-controls" th:fragment="chatControls" th:attr="hx-swap-oob=${chatControlsOob ?: false} ? 'outerHTML:#chat-controls' : null, data-model-explicit=${selectedModelExplicit}">
+        <form
+            th:if="${!(subagentView ?: false)}"
+            id="chat-send-form"
+            class="chat-form"
+            hx-post="/ui/chat/send"
+            hx-target="#chat-messages-list"
+            hx-swap="beforeend"
+            th:attr="data-session-id=${activeSession != null ? activeSession.id : null}, data-model-explicit=${selectedModelExplicit}"
+        >
+            <div
+                id="chat-controls"
+                class="chat-controls"
+                th:fragment="chatControls"
+                th:attr="hx-swap-oob=${chatControlsOob ?: false} ? 'outerHTML:#chat-controls' : null, data-model-explicit=${selectedModelExplicit}"
+            >
                 <label>
                     <span class="chat-control-label">Agent</span>
                     <select id="chat-agent-select" name="agentId" class="form-select">
-                        <option th:each="agent : ${agents}"
-                                th:value="${agent.id}"
-                                th:selected="${selectedAgent != null and selectedAgent.id == agent.id}"
-                                th:attr="data-description=${agent.description}, data-default-model=${agentDefaultModels != null ? agentDefaultModels[agent.id] : null}, data-default-thinking=${agent.defaultThinkingLevel}, title=${agent.description}"
-                                th:text="${agent.name + ' — ' + agent.description}"></option>
+                        <option
+                            th:each="agent : ${agents}"
+                            th:value="${agent.id}"
+                            th:selected="${selectedAgent != null and selectedAgent.id == agent.id}"
+                            th:attr="data-description=${agent.description}, data-default-model=${agentDefaultModels != null ? agentDefaultModels[agent.id] : null}, data-default-thinking=${agent.defaultThinkingLevel}, title=${agent.description}"
+                            th:text="${agent.name + ' — ' + agent.description}"
+                        ></option>
                     </select>
                 </label>
 
@@ -32,30 +62,48 @@
                     <span class="chat-control-label">Model</span>
                     <select id="chat-model-select" name="modelId" class="form-select" th:disabled="${pickerEmpty}">
                         <option th:if="${pickerEmpty}" value="">No models available</option>
-                        <option th:each="modelDef : ${models}"
-                                th:value="${modelDef.id}"
-                                th:selected="${selectedModel != null and selectedModel.id == modelDef.id}"
-                                th:text="${modelDef.displayName + ' — ' + modelDef.provider}"></option>
+                        <option
+                            th:each="modelDef : ${models}"
+                            th:value="${modelDef.id}"
+                            th:selected="${selectedModel != null and selectedModel.id == modelDef.id}"
+                            th:text="${modelDef.displayName + ' — ' + modelDef.provider}"
+                        ></option>
                     </select>
                 </label>
 
                 <label>
                     <span class="chat-control-label">Thinking</span>
                     <select id="chat-thinking-select" name="thinkingLevel" class="form-select">
-                        <option th:each="level : ${thinkingLevels}"
-                                th:value="${level}"
-                                th:selected="${selectedThinking != null and selectedThinking == level}"
-                                th:text="${level}"></option>
+                        <option
+                            th:each="level : ${thinkingLevels}"
+                            th:value="${level}"
+                            th:selected="${selectedThinking != null and selectedThinking == level}"
+                            th:text="${level}"
+                        ></option>
                     </select>
                 </label>
             </div>
 
-            <p th:if="${pickerEmpty}" class="chat-picker-empty">No models available. <a href="#settings-modal" hx-get="/ui/settings" hx-target="#modal-root" hx-swap="innerHTML">Connect a provider or choose favourite models in Settings.</a></p>
+            <p th:if="${pickerEmpty}" class="chat-picker-empty">
+                No models available.
+                <a href="#settings-modal" hx-get="/ui/settings" hx-target="#modal-root" hx-swap="innerHTML"
+                    >Connect a provider or choose favourite models in Settings.</a
+                >
+            </p>
 
             <div class="chat-compose-row">
                 <label for="chat-input" class="sr-only">Message</label>
-                <textarea id="chat-input" name="message" rows="1" autocomplete="off" th:text="${chatDraft ?: ''}"></textarea>
-                <button id="chat-send-btn" type="submit" class="btn btn-outline-primary" th:disabled="${pickerEmpty}"><i class="bi bi-send"></i> Send</button>
+                <textarea
+                    id="chat-input"
+                    name="message"
+                    rows="1"
+                    autocomplete="off"
+                    th:text="${chatDraft ?: ''}"
+                ></textarea>
+                <button id="chat-send-btn" type="submit" class="btn btn-outline-primary" th:disabled="${pickerEmpty}">
+                    <i class="bi bi-send"></i>
+                    Send
+                </button>
             </div>
         </form>
     </section>

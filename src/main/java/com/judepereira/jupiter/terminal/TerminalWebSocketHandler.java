@@ -2,13 +2,12 @@ package com.judepereira.jupiter.terminal;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
-
-import java.util.Map;
 
 @Log4j2
 public class TerminalWebSocketHandler extends TextWebSocketHandler {
@@ -79,7 +78,8 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
     private void sendErrorAndClose(WebSocketSession session, String message) {
         try {
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(Map.of("type", "error", "message", message))));
+            session.sendMessage(
+                    new TextMessage(objectMapper.writeValueAsString(Map.of("type", "error", "message", message))));
         } catch (Exception e) {
             log.error("Failed to send websocket error", e);
         }
@@ -96,5 +96,6 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record TerminalSocketMessage(String type, String data, Integer cols, Integer rows) {}
+    private record TerminalSocketMessage(String type, String data, Integer cols, Integer rows) {
+    }
 }

@@ -1,6 +1,5 @@
 package com.judepereira.jupiter.security;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
@@ -48,8 +47,8 @@ public final class LinuxProcessHardening {
         // prctl has one fixed int followed by variadic long arguments on Linux ABIs.
         FunctionDescriptor descriptor = FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
                 ValueLayout.JAVA_LONG);
-        MethodHandle handle = Linker.nativeLinker().downcallHandle(
-                address, descriptor, Linker.Option.firstVariadicArg(1));
+        MethodHandle handle = Linker.nativeLinker().downcallHandle(address, descriptor,
+                Linker.Option.firstVariadicArg(1));
         return (int) handle.invokeExact(option, value);
     }
 }

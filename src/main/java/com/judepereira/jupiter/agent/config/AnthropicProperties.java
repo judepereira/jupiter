@@ -1,10 +1,9 @@
 package com.judepereira.jupiter.agent.config;
 
+import java.time.Duration;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-
-import java.time.Duration;
 
 @Getter
 @Setter

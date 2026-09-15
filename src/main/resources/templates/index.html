@@ -1,111 +1,146 @@
 <!doctype html>
 <html>
-<head>
-    <meta charset="utf-8"/>
-    <title>Jupiter</title>
-    <script src="/webjars/htmx.org/1.9.4/dist/htmx.min.js"></script>
-    <link href="/webjars/bootstrap/5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="/webjars/bootstrap-icons/1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="/webjars/xterm/5.3.0/css/xterm.css">
-    <link rel="stylesheet" href="/webjars/codemirror/5.65.16/lib/codemirror.css">
-    <link rel="stylesheet" th:href="@{/css/diff-viewer.css}">
-    <link rel="stylesheet" th:href="@{/css/tokens.css}">
-    <link rel="stylesheet" th:href="@{/css/base.css}">
-    <link rel="stylesheet" th:href="@{/css/projects.css}">
-    <link rel="stylesheet" th:href="@{/css/system-balloons.css}">
-    <link rel="stylesheet" th:href="@{/css/layout.css}">
-    <link rel="stylesheet" th:href="@{/css/chat.css}">
-    <link rel="stylesheet" th:href="@{/css/review.css}">
-    <link rel="stylesheet" th:href="@{/css/terminal.css}">
-    <link rel="stylesheet" th:href="@{/css/session.css}">
-    <link rel="stylesheet" th:href="@{/css/settings.css}">
-    <link rel="stylesheet" th:href="@{/css/connection-loss.css}">
-    <link rel="stylesheet" th:href="@{/css/mobile-rail.css}">
-    <link rel="stylesheet" th:href="@{/css/responsive.css}">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="apple-touch-icon" sizes="180x180" th:href="@{/apple-touch-icon.png}">
-    <link id="favicon-32x32" rel="icon" type="image/png" sizes="32x32" th:href="@{/favicon-32x32.png}">
-    <link id="favicon-16x16" rel="icon" type="image/png" sizes="16x16" th:href="@{/favicon-16x16.png}">
-    <link rel="manifest" th:href="@{/site.webmanifest}">
-</head>
-<body>
-<header id="top-bar" th:replace="~{fragments/projects :: topbar}" th:with="shellRefresh=${false}">Top bar</header>
+    <head>
+        <meta charset="utf-8">
+        <title>Jupiter</title>
+        <script src="/webjars/htmx.org/1.9.4/dist/htmx.min.js"></script>
+        <link href="/webjars/bootstrap/5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="/webjars/bootstrap-icons/1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+        <link rel="stylesheet" href="/webjars/xterm/5.3.0/css/xterm.css">
+        <link rel="stylesheet" href="/webjars/codemirror/5.65.16/lib/codemirror.css">
+        <link rel="stylesheet" th:href="@{/css/diff-viewer.css}">
+        <link rel="stylesheet" th:href="@{/css/tokens.css}">
+        <link rel="stylesheet" th:href="@{/css/base.css}">
+        <link rel="stylesheet" th:href="@{/css/projects.css}">
+        <link rel="stylesheet" th:href="@{/css/system-balloons.css}">
+        <link rel="stylesheet" th:href="@{/css/layout.css}">
+        <link rel="stylesheet" th:href="@{/css/chat.css}">
+        <link rel="stylesheet" th:href="@{/css/review.css}">
+        <link rel="stylesheet" th:href="@{/css/terminal.css}">
+        <link rel="stylesheet" th:href="@{/css/session.css}">
+        <link rel="stylesheet" th:href="@{/css/settings.css}">
+        <link rel="stylesheet" th:href="@{/css/connection-loss.css}">
+        <link rel="stylesheet" th:href="@{/css/mobile-rail.css}">
+        <link rel="stylesheet" th:href="@{/css/responsive.css}">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="apple-touch-icon" sizes="180x180" th:href="@{/apple-touch-icon.png}">
+        <link id="favicon-32x32" rel="icon" type="image/png" sizes="32x32" th:href="@{/favicon-32x32.png}">
+        <link id="favicon-16x16" rel="icon" type="image/png" sizes="16x16" th:href="@{/favicon-16x16.png}">
+        <link rel="manifest" th:href="@{/site.webmanifest}">
+    </head>
+    <body>
+        <header id="top-bar" th:replace="~{fragments/projects :: topbar}" th:with="shellRefresh=${false}">
+            Top bar
+        </header>
 
-<div id="shell" class="shell-root">
+        <div id="shell" class="shell-root">
+            <!-- left workspace/session navigation -->
+            <aside id="left-rail" class="rail left-rail">
+                <section
+                    id="workspace-session-rail"
+                    th:replace="~{fragments/projects :: workspaceRail}"
+                    th:with="shellRefresh=${false}"
+                >
+                    Workspace rail
+                </section>
+                <div id="left-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
+            </aside>
 
-    <!-- left workspace/session navigation -->
-    <aside id="left-rail" class="rail left-rail">
-        <section id="workspace-session-rail" th:replace="~{fragments/projects :: workspaceRail}" th:with="shellRefresh=${false}">Workspace rail</section>
-        <div id="left-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
-    </aside>
+            <!-- main left content: chat composer + history -->
+            <main id="left-panel" class="main-panel left-panel">
+                <div
+                    id="chat-container"
+                    th:replace="~{fragments/chat :: chat}"
+                    th:with="hasPending=${false}, reviewOob=${false}, shellRefresh=${false}, subagentView=${false}"
+                >
+                    Loading chat...
+                </div>
+            </main>
 
-    <!-- main left content: chat composer + history -->
-    <main id="left-panel" class="main-panel left-panel">
-        <div id="chat-container" th:replace="~{fragments/chat :: chat}" th:with="hasPending=${false}, reviewOob=${false}, shellRefresh=${false}, subagentView=${false}">
-            Loading chat...
+            <!-- draggable divider between left rail and left panel -->
+            <div
+                id="left-rail-divider"
+                class="left-rail-divider"
+                role="separator"
+                aria-label="Click and drag to resize left rail"
+                title="Click and drag to resize left rail"
+                aria-orientation="vertical"
+                tabindex="0"
+            ></div>
+
+            <!-- draggable divider between left panel and review panel -->
+            <div
+                id="panel-divider"
+                class="panel-divider"
+                role="separator"
+                aria-label="Click and drag to resize"
+                title="Click and drag to resize"
+                aria-orientation="vertical"
+                tabindex="0"
+            ></div>
+
+            <!-- main right content: review panel -->
+            <aside
+                id="review"
+                class="main-panel review-panel"
+                th:replace="~{fragments/review :: panel}"
+                th:with="reviewOob=${false}"
+            >
+                Loading review...
+            </aside>
+
+            <!-- bottom rail -->
+            <aside id="bottom-rail" class="rail bottom-rail">
+                <div th:replace="~{fragments/panel :: panel(panelName='bottom-rail')}">Bottom rail</div>
+                <div id="bottom-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
+                <button
+                    id="toggle-terminal-rail-btn"
+                    class="rail-btn"
+                    hx-post="/ui/panel/terminal"
+                    hx-target="#bottom-panel"
+                    hx-swap="outerHTML"
+                >
+                    <i class="bi bi-terminal" aria-label="Open terminal panel" title="Open terminal panel"></i>
+                </button>
+            </aside>
+
+            <!-- bottom panel content -->
+            <div id="bottom-panel" th:replace="~{fragments/terminal :: panel}">Loading terminal...</div>
         </div>
-    </main>
 
-    <!-- draggable divider between left rail and left panel -->
-    <div id="left-rail-divider" class="left-rail-divider" role="separator" aria-label="Click and drag to resize left rail"
-         title="Click and drag to resize left rail" aria-orientation="vertical" tabindex="0"></div>
+        <div id="system-balloon-root" aria-live="polite" aria-atomic="false"></div>
+        <div id="connection-loss-overlay" class="connection-loss-overlay" hidden aria-hidden="true">
+            <div class="connection-loss-overlay__panel" role="status" aria-live="polite" aria-atomic="true">
+                <p class="connection-loss-overlay__eyebrow">Connection lost</p>
+                <p class="connection-loss-overlay__message">
+                    Jupiter will automatically reload once the backend is reachable
+                </p>
+                <button type="button" class="btn btn-dark" data-connection-loss-refresh>Reload Now</button>
+            </div>
+        </div>
+        <div id="modal-root"></div>
 
-    <!-- draggable divider between left panel and review panel -->
-    <div id="panel-divider" class="panel-divider" role="separator" aria-label="Click and drag to resize"
-         title="Click and drag to resize" aria-orientation="vertical" tabindex="0"></div>
-
-    <!-- main right content: review panel -->
-    <aside id="review" class="main-panel review-panel"
-           th:replace="~{fragments/review :: panel}" th:with="reviewOob=${false}">Loading review...
-    </aside>
-
-    <!-- bottom rail -->
-    <aside id="bottom-rail" class="rail bottom-rail">
-        <div th:replace="~{fragments/panel :: panel(panelName='bottom-rail')}">Bottom rail</div>
-        <div id="bottom-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
-        <button id="toggle-terminal-rail-btn" class="rail-btn" hx-post="/ui/panel/terminal" hx-target="#bottom-panel"
-                 hx-swap="outerHTML">
-            <i class="bi bi-terminal" aria-label="Open terminal panel"
-               title="Open terminal panel"></i>
-        </button>
-    </aside>
-
-    <!-- bottom panel content -->
-    <div id="bottom-panel" th:replace="~{fragments/terminal :: panel}">Loading terminal...</div>
-
-</div>
-
-<div id="system-balloon-root" aria-live="polite" aria-atomic="false"></div>
-<div id="connection-loss-overlay" class="connection-loss-overlay" hidden aria-hidden="true">
-    <div class="connection-loss-overlay__panel" role="status" aria-live="polite" aria-atomic="true">
-        <p class="connection-loss-overlay__eyebrow">Connection lost</p>
-        <p class="connection-loss-overlay__message">Jupiter will automatically reload once the backend is reachable</p>
-        <button type="button" class="btn btn-dark" data-connection-loss-refresh>Reload Now</button>
-    </div>
-</div>
-<div id="modal-root"></div>
-
-<script src="/webjars/bootstrap/5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/webjars/chart.js/4.5.0/dist/chart.umd.min.js"></script>
-<script src="/webjars/dompurify/3.4.11/dist/purify.min.js"></script>
-<script src="/webjars/marked/18.0.5/lib/marked.umd.js"></script>
-<script src="/webjars/xterm/5.3.0/lib/xterm.js"></script>
-    <script src="/webjars/xterm-addon-fit/0.8.0/lib/xterm-addon-fit.js"></script>
-<script src="/webjars/codemirror/5.65.16/lib/codemirror.js"></script>
-<script src="/webjars/codemirror/5.65.16/mode/diff/diff.js"></script>
-<script type="module" th:src="@{/js/connection-loss-monitor.js}"></script>
-<script type="module" th:src="@{/js/diff-viewer.js}"></script>
-<script type="module" th:src="@{/js/system-balloons.js}"></script>
-<script type="module" th:src="@{/js/workspace-branch-sanitizer.js}"></script>
-<script type="module" th:src="@{/js/left-rail-divider.js}"></script>
-<script type="module" th:src="@{/js/review-divider.js}"></script>
-<script type="module" th:src="@{/js/terminal-divider.js}"></script>
-<script type="module" th:src="@{/js/shortcuts.js}"></script>
-<script type="module" th:src="@{/js/mobile-rail.js}"></script>
-<script type="module" th:src="@{/js/chat.js}"></script>
-<script type="module" th:src="@{/js/terminal.js}"></script>
-<script type="module" th:src="@{/js/session.js}"></script>
-<script type="module" th:src="@{/js/settings.js}"></script>
-<script type="module" th:src="@{/js/usage.js}"></script>
-</body>
+        <script src="/webjars/bootstrap/5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="/webjars/chart.js/4.5.0/dist/chart.umd.min.js"></script>
+        <script src="/webjars/dompurify/3.4.11/dist/purify.min.js"></script>
+        <script src="/webjars/marked/18.0.5/lib/marked.umd.js"></script>
+        <script src="/webjars/xterm/5.3.0/lib/xterm.js"></script>
+        <script src="/webjars/xterm-addon-fit/0.8.0/lib/xterm-addon-fit.js"></script>
+        <script src="/webjars/codemirror/5.65.16/lib/codemirror.js"></script>
+        <script src="/webjars/codemirror/5.65.16/mode/diff/diff.js"></script>
+        <script type="module" th:src="@{/js/connection-loss-monitor.js}"></script>
+        <script type="module" th:src="@{/js/diff-viewer.js}"></script>
+        <script type="module" th:src="@{/js/system-balloons.js}"></script>
+        <script type="module" th:src="@{/js/workspace-branch-sanitizer.js}"></script>
+        <script type="module" th:src="@{/js/left-rail-divider.js}"></script>
+        <script type="module" th:src="@{/js/review-divider.js}"></script>
+        <script type="module" th:src="@{/js/terminal-divider.js}"></script>
+        <script type="module" th:src="@{/js/shortcuts.js}"></script>
+        <script type="module" th:src="@{/js/mobile-rail.js}"></script>
+        <script type="module" th:src="@{/js/chat.js}"></script>
+        <script type="module" th:src="@{/js/terminal.js}"></script>
+        <script type="module" th:src="@{/js/session.js}"></script>
+        <script type="module" th:src="@{/js/settings.js}"></script>
+        <script type="module" th:src="@{/js/usage.js}"></script>
+    </body>
 </html>

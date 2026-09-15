@@ -1,11 +1,18 @@
 package com.judepereira.jupiter.persistence;
 
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
-import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
+import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
@@ -14,42 +21,45 @@ import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
+import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.config.HttpAuthProperties;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
+import com.judepereira.jupiter.security.EncryptionMigrationService;
 import com.judepereira.jupiter.terminal.TerminalHandle;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
-import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.ChatToolCallHtmlService;
+import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
-import org.flywaydb.core.Flyway;
-import com.judepereira.jupiter.security.EncryptionMigrationService;
-
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.thymeleaf.spring6.SpringTemplateEngine;
-import org.thymeleaf.templatemode.TemplateMode;
-import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
-import org.springframework.ui.ConcurrentModel;
-
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
-
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.thymeleaf.spring6.SpringTemplateEngine;
+import org.thymeleaf.templatemode.TemplateMode;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 public final class TestAppStateSupport {
 
@@ -72,7 +82,8 @@ public final class TestAppStateSupport {
         return appStateContext(applicationEventPublisher, new ActiveStreamRegistryService());
     }
 
-    private static AppStateTestContext appStateContext(ApplicationEventPublisher applicationEventPublisher, ActiveStreamRegistryService activeStreamRegistryService) {
+    private static AppStateTestContext appStateContext(ApplicationEventPublisher applicationEventPublisher,
+            ActiveStreamRegistryService activeStreamRegistryService) {
         Path dbFile;
         try {
             dbFile = Files.createTempDirectory("jupiter-app-state-").resolve("app-state.db");
@@ -84,7 +95,7 @@ public final class TestAppStateSupport {
 
         Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
         SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
-        var jdbc = new org.springframework.jdbc.core.JdbcTemplate(dataSource);
+        var jdbc = new JdbcTemplate(dataSource);
         try (var connection = dataSource.getConnection()) {
             new EncryptionMigrationService(TestEncryptionSupport.encryptor()).run(connection);
         } catch (Exception e) {
@@ -93,24 +104,26 @@ public final class TestAppStateSupport {
 
         AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource),
                 TestEncryptionSupport.encryptor(), new ObjectMapper());
-        AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher, activeStreamRegistryService);
+        AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher,
+                activeStreamRegistryService);
         return new AppStateTestContext(service, repository, activeStreamRegistryService, dataSource);
     }
 
     public record AppStateTestContext(AppStateService service, AppStateRepository repository,
-                                      ActiveStreamRegistryService activeStreamRegistryService,
-                                      javax.sql.DataSource dataSource) {}
+            ActiveStreamRegistryService activeStreamRegistryService, DataSource dataSource) {
+    }
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
         return controller(harness, properties, ModelCatalogTestSupport.modelCatalogService(), null);
     }
 
-    public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService) {
+    public static UiController controller(CodingAgentHarness harness, AgentProperties properties,
+            ModelCatalogService modelCatalogService) {
         return controller(harness, properties, modelCatalogService, null);
     }
 
-    public static UiController controller(CodingAgentHarness harness, AgentProperties properties, ModelCatalogService modelCatalogService,
-                                          LifecycleHookService lifecycleHookService) {
+    public static UiController controller(CodingAgentHarness harness, AgentProperties properties,
+            ModelCatalogService modelCatalogService, LifecycleHookService lifecycleHookService) {
         TerminalManager terminalManager = mock(TerminalManager.class);
         AtomicInteger sequence = new AtomicInteger();
         when(terminalManager.createTerminal(anyString(), anyMap())).thenAnswer(invocation -> {
@@ -135,10 +148,25 @@ public final class TestAppStateSupport {
         resolver.setTemplateMode(TemplateMode.HTML);
         resolver.setCacheable(false);
         templateEngine.setTemplateResolver(resolver);
-        return new UiController(harness, properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), modelCatalogService, com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null, null, null, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), activeStreamRegistryService, terminalManager, new TerminalStateService(), new OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), context.repository(), null), contextCompactionService(appStateService), new TokenUsageService(context.repository(), new ObjectMapper()), mock(CommandStreamService.class), new com.judepereira.jupiter.command.CommandCatalogService(""), mock(McpProjectMcpServerRuntimeManager.class), new com.judepereira.jupiter.ui.ChatPresentationService(), new com.judepereira.jupiter.ui.ChatToolCallHtmlService(templateEngine, new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService), lifecycleHookService, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+        return new UiController(harness, properties, appStateService, new AgentDefinitionService(new ObjectMapper()),
+                modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null, null,
+                null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
+                        (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
+                activeStreamRegistryService, terminalManager, new TerminalStateService(),
+                new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
+                        context.repository(), null),
+                contextCompactionService(appStateService),
+                new TokenUsageService(context.repository(), new ObjectMapper()), mock(CommandStreamService.class),
+                new CommandCatalogService(""), mock(McpProjectMcpServerRuntimeManager.class),
+                new ChatPresentationService(),
+                new ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
+                lifecycleHookService, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
     }
 
-    public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller, String assistantId) {
+    public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller,
+            String assistantId) {
         return awaitChatMessage(controller, assistantId, message -> !message.pending());
     }
 
@@ -160,10 +188,12 @@ public final class TestAppStateSupport {
                 throw new IllegalStateException("Interrupted while waiting for changed files and selection", e);
             }
         }
-        throw new IllegalStateException("Timed out waiting for changed files and selection" + (lastSeen == null ? "" : ": " + lastSeen));
+        throw new IllegalStateException(
+                "Timed out waiting for changed files and selection" + (lastSeen == null ? "" : ": " + lastSeen));
     }
 
-    private static ChatPresentationService.ChatMessage awaitChatMessage(UiController controller, String messageId, Predicate<ChatPresentationService.ChatMessage> condition) {
+    private static ChatPresentationService.ChatMessage awaitChatMessage(UiController controller, String messageId,
+            Predicate<ChatPresentationService.ChatMessage> condition) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         ChatPresentationService.ChatMessage lastSeen = null;
         while (System.nanoTime() < deadline) {
@@ -181,14 +211,16 @@ public final class TestAppStateSupport {
                 throw new IllegalStateException("Interrupted while waiting for chat message " + messageId, e);
             }
         }
-        throw new IllegalStateException("Timed out waiting for chat message " + messageId + (lastSeen == null ? "" : ": " + lastSeen));
+        throw new IllegalStateException(
+                "Timed out waiting for chat message " + messageId + (lastSeen == null ? "" : ": " + lastSeen));
     }
 
     @SuppressWarnings("unchecked")
     private static ChatPresentationService.ChatMessage currentChatMessage(UiController controller, String messageId) {
         ConcurrentModel model = new ConcurrentModel();
         controller.index(model);
-        List<ChatPresentationService.ChatMessage> messages = (List<ChatPresentationService.ChatMessage>) model.getAttribute("chatMessages");
+        List<ChatPresentationService.ChatMessage> messages = (List<ChatPresentationService.ChatMessage>) model
+                .getAttribute("chatMessages");
         if (messages == null) {
             return null;
         }
@@ -196,7 +228,9 @@ public final class TestAppStateSupport {
     }
 
     public static ContextCompactionService contextCompactionService(AppStateService appStateService) {
-        return new ContextCompactionService(appStateService, summaryClientFactory(), null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery());
+        return new ContextCompactionService(appStateService, summaryClientFactory(), null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery());
     }
 
     private static AgentModelClientFactory summaryClientFactory() {
@@ -207,13 +241,14 @@ public final class TestAppStateSupport {
             }
 
             @Override
-            public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
+            public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools,
+                    AgentModelOptions options) {
                 return new ModelResponse("compact summary", null, ModelResponseMetadata.empty(), null);
             }
 
             @Override
-            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
-                                               java.util.function.Consumer<String> onDelta) {
+            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+                    AgentModelOptions options, Consumer<String> onDelta) {
                 onDelta.accept("compact summary");
                 return new ModelResponse("compact summary", null, ModelResponseMetadata.empty(), null);
             }

@@ -1,11 +1,18 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
-import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.ui.ChatPresentationService;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -15,13 +22,6 @@ import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.web.servlet.JakartaServletWebApplication;
-
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 public class ChatTemplateRenderTest {
 
@@ -41,12 +41,12 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("chatMessages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(),
-                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null), "GPT-5.6 Sol")
-        ));
+        context.setVariable("chatMessages",
+                List.of(new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
+                        null, List.of(), new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null),
+                        "GPT-5.6 Sol")));
         context.setVariable("agents", agentService.listPrimaryAgents());
-        context.setVariable("agentDefaultModels", java.util.Map.of("plan", "openai/gpt-5.6-sol"));
+        context.setVariable("agentDefaultModels", Map.of("plan", "openai/gpt-5.6-sol"));
         context.setVariable("models", modelService.list());
         context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
         context.setVariable("selectedAgent", agentService.getRequired("plan"));
@@ -55,12 +55,15 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat", context);
 
-        assertThat(html).contains("id=\"chat-agent-select\"", "id=\"chat-model-select\"", "id=\"chat-thinking-select\"");
+        assertThat(html).contains("id=\"chat-agent-select\"", "id=\"chat-model-select\"",
+                "id=\"chat-thinking-select\"");
         assertThat(html).contains("data-default-model=\"openai/gpt-5.6-sol\"");
-        assertThat(html).contains("class=\"chat-message-subtitle\"", "data-agent-label=\"Plan\"", "data-agent-id=\"plan\"", "data-model-id=\"openai/gpt-5.6-sol\"", "data-model-label=\"GPT-5.6 Sol\"", "data-thinking-level=\"HIGH\"");
+        assertThat(html).contains("class=\"chat-message-subtitle\"", "data-agent-label=\"Plan\"",
+                "data-agent-id=\"plan\"", "data-model-id=\"openai/gpt-5.6-sol\"", "data-model-label=\"GPT-5.6 Sol\"",
+                "data-thinking-level=\"HIGH\"");
         assertThat(html).doesNotContain("chat-message-meta", "chat-meta-chip", "Explore");
 
-        context.setVariable("agentDefaultModels", java.util.Map.of());
+        context.setVariable("agentDefaultModels", Map.of());
         context.setVariable("selectedModel", modelService.getRequired("anthropic/claude-sonnet-5"));
         String arbitraryFallbackHtml = engine.process("fragments/chat", context);
         assertThat(arbitraryFallbackHtml).doesNotContain("data-default-model=");
@@ -83,13 +86,14 @@ public class ChatTemplateRenderTest {
         context.setVariable("chatMessages", List.of(
                 new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-done", 2L, List.of(),
                         new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null), "GPT-5.6 Sol"),
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 3L, true, "assistant-pending", null, List.of(), null, null)
-        ));
+                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 3L, true, "assistant-pending", null,
+                        List.of(), null, null)));
 
         String html = engine.process("fragments/chat", context);
 
         assertThat(html).contains("data-completed-ts=\"2\"");
-        assertThat(html).contains("assistant-done", "data-model-id=\"openai/gpt-5.6-sol\"", "data-model-label=\"GPT-5.6 Sol\"");
+        assertThat(html).contains("assistant-done", "data-model-id=\"openai/gpt-5.6-sol\"",
+                "data-model-label=\"GPT-5.6 Sol\"");
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
         assertThat(html).contains("chat-message-subtitle");
         assertThat(html).doesNotContain("assistant-pending\" data-completed-ts");
@@ -108,22 +112,27 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("chatMessages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Broken metadata row", 1L, false, "assistant-broken", null,
-                        List.of(), new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null), "GPT-5.6 Sol"),
-                new ChatPresentationService.ChatMessage("assistant", "Done", 3L, false, "assistant-done", 4L, List.of(),
-                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null), "GPT-5.6 Sol")
-        ));
+        context.setVariable("chatMessages",
+                List.of(new ChatPresentationService.ChatMessage(
+                        "assistant", "Broken metadata row", 1L, false, "assistant-broken", null, List.of(),
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null), "GPT-5.6 Sol"),
+                        new ChatPresentationService.ChatMessage("assistant", "Done", 3L, false, "assistant-done", 4L,
+                                List.of(), new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null),
+                                "GPT-5.6 Sol")));
 
         String html = engine.process("fragments/chat", context);
 
-        String brokenRow = html.substring(html.indexOf("assistant-broken"), html.indexOf("</li>", html.indexOf("assistant-broken")));
+        String brokenRow = html.substring(html.indexOf("assistant-broken"),
+                html.indexOf("</li>", html.indexOf("assistant-broken")));
         assertThat(brokenRow).doesNotContain("chat-message-fork-button", "hx-post=\"/ui/chat/fork/assistant-broken\"");
-        assertThat(html).contains("assistant-done", "chat-message-copy-button", "bi-copy", "aria-label=\"Copy response\"", "Fork", "hx-post=\"/ui/chat/fork/assistant-done\"", "hx-target=\"#shell\"", "hx-swap=\"none\"");
+        assertThat(html).contains("assistant-done", "chat-message-copy-button", "bi-copy",
+                "aria-label=\"Copy response\"", "Fork", "hx-post=\"/ui/chat/fork/assistant-done\"",
+                "hx-target=\"#shell\"", "hx-swap=\"none\"");
 
         context.setVariable("subagentView", true);
         String subagentHtml = engine.process("fragments/chat", context);
-        assertThat(subagentHtml).doesNotContain("chat-message-copy-button", "chat-message-fork-button", "hx-post=\"/ui/chat/fork/assistant-done\"");
+        assertThat(subagentHtml).doesNotContain("chat-message-copy-button", "chat-message-fork-button",
+                "hx-post=\"/ui/chat/fork/assistant-done\"");
     }
 
     @Test
@@ -137,10 +146,11 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("newChatMessages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-done", 2L, List.of(), null, null),
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 3L, true, "assistant-pending", null, List.of(), null, null)
-        ));
+        context.setVariable("newChatMessages",
+                List.of(new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-done", 2L,
+                        List.of(), null, null),
+                        new ChatPresentationService.ChatMessage("assistant", "Thinking…", 3L, true, "assistant-pending",
+                                null, List.of(), null, null)));
 
         String html = engine.process("fragments/chat-response", context);
 
@@ -153,15 +163,15 @@ public class ChatTemplateRenderTest {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
-        context.setVariable("messages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, true, "assistant-pending", null, List.of(), null, null)
-        ));
+        context.setVariable("messages", List.of(new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L,
+                true, "assistant-pending", null, List.of(), null, null)));
         context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
         context.setVariable("subagentView", false);
 
         String html = engine.process("fragments/chat-rows", context);
 
-        assertThat(html).contains("<li", "data-id=\"assistant-pending\"", "data-stream-url=\"/ui/chat/stream/assistant-pending\"");
+        assertThat(html).contains("<li", "data-id=\"assistant-pending\"",
+                "data-stream-url=\"/ui/chat/stream/assistant-pending\"");
         assertThat(html).doesNotContain("<ul", "chat-send-form", "chat-container");
     }
 
@@ -170,9 +180,8 @@ public class ChatTemplateRenderTest {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
-        context.setVariable("messages", List.of(
-                new ChatPresentationService.ChatMessage("info", "Git updated workspace", 1L, false, "info-1", 1L, List.of(), null, null)
-        ));
+        context.setVariable("messages", List.of(new ChatPresentationService.ChatMessage("info", "Git updated workspace",
+                1L, false, "info-1", 1L, List.of(), null, null)));
         context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
         context.setVariable("subagentView", false);
 
@@ -187,19 +196,21 @@ public class ChatTemplateRenderTest {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
-        context.setVariable("messages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-done", 2L,
-                        List.of(new ChatPresentationService.ToolCallView("tool-call-1", "read_file", true, "input", "output", false, false, null, null, null, null, null, null, null, null, null)),
-                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null),
-                        "GPT-5.6 Sol")
-        ));
+        context.setVariable("messages",
+                List.of(new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-done",
+                        2L,
+                        List.of(new ChatPresentationService.ToolCallView("tool-call-1", "read_file", true, "input",
+                                "output", false, false, null, null, null, null, null, null, null, null, null)),
+                        new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-sol", "HIGH", null), "GPT-5.6 Sol")));
         context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
         context.setVariable("subagentView", false);
 
         String html = engine.process("fragments/chat-rows", context);
 
-        assertThat(html).containsSubsequence("class=\"tool-calls\"", "class=\"chat-message-text\"", "class=\"chat-message-subtitle\"");
-        assertThat(html).contains("data-completed-ts=\"2\"", "data-agent-label=\"Plan\"", "data-model-label=\"GPT-5.6 Sol\"");
+        assertThat(html).containsSubsequence("class=\"tool-calls\"", "class=\"chat-message-text\"",
+                "class=\"chat-message-subtitle\"");
+        assertThat(html).contains("data-completed-ts=\"2\"", "data-agent-label=\"Plan\"",
+                "data-model-label=\"GPT-5.6 Sol\"");
     }
 
     @Test
@@ -207,22 +218,25 @@ public class ChatTemplateRenderTest {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
-        context.setVariable("messages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-lazy", 2L,
-                        List.of(
-                                new ChatPresentationService.ToolCallView("read-1", "read_file", true, null, null, false, false, null, null, null, null, null, null, null, null, null),
-                                new ChatPresentationService.ToolCallView("image-1", "display_image", true, "input", "output", false, false, null, null, null, null, "/ui/chat/image/1/image-1", "Cat", "images/cat.png", "image/png", null)
-                        ), null, null)
-        ));
+        context.setVariable("messages",
+                List.of(new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-lazy", 2L,
+                        List.of(new ChatPresentationService.ToolCallView("read-1", "read_file", true, null, null, false,
+                                false, null, null, null, null, null, null, null, null, null),
+                                new ChatPresentationService.ToolCallView("image-1", "display_image", true, "input",
+                                        "output", false, false, null, null, null, null, "/ui/chat/image/1/image-1",
+                                        "Cat", "images/cat.png", "image/png", null)),
+                        null, null)));
         context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
         context.setVariable("subagentView", false);
         context.setVariable("fullMode", false);
 
         String html = engine.process("fragments/chat-rows", context);
 
-        assertThat(html).contains("data-tool-call-tool-name=\"read_file\"", "hx-get=\"/ui/chat/tool-call/assistant-lazy/read-1\"",
-                "hx-trigger=\"toggle once\"", "hx-target=\"this\"", "hx-swap=\"outerHTML\"");
-        assertThat(html).contains("data-tool-call-tool-name=\"display_image\"", "open", "src=\"/ui/chat/image/1/image-1\"");
+        assertThat(html).contains("data-tool-call-tool-name=\"read_file\"",
+                "hx-get=\"/ui/chat/tool-call/assistant-lazy/read-1\"", "hx-trigger=\"toggle once\"",
+                "hx-target=\"this\"", "hx-swap=\"outerHTML\"");
+        assertThat(html).contains("data-tool-call-tool-name=\"display_image\"", "open",
+                "src=\"/ui/chat/image/1/image-1\"");
         assertThat(html).doesNotContain("read-1 input", "read-1 output");
     }
 
@@ -231,10 +245,12 @@ public class ChatTemplateRenderTest {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
-        context.setVariable("messages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-task", 2L,
-                        List.of(new ChatPresentationService.ToolCallView("task-1", "task", true, "full task input", "full task output", false, false, 42L, "engineer", "Engineer", "success", null, null, null, null, "<summary>")), null, null)
-        ));
+        context.setVariable("messages",
+                List.of(new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-task", 2L,
+                        List.of(new ChatPresentationService.ToolCallView("task-1", "task", true, "full task input",
+                                "full task output", false, false, 42L, "engineer", "Engineer", "success", null, null,
+                                null, null, "<summary>")),
+                        null, null)));
         context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
         context.setVariable("subagentView", false);
         context.setVariable("fullMode", false);
@@ -242,7 +258,8 @@ public class ChatTemplateRenderTest {
         String html = engine.process("fragments/chat-rows", context);
 
         assertThat(html).contains("<summary", "&lt;summary&gt;", "View Session", "hx-get=\"/ui/chat/subagent/42\"",
-                "hx-get=\"/ui/chat/tool-call/assistant-task/task-1\"", "hx-trigger=\"toggle once\"", "hx-target=\"this\"", "hx-swap=\"outerHTML\"");
+                "hx-get=\"/ui/chat/tool-call/assistant-task/task-1\"", "hx-trigger=\"toggle once\"",
+                "hx-target=\"this\"", "hx-swap=\"outerHTML\"");
         assertThat(html).doesNotContain("full task input", "full task output", "data-tool-call-task-body", "open");
     }
 
@@ -251,19 +268,21 @@ public class ChatTemplateRenderTest {
         SpringTemplateEngine engine = engine();
 
         WebContext context = webContext();
-        context.setVariable("messages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-running", null,
-                        List.of(new ChatPresentationService.ToolCallView("tool-call-1", "read_file", false, "input", "output", false, false, null, null, null, "running", null, null, null, null, null)),
-                        null,
-                        null)
-        ));
+        context.setVariable("messages",
+                List.of(new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false,
+                        "assistant-running", null,
+                        List.of(new ChatPresentationService.ToolCallView("tool-call-1", "read_file", false, "input",
+                                "output", false, false, null, null, null, "running", null, null, null, null, null)),
+                        null, null)));
         context.setVariable("pendingStreamUrlPrefix", "/ui/chat/stream");
         context.setVariable("subagentView", false);
 
         String html = engine.process("fragments/chat-rows", context);
 
-        assertThat(html).contains("data-tool-call-state=\"running\"", "bi-arrow-repeat", "aria-label=\"running\"", "visually-hidden");
-        assertThat(html).doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*running\\s*</span>.*").doesNotContain("tool-call-status-failure");
+        assertThat(html).contains("data-tool-call-state=\"running\"", "bi-arrow-repeat", "aria-label=\"running\"",
+                "visually-hidden");
+        assertThat(html).doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*running\\s*</span>.*")
+                .doesNotContain("tool-call-status-failure");
     }
 
     @Test
@@ -276,15 +295,20 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("newChatMessages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null,
-                        List.of(new ChatPresentationService.ToolCallView("tool-call-1", "task", true, "{\"agentId\": \"engineer\"}", "child final", false, false, 42L, "engineer", "Engineer", "done", null, null, null, null, "Implement the parser")), null, null)
-        ));
+        context.setVariable("newChatMessages",
+                List.of(new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
+                        null,
+                        List.of(new ChatPresentationService.ToolCallView("tool-call-1", "task", true,
+                                "{\"agentId\": \"engineer\"}", "child final", false, false, 42L, "engineer", "Engineer",
+                                "done", null, null, null, null, "Implement the parser")),
+                        null, null)));
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("tool-call-summary-task", "Implement the parser", "View Session", "hx-get=\"/ui/chat/subagent/42\"");
-        assertThat(html).doesNotContain("tool-call-call\"\n                                            class=\"tool-call-subagent");
+        assertThat(html).contains("tool-call-summary-task", "Implement the parser", "View Session",
+                "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).doesNotContain(
+                "tool-call-call\"\n                                            class=\"tool-call-subagent");
     }
 
     @Test
@@ -297,14 +321,17 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("newChatMessages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Done", 1L, false, "assistant-1",
-                        null, List.of(new ChatPresentationService.ToolCallView("tool-call-1", "display_image", true, "{\"path\": \"images/cat.png\"}", "Displayed image: images/cat.png", false, false, null, null, null, null, "/ui/chat/image/1/tool-call-1", "Cat", "images/cat.png", "image/png", null)), null, null)
-        ));
+        context.setVariable("newChatMessages", List.of(new ChatPresentationService.ChatMessage("assistant", "Done", 1L,
+                false, "assistant-1", null,
+                List.of(new ChatPresentationService.ToolCallView("tool-call-1", "display_image", true,
+                        "{\"path\": \"images/cat.png\"}", "Displayed image: images/cat.png", false, false, null, null,
+                        null, null, "/ui/chat/image/1/tool-call-1", "Cat", "images/cat.png", "image/png", null)),
+                null, null)));
 
         String html = engine.process("fragments/chat-response", context);
 
-        assertThat(html).contains("<details", "open", "<img", "src=\"/ui/chat/image/1/tool-call-1\"", "alt=\"Cat\"", "images/cat.png", "tool-call-image-caption", ">Cat<");
+        assertThat(html).contains("<details", "open", "<img", "src=\"/ui/chat/image/1/tool-call-1\"", "alt=\"Cat\"",
+                "images/cat.png", "tool-call-image-caption", ">Cat<");
         assertThat(html).doesNotContain("Displayed image: images/cat.png");
     }
 
@@ -319,17 +346,22 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("newChatMessages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(
-                        new ChatPresentationService.ToolCallView("read-1", "read_file", true, "read-1 input", "read-1 output", false, false, null, null, null, null, null, null, null, null, null),
-                        new ChatPresentationService.ToolCallView("read-2", "read_file", true, "read-2 input", "read-2 output", false, false, null, null, null, null, null, null, null, null, null),
-                        new ChatPresentationService.ToolCallView("task-1", "task", true, "task input", "task output", false, false, 41L, "engineer-1", "Engineer 1", null, null, null, null, null, null),
-                        new ChatPresentationService.ToolCallView("read-3", "read_file", true, "read-3 input", "read-3 output", false, false, null, null, null, null, null, null, null, null, null),
-                        new ChatPresentationService.ToolCallView("display-1", "display_image", true, "display input", "display output", false, false, null, null, null, null, "/ui/chat/image/1/display-1", "Cat", "images/cat.png", "image/png", null)
-                ), null, null)
-        ));
+        context.setVariable("newChatMessages", List.of(new ChatPresentationService.ChatMessage("assistant", "Thinking…",
+                1L, false, "assistant-1", null,
+                List.of(new ChatPresentationService.ToolCallView("read-1", "read_file", true, "read-1 input",
+                        "read-1 output", false, false, null, null, null, null, null, null, null, null, null),
+                        new ChatPresentationService.ToolCallView("read-2", "read_file", true, "read-2 input",
+                                "read-2 output", false, false, null, null, null, null, null, null, null, null, null),
+                        new ChatPresentationService.ToolCallView("task-1", "task", true, "task input", "task output",
+                                false, false, 41L, "engineer-1", "Engineer 1", null, null, null, null, null, null),
+                        new ChatPresentationService.ToolCallView("read-3", "read_file", true, "read-3 input",
+                                "read-3 output", false, false, null, null, null, null, null, null, null, null, null),
+                        new ChatPresentationService.ToolCallView("display-1", "display_image", true, "display input",
+                                "display output", false, false, null, null, null, null, "/ui/chat/image/1/display-1",
+                                "Cat", "images/cat.png", "image/png", null)),
+                null, null)));
 
-        String html = engine.process("fragments/chat-response", context);
+        String html = normalizeWhitespace(engine.process("fragments/chat-response", context));
 
         int firstBundle = html.indexOf("Used: read_file (2)");
         int taskIndex = html.indexOf("data-tool-call-tool-name=\"task\"");
@@ -338,8 +370,9 @@ public class ChatTemplateRenderTest {
         assertThat(firstBundle).isGreaterThanOrEqualTo(0);
         assertThat(taskIndex).isGreaterThan(firstBundle);
         assertThat(secondBundle).isGreaterThan(taskIndex);
-        assertThat(html).contains("tool-call-summary-task", "View Session", "<span class=\"tool-call-name\">Engineer 1</span>");
-        assertThat(html).contains("<span class=\"tool-call-name\">display_image</span>", "src=\"/ui/chat/image/1/display-1\"", "tool-call-image-caption");
+        assertThat(html).contains("tool-call-summary-task", "View Session", "Engineer 1");
+        assertThat(html).contains("<span class=\"tool-call-name\">display_image</span>",
+                "src=\"/ui/chat/image/1/display-1\"", "tool-call-image-caption");
         assertThat(html).contains("read-1 input", "read-2 input", "read-3 input");
 
         int bundleTagStart = html.lastIndexOf("<details", firstBundle);
@@ -362,17 +395,23 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("newChatMessages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null, List.of(
-                        new ChatPresentationService.ToolCallView("read-1", "read", true, "read-1 input", "read-1 output", false, false, null, null, null, null, null, null, null, null, null),
-                        new ChatPresentationService.ToolCallView("read-2", "read", true, "read-2 input", "read-2 output", false, false, null, null, null, null, null, null, null, null, null),
-                        new ChatPresentationService.ToolCallView("task-1", "task", true, "task-1 input", "task-1 output", false, false, 41L, "engineer-1", "Engineer 1", null, null, null, null, null, null),
-                        new ChatPresentationService.ToolCallView("task-2", "task", true, "task-2 input", "task-2 output", false, false, 42L, "engineer-2", "Engineer 2", null, null, null, null, null, null),
-                        new ChatPresentationService.ToolCallView("read-3", "read", true, "read-3 input", "read-3 output", false, false, null, null, null, null, null, null, null, null, null)
-                ), null, null)
-        ));
+        context.setVariable("newChatMessages", List.of(new ChatPresentationService.ChatMessage("assistant", "Thinking…",
+                1L, false, "assistant-1", null,
+                List.of(new ChatPresentationService.ToolCallView("read-1", "read", true, "read-1 input",
+                        "read-1 output", false, false, null, null, null, null, null, null, null, null, null),
+                        new ChatPresentationService.ToolCallView("read-2", "read", true, "read-2 input",
+                                "read-2 output", false, false, null, null, null, null, null, null, null, null, null),
+                        new ChatPresentationService.ToolCallView("task-1", "task", true, "task-1 input",
+                                "task-1 output", false, false, 41L, "engineer-1", "Engineer 1", null, null, null, null,
+                                null, null),
+                        new ChatPresentationService.ToolCallView("task-2", "task", true, "task-2 input",
+                                "task-2 output", false, false, 42L, "engineer-2", "Engineer 2", null, null, null, null,
+                                null, null),
+                        new ChatPresentationService.ToolCallView("read-3", "read", true, "read-3 input",
+                                "read-3 output", false, false, null, null, null, null, null, null, null, null, null)),
+                null, null)));
 
-        String html = engine.process("fragments/chat-response", context);
+        String html = normalizeWhitespace(engine.process("fragments/chat-response", context));
 
         int firstBundle = html.indexOf("Used: read (2)");
         int firstTask = html.indexOf("data-tool-call-tool-name=\"task\"");
@@ -384,7 +423,7 @@ public class ChatTemplateRenderTest {
         assertThat(secondTask).isGreaterThan(firstTask);
         assertThat(secondBundle).isGreaterThan(secondTask);
         assertThat(html).contains("tool-call-bundle");
-        assertThat(html).contains("View Session", "<span class=\"tool-call-name\">Engineer 1</span>", "<span class=\"tool-call-name\">Engineer 2</span>");
+        assertThat(html).contains("View Session", "Engineer 1", "Engineer 2");
         assertThat(html).contains("task-1 input", "task-1 output", "task-2 input", "task-2 output");
     }
 
@@ -414,10 +453,11 @@ public class ChatTemplateRenderTest {
         context.setVariable("subagentAgentName", "Engineer");
         context.setVariable("subagentAgentId", "engineer");
         context.setVariable("subagentSessionId", 42L);
-        context.setVariable("chatMessages", List.of(
-                new ChatPresentationService.ChatMessage("user", "Primary task:\nwrite a file", 1L, false, "user-1", null, List.of(), null, null),
-                new ChatPresentationService.ChatMessage("assistant", "child final", 2L, false, "assistant-1", null, List.of(), null, null)
-        ));
+        context.setVariable("chatMessages",
+                List.of(new ChatPresentationService.ChatMessage("user", "Primary task:\nwrite a file", 1L, false,
+                        "user-1", null, List.of(), null, null),
+                        new ChatPresentationService.ChatMessage("assistant", "child final", 2L, false, "assistant-1",
+                                null, List.of(), null, null)));
         context.setVariable("agents", agentService.listPrimaryAgents());
         context.setVariable("models", modelService.list());
         context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
@@ -435,11 +475,13 @@ public class ChatTemplateRenderTest {
     @Test
     public void chatToolCallFragmentsRenderTaskGroupWithExactlyOneStableTaskSummary() {
         SpringTemplateEngine engine = engine();
-        ChatPresentationService.ToolCallView taskCall = new ChatPresentationService.ToolCallView("task-1", "task", true, "task input", "task output", false, false, 42L, "engineer", "Engineer", "success", null, null, null, null, "Inspect the task flow");
-        ChatPresentationService.ToolCallGroupView taskGroup = new ChatPresentationService.ToolCallGroupView(
-                "task", "task", "success", true, 1, List.of(taskCall));
-        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage(
-                "assistant", "Done", 1L, false, "assistant-1", 2L, List.of(taskCall), null, null);
+        ChatPresentationService.ToolCallView taskCall = new ChatPresentationService.ToolCallView("task-1", "task", true,
+                "task input", "task output", false, false, 42L, "engineer", "Engineer", "success", null, null, null,
+                null, "Inspect the task flow");
+        ChatPresentationService.ToolCallGroupView taskGroup = new ChatPresentationService.ToolCallGroupView("task",
+                "task", "success", true, 1, List.of(taskCall));
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "Done", 1L,
+                false, "assistant-1", 2L, List.of(taskCall), null, null);
 
         WebContext groupContext = webContext();
         groupContext.setVariable("group", taskGroup);
@@ -457,7 +499,8 @@ public class ChatTemplateRenderTest {
         String pageHtml = engine.process("fragments/chat-rows", pageContext);
 
         String summaryId = "assistant-tool-group-assistant-1-task-1-summary";
-        assertThat(groupHtml).contains("tool-call-summary-task", "Engineer", "bi-check-circle-fill", "aria-label=\"success\"", "visually-hidden", "View Session");
+        assertThat(groupHtml).contains("tool-call-summary-task", "Engineer", "bi-check-circle-fill",
+                "aria-label=\"success\"", "visually-hidden", "View Session");
         assertThat(groupHtml).doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*success\\s*</span>.*");
         assertThat(groupHtml).contains("id=\"" + summaryId + "\"");
         assertThat(groupHtml).doesNotContain("<span class=\"tool-call-name\">task</span>");
@@ -471,21 +514,27 @@ public class ChatTemplateRenderTest {
     @Test
     public void chatToolCallStatusIconsRenderFailureAndUnknownFallback() {
         SpringTemplateEngine engine = engine();
-        ChatPresentationService.ToolCallView failureCall = new ChatPresentationService.ToolCallView("failure-1", "read_file", false, null, null, false, false, null, null, null, "failure", null, null, null, null, null);
-        ChatPresentationService.ToolCallGroupView failureGroup = new ChatPresentationService.ToolCallGroupView("read_file", "Read file", "failure", false, 1, List.of(failureCall));
+        ChatPresentationService.ToolCallView failureCall = new ChatPresentationService.ToolCallView("failure-1",
+                "read_file", false, null, null, false, false, null, null, null, "failure", null, null, null, null,
+                null);
+        ChatPresentationService.ToolCallGroupView failureGroup = new ChatPresentationService.ToolCallGroupView(
+                "read_file", "Read file", "failure", false, 1, List.of(failureCall));
         WebContext failureContext = webContext();
         failureContext.setVariable("group", failureGroup);
         failureContext.setVariable("assistantId", "assistant-1");
         String failureHtml = engine.process("fragments/chat-tool-calls", Set.of("group"), failureContext);
 
-        ChatPresentationService.ToolCallGroupView unknownGroup = new ChatPresentationService.ToolCallGroupView("read_file", "Read file", "paused", false, 1, List.of(failureCall));
+        ChatPresentationService.ToolCallGroupView unknownGroup = new ChatPresentationService.ToolCallGroupView(
+                "read_file", "Read file", "paused", false, 1, List.of(failureCall));
         WebContext unknownContext = webContext();
         unknownContext.setVariable("group", unknownGroup);
         unknownContext.setVariable("assistantId", "assistant-1");
         String unknownHtml = engine.process("fragments/chat-tool-calls", Set.of("group"), unknownContext);
 
-        assertThat(failureHtml).contains("bi-x-circle-fill", "aria-label=\"failure\"", "tool-call-status-failure").doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*failure\\s*</span>.*");
-        assertThat(unknownHtml).contains("bi-question-circle", "aria-label=\"paused\"", "visually-hidden").doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*paused\\s*</span>.*");
+        assertThat(failureHtml).contains("bi-x-circle-fill", "aria-label=\"failure\"", "tool-call-status-failure")
+                .doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*failure\\s*</span>.*");
+        assertThat(unknownHtml).contains("bi-question-circle", "aria-label=\"paused\"", "visually-hidden")
+                .doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*paused\\s*</span>.*");
     }
 
     @Test
@@ -511,10 +560,13 @@ public class ChatTemplateRenderTest {
         context.setVariable("changedFiles", List.of());
         context.setVariable("reviewSource", null);
         context.setVariable("selectedFile", null);
-        context.setVariable("chatMessages", List.of(
-                new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1", null,
-                        List.of(new ChatPresentationService.ToolCallView("tool-call-1", "task", true, "{\"agentId\": \"engineer\"}", "child final", false, false, 42L, "engineer", "Engineer", null, null, null, null, null, null)), null, null)
-        ));
+        context.setVariable("chatMessages",
+                List.of(new ChatPresentationService.ChatMessage("assistant", "Thinking…", 1L, false, "assistant-1",
+                        null,
+                        List.of(new ChatPresentationService.ToolCallView("tool-call-1", "task", true,
+                                "{\"agentId\": \"engineer\"}", "child final", false, false, 42L, "engineer", "Engineer",
+                                null, null, null, null, null, null)),
+                        null, null)));
         context.setVariable("agents", agentService.listPrimaryAgents());
         context.setVariable("models", modelService.list());
         context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
@@ -527,6 +579,10 @@ public class ChatTemplateRenderTest {
         assertThat(html).contains("tool-call-summary-task", "View Session", "Engineer",
                 "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("subagent-activities");
+    }
+
+    private static String normalizeWhitespace(String html) {
+        return html.replaceAll("\\s+", " ");
     }
 
     private static SpringTemplateEngine engine() {

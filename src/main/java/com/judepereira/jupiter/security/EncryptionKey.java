@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.security;
 
+import java.util.Arrays;
 import java.util.Base64;
 
 public record EncryptionKey(byte[] bytes) {
@@ -23,7 +24,7 @@ public record EncryptionKey(byte[] bytes) {
         try {
             return new EncryptionKey(decoded);
         } finally {
-            java.util.Arrays.fill(decoded, (byte) 0);
+            Arrays.fill(decoded, (byte) 0);
         }
     }
 

@@ -1,0 +1,14 @@
+{
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 120,
+        "lineEnding": "lf"
+    },
+    "html": {
+        "formatter": {
+            "enabled": true
+        }
+    }
+}

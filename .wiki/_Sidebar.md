@@ -4,6 +4,7 @@
 - [Feature Inventory](Feature-Inventory)
 
 ## Start here
+
 - [Overview](Overview)
 - [Getting Started](Getting-Started)
 - [Interface Tour](Interface-Tour)
@@ -13,6 +14,7 @@
 - [Anthropic Authentication](Anthropic-Authentication)
 
 ## Core workflow
+
 - [Projects](Projects)
 - [Workspaces and Git Worktrees](Workspaces-and-Git-Worktrees)
 - [Sessions and Chat](Sessions-and-Chat)
@@ -22,6 +24,7 @@
 - [Keyboard Shortcuts](Keyboard-Shortcuts)
 
 ## Agent harness
+
 - [Agents](Agents)
 - [Models and Thinking](Models-and-Thinking)
 - [Built-in Tools](Built-in-Tools)
@@ -31,6 +34,7 @@
 - [Tool Calls and Images](Tool-Calls-and-Images)
 
 ## Configuration and automation
+
 - [Project Settings](Project-Settings)
 - [Workspace Initialization](Workspace-Initialization)
 - [Environment Variables](Environment-Variables)
@@ -40,6 +44,7 @@
 - [Configuration Reference](Configuration-Reference)
 
 ## Deployment and security
+
 - [Remote Deployment](Remote-Deployment)
 - [Reverse Proxy and HTTPS](Reverse-Proxy-and-HTTPS)
 - [HTTP Authentication](HTTP-Authentication)
@@ -48,6 +53,7 @@
 - [Process and Credential Isolation](Process-and-Credential-Isolation)
 
 ## Operations and internals
+
 - [Storage and Backups](Storage-and-Backups)
 - [Health Checks](Health-Checks)
 - [Troubleshooting](Troubleshooting)
@@ -56,3 +62,4 @@
 - [Persistence and Migrations](Persistence-and-Migrations)
 - [Development and Testing](Development-and-Testing)
 - [Wiki Maintenance](Wiki-Maintenance)
+

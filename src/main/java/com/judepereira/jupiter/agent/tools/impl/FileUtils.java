@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -25,7 +26,7 @@ public class FileUtils {
 
     public static String readUtf8(Path path, int maxChars) throws IOException {
         byte[] all = Files.readAllBytes(path);
-        String s = new String(all, java.nio.charset.StandardCharsets.UTF_8);
+        String s = new String(all, StandardCharsets.UTF_8);
         if (maxChars > 0 && s.length() > maxChars) {
             return s.substring(0, maxChars);
         }

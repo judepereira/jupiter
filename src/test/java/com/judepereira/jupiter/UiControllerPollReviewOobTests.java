@@ -1,43 +1,51 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
+import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
-import com.judepereira.jupiter.ui.UiController;
+import com.judepereira.jupiter.terminal.TerminalTab;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ui.ConcurrentModel;
-import org.springframework.ui.Model;
-
+import com.judepereira.jupiter.ui.UiController;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.ui.Model;
 
 public class UiControllerPollReviewOobTests {
 
     @Test
     public void streamingCompletion_setsChangedFilesAndSelectionWithoutOpeningReviewPanel() throws Exception {
         // prepare a harness that emits a write_file trace on completion
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 // simulate some streaming deltas
                 listener.onTextDelta("do");
                 listener.onTextDelta("ne");
-                ToolCallTrace t = new ToolCallTrace("tool-1-0", "write_file", Map.of("path", "out.txt"), true, "wrote", Map.of("path", "out.txt"));
+                ToolCallTrace t = new ToolCallTrace("tool-1-0", "write_file", Map.of("path", "out.txt"), true, "wrote",
+                        Map.of("path", "out.txt"));
                 AgentTurnResult res = new AgentTurnResult("done", List.of(t));
                 listener.onComplete(res);
                 return res;
             }
         };
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         Path tmp = Files.createTempDirectory("jup-test-ws");
         props.setWorkspaceRoot(tmp.toString());
         UiController ctrl = TestAppStateSupport.controller(fake, props);
@@ -47,8 +55,8 @@ public class UiControllerPollReviewOobTests {
         ctrl.sendMessage("do it", m1, null);
 
         // find assistant id from model
-        List<?> msgs = (List<?>) ((ConcurrentModel)m1).getAttribute("chatMessages");
-        Object last = msgs.get(msgs.size()-1);
+        List<?> msgs = (List<?>) ((ConcurrentModel) m1).getAttribute("chatMessages");
+        Object last = msgs.get(msgs.size() - 1);
         String assistantId = ((ChatPresentationService.ChatMessage) last).id();
         assertThat(assistantId).isNotNull();
 
@@ -70,14 +78,17 @@ public class UiControllerPollReviewOobTests {
 
     @Test
     public void toggleReviewKeepsResponseInBand() throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 return new AgentTurnResult("done", List.of());
             }
         };
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(".");
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -99,14 +110,17 @@ public class UiControllerPollReviewOobTests {
 
     @Test
     public void openingReviewPanelDoesNotCloseOpenTerminalBottomPanel(@TempDir Path workspaceRoot) throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 return new AgentTurnResult("done", List.of());
             }
         };
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(workspaceRoot.toString());
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -124,7 +138,7 @@ public class UiControllerPollReviewOobTests {
         assertThat(model.getAttribute("bottomPanelMode")).isEqualTo("terminal");
         assertThat(model.getAttribute("bottomPanelOpen")).isEqualTo(true);
         assertThat(model.getAttribute("activeTerminal")).isNotNull();
-        assertThat(((com.judepereira.jupiter.terminal.TerminalTab) model.getAttribute("activeTerminal")).id()).isEqualTo("terminal-1");
+        assertThat(((TerminalTab) model.getAttribute("activeTerminal")).id()).isEqualTo("terminal-1");
         assertThat(closedView).isEqualTo("fragments/review :: panel");
         assertThat(closedModel.getAttribute("reviewPanelOpen")).isEqualTo(false);
         assertThat(closedModel.getAttribute("bottomPanelMode")).isEqualTo("terminal");

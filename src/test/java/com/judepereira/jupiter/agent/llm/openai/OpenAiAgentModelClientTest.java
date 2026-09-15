@@ -1,8 +1,22 @@
 package com.judepereira.jupiter.agent.llm.openai;
 
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiProperties;
-import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
@@ -21,30 +35,16 @@ import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 import dev.langchain4j.model.openai.OpenAiTokenUsage;
 import dev.langchain4j.model.output.FinishReason;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+import org.junit.jupiter.api.Test;
 
 public class OpenAiAgentModelClientTest {
 
@@ -65,7 +65,8 @@ public class OpenAiAgentModelClientTest {
 
     @Test
     public void source_does_not_reference_raw_http_or_mapping_helpers() throws Exception {
-        String source = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/judepereira/jupiter/agent/llm/openai/OpenAiAgentModelClient.java"));
+        String source = Files.readString(
+                Path.of("src/main/java/com/judepereira/jupiter/agent/llm/openai/OpenAiAgentModelClient.java"));
 
         assertFalse(source.contains("HttpURLConnection"));
         assertFalse(source.contains("java.net.http"));
@@ -81,29 +82,25 @@ public class OpenAiAgentModelClientTest {
         when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
             capturedRequest.set(invocation.getArgument(0));
             return ChatResponse.builder()
-                    .aiMessage(AiMessage.from("assistant", List.of(ToolExecutionRequest.builder()
-                            .id("call-1")
-                            .name("read_file")
-                            .arguments("{\"path\":\"notes.txt\"}")
-                            .build())))
-                    .id("response-1")
-                    .modelName("per-turn-model")
-                    .tokenUsage(OpenAiTokenUsage.builder().inputTokenCount(12).outputTokenCount(8).totalTokenCount(20).build())
-                    .finishReason(FinishReason.TOOL_EXECUTION)
-                    .build();
+                    .aiMessage(AiMessage.from("assistant",
+                            List.of(ToolExecutionRequest.builder().id("call-1").name("read_file")
+                                    .arguments("{\"path\":\"notes.txt\"}").build())))
+                    .id("response-1").modelName("per-turn-model").tokenUsage(OpenAiTokenUsage.builder()
+                            .inputTokenCount(12).outputTokenCount(8).totalTokenCount(20).build())
+                    .finishReason(FinishReason.TOOL_EXECUTION).build();
         });
 
         RecordingClient client = new RecordingClient(chatModel, null);
-        var response = client.chat(
-                List.of(new Message(Message.Role.USER, "read it", null, null, null)),
-                List.of(ToolDefinition.builtIn("read_file", "Read a file", ToolSchema.object(string("path", "path")).required("path"))),
-                new AgentModelOptions("turn-model", "per-turn-model", ThinkingLevel.HIGH, true, null)
-        );
+        var response = client.chat(List.of(new Message(Message.Role.USER, "read it", null, null, null)),
+                List.of(ToolDefinition.builtIn("read_file", "Read a file",
+                        ToolSchema.object(string("path", "path")).required("path"))),
+                new AgentModelOptions("turn-model", "per-turn-model", ThinkingLevel.HIGH, true, null));
 
         assertEquals(List.of("per-turn-model"), client.chatModelNames());
         assertEquals("per-turn-model", capturedRequest.get().modelName());
         assertInstanceOf(OpenAiResponsesChatRequestParameters.class, capturedRequest.get().parameters());
-        assertEquals("high", ((OpenAiResponsesChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
+        assertEquals("high",
+                ((OpenAiResponsesChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
         assertEquals(1, capturedRequest.get().toolSpecifications().size());
         assertEquals("read_file", capturedRequest.get().toolSpecifications().get(0).name());
         assertEquals("assistant", response.getAssistantText());
@@ -130,10 +127,8 @@ public class OpenAiAgentModelClientTest {
         });
 
         RecordingClient client = new RecordingClient(chatModel, null);
-        var response = client.chat(
-                List.of(new Message(Message.Role.SYSTEM, "sys", null, null, null), new Message(Message.Role.USER, "u", null, null, null)),
-                List.of()
-        );
+        var response = client.chat(List.of(new Message(Message.Role.SYSTEM, "sys", null, null, null),
+                new Message(Message.Role.USER, "u", null, null, null)), List.of());
 
         assertEquals("assistant", response.getAssistantText());
         assertInstanceOf(SystemMessage.class, capturedRequest.get().messages().get(0));
@@ -163,21 +158,17 @@ public class OpenAiAgentModelClientTest {
             }
 
             @Override
-            protected ChatModel buildChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+            protected ChatModel buildChatModel(String modelName, String credential, String baseUrl,
+                    Optional<String> accountId) {
                 return chatModel;
             }
         }
 
         OAuthRecordingClient client = new OAuthRecordingClient();
-        var response = client.chat(
-                List.of(
-                        new Message(Message.Role.SYSTEM, "sys-1", null, null, null),
-                        new Message(Message.Role.USER, "u-1", null, null, null),
-                        new Message(Message.Role.SYSTEM, "sys-2", null, null, null),
-                        new Message(Message.Role.ASSISTANT, "a-1", null, null, null)
-                ),
-                List.of()
-        );
+        var response = client.chat(List.of(new Message(Message.Role.SYSTEM, "sys-1", null, null, null),
+                new Message(Message.Role.USER, "u-1", null, null, null),
+                new Message(Message.Role.SYSTEM, "sys-2", null, null, null),
+                new Message(Message.Role.ASSISTANT, "a-1", null, null, null)), List.of());
 
         assertEquals("oauth", response.getAssistantText());
         assertInstanceOf(UserMessage.class, capturedRequest.get().messages().get(0));
@@ -210,7 +201,8 @@ public class OpenAiAgentModelClientTest {
                 return super.buildChatModel(modelName, credential, baseUrl, accountId);
             }
 
-            private StreamingChatModel streaming(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+            private StreamingChatModel streaming(String modelName, String credential, String baseUrl,
+                    Optional<String> accountId) {
                 return super.buildStreamingChatModel(modelName, credential, baseUrl, accountId);
             }
         }
@@ -219,8 +211,10 @@ public class OpenAiAgentModelClientTest {
 
         assertNotNull(client.chat("gpt-5.4", "api-key-123", "https://api.openai.com/v1", Optional.empty()));
         assertNotNull(client.streaming("gpt-5.4", "api-key-123", "https://api.openai.com/v1", Optional.empty()));
-        assertNotNull(client.chat("gpt-5.4", "oauth-token", "https://chatgpt.com/backend-api/codex", Optional.of("acct-123")));
-        assertNotNull(client.streaming("gpt-5.4", "oauth-token", "https://chatgpt.com/backend-api/codex", Optional.of("acct-123")));
+        assertNotNull(client.chat("gpt-5.4", "oauth-token", "https://chatgpt.com/backend-api/codex",
+                Optional.of("acct-123")));
+        assertNotNull(client.streaming("gpt-5.4", "oauth-token", "https://chatgpt.com/backend-api/codex",
+                Optional.of("acct-123")));
     }
 
     @Test
@@ -232,34 +226,27 @@ public class OpenAiAgentModelClientTest {
             StreamingChatResponseHandler handler = invocation.getArgument(1);
             handler.onPartialResponse("hel");
             handler.onPartialResponse("lo");
-            handler.onCompleteToolCall(new CompleteToolCall(0, ToolExecutionRequest.builder()
-                    .id("stream-call")
-                    .name("write_file")
-                    .arguments("{\"path\":\"out.txt\"}")
-                    .build()));
-            handler.onCompleteResponse(ChatResponse.builder()
-                    .aiMessage(AiMessage.from("done"))
-                    .id("stream-response-1")
-                    .modelName("stream-model")
-                    .tokenUsage(OpenAiTokenUsage.builder().inputTokenCount(30).outputTokenCount(15).totalTokenCount(45).build())
-                    .finishReason(FinishReason.TOOL_EXECUTION)
-                    .build());
+            handler.onCompleteToolCall(new CompleteToolCall(0, ToolExecutionRequest.builder().id("stream-call")
+                    .name("write_file").arguments("{\"path\":\"out.txt\"}").build()));
+            handler.onCompleteResponse(ChatResponse.builder().aiMessage(AiMessage.from("done")).id("stream-response-1")
+                    .modelName("stream-model").tokenUsage(OpenAiTokenUsage.builder().inputTokenCount(30)
+                            .outputTokenCount(15).totalTokenCount(45).build())
+                    .finishReason(FinishReason.TOOL_EXECUTION).build());
             return null;
         }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
 
         RecordingClient client = new RecordingClient(null, streamingModel);
         List<String> deltas = new ArrayList<>();
-        var response = client.chatStreaming(
-                List.of(new Message(Message.Role.USER, "stream it", null, null, null)),
-                List.of(ToolDefinition.builtIn("write_file", "Write a file", ToolSchema.object(string("path", "path")).required("path"))),
-                new AgentModelOptions("turn-model", "stream-model", ThinkingLevel.MEDIUM, true, null),
-                deltas::add
-        );
+        var response = client.chatStreaming(List.of(new Message(Message.Role.USER, "stream it", null, null, null)),
+                List.of(ToolDefinition.builtIn("write_file", "Write a file",
+                        ToolSchema.object(string("path", "path")).required("path"))),
+                new AgentModelOptions("turn-model", "stream-model", ThinkingLevel.MEDIUM, true, null), deltas::add);
 
         assertEquals(List.of("stream-model"), client.streamingModelNames());
         assertEquals("stream-model", capturedRequest.get().modelName());
         assertInstanceOf(OpenAiResponsesChatRequestParameters.class, capturedRequest.get().parameters());
-        assertEquals("medium", ((OpenAiResponsesChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
+        assertEquals("medium",
+                ((OpenAiResponsesChatRequestParameters) capturedRequest.get().parameters()).reasoningEffort());
         assertEquals(List.of("hel", "lo"), deltas);
         assertEquals("done", response.getAssistantText());
         assertEquals(30, response.getMetadata().inputTokenCount());
@@ -283,17 +270,24 @@ public class OpenAiAgentModelClientTest {
 
         ChatModel apiKeyModel = mock(ChatModel.class);
         ChatModel oauthModel = mock(ChatModel.class);
-        when(apiKeyModel.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder().aiMessage(AiMessage.from("api-key")).build());
-        when(oauthModel.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder().aiMessage(AiMessage.from("oauth")).build());
+        when(apiKeyModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder().aiMessage(AiMessage.from("api-key")).build());
+        when(oauthModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder().aiMessage(AiMessage.from("oauth")).build());
 
         TrackingClient client = new TrackingClient(apiKeyModel, oauthModel, oauthService);
 
-        assertEquals("api-key", client.chat(List.of(new Message(Message.Role.USER, "first", null, null, null)), List.of()).getAssistantText());
-        assertEquals("oauth", client.chat(List.of(new Message(Message.Role.USER, "second", null, null, null)), List.of()).getAssistantText());
+        assertEquals("api-key",
+                client.chat(List.of(new Message(Message.Role.USER, "first", null, null, null)), List.of())
+                        .getAssistantText());
+        assertEquals("oauth",
+                client.chat(List.of(new Message(Message.Role.USER, "second", null, null, null)), List.of())
+                        .getAssistantText());
 
         assertEquals(List.of("gpt-5.4", "gpt-5.4"), client.chatModelNames());
         assertEquals(List.of("api-key-123", "oauth-access-token"), client.chatModelCredentials());
-        assertEquals(List.of("https://api.openai.com/v1", "https://chatgpt.com/backend-api/codex"), client.chatModelBaseUrls());
+        assertEquals(List.of("https://api.openai.com/v1", "https://chatgpt.com/backend-api/codex"),
+                client.chatModelBaseUrls());
         assertEquals(List.of(Optional.empty(), Optional.of("acct-123")), client.chatModelAccountIds());
         verify(apiKeyModel, times(1)).chat(any(ChatRequest.class));
         verify(oauthModel, times(1)).chat(any(ChatRequest.class));
@@ -315,7 +309,8 @@ public class OpenAiAgentModelClientTest {
 
         RecordingClient client = new RecordingClient(chatModel, null, openAiProperties);
 
-        assertEquals("ok", client.chat(List.of(new Message(Message.Role.USER, "retry", null, null, null)), List.of()).getAssistantText());
+        assertEquals("ok", client.chat(List.of(new Message(Message.Role.USER, "retry", null, null, null)), List.of())
+                .getAssistantText());
         assertEquals(2, attempts.get());
         verify(chatModel, times(2)).chat(any(ChatRequest.class));
     }
@@ -340,7 +335,8 @@ public class OpenAiAgentModelClientTest {
         RecordingClient client = new RecordingClient(null, streamingModel, openAiProperties);
         List<String> deltas = new ArrayList<>();
 
-        assertEquals("done", client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)), List.of(), deltas::add).getAssistantText());
+        assertEquals("done", client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
+                List.of(), deltas::add).getAssistantText());
         assertEquals(List.of("he", "llo"), deltas);
         assertEquals(2, attempts.get());
         verify(streamingModel, times(2)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
@@ -363,7 +359,8 @@ public class OpenAiAgentModelClientTest {
         List<String> deltas = new ArrayList<>();
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
-                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)), List.of(), deltas::add));
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
+                        List.of(), deltas::add));
 
         assertEquals("OpenAI streaming request failed", exception.getMessage());
         assertEquals(List.of("he"), deltas);
@@ -401,7 +398,8 @@ public class OpenAiAgentModelClientTest {
             this(chatModel, streamingChatModel, openAiProperties());
         }
 
-        private RecordingClient(ChatModel chatModel, StreamingChatModel streamingChatModel, OpenAiProperties openAiProperties) {
+        private RecordingClient(ChatModel chatModel, StreamingChatModel streamingChatModel,
+                OpenAiProperties openAiProperties) {
             super(openAiProperties, new AgentProperties(), null);
             this.chatModel = chatModel;
             this.streamingChatModel = streamingChatModel;
@@ -423,13 +421,15 @@ public class OpenAiAgentModelClientTest {
         }
 
         @Override
-        protected ChatModel buildChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+        protected ChatModel buildChatModel(String modelName, String credential, String baseUrl,
+                Optional<String> accountId) {
             chatModelNames.add(modelName);
             return chatModel;
         }
 
         @Override
-        protected StreamingChatModel buildStreamingChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+        protected StreamingChatModel buildStreamingChatModel(String modelName, String credential, String baseUrl,
+                Optional<String> accountId) {
             streamingModelNames.add(modelName);
             return streamingChatModel;
         }
@@ -465,7 +465,8 @@ public class OpenAiAgentModelClientTest {
         }
 
         @Override
-        protected ChatModel buildChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
+        protected ChatModel buildChatModel(String modelName, String credential, String baseUrl,
+                Optional<String> accountId) {
             chatModelNames.add(modelName);
             chatModelCredentials.add(credential);
             chatModelBaseUrls.add(baseUrl);

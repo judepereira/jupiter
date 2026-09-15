@@ -1,9 +1,13 @@
 package com.judepereira.jupiter.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.dto.Message;
@@ -13,22 +17,24 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.agent.tools.impl.WriteFileTool;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.function.Consumer;
+import org.assertj.core.groups.Tuple;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class TokenUsageLifecycleAndHarnessTests {
 
     @Test
     void usageFactsAndHourlyRowsSurviveSessionDeletion(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService appStateService = context.service();
         AppStateRepository repository = context.repository();
         TokenUsageService tokenUsageService = new TokenUsageService(repository, new ObjectMapper());
@@ -42,25 +48,23 @@ class TokenUsageLifecycleAndHarnessTests {
         appStateService.closeSession(sessionId);
 
         assertThat(tokenUsageService.findHourlyUsage(usageKey, Instant.EPOCH, Instant.now().plus(1, ChronoUnit.HOURS)))
-                .singleElement()
-                .satisfies(row -> {
+                .singleElement().satisfies(row -> {
                     assertThat(row.modelKey()).isEqualTo("model-history");
                     assertThat(row.requestCount()).isEqualTo(1);
                     assertThat(row.totalTokenCount()).isEqualTo(20);
                 });
-        assertThat(tokenUsageService.findFacts(usageKey))
-                .singleElement()
-                .satisfies(fact -> {
-                    assertThat(fact.sessionIdSnapshot()).isEqualTo(sessionId);
-                    assertThat(fact.sessionNameSnapshot()).isEqualTo("Session #1");
-                    assertThat(fact.workspacePathSnapshot()).isEqualTo(projectPath.toString());
-                    assertThat(fact.totalTokenCount()).isEqualTo(20);
-                });
+        assertThat(tokenUsageService.findFacts(usageKey)).singleElement().satisfies(fact -> {
+            assertThat(fact.sessionIdSnapshot()).isEqualTo(sessionId);
+            assertThat(fact.sessionNameSnapshot()).isEqualTo("Session #1");
+            assertThat(fact.workspacePathSnapshot()).isEqualTo(projectPath.toString());
+            assertThat(fact.totalTokenCount()).isEqualTo(20);
+        });
     }
 
     @Test
     void harnessPersistsUsageForToolAndFinalModelIterations(@TempDir Path workspacePath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService appStateService = context.service();
         AppStateRepository repository = context.repository();
         TokenUsageService tokenUsageService = new TokenUsageService(repository, new ObjectMapper());
@@ -76,26 +80,28 @@ class TokenUsageLifecycleAndHarnessTests {
         ToolRegistry registry = new ToolRegistry();
         registry.register(new WriteFileTool());
         AgentModelClient model = new SequenceModel(List.of(
-                new ModelResponse(null, new ToolCall(null, "write_file", Map.of("path", "iteration.txt", "content", "written")), metadata(10, 4, 14), null),
+                new ModelResponse(null,
+                        new ToolCall(null, "write_file", Map.of("path", "iteration.txt", "content", "written")),
+                        metadata(10, 4, 14), null),
                 new ModelResponse("final response", null, metadata(15, 6, 21), null)));
-        CodingAgentHarness harness = new CodingAgentHarness(
-                fakeFactory(model), registry, properties, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.modelCatalogService(),
-                com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.modelCatalogService()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties,
+                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
                 appStateService, tokenUsageService, null,
-                new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector());
 
-        AgentTurnRequest request = new AgentTurnRequest("system", List.of(new Message(Message.Role.USER, "user", null, null, null)), workspacePath.toString(),
-                null, "openai/gpt-5.6-sol", null, sessionId, null);
+        AgentTurnRequest request = new AgentTurnRequest("system",
+                List.of(new Message(Message.Role.USER, "user", null, null, null)), workspacePath.toString(), null,
+                "openai/gpt-5.6-sol", null, sessionId, null);
         assertThat(harness.runTurn(request).getFinalText()).isEqualTo("final response");
 
         assertThat(tokenUsageService.findFacts(usageKey))
                 .extracting(Persistence.TokenUsageFact::modelKey, Persistence.TokenUsageFact::totalTokenCount)
-                .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple("openai/gpt-5.6-sol", 14),
-                        org.assertj.core.groups.Tuple.tuple("openai/gpt-5.6-sol", 21));
+                .containsExactly(Tuple.tuple("openai/gpt-5.6-sol", 14), Tuple.tuple("openai/gpt-5.6-sol", 21));
         assertThat(tokenUsageService.findHourlyUsage(usageKey, Instant.EPOCH, Instant.now().plus(1, ChronoUnit.HOURS)))
-                .singleElement()
-                .satisfies(row -> {
+                .singleElement().satisfies(row -> {
                     assertThat(row.modelKey()).isEqualTo("openai/gpt-5.6-sol");
                     assertThat(row.requestCount()).isEqualTo(2);
                     assertThat(row.totalTokenCount()).isEqualTo(35);
@@ -113,8 +119,8 @@ class TokenUsageLifecycleAndHarnessTests {
     }
 
     private static ModelResponseMetadata metadata(int input, int output, int total) {
-        return new ModelResponseMetadata(input, output, total, null, null, null,
-                null, "provider-model", "stop", Map.of());
+        return new ModelResponseMetadata(input, output, total, null, null, null, null, "provider-model", "stop",
+                Map.of());
     }
 
     private static final class SequenceModel implements AgentModelClient {
@@ -132,7 +138,7 @@ class TokenUsageLifecycleAndHarnessTests {
 
         @Override
         public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
-                                           java.util.function.Consumer<String> onDelta) {
+                Consumer<String> onDelta) {
             return chat(conversation, tools);
         }
     }

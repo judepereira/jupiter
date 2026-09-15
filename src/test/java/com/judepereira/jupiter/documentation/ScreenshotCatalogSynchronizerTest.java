@@ -1,24 +1,25 @@
 package com.judepereira.jupiter.documentation;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.imageio.ImageIO;
-import java.awt.Color;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.nio.ByteBuffer;
-import java.nio.file.FileSystemException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.zip.CRC32;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.awt.Color;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.zip.CRC32;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 class ScreenshotCatalogSynchronizerTest {
-    @TempDir Path repository;
+    @TempDir
+    Path repository;
 
     @Test
     void preservesBytesWhenPixelsAreIdentical() throws Exception {
@@ -159,9 +160,10 @@ class ScreenshotCatalogSynchronizerTest {
         Path generated = directory("generated");
         Path tracked = directory("tracked");
 
-        assertThatThrownBy(() -> ScreenshotCatalogSynchronizer.synchronize(repository, generated, tracked.resolve("absolute").toAbsolutePath()))
-                .hasMessageContaining("must be relative");
-        assertThatThrownBy(() -> ScreenshotCatalogSynchronizer.synchronize(repository, Path.of("../outside"), Path.of("tracked")))
+        assertThatThrownBy(() -> ScreenshotCatalogSynchronizer.synchronize(repository, generated,
+                tracked.resolve("absolute").toAbsolutePath())).hasMessageContaining("must be relative");
+        assertThatThrownBy(
+                () -> ScreenshotCatalogSynchronizer.synchronize(repository, Path.of("../outside"), Path.of("tracked")))
                 .hasMessageContaining("escapes the repository");
     }
 
@@ -174,8 +176,8 @@ class ScreenshotCatalogSynchronizerTest {
         } catch (UnsupportedOperationException | FileSystemException exception) {
             assumeTrue(false, "symbolic links unavailable: " + exception.getMessage());
         }
-        assertThatThrownBy(() -> ScreenshotCatalogSynchronizer.synchronize(repository, Path.of("generated-link"), Path.of("tracked")))
-                .hasMessageContaining("symbolic link");
+        assertThatThrownBy(() -> ScreenshotCatalogSynchronizer.synchronize(repository, Path.of("generated-link"),
+                Path.of("tracked"))).hasMessageContaining("symbolic link");
     }
 
     private Path directory(String name) throws Exception {
@@ -183,7 +185,8 @@ class ScreenshotCatalogSynchronizerTest {
     }
 
     private ScreenshotCatalogSynchronizer.Summary synchronize(Path generated, Path tracked) {
-        return ScreenshotCatalogSynchronizer.synchronize(repository, repository.relativize(generated), repository.relativize(tracked));
+        return ScreenshotCatalogSynchronizer.synchronize(repository, repository.relativize(generated),
+                repository.relativize(tracked));
     }
 
     private static void write(Path path, Color color, int width, int height) throws Exception {
@@ -212,8 +215,8 @@ class ScreenshotCatalogSynchronizerTest {
     }
 
     private static byte[] textChunk(String text) {
-        byte[] data = (text + "\0value").getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
-        byte[] type = "tEXt".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        byte[] data = (text + "\0value").getBytes(StandardCharsets.ISO_8859_1);
+        byte[] type = "tEXt".getBytes(StandardCharsets.US_ASCII);
         ByteBuffer chunk = ByteBuffer.allocate(12 + data.length);
         chunk.putInt(data.length).put(type).put(data);
         CRC32 crc = new CRC32();

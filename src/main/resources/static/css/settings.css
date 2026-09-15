@@ -75,7 +75,7 @@
 .settings-usage-note {
     color: var(--muted);
     margin: 4px 0 0;
-    font-size: .85rem;
+    font-size: 0.85rem;
 }
 
 .settings-usage-summary {
@@ -103,12 +103,44 @@
     border-radius: 8px;
 }
 
-.settings-command-form { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: #fbfdff; }
-.settings-command-list { display: grid; gap: 12px; }
-.settings-command-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
-.settings-command-card-header, .settings-command-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.settings-command-card-header code { margin-left: 8px; color: var(--muted); }
-.settings-command-empty { padding: 20px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 10px; }
+.settings-command-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fbfdff;
+}
+.settings-command-list {
+    display: grid;
+    gap: 12px;
+}
+.settings-command-card {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.settings-command-card-header,
+.settings-command-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.settings-command-card-header code {
+    margin-left: 8px;
+    color: var(--muted);
+}
+.settings-command-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+}
 
 .settings-section-header {
     display: flex;
@@ -522,4 +554,3 @@
         flex-wrap: wrap;
     }
 }
-

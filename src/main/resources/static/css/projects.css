@@ -51,7 +51,8 @@
     color: black;
 }
 
-input:focus, textarea:focus {
+input:focus,
+textarea:focus {
     border: 1px solid var(--accent) !important;
     outline: none;
 }
@@ -99,7 +100,11 @@ input:focus, textarea:focus {
     min-width: 0;
     max-width: min(260px, 32vw);
     overflow: hidden;
-    transition: background-color 120ms ease, border-color 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        filter 120ms ease,
+        box-shadow 120ms ease;
 }
 
 .project-tab-group.active {

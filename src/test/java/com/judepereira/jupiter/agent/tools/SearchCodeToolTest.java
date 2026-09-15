@@ -1,14 +1,18 @@
 package com.judepereira.jupiter.agent.tools;
 
-import com.judepereira.jupiter.agent.tools.impl.SearchCodeTool;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport;
+import com.judepereira.jupiter.agent.tools.impl.SearchCodeTool;
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class SearchCodeToolTest {
 
@@ -20,12 +24,13 @@ public class SearchCodeToolTest {
         Files.writeString(a, "needle");
         Files.writeString(b, "needle\n");
 
-        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        SearchCodeTool t = new SearchCodeTool(new RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(),
+                Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", "", "pattern", "needle", "include", "**/*.java"), ctx);
         assertTrue(res.isSuccess());
-        var matches = (java.util.List<String>) res.getMachine().get("matches");
+        var matches = (List<String>) res.getMachine().get("matches");
         assertNotNull(matches);
         assertTrue(matches.stream().anyMatch(s -> s.contains("src/Main.java")));
         assertFalse(matches.stream().anyMatch(s -> s.contains("a.txt")));
@@ -38,12 +43,13 @@ public class SearchCodeToolTest {
         Files.createDirectories(nested);
         Files.writeString(nested.resolve("AGENTS.md"), "needle");
 
-        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        SearchCodeTool t = new SearchCodeTool(new RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(),
+                Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", "", "pattern", "needle", "include", "**/AGENTS.md"), ctx);
         assertTrue(res.isSuccess());
-        var matches = (java.util.List<String>) res.getMachine().get("matches");
+        var matches = (List<String>) res.getMachine().get("matches");
         assertNotNull(matches);
         assertTrue(matches.stream().anyMatch(s -> s.contains("AGENTS.md:1:needle")));
         assertTrue(matches.stream().anyMatch(s -> s.contains("docs/AGENTS.md:1:needle")));
@@ -58,20 +64,20 @@ public class SearchCodeToolTest {
         Files.writeString(a, "needle");
         Files.writeString(b, "needle\n");
 
-        SearchCodeTool t = new SearchCodeTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        SearchCodeTool t = new SearchCodeTool(new RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5, null, null, null, null,
+                Map.of(), Set.of(), ToolProgressSink.noop(), null);
 
-        var res = t.execute(Map.of("path", ws.getFileName().toString(), "pattern", "needle", "include", "**/*.java"), ctx);
+        var res = t.execute(Map.of("path", ws.getFileName().toString(), "pattern", "needle", "include", "**/*.java"),
+                ctx);
         assertTrue(res.isSuccess());
-        var matches = (java.util.List<String>) res.getMachine().get("matches");
+        var matches = (List<String>) res.getMachine().get("matches");
         assertNotNull(matches);
         assertTrue(matches.stream().anyMatch(s -> s.contains("src/Main.java")));
         assertFalse(matches.stream().anyMatch(s -> s.contains("a.txt")));
         try {
-            java.nio.file.Files.walk(ws)
-                    .sorted(java.util.Comparator.reverseOrder())
-                    .map(java.nio.file.Path::toFile)
-                    .forEach(java.io.File::delete);
-        } catch (Exception ignored) {}
+            Files.walk(ws).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+        } catch (Exception ignored) {
+        }
     }
 }

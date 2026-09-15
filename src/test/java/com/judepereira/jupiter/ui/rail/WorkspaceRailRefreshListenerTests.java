@@ -1,10 +1,10 @@
 package com.judepereira.jupiter.ui.rail;
 
-import com.judepereira.jupiter.persistence.WorkspaceRailRefreshEvent;
-import org.junit.jupiter.api.Test;
-
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+
+import com.judepereira.jupiter.persistence.WorkspaceRailRefreshEvent;
+import org.junit.jupiter.api.Test;
 
 class WorkspaceRailRefreshListenerTests {
 

@@ -2,11 +2,10 @@ package com.judepereira.jupiter.agent.tools;
 
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.harness.CancellationToken;
-import lombok.Getter;
-
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
+import lombok.Getter;
 
 @Getter
 public class ToolExecutionContext {
@@ -23,13 +22,10 @@ public class ToolExecutionContext {
     private final ToolProgressSink progressSink;
     private final CancellationToken cancellationToken;
 
-
-
-
     public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
-                                Long sessionId, String agentId, AgentMode agentMode, String toolCallId,
-                                Map<String, String> environmentVariables, Set<String> commandEnvironmentAllowlist,
-                                ToolProgressSink progressSink, CancellationToken cancellationToken) {
+            Long sessionId, String agentId, AgentMode agentMode, String toolCallId,
+            Map<String, String> environmentVariables, Set<String> commandEnvironmentAllowlist,
+            ToolProgressSink progressSink, CancellationToken cancellationToken) {
         this.workspaceRoot = workspaceRoot;
         this.allowWrite = allowWrite;
         this.allowCommand = allowCommand;
@@ -39,7 +35,9 @@ public class ToolExecutionContext {
         this.agentMode = agentMode;
         this.toolCallId = toolCallId;
         this.environmentVariables = environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables);
-        this.commandEnvironmentAllowlist = commandEnvironmentAllowlist == null ? Set.of() : Set.copyOf(commandEnvironmentAllowlist);
+        this.commandEnvironmentAllowlist = commandEnvironmentAllowlist == null
+                ? Set.of()
+                : Set.copyOf(commandEnvironmentAllowlist);
         this.progressSink = progressSink == null ? ToolProgressSink.noop() : progressSink;
         this.cancellationToken = cancellationToken;
     }

@@ -1,6 +1,7 @@
 package com.judepereira.jupiter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
@@ -11,17 +12,15 @@ import com.judepereira.jupiter.persistence.TestAppStateSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.ChatToolCallHtmlService;
 import com.judepereira.jupiter.ui.DomPatch;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
-
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class ChatToolCallHtmlServiceTest {
 
@@ -34,9 +33,10 @@ class ChatToolCallHtmlServiceTest {
         appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(
                 new ToolCallTraceInput("read-1", "read_file", Map.of("path", "a.txt"), true, "contents", Map.of())));
 
-        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService);
+        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(),
+                new ChatPresentationService(), appStateService);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> htmlService.lazyGroup(turn.assistantMessage().id(), "other-call"))
+        Assertions.assertThatThrownBy(() -> htmlService.lazyGroup(turn.assistantMessage().id(), "other-call"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Tool call does not belong to assistant message");
     }
@@ -47,49 +47,50 @@ class ChatToolCallHtmlServiceTest {
         appStateService.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
         QueuedChatTurn turn = appStateService.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("requestSummary", "Show me", "task", "full request"), true,
-                "full <output>", Map.of("subagentSessionId", 42L, "subagentAgentName", "Engineer"));
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task",
+                Map.of("requestSummary", "Show me", "task", "full request"), true, "full <output>",
+                Map.of("subagentSessionId", 42L, "subagentAgentName", "Engineer"));
         appStateService.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
         appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
 
-        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService);
+        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(),
+                new ChatPresentationService(), appStateService);
         String html = htmlService.lazyGroup(turn.assistantMessage().id(), "task-1");
 
-        assertThat(html).contains("<details", "open", "full request", "full &lt;output&gt;", "View Session", "hx-get=\"/ui/chat/subagent/42\"");
+        assertThat(html).contains("<details", "open", "full request", "full &lt;output&gt;", "View Session",
+                "hx-get=\"/ui/chat/subagent/42\"");
         assertThat(html).doesNotContain("hx-get=\"/ui/chat/tool-call/", "hx-trigger", "hx-target=\"this\"");
     }
 
     @Test
     void subagentStartedReplacesGenericTaskGroupAndCompletionRefreshesItsSummary(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService appStateService = context.service();
         appStateService.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
         QueuedChatTurn turn = appStateService.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        Map<String, Object> args = Map.of(
-                "agentId", "explore",
-                "requestSummary", "Inspect the task flow and report back.",
-                "task", "Inspect the task flow and report back.",
+        Map<String, Object> args = Map.of("agentId", "explore", "requestSummary",
+                "Inspect the task flow and report back.", "task", "Inspect the task flow and report back.",
                 "expectedOutput", "finished");
         appStateService.startToolCallTrace(sessionId, turn.assistantMessage().id(),
                 new ToolCallTraceInput("task-1", "task", args, false, "", Map.of()));
 
         AgentDefinition subagent = new AgentDefinition("explore", "Explore", "", "Explore files", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.LOW, null, true, true, java.util.List.of());
+                "openai/gpt-5.5", ThinkingLevel.LOW, null, true, true, List.of());
         appStateService.createHiddenSubagentSession(sessionId, "task-1", subagent);
 
-        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(), new com.judepereira.jupiter.ui.ChatPresentationService(), appStateService);
+        ChatToolCallHtmlService htmlService = new ChatToolCallHtmlService(templateEngine(),
+                new ChatPresentationService(), appStateService);
         DomPatch started = htmlService.subagentStarted(sessionId, turn.assistantMessage().id(), "task-1").getFirst();
 
         assertThat(started.swapMode()).isEqualTo("outerHTML");
         assertThat(started.html()).contains("Explore", "Inspect the task flow and report back.");
         assertThat(started.html()).doesNotContain(">task<");
 
-        appStateService.appendToolCallTrace(sessionId, turn.assistantMessage().id(),
-                new ToolCallTraceInput("task-1", "task", args, true, "finished", Map.of(
-                        "subagentSessionId", 42L,
-                        "subagentAgentId", "explore",
-                        "subagentAgentName", "Explore")));
+        appStateService.appendToolCallTrace(sessionId, turn.assistantMessage().id(), new ToolCallTraceInput("task-1",
+                "task", args, true, "finished",
+                Map.of("subagentSessionId", 42L, "subagentAgentId", "explore", "subagentAgentName", "Explore")));
         var completion = htmlService.toolCompleted(sessionId, turn.assistantMessage().id(), "task-1");
 
         assertThat(completion).anySatisfy(patch -> assertThat(patch.html()).contains("Explore", "success"));

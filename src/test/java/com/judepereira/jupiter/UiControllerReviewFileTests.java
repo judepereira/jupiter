@@ -1,40 +1,47 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.judepereira.jupiter.agent.config.AgentProperties;
+import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.UiController.ChangedFile;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 
-import java.lang.reflect.Field;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 public class UiControllerReviewFileTests {
 
     @Test
-    public void reviewFileSelectionReturnsFullPanelAndKeepsSelectionRequestScoped(@TempDir Path workspaceRoot) throws Exception {
+    public void reviewFileSelectionReturnsFullPanelAndKeepsSelectionRequestScoped(@TempDir Path workspaceRoot)
+            throws Exception {
         initGitRepo(workspaceRoot);
         Files.writeString(workspaceRoot.resolve("alpha.txt"), "alpha\n");
 
         AgentProperties props = new AgentProperties();
-        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()), props);
+        UiController controller = TestAppStateSupport.controller(new CodingAgentHarness(null, null, props, null, null,
+                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()), props);
         AppStateService appStateService = appStateService(controller);
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         AppStateView initialView = appStateService.loadViewData();
         long sessionId = initialView.activeSession().id();
-        appStateService.addChangedFilesToSession(sessionId, List.of(new ChangedFileDraft("session.txt", "session diff")));
+        appStateService.addChangedFilesToSession(sessionId,
+                List.of(new ChangedFileDraft("session.txt", "session diff")));
 
         controller.openReviewPanel(new ConcurrentModel());
 
@@ -65,24 +72,30 @@ public class UiControllerReviewFileTests {
         Files.writeString(workspaceRoot.resolve("alpha.txt"), "alpha\n");
 
         AgentProperties props = new AgentProperties();
-        UiController controller = TestAppStateSupport.controller(new com.judepereira.jupiter.agent.harness.CodingAgentHarness(null, null, props, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()), props);
+        UiController controller = TestAppStateSupport.controller(new CodingAgentHarness(null, null, props, null, null,
+                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()), props);
         AppStateService appStateService = appStateService(controller);
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         AppStateView initialView = appStateService.loadViewData();
         long sessionId = initialView.activeSession().id();
-        appStateService.addChangedFilesToSession(sessionId, List.of(new ChangedFileDraft("session.txt", "session diff")));
+        appStateService.addChangedFilesToSession(sessionId,
+                List.of(new ChangedFileDraft("session.txt", "session diff")));
         String sessionKey = appStateService.loadViewData().activeSessionDetail().changedFiles().getFirst().key();
 
         controller.openReviewPanel(new ConcurrentModel());
 
         Model openModel = new ConcurrentModel();
-        assertThat(controller.loadFile(ReviewSource.SESSION, sessionKey, false, openModel)).isEqualTo("fragments/review :: panel");
+        assertThat(controller.loadFile(ReviewSource.SESSION, sessionKey, false, openModel))
+                .isEqualTo("fragments/review :: panel");
         assertThat(openModel.getAttribute("reviewOob")).isEqualTo(false);
         assertThat(openModel.getAttribute("selectedFile")).isInstanceOf(ChangedFile.class);
 
         Model closedModel = new ConcurrentModel();
-        assertThat(controller.loadFile(ReviewSource.SESSION, sessionKey, true, closedModel)).isEqualTo("fragments/review :: panel");
+        assertThat(controller.loadFile(ReviewSource.SESSION, sessionKey, true, closedModel))
+                .isEqualTo("fragments/review :: panel");
         assertThat(closedModel.getAttribute("reviewOob")).isEqualTo(false);
         assertThat(closedModel.getAttribute("selectedFile")).isNull();
 

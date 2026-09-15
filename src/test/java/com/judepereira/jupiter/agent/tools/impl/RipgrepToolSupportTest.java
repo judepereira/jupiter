@@ -1,14 +1,13 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
-import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class RipgrepToolSupportTest {
 
@@ -102,7 +101,8 @@ public class RipgrepToolSupportTest {
         Files.createDirectories(tmp.resolve("workspace"));
         Files.writeString(tmp.resolve("outside.txt"), "needle\n");
 
-        ToolExecutionResult search = new RipgrepToolSupport().searchCode(tmp.resolve("workspace"), "..", "needle", "", 5);
+        ToolExecutionResult search = new RipgrepToolSupport().searchCode(tmp.resolve("workspace"), "..", "needle", "",
+                5);
 
         assertFalse(search.isSuccess());
         assertTrue(search.getText().contains("failed to resolve path"));

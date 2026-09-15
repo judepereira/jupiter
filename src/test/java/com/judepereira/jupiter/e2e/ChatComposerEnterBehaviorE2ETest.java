@@ -1,25 +1,28 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
 import com.microsoft.playwright.options.ViewportSize;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
 
@@ -36,7 +39,7 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
 
             page.navigate(app.baseUrl());
@@ -47,12 +50,15 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
             page.locator("#chat-input").press("Enter");
 
             assertThat(page.locator("#chat-messages-list li")).hasCount(3);
-            assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text")).hasText("hello there");
-            assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text")).hasText(ASSISTANT_REPLY);
+            assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text"))
+                    .hasText("hello there");
+            assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text"))
+                    .hasText(ASSISTANT_REPLY);
             var assistantRow = page.locator("#chat-messages-list li").nth(2);
             var forkButton = assistantRow.locator(".chat-message-fork-button");
             assertThat(assistantRow.locator(".chat-message-subtitle")).containsText("Fork");
-            org.assertj.core.api.Assertions.assertThat(forkButton.getAttribute("hx-post")).isEqualTo("/ui/chat/fork/" + assistantRow.getAttribute("data-id"));
+            Assertions.assertThat(forkButton.getAttribute("hx-post"))
+                    .isEqualTo("/ui/chat/fork/" + assistantRow.getAttribute("data-id"));
             assertThat(forkButton).hasAttribute("hx-target", "#shell");
             assertThat(forkButton).hasAttribute("hx-swap", "none");
             assertThat(page.locator("#chat-input")).hasValue("");
@@ -76,7 +82,7 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
 
             page.navigate(app.baseUrl());
@@ -109,10 +115,8 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
-                     .setViewportSize(new ViewportSize(390, 844))
-                     .setIsMobile(true)
-                     .setHasTouch(true))) {
+                BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
+                        .setViewportSize(new ViewportSize(390, 844)).setIsMobile(true).setHasTouch(true))) {
             Page page = context.newPage();
 
             page.navigate(app.baseUrl());
@@ -148,13 +152,17 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 listener.onTextDelta(ASSISTANT_REPLY);
-                AgentTurnResult result = new AgentTurnResult(ASSISTANT_REPLY, java.util.List.of());
+                AgentTurnResult result = new AgentTurnResult(ASSISTANT_REPLY, List.of());
                 listener.onComplete(result);
                 return result;
             }

@@ -1,18 +1,19 @@
 package com.judepereira.jupiter.git;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 class GitAutoUpdateServiceTests {
 
@@ -59,11 +60,9 @@ class GitAutoUpdateServiceTests {
         var result = service.updateWorkspace(workspace);
 
         assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE);
-        assertThat(commands).containsExactly(
-                List.of("git", "symbolic-ref", "--quiet", "--short", "HEAD"),
+        assertThat(commands).containsExactly(List.of("git", "symbolic-ref", "--quiet", "--short", "HEAD"),
                 List.of("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"),
-                List.of("git", "rev-parse", "--verify", "HEAD"),
-                List.of("git", "pull", "--ff-only"),
+                List.of("git", "rev-parse", "--verify", "HEAD"), List.of("git", "pull", "--ff-only"),
                 List.of("git", "rev-parse", "--verify", "HEAD"));
     }
 
@@ -74,19 +73,17 @@ class GitAutoUpdateServiceTests {
         var session = new Persistence.SessionView(81, "Session #1", false, Persistence.RailStatus.NONE);
         when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(8)).thenReturn(Optional.of(session));
         List<List<String>> commands = new ArrayList<>();
-        GitCommandRunner commandRunner = metadataRunner(commands, "before", "after", success("2\n"), success("latest subject\n"));
+        GitCommandRunner commandRunner = metadataRunner(commands, "before", "after", success("2\n"),
+                success("latest subject\n"));
 
         var result = new GitAutoUpdateService(appStateService, commandRunner).updateWorkspace(workspace);
 
         assertThat(result).isEqualTo(new GitAutoUpdateService.UpdateResult(
                 GitAutoUpdateService.UpdateResult.Status.UPDATED, "before", "after", null, false));
-        assertThat(commands).containsExactly(
-                List.of("git", "symbolic-ref", "--quiet", "--short", "HEAD"),
+        assertThat(commands).containsExactly(List.of("git", "symbolic-ref", "--quiet", "--short", "HEAD"),
                 List.of("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"),
-                List.of("git", "rev-parse", "--verify", "HEAD"),
-                List.of("git", "pull", "--ff-only"),
-                List.of("git", "rev-parse", "--verify", "HEAD"),
-                List.of("git", "rev-list", "--count", "before..after"),
+                List.of("git", "rev-parse", "--verify", "HEAD"), List.of("git", "pull", "--ff-only"),
+                List.of("git", "rev-parse", "--verify", "HEAD"), List.of("git", "rev-list", "--count", "before..after"),
                 List.of("git", "log", "-1", "--format=%s", "after"));
         verify(appStateService).resetWorkspaceAutoGitUpdateFailure(8);
         verify(appStateService).appendInfoMessage(81,
@@ -99,7 +96,8 @@ class GitAutoUpdateServiceTests {
         var workspace = workspace(18, "project", tempDir.resolve("workspace"));
         var session = new Persistence.SessionView(181, "Session", false, Persistence.RailStatus.NONE);
         when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(18)).thenReturn(Optional.of(session));
-        GitCommandRunner runner = metadataRunner(new ArrayList<>(), "before", "after", success("1"), success("one line\r\nsecond line"));
+        GitCommandRunner runner = metadataRunner(new ArrayList<>(), "before", "after", success("1"),
+                success("one line\r\nsecond line"));
 
         new GitAutoUpdateService(appStateService, runner).updateWorkspace(workspace);
 
@@ -114,10 +112,13 @@ class GitAutoUpdateServiceTests {
         var session = new Persistence.SessionView(191, "Session", false, Persistence.RailStatus.NONE);
         when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(19)).thenReturn(Optional.of(session));
         String subject = "a".repeat(255) + "\uD83D\uDE00" + "extra";
-        new GitAutoUpdateService(appStateService, metadataRunner(new ArrayList<>(), "before", "after", success("3"), success(subject))).updateWorkspace(workspace);
+        new GitAutoUpdateService(appStateService,
+                metadataRunner(new ArrayList<>(), "before", "after", success("3"), success(subject)))
+                .updateWorkspace(workspace);
 
         verify(appStateService).appendInfoMessage(191,
-                "Background git update brought 3 commits into this workspace. Latest commit: " + "a".repeat(255) + "\uD83D\uDE00");
+                "Background git update brought 3 commits into this workspace. Latest commit: " + "a".repeat(255)
+                        + "\uD83D\uDE00");
     }
 
     @Test
@@ -126,7 +127,9 @@ class GitAutoUpdateServiceTests {
         var workspace = workspace(20, "project", tempDir.resolve("workspace"));
         var session = new Persistence.SessionView(201, "Session", false, Persistence.RailStatus.NONE);
         when(appStateService.findMostRecentlyOpenedVisiblePrimarySession(20)).thenReturn(Optional.of(session));
-        new GitAutoUpdateService(appStateService, metadataRunner(new ArrayList<>(), "before", "after", success("1"), success("\r\nbody"))).updateWorkspace(workspace);
+        new GitAutoUpdateService(appStateService,
+                metadataRunner(new ArrayList<>(), "before", "after", success("1"), success("\r\nbody")))
+                .updateWorkspace(workspace);
 
         verify(appStateService).appendInfoMessage(201,
                 "Background git update brought 1 commit into this workspace. Latest commit: ");
@@ -160,8 +163,8 @@ class GitAutoUpdateServiceTests {
     void upToDateHeadResetsFailureWithoutInfo(@TempDir Path tempDir) {
         AppStateService appStateService = mock(AppStateService.class);
         var workspace = workspace(9, "project", tempDir.resolve("workspace"));
-        GitAutoUpdateService service = new GitAutoUpdateService(appStateService, runner(
-                success("main"), success("origin/main"), success("same"), success("Already up to date"), success("same")));
+        GitAutoUpdateService service = new GitAutoUpdateService(appStateService, runner(success("main"),
+                success("origin/main"), success("same"), success("Already up to date"), success("same")));
 
         var result = service.updateWorkspace(workspace);
 
@@ -174,16 +177,16 @@ class GitAutoUpdateServiceTests {
     void failureNotificationIsOncePerSessionAndResetsAfterSuccess(@TempDir Path tempDir) {
         AppStateService appStateService = mock(AppStateService.class);
         var workspace = workspace(10, "project", tempDir.resolve("workspace"));
-        when(appStateService.appendAutoGitUpdateFailureMessage(eq(10L), anyString()))
-                .thenReturn(new Persistence.AutoGitUpdateFailureNotification(true),
-                        new Persistence.AutoGitUpdateFailureNotification(false),
-                        new Persistence.AutoGitUpdateFailureNotification(true));
+        when(appStateService.appendAutoGitUpdateFailureMessage(eq(10L), anyString())).thenReturn(
+                new Persistence.AutoGitUpdateFailureNotification(true),
+                new Persistence.AutoGitUpdateFailureNotification(false),
+                new Persistence.AutoGitUpdateFailureNotification(true));
         GitCommandRunner commandRunner = mock(GitCommandRunner.class);
-        when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT)))
-                .thenReturn(success("main"), success("origin/main"), success("before"), failure("pull failed"),
-                        success("main"), success("origin/main"), success("before"), failure("pull failed"),
-                        success("main"), success("origin/main"), success("same"), success("Already up to date"), success("same"),
-                        success("main"), success("origin/main"), success("before"), failure("pull failed"));
+        when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT))).thenReturn(success("main"),
+                success("origin/main"), success("before"), failure("pull failed"), success("main"),
+                success("origin/main"), success("before"), failure("pull failed"), success("main"),
+                success("origin/main"), success("same"), success("Already up to date"), success("same"),
+                success("main"), success("origin/main"), success("before"), failure("pull failed"));
         GitAutoUpdateService service = new GitAutoUpdateService(appStateService, commandRunner);
 
         var first = service.updateWorkspace(workspace);
@@ -219,9 +222,9 @@ class GitAutoUpdateServiceTests {
         AppStateService appStateService = mock(AppStateService.class);
         var workspace = workspace(13, "project", tempDir.resolve("workspace"));
         List<List<String>> commands = new ArrayList<>();
-        GitCommandRunner commandRunner = runnerWithCommands(commands,
-                success("feature/topic"), failure("fatal: no upstream branch"), success("origin\n"),
-                success("abc\trefs/heads/feature/topic\n"), success("before"), success(""), success("before"));
+        GitCommandRunner commandRunner = runnerWithCommands(commands, success("feature/topic"),
+                failure("fatal: no upstream branch"), success("origin\n"), success("abc\trefs/heads/feature/topic\n"),
+                success("before"), success(""), success("before"));
         GitAutoUpdateService service = new GitAutoUpdateService(appStateService, commandRunner);
 
         var result = service.updateWorkspace(workspace);
@@ -235,9 +238,8 @@ class GitAutoUpdateServiceTests {
         AppStateService appStateService = mock(AppStateService.class);
         var workspace = workspace(14, "project", tempDir.resolve("workspace"));
         List<List<String>> commands = new ArrayList<>();
-        GitCommandRunner commandRunner = runnerWithCommands(commands,
-                success("main"), failure("no upstream"), success("upstream\n"), success("x\trefs/heads/main\n"),
-                success("same"), success(""), success("same"));
+        GitCommandRunner commandRunner = runnerWithCommands(commands, success("main"), failure("no upstream"),
+                success("upstream\n"), success("x\trefs/heads/main\n"), success("same"), success(""), success("same"));
         var result = new GitAutoUpdateService(appStateService, commandRunner).updateWorkspace(workspace);
 
         assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE);
@@ -248,8 +250,8 @@ class GitAutoUpdateServiceTests {
     void upstreamlessPullSkipsAmbiguousRemotes(@TempDir Path tempDir) {
         AppStateService appStateService = mock(AppStateService.class);
         var workspace = workspace(15, "project", tempDir.resolve("workspace"));
-        var result = new GitAutoUpdateService(appStateService, runner(success("main"), failure("no upstream"), success("one\ntwo\n")))
-                .updateWorkspace(workspace);
+        var result = new GitAutoUpdateService(appStateService,
+                runner(success("main"), failure("no upstream"), success("one\ntwo\n"))).updateWorkspace(workspace);
 
         assertThat(result.status()).isEqualTo(GitAutoUpdateService.UpdateResult.Status.SKIPPED);
         assertThat(result.message()).contains("multiple remotes");
@@ -348,33 +350,36 @@ class GitAutoUpdateServiceTests {
     }
 
     private static GitCommandRunner metadataRunner(List<List<String>> commands, String before, String after,
-                                                    GitCommandRunner.GitCommandResult count,
-                                                    GitCommandRunner.GitCommandResult subject) {
+            GitCommandRunner.GitCommandResult count, GitCommandRunner.GitCommandResult subject) {
         GitCommandRunner commandRunner = mock(GitCommandRunner.class);
-        when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT))).thenAnswer(new org.mockito.stubbing.Answer<GitCommandRunner.GitCommandResult>() {
-            int headLookups;
+        when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT)))
+                .thenAnswer(new Answer<GitCommandRunner.GitCommandResult>() {
+                    int headLookups;
 
-            @Override
-            public GitCommandRunner.GitCommandResult answer(org.mockito.invocation.InvocationOnMock invocation) {
-                List<String> command = invocation.getArgument(1);
-                commands.add(command);
-                if (command.get(1).equals("rev-parse") && command.getLast().equals("HEAD")) {
-                    return headLookups++ == 0 ? success(before) : success(after);
-                }
-                if (command.get(1).equals("rev-list")) return count;
-                if (command.get(1).equals("log")) return subject;
-                return switch (command.get(1)) {
-                    case "symbolic-ref" -> success("main");
-                    case "rev-parse" -> success("origin/main");
-                    case "pull" -> success("");
-                    default -> success("");
-                };
-            }
-        });
+                    @Override
+                    public GitCommandRunner.GitCommandResult answer(InvocationOnMock invocation) {
+                        List<String> command = invocation.getArgument(1);
+                        commands.add(command);
+                        if (command.get(1).equals("rev-parse") && command.getLast().equals("HEAD")) {
+                            return headLookups++ == 0 ? success(before) : success(after);
+                        }
+                        if (command.get(1).equals("rev-list"))
+                            return count;
+                        if (command.get(1).equals("log"))
+                            return subject;
+                        return switch (command.get(1)) {
+                            case "symbolic-ref" -> success("main");
+                            case "rev-parse" -> success("origin/main");
+                            case "pull" -> success("");
+                            default -> success("");
+                        };
+                    }
+                });
         return commandRunner;
     }
 
-    private static GitCommandRunner runnerWithCommands(List<List<String>> commands, GitCommandRunner.GitCommandResult... results) {
+    private static GitCommandRunner runnerWithCommands(List<List<String>> commands,
+            GitCommandRunner.GitCommandResult... results) {
         GitCommandRunner commandRunner = mock(GitCommandRunner.class);
         when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT))).thenAnswer(invocation -> {
             commands.add(invocation.getArgument(1));
@@ -385,8 +390,8 @@ class GitAutoUpdateServiceTests {
 
     private static GitCommandRunner mockRunner(GitCommandRunner.GitCommandResult... results) {
         GitCommandRunner commandRunner = mock(GitCommandRunner.class);
-        when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT)))
-                .thenReturn(results[0], Arrays.copyOfRange(results, 1, results.length));
+        when(commandRunner.run(any(), any(), eq(GitAutoUpdateService.COMMAND_TIMEOUT))).thenReturn(results[0],
+                Arrays.copyOfRange(results, 1, results.length));
         return commandRunner;
     }
 

@@ -1,14 +1,14 @@
 package com.judepereira.jupiter;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpHeaders;
-import org.springframework.test.web.servlet.MockMvc;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.test.web.servlet.MockMvc;
 
 class HealthControllerTests {
 
@@ -16,11 +16,9 @@ class HealthControllerTests {
 
     @Test
     void healthEndpointReturnsUpWithNoStoreHeaders() throws Exception {
-        mockMvc.perform(get("/health"))
-                .andExpect(status().isOk())
+        mockMvc.perform(get("/health")).andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string(HttpHeaders.PRAGMA, "no-cache"))
-                .andExpect(header().string(HttpHeaders.EXPIRES, "0"))
-                .andExpect(content().json("{\"status\":\"UP\"}"));
+                .andExpect(header().string(HttpHeaders.EXPIRES, "0")).andExpect(content().json("{\"status\":\"UP\"}"));
     }
 }

@@ -1,34 +1,38 @@
 package com.judepereira.jupiter.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import com.microsoft.playwright.options.AriaRole;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class OpenAiOAuthE2ETest extends E2ETestSupport {
 
@@ -43,11 +47,10 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (TestServer server = TestServer.start();
-             RunningApp app = startApp(fakeHome, sqliteDbFile, Map.of(
-                      "openai.oauth.issuer", server.baseUrl(),
-                      "openai.oauth.client-id", "e2e-client"
-               ), TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                RunningApp app = startApp(fakeHome, sqliteDbFile,
+                        Map.of("openai.oauth.issuer", server.baseUrl(), "openai.oauth.client-id", "e2e-client"),
+                        TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
 
@@ -59,20 +62,23 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
 
             openProject(page, "Alpha", projectDir);
 
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings") && response.status() == 200,
+            page.waitForResponse(response -> response.url().contains("/ui/settings") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
-            com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#settings-modal")).isVisible();
+            PlaywrightAssertions.assertThat(page.locator("#settings-modal")).isVisible();
             page.locator("#settings-model-providers-tab").click();
 
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/openai/start") && response.status() == 200,
-                    () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")).click());
+                    () -> page
+                            .getByRole(AriaRole.BUTTON,
+                                    new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))
+                            .click());
 
-            com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator(".settings-openai-user-code")).hasText("ABCD-EFGH");
-            com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator(".settings-openai-device-flow")).containsText(server.url("/codex/device"));
+            PlaywrightAssertions.assertThat(page.locator(".settings-openai-user-code")).hasText("ABCD-EFGH");
+            PlaywrightAssertions.assertThat(page.locator(".settings-openai-device-flow"))
+                    .containsText(server.url("/codex/device"));
 
-            com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
+            PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
             assertThat(server.deviceCalls.get()).isEqualTo(1);
             assertThat(server.deviceRequestMethod).isEqualTo("POST");
             assertThat(server.deviceRequestBody).isNotNull();
@@ -81,30 +87,31 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
             assertThat(server.tokenCalls.get()).isEqualTo(1);
             assertThat(server.authorizationRequestBodies).hasSizeGreaterThanOrEqualTo(2);
             assertThat(server.tokenRequestMethods).allMatch("POST"::equals);
-            assertThat(server.tokenRequestBodies.get(0)).isEqualTo(encodedFormBody(
-                    "grant_type", "authorization_code",
-                    "code", "auth-123",
-                    "redirect_uri", server.baseUrl() + "/deviceauth/callback",
-                    "client_id", "e2e-client",
-                    "code_verifier", "verifier-456"
-            ));
+            assertThat(server.tokenRequestBodies.get(0)).isEqualTo(encodedFormBody("grant_type", "authorization_code",
+                    "code", "auth-123", "redirect_uri", server.baseUrl() + "/deviceauth/callback", "client_id",
+                    "e2e-client", "code_verifier", "verifier-456"));
             assertThat(server.tokenRequestBodies).hasSize(1);
 
             page.locator("#settings-modal .btn-close").click();
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings") && response.status() == 200,
+            page.waitForResponse(response -> response.url().contains("/ui/settings") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
             page.locator("#settings-model-providers-tab").click();
 
-            com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
-            com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))).isVisible();
+            PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
+            PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON,
+                    new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))).isVisible();
 
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/openai/logout") && response.status() == 200,
-                    () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription")).click());
+                    () -> page
+                            .getByRole(AriaRole.BUTTON,
+                                    new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))
+                            .click());
 
-            com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("OpenAI is not connected.");
-            com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))).isVisible();
+            PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section"))
+                    .containsText("OpenAI is not connected.");
+            PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON,
+                    new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))).isVisible();
         } finally {
             if (previousHome == null) {
                 System.clearProperty("user.home");
@@ -126,11 +133,9 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
 
         try (TestServer server = TestServer.start()) {
 
-            try (RunningApp first = startApp(fakeHome, sqliteDbFile, Map.of(
-                    "openai.oauth.issuer", server.baseUrl(),
-                    "openai.oauth.client-id", "e2e-client"
-            ), TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+            try (RunningApp first = startApp(fakeHome, sqliteDbFile,
+                    Map.of("openai.oauth.issuer", server.baseUrl(), "openai.oauth.client-id", "e2e-client"),
+                    TestAppConfig.class); BrowserContext context = newBrowserContext()) {
 
                 Page page = context.newPage();
                 page.navigate(first.baseUrl());
@@ -138,46 +143,58 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
 
                 openProject(page, "Alpha", projectDir);
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/settings") && response.status() == 200,
+                page.waitForResponse(response -> response.url().contains("/ui/settings") && response.status() == 200,
                         () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
                 page.locator("#settings-model-providers-tab").click();
                 page.waitForResponse(
                         response -> response.url().contains("/ui/settings/openai/start") && response.status() == 200,
-                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")).click());
+                        () -> page
+                                .getByRole(AriaRole.BUTTON,
+                                        new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))
+                                .click());
 
-                com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
+                PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section"))
+                        .containsText("Status: Connected");
                 assertThat(server.deviceCalls.get()).isEqualTo(1);
                 assertThat(server.tokenCalls.get()).isEqualTo(1);
             }
 
-            try (RunningApp second = startApp(fakeHome, sqliteDbFile, Map.of(
-                    "openai.oauth.issuer", server.baseUrl(),
-                    "openai.oauth.client-id", "e2e-client"
-            ), TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+            try (RunningApp second = startApp(fakeHome, sqliteDbFile,
+                    Map.of("openai.oauth.issuer", server.baseUrl(), "openai.oauth.client-id", "e2e-client"),
+                    TestAppConfig.class); BrowserContext context = newBrowserContext()) {
 
                 Page page = context.newPage();
                 page.navigate(second.baseUrl());
                 page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
 
-                com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText("Alpha");
+                PlaywrightAssertions.assertThat(page.locator(".project-tab-group.active .project-tab-label"))
+                        .hasText("Alpha");
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/settings") && response.status() == 200,
+                page.waitForResponse(response -> response.url().contains("/ui/settings") && response.status() == 200,
                         () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
                 page.locator("#settings-model-providers-tab").click();
 
-                com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
-                com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))).isVisible();
+                PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section"))
+                        .containsText("Status: Connected");
+                PlaywrightAssertions
+                        .assertThat(page.getByRole(AriaRole.BUTTON,
+                                new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription")))
+                        .isVisible();
                 assertThat(server.deviceCalls.get()).isEqualTo(1);
 
                 page.waitForResponse(
                         response -> response.url().contains("/ui/settings/openai/logout") && response.status() == 200,
-                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription")).click());
+                        () -> page
+                                .getByRole(AriaRole.BUTTON,
+                                        new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))
+                                .click());
 
-                com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("OpenAI is not connected.");
-                com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))).isVisible();
+                PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section"))
+                        .containsText("OpenAI is not connected.");
+                PlaywrightAssertions
+                        .assertThat(page.getByRole(AriaRole.BUTTON,
+                                new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")))
+                        .isVisible();
             }
         } finally {
             if (previousHome == null) {
@@ -191,8 +208,8 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
     private static String formValue(String body, String key) {
         for (String pair : body.split("&")) {
             String[] parts = pair.split("=", 2);
-            if (parts.length == 2 && key.equals(java.net.URLDecoder.decode(parts[0], StandardCharsets.UTF_8))) {
-                return java.net.URLDecoder.decode(parts[1], StandardCharsets.UTF_8);
+            if (parts.length == 2 && key.equals(URLDecoder.decode(parts[0], StandardCharsets.UTF_8))) {
+                return URLDecoder.decode(parts[1], StandardCharsets.UTF_8);
             }
         }
         return null;
@@ -204,9 +221,8 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
             if (body.length() > 0) {
                 body.append('&');
             }
-            body.append(java.net.URLEncoder.encode(nameValuePairs[i], StandardCharsets.UTF_8))
-                    .append('=')
-                    .append(java.net.URLEncoder.encode(nameValuePairs[i + 1], StandardCharsets.UTF_8));
+            body.append(URLEncoder.encode(nameValuePairs[i], StandardCharsets.UTF_8)).append('=')
+                    .append(URLEncoder.encode(nameValuePairs[i + 1], StandardCharsets.UTF_8));
         }
         return body.toString();
     }
@@ -217,10 +233,13 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                    new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                    SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                    SkillTestSupport.defaultComponents().injector()) {
                 @Override
                 public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                    AgentTurnResult result = new AgentTurnResult("done", java.util.List.of());
+                    AgentTurnResult result = new AgentTurnResult("done", List.of());
                     listener.onComplete(result);
                     return result;
                 }

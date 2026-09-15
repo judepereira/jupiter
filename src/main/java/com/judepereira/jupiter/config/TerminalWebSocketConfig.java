@@ -3,15 +3,18 @@ package com.judepereira.jupiter.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalWebSocketHandler;
+import java.net.URI;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 import org.springframework.web.socket.server.HandshakeInterceptor;
-
-import java.net.URI;
 
 @Configuration
 @EnableWebSocket
@@ -25,7 +28,8 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
     public HandshakeInterceptor terminalHandshakeInterceptor() {
         return new HandshakeInterceptor() {
             @Override
-            public boolean beforeHandshake(org.springframework.http.server.ServerHttpRequest request, org.springframework.http.server.ServerHttpResponse response, org.springframework.web.socket.WebSocketHandler wsHandler, java.util.Map<String, Object> attributes) {
+            public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
                 URI uri = request.getURI();
                 String path = uri.getPath();
                 int slash = path.lastIndexOf('/');
@@ -36,7 +40,8 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
             }
 
             @Override
-            public void afterHandshake(org.springframework.http.server.ServerHttpRequest request, org.springframework.http.server.ServerHttpResponse response, org.springframework.web.socket.WebSocketHandler wsHandler, Exception exception) {
+            public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                    WebSocketHandler wsHandler, Exception exception) {
             }
         };
     }
@@ -44,7 +49,6 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(new TerminalWebSocketHandler(terminalManager, objectMapper), "/ui/terminal/ws/{terminalId}")
-                .addInterceptors(terminalHandshakeInterceptor())
-                .setAllowedOriginPatterns("*");
+                .addInterceptors(terminalHandshakeInterceptor()).setAllowedOriginPatterns("*");
     }
 }

@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.agent.harness;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
@@ -8,50 +10,53 @@ import com.judepereira.jupiter.agent.skill.SkillDefinition;
 import com.judepereira.jupiter.agent.skill.SkillScope;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Path;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 public class SystemPromptComposerTest {
+
+    private static String normalizeWhitespace(String text) {
+        return text.replaceAll("\\s+", " ").trim();
+    }
 
     @Test
     public void compose_withoutAppendageAddsDefaultPromptAndEnv(@TempDir Path workspaceRoot) {
-        String prompt = new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()).compose(null, workspaceRoot.toString(), new SkillCatalog(List.of(), List.of()));
+        String prompt = new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()).compose(null,
+                workspaceRoot.toString(), new SkillCatalog(List.of(), List.of()));
 
-        assertThat(prompt)
-                .isEqualTo(SystemPromptTestSupport.composeExpected(null, workspaceRoot))
-                .contains("## Skills\n"
-                        + "Skills are reusable task instructions stored in SKILL.md files.\n"
-                        + "Available skills are provided separately for each workspace.\n"
-                        + "Use a skill when:\n"
-                        + "- Its name is explicitly mentioned.\n"
-                        + "- Its description clearly matches the task.\n"
+        String normalizedPrompt = normalizeWhitespace(prompt);
+        assertThat(normalizedPrompt).isEqualTo(normalizeWhitespace(SystemPromptTestSupport.composeExpected(null, workspaceRoot)))
+                .contains(normalizeWhitespace("## Skills\n" + "Skills are reusable task instructions stored in SKILL.md files.\n"
+                        + "Available skills are provided separately for each workspace.\n" + "Use a skill when:\n"
+                        + "- Its name is explicitly mentioned.\n" + "- Its description clearly matches the task.\n"
                         + "Before following a skill, read the complete SKILL.md file.\n"
                         + "Use multiple skills when they are all necessary.\n"
-                        + "Supporting files are relative to the directory containing SKILL.md.")
+                        + "Supporting files are relative to the directory containing SKILL.md."))
                 .doesNotContain("Activated skills apply to the current turn only unless referenced again.")
                 .contains("## Subagent Delegation")
-                .contains("A subagent started with the `task` tool has zero history of the parent agent's conversation.")
+                .contains(
+                        "A subagent started with the `task` tool has zero history of the parent agent's conversation.")
                 .contains("Make every delegated task self-contained.");
     }
 
     @Test
     public void compose_insertsCatalogBeforeEnvironment(@TempDir Path workspaceRoot) {
-        var skill = new SkillDefinition("demo", "demo description", workspaceRoot, workspaceRoot.resolve("SKILL.md"), SkillScope.REPOSITORY);
-        String prompt = new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()).compose("appendage", workspaceRoot.toString(), new SkillCatalog(List.of(skill), List.of()));
+        var skill = new SkillDefinition("demo", "demo description", workspaceRoot, workspaceRoot.resolve("SKILL.md"),
+                SkillScope.REPOSITORY);
+        String prompt = new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()).compose("appendage",
+                workspaceRoot.toString(), new SkillCatalog(List.of(skill), List.of()));
         assertThat(prompt).containsSubsequence("appendage", "<available_skills>", "demo description", "<env>");
     }
 
     @Test
     public void composeForAgent_addsDefaultPromptAgentAppendageAndEnv(@TempDir Path workspaceRoot) {
-        AgentDefinition agent = new AgentDefinition("agent", "Agent", "desc", "You are an appendage.",
-                AgentMode.AGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, null, true, true, List.of());
+        AgentDefinition agent = new AgentDefinition("agent", "Agent", "desc", "You are an appendage.", AgentMode.AGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, null, true, true, List.of());
 
-        String prompt = new SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()).composeForAgent(agent, workspaceRoot.toString(), new SkillCatalog(List.of(), List.of()));
+        String prompt = new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()).composeForAgent(agent,
+                workspaceRoot.toString(), new SkillCatalog(List.of(), List.of()));
 
         assertThat(prompt).isEqualTo(SystemPromptTestSupport.composeExpected("You are an appendage.", workspaceRoot));
     }

@@ -1,25 +1,27 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkspaceInitE2ETest extends E2ETestSupport {
 
@@ -41,7 +43,7 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
 
         try {
             try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
 
                 page.navigate(app.baseUrl());
@@ -49,8 +51,7 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
 
                 openProject(page, "Alpha", projectDir);
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/settings") && response.status() == 200,
+                page.waitForResponse(response -> response.url().contains("/ui/settings") && response.status() == 200,
                         () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
                 assertThat(page.locator("#settings-modal")).isVisible();
 
@@ -62,15 +63,18 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
 
                 page.waitForResponse(
                         response -> response.url().contains("/ui/workspaces/new") && response.status() == 200,
-                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New Workspace")).click());
+                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New Workspace"))
+                                .click());
                 assertThat(page.locator("#workspace-modal")).isVisible();
 
                 page.locator("input[name='branchName']").fill(branchName);
                 page.waitForResponse(
                         response -> response.url().contains("/ui/workspaces/add") && response.status() == 200,
-                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create workspace")).click());
+                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create workspace"))
+                                .click());
 
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Workspace Init"))).isVisible();
+                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Workspace Init")))
+                        .isVisible();
                 assertThat(page.locator("#bottom-panel")).containsText("Workspace Init");
 
                 awaitPathExists(worktreeDir.resolve("init-ran.txt"));
@@ -101,10 +105,13 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                    new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                    SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                    SkillTestSupport.defaultComponents().injector()) {
                 @Override
                 public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                    AgentTurnResult result = new AgentTurnResult("done", java.util.List.of());
+                    AgentTurnResult result = new AgentTurnResult("done", List.of());
                     listener.onComplete(result);
                     return result;
                 }

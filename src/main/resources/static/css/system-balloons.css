@@ -30,7 +30,9 @@
     align-items: flex-start;
     transform: translateY(calc(-1 * var(--system-balloon-entry-offset)));
     opacity: 0;
-    transition: opacity 140ms ease, transform 140ms ease;
+    transition:
+        opacity 140ms ease,
+        transform 140ms ease;
 }
 
 .system-balloon.is-visible {
@@ -82,5 +84,3 @@
     background: #fffbeb;
     border-left: 4px solid #f59e0b;
 }
-
-

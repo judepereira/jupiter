@@ -1,14 +1,12 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+
 import com.judepereira.jupiter.Jupiter;
-import java.io.IOException;
-import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
-import com.sun.net.httpserver.HttpServer;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import com.judepereira.jupiter.testsupport.TestEncryptionConfiguration;
-import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter.persistence.AppStateRepository;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
+import com.judepereira.jupiter.testsupport.TestEncryptionConfiguration;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
@@ -16,6 +14,23 @@ import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.options.AriaRole;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Stream;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,24 +39,11 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
-import javax.sql.DataSource;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Stream;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-
 @ExtendWith(E2ETestSupport.SharedBrowserExtension.class)
 abstract class E2ETestSupport {
 
-    private static final ExtensionContext.Namespace PLAYWRIGHT_NAMESPACE =
-            ExtensionContext.Namespace.create(E2ETestSupport.class);
+    private static final ExtensionContext.Namespace PLAYWRIGHT_NAMESPACE = ExtensionContext.Namespace
+            .create(E2ETestSupport.class);
     private static final String SHARED_BROWSER_RESOURCE = "shared-browser";
     private static volatile SharedBrowser sharedBrowser;
 
@@ -130,7 +132,7 @@ abstract class E2ETestSupport {
 
     static String playwrightDependencySkipReason() {
         try (Playwright playwright = Playwright.create();
-             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
+                Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
             return null;
         } catch (Throwable throwable) {
             String skipReason = playwrightDependencySkipReason(throwable);
@@ -170,7 +172,8 @@ abstract class E2ETestSupport {
     }
 
     private static String catalogJsonWithBundledModels() {
-        return ModelCatalogTestSupport.catalogJsonWithBundledAnthropicModels().replace("\"openai/gpt-5.6-terra\"", "\"openai/gpt-5.6-terra\"");
+        return ModelCatalogTestSupport.catalogJsonWithBundledAnthropicModels().replace("\"openai/gpt-5.6-terra\"",
+                "\"openai/gpt-5.6-terra\"");
     }
 
     protected static RunningApp startApp(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
@@ -181,26 +184,34 @@ abstract class E2ETestSupport {
         return startApp(fakeHome, dbFile, Map.of("server.port", Integer.toString(port)), testConfigClasses);
     }
 
-    /** Starts an app with the same persisted state produced by a successful OpenAI OAuth connection. */
+    /**
+     * Starts an app with the same persisted state produced by a successful OpenAI
+     * OAuth connection.
+     */
     protected static RunningApp startAppWithConnectedOpenAi(Path fakeHome, Path dbFile, Class<?>... testConfigClasses) {
         RunningApp bootstrap = startApp(fakeHome, dbFile, testConfigClasses);
         try {
             AppStateRepository repository = bootstrap.context().getBean(AppStateRepository.class);
-            repository.updateOpenAiOAuthState("e2e-access-token", "e2e-refresh-token", "e2e-id-token", "e2e-account", java.time.Instant.now().plusSeconds(3600));
+            repository.updateOpenAiOAuthState("e2e-access-token", "e2e-refresh-token", "e2e-id-token", "e2e-account",
+                    Instant.now().plusSeconds(3600));
             repository.updateProviderInitialized("openai", true);
-            repository.updateFavouriteModelIds(java.util.List.of("openai/gpt-5.6-sol"));
+            repository.updateFavouriteModelIds(List.of("openai/gpt-5.6-sol"));
         } finally {
             bootstrap.close();
         }
         return startApp(fakeHome, dbFile, testConfigClasses);
     }
 
-    protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties, Class<?>... testConfigClasses) {
-        String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize() + "?journal_mode=WAL&foreign_keys=on&busy_timeout=30000";
+    protected static RunningApp startApp(Path fakeHome, Path dbFile, Map<String, String> additionalProperties,
+            Class<?>... testConfigClasses) {
+        String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize()
+                + "?journal_mode=WAL&foreign_keys=on&busy_timeout=30000";
         Map<String, String> previousProperties = new HashMap<>();
         overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
         additionalProperties.forEach((key, value) -> overrideSystemProperty(previousProperties, key, value));
-        Class<?>[] sources = Stream.concat(Stream.of(Jupiter.class, TestEncryptionConfiguration.class), Arrays.stream(testConfigClasses)).toArray(Class<?>[]::new);
+        Class<?>[] sources = Stream
+                .concat(Stream.of(Jupiter.class, TestEncryptionConfiguration.class), Arrays.stream(testConfigClasses))
+                .toArray(Class<?>[]::new);
         Map<String, String> properties = new LinkedHashMap<>();
         properties.put("server.port", "0");
         properties.put("spring.datasource.url", jdbcUrl);
@@ -219,15 +230,18 @@ abstract class E2ETestSupport {
                 byte[] body = catalogJsonWithBundledModels().getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, body.length);
-                try (var output = exchange.getResponseBody()) { output.write(body); }
+                try (var output = exchange.getResponseBody()) {
+                    output.write(body);
+                }
             });
             catalogServer.start();
-            properties.put("models.dev.catalog-url", "http://127.0.0.1:" + catalogServer.getAddress().getPort() + "/catalog.json");
+            properties.put("models.dev.catalog-url",
+                    "http://127.0.0.1:" + catalogServer.getAddress().getPort() + "/catalog.json");
         }
         properties.putAll(additionalProperties);
-        ConfigurableApplicationContext context = new SpringApplicationBuilder(sources)
-                .web(WebApplicationType.SERVLET)
-                .properties(properties.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new))
+        ConfigurableApplicationContext context = new SpringApplicationBuilder(sources).web(WebApplicationType.SERVLET)
+                .properties(properties.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue())
+                        .toArray(String[]::new))
                 .run();
 
         Integer port = context.getEnvironment().getProperty("local.server.port", Integer.class);
@@ -260,9 +274,7 @@ abstract class E2ETestSupport {
     }
 
     protected static void captureScreenshot(Page page, Path screenshotsDir, String fileName) {
-        page.screenshot(new Page.ScreenshotOptions()
-                .setPath(screenshotsDir.resolve(fileName))
-                .setFullPage(true));
+        page.screenshot(new Page.ScreenshotOptions().setPath(screenshotsDir.resolve(fileName)).setFullPage(true));
     }
 
     protected static Locator addTestBalloon(Page page, RunningApp app, String title, String body) {
@@ -275,13 +287,15 @@ abstract class E2ETestSupport {
                 .filter(new Locator.FilterOptions().setHasText(uniqueBody));
         balloon.waitFor();
         assertThat(balloon).hasCount(1);
-        page.waitForFunction("""
-                body => {
-                    const balloon = Array.from(document.querySelectorAll('#system-balloon-root .system-balloon'))
-                            .find(node => node.querySelector('.system-balloon__body')?.textContent === body);
-                    return balloon && balloon.classList.contains('is-visible') && getComputedStyle(balloon).opacity === '1';
-                }
-                """, uniqueBody);
+        page.waitForFunction(
+                """
+                        body => {
+                            const balloon = Array.from(document.querySelectorAll('#system-balloon-root .system-balloon'))
+                                    .find(node => node.querySelector('.system-balloon__body')?.textContent === body);
+                            return balloon && balloon.classList.contains('is-visible') && getComputedStyle(balloon).opacity === '1';
+                        }
+                        """,
+                uniqueBody);
         return balloon;
     }
 
@@ -296,9 +310,7 @@ abstract class E2ETestSupport {
     }
 
     protected static void runGit(Path workingDirectory, String... command) throws Exception {
-        Process process = new ProcessBuilder(command)
-                .directory(workingDirectory.toFile())
-                .redirectErrorStream(true)
+        Process process = new ProcessBuilder(command).directory(workingDirectory.toFile()).redirectErrorStream(true)
                 .start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
@@ -313,29 +325,32 @@ abstract class E2ETestSupport {
     }
 
     protected static void openProject(Page page, String projectName, Path projectDir) {
-        page.getByRole(com.microsoft.playwright.options.AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).click();
+        page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).click();
         assertThat(page.locator("#project-modal")).isVisible();
         openProjectThroughModal(page, projectName, projectDir);
     }
 
-    protected static void openProjectThroughModal(Page page, String projectName, Path projectDir, Runnable afterDirectorySelected) {
+    protected static void openProjectThroughModal(Page page, String projectName, Path projectDir,
+            Runnable afterDirectorySelected) {
         page.locator(".project-form-field input[name='name']").fill(projectName);
-        page.getByRole(com.microsoft.playwright.options.AriaRole.BUTTON, new Page.GetByRoleOptions().setName(projectDir.getFileName().toString())).click();
+        page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName(projectDir.getFileName().toString()))
+                .click();
         page.locator(".project-form-field input[name='name']").fill(projectName);
         assertThat(page.locator("#project-path-input")).hasValue(projectDir.toAbsolutePath().normalize().toString());
         afterDirectorySelected.run();
         page.locator(".project-form-field input[name='name']").fill(projectName);
-        page.getByRole(com.microsoft.playwright.options.AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Open").setExact(true)).click();
+        page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Open").setExact(true)).click();
         assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText(projectName);
     }
 
     protected static void createImageFile(Path projectDir, String relativePath) throws Exception {
         Path image = projectDir.resolve(relativePath);
         Files.createDirectories(image.getParent());
-        Files.write(image, new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        Files.write(image, new byte[]{(byte) 0x89, 'P', 'N', 'G'});
     }
 
-    protected record RunningApp(ConfigurableApplicationContext context, String baseUrl, Runnable cleanup) implements AutoCloseable {
+    protected record RunningApp(ConfigurableApplicationContext context, String baseUrl,
+            Runnable cleanup) implements AutoCloseable {
         @Override
         public void close() {
             try {

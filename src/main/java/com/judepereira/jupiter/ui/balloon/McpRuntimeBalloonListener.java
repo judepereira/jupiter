@@ -4,15 +4,14 @@ import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ProjectView;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
-
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 @Log4j2
 @Service
@@ -38,13 +37,16 @@ public class McpRuntimeBalloonListener {
     public void onProjectMcpToolsChanged(McpRuntimeEvents.ProjectMcpToolsChanged event) {
         String fingerprint = toolFingerprint(event.projectId());
         String previousFingerprint = lastProjectToolFingerprints.put(event.projectId(), fingerprint);
-        if (systemBalloonService.activeEmitterCount() == 0 || previousFingerprint == null || previousFingerprint.equals(fingerprint)) {
+        if (systemBalloonService.activeEmitterCount() == 0 || previousFingerprint == null
+                || previousFingerprint.equals(fingerprint)) {
             return;
         }
 
         String projectName = projectName(event.projectId());
         String title = projectName == null ? "MCP tools updated" : "MCP tools updated: " + projectName;
-        String body = projectName == null ? "Project MCP tools changed." : "Project " + projectName + " MCP tools changed.";
+        String body = projectName == null
+                ? "Project MCP tools changed."
+                : "Project " + projectName + " MCP tools changed.";
         systemBalloonService.publishSuccess(title, body);
     }
 
@@ -60,19 +62,22 @@ public class McpRuntimeBalloonListener {
         String serverName = safeName(event.serverName());
         String subject = projectName == null ? serverName : projectName + " / " + serverName;
 
-        if (event.status() == McpRuntimeEvents.ConnectionStatus.FAILED && previousStatus != McpRuntimeEvents.ConnectionStatus.FAILED) {
-            systemBalloonService.publishWarning(
-                    subject == null ? "MCP server failed" : "MCP server failed: " + subject,
-                    subject == null ? "An MCP server became unavailable." : "Project " + subject + " became unavailable."
-            );
+        if (event.status() == McpRuntimeEvents.ConnectionStatus.FAILED
+                && previousStatus != McpRuntimeEvents.ConnectionStatus.FAILED) {
+            systemBalloonService.publishWarning(subject == null ? "MCP server failed" : "MCP server failed: " + subject,
+                    subject == null
+                            ? "An MCP server became unavailable."
+                            : "Project " + subject + " became unavailable.");
             return;
         }
 
-        if (event.status() == McpRuntimeEvents.ConnectionStatus.READY && previousStatus == McpRuntimeEvents.ConnectionStatus.FAILED) {
+        if (event.status() == McpRuntimeEvents.ConnectionStatus.READY
+                && previousStatus == McpRuntimeEvents.ConnectionStatus.FAILED) {
             systemBalloonService.publishSuccess(
                     subject == null ? "MCP server recovered" : "MCP server recovered: " + subject,
-                    subject == null ? "An MCP server is available again." : "Project " + subject + " is available again."
-            );
+                    subject == null
+                            ? "An MCP server is available again."
+                            : "Project " + subject + " is available again.");
         }
     }
 
@@ -86,10 +91,9 @@ public class McpRuntimeBalloonListener {
     }
 
     private String toolFingerprint(long projectId) {
-        return mcpRuntimeManager.snapshot(projectId).toolDefinitions().stream()
-                .map(definition -> definition.getName() + "|" + definition.getDescription() + "|" + definition.getSchema())
-                .sorted()
-                .collect(Collectors.joining("\n"));
+        return mcpRuntimeManager.snapshot(projectId).toolDefinitions().stream().map(
+                definition -> definition.getName() + "|" + definition.getDescription() + "|" + definition.getSchema())
+                .sorted().collect(Collectors.joining("\n"));
     }
 
     private static String safeName(String value) {

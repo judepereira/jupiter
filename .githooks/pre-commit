@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+if ! ./mvnw -q spotless:check; then
+    echo >&2
+    echo "Spotless check failed. Run ./mvnw spotless:apply and stage the formatting changes." >&2
+    exit 1
+fi

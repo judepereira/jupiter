@@ -25,8 +25,8 @@ public final class SkillTestSupport {
     public static Components components(Path userHome) {
         var parser = new SkillParser();
         return new Components(parser, new SkillCatalogRenderer(),
-                new SkillDiscoveryService(parser, userHome.toString()),
-                new SkillInvocationResolver(), new SkillContextInjector(parser));
+                new SkillDiscoveryService(parser, userHome.toString()), new SkillInvocationResolver(),
+                new SkillContextInjector(parser));
     }
 
     public static SkillDefinition skill(String name, String description, Path directory, SkillScope scope) {
@@ -37,8 +37,7 @@ public final class SkillTestSupport {
         return new SkillCatalog(List.of(skills), List.of());
     }
 
-    public record Components(SkillParser parser, SkillCatalogRenderer renderer,
-                             SkillDiscoveryService discovery, SkillInvocationResolver resolver,
-                             SkillContextInjector injector) {
+    public record Components(SkillParser parser, SkillCatalogRenderer renderer, SkillDiscoveryService discovery,
+            SkillInvocationResolver resolver, SkillContextInjector injector) {
     }
 }

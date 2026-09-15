@@ -4,7 +4,7 @@ export function createPointerResizeController({
     onMove = () => {},
     onEnd = () => {},
     bodyClass = null,
-    dragClass = 'dragging',
+    dragClass = "dragging",
 }) {
     let dragging = false;
     let activePointerId = null;
@@ -25,8 +25,7 @@ export function createPointerResizeController({
 
         try {
             handle.setPointerCapture(event.pointerId);
-        } catch (_) {
-        }
+        } catch (_) {}
 
         event.preventDefault();
     }
@@ -38,7 +37,14 @@ export function createPointerResizeController({
 
     function finishDrag(event, force = false) {
         if (!dragging) return;
-        if (!force && event && event.pointerId != null && activePointerId != null && event.pointerId !== activePointerId) return;
+        if (
+            !force &&
+            event &&
+            event.pointerId != null &&
+            activePointerId != null &&
+            event.pointerId !== activePointerId
+        )
+            return;
 
         const handle = activeHandle;
         const pointerId = event && event.pointerId != null ? event.pointerId : activePointerId;
@@ -54,18 +60,17 @@ export function createPointerResizeController({
             if (pointerId != null) {
                 try {
                     handle.releasePointerCapture(pointerId);
-                } catch (_) {
-                }
+                } catch (_) {}
             }
         }
 
         onEnd(event, handle);
     }
 
-    document.addEventListener('pointerdown', beginDrag);
-    window.addEventListener('pointermove', moveDrag);
-    window.addEventListener('pointerup', finishDrag);
-    window.addEventListener('pointercancel', finishDrag);
+    document.addEventListener("pointerdown", beginDrag);
+    window.addEventListener("pointermove", moveDrag);
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", finishDrag);
 
     return {
         isDragging: () => dragging,

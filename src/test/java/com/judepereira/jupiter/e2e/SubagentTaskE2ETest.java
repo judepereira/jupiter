@@ -1,36 +1,41 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.impl.TaskTool;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 class SubagentTaskE2ETest extends E2ETestSupport {
 
-    private static void assertStatusIcon(com.microsoft.playwright.Locator status, String iconClass, String accessibleStatus) {
+    private static void assertStatusIcon(Locator status, String iconClass, String accessibleStatus) {
         assertThat(status).isVisible();
         assertThat(status).hasAttribute("aria-label", accessibleStatus);
         assertThat(status.locator("i.bi")).hasClass(Pattern.compile("(^|\\s)" + iconClass + "(\\s|$)"));
@@ -50,7 +55,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -65,14 +70,20 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-input").fill("please use a task");
             page.locator("#chat-send-btn").click();
 
-            var taskToolCall = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            var taskToolCall = page.locator(
+                    "#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])")
+                    .first();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
             assertThat(taskToolCall.locator(":scope > .tool-call-detail")).not().isVisible();
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
-            var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
+            assertThat(
+                    taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name"))
+                    .hasText("Explore");
+            var statusBadge = taskToolCall
+                    .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
             assertStatusIcon(statusBadge, "bi-check-circle-fill", "success");
-            var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+            var taskSummaryBody = taskToolCall
+                    .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
             assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
             assertThat(taskSummaryBody).isVisible();
             Path screenshotsDir = Path.of("target", "playwright-screenshots", "SubagentTaskE2ETest");
@@ -83,24 +94,26 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             var taskSubagentButton = taskToolCall.locator(".tool-call-subagent-button");
             taskSubagentButton.waitFor();
             assertThat(taskSubagentButton).hasText("View Session");
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).doesNotContain("Primary task:");
+            Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
+            Assertions.assertThat(page.locator("#chat-messages-list").innerText()).doesNotContain("Primary task:");
 
             String subagentHref = taskSubagentButton.getAttribute("hx-get");
-            org.assertj.core.api.Assertions.assertThat(subagentHref).contains("/ui/chat/subagent/");
-            page.evaluate("url => htmx.ajax('GET', url, { target: '#chat-container', swap: 'outerHTML' })", subagentHref);
+            Assertions.assertThat(subagentHref).contains("/ui/chat/subagent/");
+            page.evaluate("url => htmx.ajax('GET', url, { target: '#chat-container', swap: 'outerHTML' })",
+                    subagentHref);
             page.locator(".subagent-bar").waitFor();
             assertThat(page.locator(".subagent-bar")).isVisible();
             assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary task:");
+            Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary task:");
             assertThat(page.locator("#chat-send-form")).hasCount(0);
 
-            page.evaluate("() => htmx.ajax('GET', '/ui/chat/primary', { target: '#chat-container', swap: 'outerHTML' })");
+            page.evaluate(
+                    "() => htmx.ajax('GET', '/ui/chat/primary', { target: '#chat-container', swap: 'outerHTML' })");
             page.locator("#chat-send-form").waitFor();
 
             assertThat(page.locator("#chat-send-form")).isVisible();
             assertThat(page.locator("#chat-agent-select option")).hasCount(2);
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
+            Assertions.assertThat(page.locator("#chat-messages-list").innerText()).contains("Primary complete");
         } finally {
             TestAppConfig.reset();
             if (previousHome == null) {
@@ -125,7 +138,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -145,7 +158,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             assertThat(page.locator(".session-item.active .pending-dot")).hasCount(1);
             assertThat(page.locator(".session-item.active .failed-dot")).hasCount(0);
             String reloadedText = page.locator("#chat-container").innerText();
-            org.assertj.core.api.Assertions.assertThat(reloadedText).doesNotContain("no_job", "[Error: no_job]");
+            Assertions.assertThat(reloadedText).doesNotContain("no_job", "[Error: no_job]");
 
             TestAppConfig.releasePrimaryTurn();
             TestAppConfig.awaitPrimaryCompleted();
@@ -154,7 +167,8 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             assertThat(page.locator("#chat-messages-list")).containsText("Primary complete");
             assertThat(page.locator(".session-item.active .pending-dot")).hasCount(0);
             assertThat(page.locator(".session-item.active .failed-dot")).hasCount(0);
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job", "[Error: no_job]");
+            Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job",
+                    "[Error: no_job]");
         } finally {
             TestAppConfig.reset();
             if (previousHome == null) {
@@ -179,7 +193,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -190,12 +204,18 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-send-btn").click();
 
             TestAppConfig.awaitSubagentStarted();
-            var taskToolCall = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            var taskToolCall = page.locator(
+                    "#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])")
+                    .first();
             taskToolCall.waitFor();
-            assertThat(taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name")).hasText("Explore");
-            var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
+            assertThat(
+                    taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-name"))
+                    .hasText("Explore");
+            var statusBadge = taskToolCall
+                    .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
             assertStatusIcon(statusBadge, "bi-arrow-repeat", "running");
-            var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+            var taskSummaryBody = taskToolCall
+                    .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
             assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
             assertThat(taskSummaryBody).isVisible();
             taskToolCall.locator(":scope > summary.tool-call-summary").click();
@@ -207,13 +227,14 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator(".subagent-bar").waitFor();
             assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
             String subagentText = page.locator("#chat-container").innerText();
-            org.assertj.core.api.Assertions.assertThat(subagentText).contains("Primary task:", "Explore subagent");
+            Assertions.assertThat(subagentText).contains("Primary task:", "Explore subagent");
 
             TestAppConfig.releaseSubagentTurn();
             TestAppConfig.awaitSubagentCompleted();
 
             assertThat(page.locator("#chat-messages-list")).containsText("Explore subagent finished");
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job", "[Error: no_job]");
+            Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job",
+                    "[Error: no_job]");
         } finally {
             TestAppConfig.reset();
             if (previousHome == null) {
@@ -239,7 +260,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -250,10 +271,13 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-send-btn").click();
 
             TestAppConfig.awaitSubagentStarted();
-            var taskToolCall = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            var taskToolCall = page.locator(
+                    "#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])")
+                    .first();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
-            var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+            var taskSummaryBody = taskToolCall
+                    .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
             assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
             assertThat(taskSummaryBody).isVisible();
 
@@ -275,10 +299,13 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                 page.locator("#chat-send-form").waitFor();
                 assertThat(page.locator("#chat-send-form")).isVisible();
 
-                var taskToolCallAfterBack = page.locator("#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+                var taskToolCallAfterBack = page.locator(
+                        "#chat-messages-list > li [data-tool-call-target='group'][data-tool-call-tool-name='task']:has(.tool-call-call[data-tool-call-id='task-1'])")
+                        .first();
                 taskToolCallAfterBack.waitFor();
                 assertThat(taskToolCallAfterBack).isVisible();
-                var taskSummaryBodyAfterBack = taskToolCallAfterBack.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+                var taskSummaryBodyAfterBack = taskToolCallAfterBack.locator(
+                        ":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
                 assertThat(taskSummaryBodyAfterBack).isVisible();
                 assertThat(taskSummaryBodyAfterBack).hasText("Inspect the task flow and report back.");
 
@@ -286,12 +313,16 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                 page.locator("#chat-send-form").waitFor();
                 assertThat(page.locator("#chat-send-form")).isVisible();
 
-                var taskToolCallAfterReload = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+                var taskToolCallAfterReload = page.locator(
+                        "#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])")
+                        .first();
                 taskToolCallAfterReload.waitFor();
                 assertThat(taskToolCallAfterReload).isVisible();
-                var taskStatusAfterReload = taskToolCallAfterReload.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
+                var taskStatusAfterReload = taskToolCallAfterReload
+                        .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
                 assertStatusIcon(taskStatusAfterReload, "bi-arrow-repeat", "running");
-                var taskSummaryBodyAfterReload = taskToolCallAfterReload.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+                var taskSummaryBodyAfterReload = taskToolCallAfterReload.locator(
+                        ":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
                 assertThat(taskSummaryBodyAfterReload).isVisible();
                 assertThat(taskSummaryBodyAfterReload).hasText("Inspect the task flow and report back.");
                 var taskSubagentButtonAfterReload = taskToolCallAfterReload.locator(".tool-call-subagent-button");
@@ -304,9 +335,10 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                 }
                 TestAppConfig.awaitSubagentCompleted();
 
-                var taskSummaryBodyAfterCompletion = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])")
-                        .first()
-                        .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+                var taskSummaryBodyAfterCompletion = page.locator(
+                        "#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])")
+                        .first().locator(
+                                ":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
                 assertThat(taskSummaryBodyAfterCompletion).isVisible();
                 assertThat(taskSummaryBodyAfterCompletion).hasText("Inspect the task flow and report back.");
             } finally {
@@ -340,7 +372,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -351,12 +383,16 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator("#chat-send-btn").click();
 
             TestAppConfig.awaitSubagentStarted();
-            var taskToolCall = page.locator("#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])").first();
+            var taskToolCall = page.locator(
+                    "#chat-messages-list > li .tool-calls > .tool-call:has(.tool-call-call[data-tool-call-id='task-1'])")
+                    .first();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
-            var statusBadge = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
+            var statusBadge = taskToolCall
+                    .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-status");
             assertStatusIcon(statusBadge, "bi-arrow-repeat", "running");
-            var taskSummaryBody = taskToolCall.locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
+            var taskSummaryBody = taskToolCall
+                    .locator(":scope > summary.tool-call-summary .tool-call-summary-main .tool-call-summary-task-body");
             assertThat(taskSummaryBody).hasText("Inspect the task flow and report back.");
             assertThat(taskSummaryBody).isVisible();
 
@@ -367,23 +403,25 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             page.locator(".subagent-bar").waitFor();
             assertThat(page.locator(".subagent-bar")).isVisible();
             assertThat(page.locator(".subagent-bar-name")).hasText("Explore");
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText()).contains("Explore subagent");
+            Assertions.assertThat(page.locator("#chat-container").innerText()).contains("Explore subagent");
 
             page.locator(".subagent-back-button").click();
             page.locator("#chat-send-form").waitFor();
             assertThat(page.locator("#chat-send-form")).isVisible();
             taskToolCall.waitFor();
             assertThat(taskToolCall).isVisible();
-            org.assertj.core.api.Assertions.assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
-                    .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
+            Assertions
+                    .assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
+                            .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
                     .isEqualTo(1);
             assertThat(taskToolCall.locator(".tool-call-subagent-button")).hasText("View Session");
 
             TestAppConfig.releaseSubagentTurn();
             TestAppConfig.awaitSubagentCompleted();
 
-            org.assertj.core.api.Assertions.assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
-                    .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
+            Assertions
+                    .assertThat((Number) taskToolCall.locator(".tool-call-subagent-button")
+                            .evaluateAll("buttons => buttons.filter(button => button.offsetParent !== null).length"))
                     .isEqualTo(1);
 
             var taskToolCallSummary = taskToolCall.locator(":scope > summary.tool-call-summary");
@@ -481,7 +519,11 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             private final TaskTool taskTool;
 
             TestCodingAgentHarness(TaskTool taskTool) {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector());
                 this.taskTool = taskTool;
             }
 
@@ -500,12 +542,9 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                     } catch (Exception e) {
                         throw new IllegalStateException(e);
                     }
-                    ToolCallTrace trace = new ToolCallTrace("child-tool-1", "write_file", Map.of(
-                            "path", "child.txt",
-                            "content", "hello from subagent"
-                    ), true, "wrote child.txt", Map.of(
-                            "path", "child.txt"
-                    ));
+                    ToolCallTrace trace = new ToolCallTrace("child-tool-1", "write_file",
+                            Map.of("path", "child.txt", "content", "hello from subagent"), true, "wrote child.txt",
+                            Map.of("path", "child.txt"));
                     listener.onToolCallTrace(trace);
                     TurnControl toolCallControl = subagentToolCallControl;
                     if (toolCallControl != null) {
@@ -529,27 +568,26 @@ class SubagentTaskE2ETest extends E2ETestSupport {
                     control.started.countDown();
                     awaitRelease(control.release);
                 }
-                Map<String, Object> taskArgs = Map.of(
-                        "agentId", "explore",
-                        "requestSummary", "Inspect the task flow and report back.",
-                        "task", "Inspect the task flow and report back.",
-                        "expectedOutput", "Explore subagent finished"
-                );
+                Map<String, Object> taskArgs = Map.of("agentId", "explore", "requestSummary",
+                        "Inspect the task flow and report back.", "task", "Inspect the task flow and report back.",
+                        "expectedOutput", "Explore subagent finished");
                 listener.onStatus("calling_tool:task");
                 listener.onToolCallStarted(new ToolCallTrace("task-1", "task", taskArgs, false, "", Map.of()));
-                ToolExecutionResult taskResult = taskTool.execute(Map.of(
-                        "agentId", "explore",
-                        "requestSummary", "Inspect the task flow and report back.",
-                        "task", "Inspect the task flow and report back.",
-                        "expectedOutput", "Explore subagent finished"
-                ), new ToolExecutionContext(Path.of(request.getWorkspaceRoot()), false, false, 30, request.getSessionId(), "task-1", com.judepereira.jupiter.agent.catalog.AgentMode.AGENT, "task-1", Map.of(), java.util.Set.of(), (eventName, payload) -> listener.onToolCallProgress("task-1", "task", eventName, payload), null));
+                ToolExecutionResult taskResult = taskTool.execute(
+                        Map.of("agentId", "explore", "requestSummary", "Inspect the task flow and report back.", "task",
+                                "Inspect the task flow and report back.", "expectedOutput",
+                                "Explore subagent finished"),
+                        new ToolExecutionContext(Path.of(request.getWorkspaceRoot()), false, false, 30,
+                                request.getSessionId(), "task-1", AgentMode.AGENT, "task-1", Map.of(), Set.of(),
+                                (eventName, payload) -> listener.onToolCallProgress("task-1", "task", eventName,
+                                        payload),
+                                null));
 
-                ToolCallTrace trace = new ToolCallTrace("task-1", "task", Map.of(
-                        "agentId", "explore",
-                        "requestSummary", "Inspect the task flow and report back.",
-                        "task", "Inspect the task flow and report back.",
-                        "expectedOutput", "Explore subagent finished"
-                ), true, taskResult.getText(), taskResult.getMachine());
+                ToolCallTrace trace = new ToolCallTrace("task-1", "task",
+                        Map.of("agentId", "explore", "requestSummary", "Inspect the task flow and report back.", "task",
+                                "Inspect the task flow and report back.", "expectedOutput",
+                                "Explore subagent finished"),
+                        true, taskResult.getText(), taskResult.getMachine());
                 listener.onToolCallTrace(trace);
                 listener.onTextDelta("Primary complete");
                 AgentTurnResult result = new AgentTurnResult("Primary complete", List.of(trace));
