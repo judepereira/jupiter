@@ -1,10 +1,9 @@
 package com.judepereira.jupiter.agent.catalog;
 
+import java.util.Comparator;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
-
-import java.util.Comparator;
 
 @Service
 public class ProviderConnectedEventListener {
@@ -17,7 +16,7 @@ public class ProviderConnectedEventListener {
     private final ProviderAvailabilityService availability;
 
     public ProviderConnectedEventListener(ModelCatalogService catalog, ModelPreferencesService preferences,
-                                          ProviderAvailabilityService availability) {
+            ProviderAvailabilityService availability) {
         this.catalog = catalog;
         this.preferences = preferences;
         this.availability = availability;
@@ -35,7 +34,8 @@ public class ProviderConnectedEventListener {
     }
 
     private void initializeIfConnected(String provider) {
-        if (availability.isAvailable(provider)) initializeProvider(provider);
+        if (availability.isAvailable(provider))
+            initializeProvider(provider);
     }
 
     private void initializeProvider(String provider) {
@@ -43,9 +43,9 @@ public class ProviderConnectedEventListener {
             case OPENAI -> catalog.list().stream()
                     .filter(model -> OPENAI_DEFAULT.equals(model.id()) && OPENAI.equals(model.provider()))
                     .map(ModelDefinition::id).findFirst().orElse(null);
-            case ANTHROPIC -> catalog.list().stream()
-                    .filter(model -> ANTHROPIC.equals(model.provider()))
-                    .filter(model -> model.displayName() != null && model.displayName().toLowerCase().contains("sonnet"))
+            case ANTHROPIC -> catalog.list().stream().filter(model -> ANTHROPIC.equals(model.provider()))
+                    .filter(model -> model.displayName() != null
+                            && model.displayName().toLowerCase().contains("sonnet"))
                     .filter(model -> model.releaseDate() != null)
                     .max(Comparator.comparing(ModelDefinition::releaseDate).thenComparing(ModelDefinition::id))
                     .map(ModelDefinition::id).orElse(null);

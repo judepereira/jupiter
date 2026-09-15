@@ -2,19 +2,18 @@ package com.judepereira.jupiter.agent.llm.openai;
 
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiProperties;
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.chat.response.CompleteToolCall;
-import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.InternalServerException;
+import dev.langchain4j.exception.RateLimitException;
 import dev.langchain4j.http.client.HttpClient;
 import dev.langchain4j.http.client.HttpClientBuilder;
 import dev.langchain4j.http.client.HttpRequest;
@@ -23,27 +22,35 @@ import dev.langchain4j.http.client.jdk.JdkHttpClient;
 import dev.langchain4j.http.client.jdk.JdkHttpClientBuilder;
 import dev.langchain4j.http.client.sse.ServerSentEventListener;
 import dev.langchain4j.http.client.sse.ServerSentEventParser;
-import dev.langchain4j.exception.HttpException;
-import dev.langchain4j.exception.InternalServerException;
-import dev.langchain4j.exception.RateLimitException;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.response.CompleteToolCall;
+import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiResponsesChatModel;
 import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 @Component
 public class OpenAiAgentModelClient implements AgentModelClient {
@@ -61,12 +68,14 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     private final Map<String, StreamingChatModel> streamingChatModels = new ConcurrentHashMap<>();
 
     @Autowired
-    public OpenAiAgentModelClient(OpenAiProperties openAiProperties, AgentProperties agentProperties, OpenAiOAuthService openAiOAuthService) {
+    public OpenAiAgentModelClient(OpenAiProperties openAiProperties, AgentProperties agentProperties,
+            OpenAiOAuthService openAiOAuthService) {
         this.openAiProperties = openAiProperties;
         this.agentProperties = agentProperties;
         this.openAiOAuthService = openAiOAuthService;
         this.messageMapper = new LangChain4jMessageMapper(new ToolArgumentsCodec());
-        this.chatRequestFactory = new LangChain4jChatRequestFactory(messageMapper, new LangChain4jToolSpecificationMapper(), new OpenAiRequestParametersMapper());
+        this.chatRequestFactory = new LangChain4jChatRequestFactory(messageMapper,
+                new LangChain4jToolSpecificationMapper(), new OpenAiRequestParametersMapper());
     }
 
     @Override
@@ -78,25 +87,30 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
         String modelName = resolveModelName(options);
         ResolvedAuth auth = resolveAuth();
-        ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools, options);
+        ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools,
+                options);
         return executeWithRetry(() -> messageMapper.toModelResponse(chatModel(modelName, auth).chat(request)),
                 "OpenAI request failed");
     }
 
     @Override
-    public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options, Consumer<String> onDelta) {
+    public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+            AgentModelOptions options, Consumer<String> onDelta) {
         String modelName = resolveModelName(options);
         ResolvedAuth auth = resolveAuth();
-        ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools, options);
+        ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools,
+                options);
         return executeStreamingWithRetry(modelName, auth, request, onDelta);
     }
 
     @Override
-    public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, Consumer<String> onDelta) {
+    public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+            Consumer<String> onDelta) {
         return chatStreaming(conversation, tools, null, onDelta);
     }
 
-    private ModelResponse executeStreamingWithRetry(String modelName, ResolvedAuth auth, ChatRequest request, Consumer<String> onDelta) {
+    private ModelResponse executeStreamingWithRetry(String modelName, ResolvedAuth auth, ChatRequest request,
+            Consumer<String> onDelta) {
         OpenAiRetryPolicy retryPolicy = retryPolicy();
         int retriesUsed = 0;
         while (true) {
@@ -106,10 +120,11 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 attemptState.await();
                 Throwable handlerError = attemptState.error();
                 if (handlerError != null) {
-                    if (handlerError instanceof com.judepereira.jupiter.agent.harness.StreamCancelledException cancelled) {
+                    if (handlerError instanceof StreamCancelledException cancelled) {
                         throw cancelled;
                     }
-                    if (attemptState.canRetry() && retryPolicy.shouldRetry(handlerError) && retriesUsed < retryPolicy.maxRetries()) {
+                    if (attemptState.canRetry() && retryPolicy.shouldRetry(handlerError)
+                            && retriesUsed < retryPolicy.maxRetries()) {
                         retriesUsed++;
                         retryPolicy.sleep(retriesUsed);
                         continue;
@@ -120,7 +135,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("OpenAI streaming request interrupted", e);
-            } catch (com.judepereira.jupiter.agent.harness.StreamCancelledException e) {
+            } catch (StreamCancelledException e) {
                 throw e;
             } catch (Exception e) {
                 if (attemptState.canRetry() && retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
@@ -138,7 +153,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         }
     }
 
-    private <T> T executeWithRetry(java.util.concurrent.Callable<T> operation, String failureMessage) {
+    private <T> T executeWithRetry(Callable<T> operation, String failureMessage) {
         OpenAiRetryPolicy retryPolicy = retryPolicy();
         int retriesUsed = 0;
         while (true) {
@@ -147,7 +162,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException(failureMessage, e);
-            } catch (com.judepereira.jupiter.agent.harness.StreamCancelledException e) {
+            } catch (StreamCancelledException e) {
                 throw e;
             } catch (Exception e) {
                 if (retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
@@ -174,7 +189,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private ChatModel chatModel(String modelName, ResolvedAuth auth) {
-        return chatModels.computeIfAbsent(cacheKey(modelName, auth), ignored -> buildChatModel(modelName, auth.credential(), auth.baseUrl(), auth.accountId()));
+        return chatModels.computeIfAbsent(cacheKey(modelName, auth),
+                ignored -> buildChatModel(modelName, auth.credential(), auth.baseUrl(), auth.accountId()));
     }
 
     private StreamingChatModel streamingChatModel(String modelName) {
@@ -182,7 +198,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private StreamingChatModel streamingChatModel(String modelName, ResolvedAuth auth) {
-        return streamingChatModels.computeIfAbsent(cacheKey(modelName, auth), ignored -> buildStreamingChatModel(modelName, auth.credential(), auth.baseUrl(), auth.accountId()));
+        return streamingChatModels.computeIfAbsent(cacheKey(modelName, auth),
+                ignored -> buildStreamingChatModel(modelName, auth.credential(), auth.baseUrl(), auth.accountId()));
     }
 
     protected ChatModel buildChatModel(String modelName) {
@@ -193,14 +210,14 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         return buildChatModel(modelName, credential, OPENAI_API_BASE_URL, Optional.empty());
     }
 
-    protected ChatModel buildChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
-        return buildChatModel(modelName, new ResolvedAuth(credential, baseUrl, accountId, accountId.isPresent() ? AuthMode.CHATGPT : AuthMode.API_KEY));
+    protected ChatModel buildChatModel(String modelName, String credential, String baseUrl,
+            Optional<String> accountId) {
+        return buildChatModel(modelName, new ResolvedAuth(credential, baseUrl, accountId,
+                accountId.isPresent() ? AuthMode.CHATGPT : AuthMode.API_KEY));
     }
 
     protected ChatModel buildChatModel(String modelName, ResolvedAuth auth) {
-        var builder = OpenAiResponsesChatModel.builder()
-                .apiKey(auth.credential())
-                .modelName(modelName);
+        var builder = OpenAiResponsesChatModel.builder().apiKey(auth.credential()).modelName(modelName);
         if (auth.baseUrl() != null) {
             builder.baseUrl(auth.baseUrl());
         }
@@ -218,14 +235,14 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         return buildStreamingChatModel(modelName, credential, OPENAI_API_BASE_URL, Optional.empty());
     }
 
-    protected StreamingChatModel buildStreamingChatModel(String modelName, String credential, String baseUrl, Optional<String> accountId) {
-        return buildStreamingChatModel(modelName, new ResolvedAuth(credential, baseUrl, accountId, accountId.isPresent() ? AuthMode.CHATGPT : AuthMode.API_KEY));
+    protected StreamingChatModel buildStreamingChatModel(String modelName, String credential, String baseUrl,
+            Optional<String> accountId) {
+        return buildStreamingChatModel(modelName, new ResolvedAuth(credential, baseUrl, accountId,
+                accountId.isPresent() ? AuthMode.CHATGPT : AuthMode.API_KEY));
     }
 
     protected StreamingChatModel buildStreamingChatModel(String modelName, ResolvedAuth auth) {
-        var builder = OpenAiResponsesStreamingChatModel.builder()
-                .apiKey(auth.credential())
-                .modelName(modelName);
+        var builder = OpenAiResponsesStreamingChatModel.builder().apiKey(auth.credential()).modelName(modelName);
         if (auth.baseUrl() != null) {
             builder.baseUrl(auth.baseUrl());
         }
@@ -240,10 +257,11 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             return conversation;
         }
 
-        List<Message> transformed = new java.util.ArrayList<>(conversation.size());
+        List<Message> transformed = new ArrayList<>(conversation.size());
         for (Message message : conversation) {
             if (message.getRole() == Message.Role.SYSTEM) {
-                transformed.add(new Message(Message.Role.USER, message.getContent(), message.getToolCallId(), message.getToolCalls(), null));
+                transformed.add(new Message(Message.Role.USER, message.getContent(), message.getToolCallId(),
+                        message.getToolCalls(), null));
             } else {
                 transformed.add(message);
             }
@@ -263,7 +281,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private String cacheKey(String modelName, ResolvedAuth auth) {
-        return modelName + "|" + auth.mode() + "|" + (auth.baseUrl() == null ? OPENAI_API_BASE_URL : auth.baseUrl()) + "|" + auth.accountId().orElse("") + "|" + credentialMarker(auth.credential());
+        return modelName + "|" + auth.mode() + "|" + (auth.baseUrl() == null ? OPENAI_API_BASE_URL : auth.baseUrl())
+                + "|" + auth.accountId().orElse("") + "|" + credentialMarker(auth.credential());
     }
 
     private String credentialMarker(String credential) {
@@ -274,7 +293,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         if (openAiOAuthService != null) {
             Optional<String> accessToken = openAiOAuthService.currentAccessToken();
             if (accessToken.isPresent()) {
-                return new ResolvedAuth(accessToken.get(), CHATGPT_BACKEND_URL, openAiOAuthService.currentAccountId(), AuthMode.CHATGPT);
+                return new ResolvedAuth(accessToken.get(), CHATGPT_BACKEND_URL, openAiOAuthService.currentAccountId(),
+                        AuthMode.CHATGPT);
             }
         }
         return new ResolvedAuth(requireApiKey(), OPENAI_API_BASE_URL, Optional.empty(), AuthMode.API_KEY);
@@ -282,7 +302,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
 
     private String fingerprint(String credential) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(credential.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(credential.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest, 0, 8);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to fingerprint OpenAI credential", e);
@@ -312,7 +332,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         }
 
         private void sleep(int retryNumber) throws InterruptedException {
-            long backoffMillis = Math.min(maxBackoff.toMillis(), initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
+            long backoffMillis = Math.min(maxBackoff.toMillis(),
+                    initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
             Thread.sleep(backoffMillis);
         }
 
@@ -387,10 +408,12 @@ public class OpenAiAgentModelClient implements AgentModelClient {
 
         private ModelResponse finish() {
             if (response.get() != null) {
-                return toolCall.get() == null ? response.get() : new ModelResponse(
-                        response.get().getAssistantText(), toolCall.get(), response.get().getMetadata(), null);
+                return toolCall.get() == null
+                        ? response.get()
+                        : new ModelResponse(response.get().getAssistantText(), toolCall.get(),
+                                response.get().getMetadata(), null);
             }
-            return new ModelResponse(null, toolCall.get(), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
+            return new ModelResponse(null, toolCall.get(), ModelResponseMetadata.empty(), null);
         }
 
         private IllegalStateException streamingFailure(Throwable throwable, boolean includePrefix) {
@@ -408,7 +431,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             if (current instanceof RateLimitException || current instanceof InternalServerException) {
                 return true;
             }
-            if (current instanceof HttpException httpException && (httpException.statusCode() == 429 || httpException.statusCode() / 100 == 5)) {
+            if (current instanceof HttpException httpException
+                    && (httpException.statusCode() == 429 || httpException.statusCode() / 100 == 5)) {
                 return true;
             }
             if (isConnectivityFailure(current)) {
@@ -420,12 +444,12 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private boolean isConnectivityFailure(Throwable throwable) {
-        return throwable instanceof IOException || throwable instanceof java.net.ConnectException || throwable instanceof java.net.SocketTimeoutException || throwable instanceof java.net.UnknownHostException;
+        return throwable instanceof IOException || throwable instanceof ConnectException
+                || throwable instanceof SocketTimeoutException || throwable instanceof UnknownHostException;
     }
 
     private enum AuthMode {
-        API_KEY,
-        CHATGPT
+        API_KEY, CHATGPT
     }
 
     private static final class ChatGPTAccountHeaderHttpClientBuilder implements HttpClientBuilder {
@@ -491,9 +515,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         private HttpRequest withAccountHeader(HttpRequest request) {
             Map<String, List<String>> headers = new LinkedHashMap<>(request.headers());
             headers.put(CHATGPT_ACCOUNT_HEADER, List.of(accountId));
-            HttpRequest.Builder builder = HttpRequest.builder()
-                    .method(request.method())
-                    .url(request.url())
+            HttpRequest.Builder builder = HttpRequest.builder().method(request.method()).url(request.url())
                     .headers(headers);
             if (!request.formDataFields().isEmpty()) {
                 builder.formDataFields(request.formDataFields());

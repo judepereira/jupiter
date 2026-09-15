@@ -255,6 +255,8 @@
                         </includes>
                         <excludes>
                             <exclude>target/**</exclude>
+                            <exclude>src/main/resources/agents/**</exclude>
+                            <exclude>src/main/resources/commands/**</exclude>
                         </excludes>
                         <flexmark>
                             <emulationProfile>COMMONMARK</emulationProfile>

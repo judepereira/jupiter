@@ -1,7 +1,5 @@
 package com.judepereira.jupiter.persistence;
 
-import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,17 +7,20 @@ import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.persistence.Persistence.*;
+import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -52,17 +53,20 @@ public class AppStateService {
 
     @Transactional(readOnly = true)
     public Persistence.AutoGitUpdateFailureState loadWorkspaceAutoGitUpdateFailureState(long workspaceId) {
-        var state = repository.findWorkspaceAutoGitUpdateState(workspaceId)
-                .orElseThrow(() -> new IllegalStateException("Missing auto git update state for workspace " + workspaceId));
-        return new Persistence.AutoGitUpdateFailureState(state.failureEpisodeActive(), state.failureStartedAt(), state.lastSuccessAt());
+        var state = repository.findWorkspaceAutoGitUpdateState(workspaceId).orElseThrow(
+                () -> new IllegalStateException("Missing auto git update state for workspace " + workspaceId));
+        return new Persistence.AutoGitUpdateFailureState(state.failureEpisodeActive(), state.failureStartedAt(),
+                state.lastSuccessAt());
     }
 
     @Transactional
-    public Persistence.AutoGitUpdateFailureNotification appendAutoGitUpdateFailureMessage(long workspaceId, String content) {
+    public Persistence.AutoGitUpdateFailureNotification appendAutoGitUpdateFailureMessage(long workspaceId,
+            String content) {
         Instant now = Instant.now();
         repository.markWorkspaceAutoGitUpdateFailure(workspaceId, now);
-        Optional<SessionView> targetSession = repository.findMostRecentlyOpenedVisiblePrimarySession(workspaceId)
-                .filter(session -> repository.claimWorkspaceAutoGitUpdateFailureNotification(workspaceId, session.id(), now))
+        Optional<SessionView> targetSession = repository
+                .findMostRecentlyOpenedVisiblePrimarySession(workspaceId).filter(session -> repository
+                        .claimWorkspaceAutoGitUpdateFailureNotification(workspaceId, session.id(), now))
                 .map(this::toSessionView);
         if (targetSession.isEmpty()) {
             return new Persistence.AutoGitUpdateFailureNotification(false);
@@ -123,17 +127,16 @@ public class AppStateService {
         }
 
         Path projectRoot = Path.of(project.normalizedPath());
-        Path worktreePath = projectRoot.resolveSibling(".trees")
-                .resolve(projectRoot.getFileName().toString())
-                .resolve(normalizedBranchName)
-                .toAbsolutePath()
-                .normalize();
+        Path worktreePath = projectRoot.resolveSibling(".trees").resolve(projectRoot.getFileName().toString())
+                .resolve(normalizedBranchName).toAbsolutePath().normalize();
         runGitWorktreeAdd(projectRoot, worktreePath, normalizedBranchName, createBranch);
 
         long position = repository.nextWorkspacePosition(projectId);
-        long workspaceId = repository.insertWorkspace(projectId, normalizedBranchName, worktreePath.toString(), position, now);
+        long workspaceId = repository.insertWorkspace(projectId, normalizedBranchName, worktreePath.toString(),
+                position, now);
         createSessionInternal(workspaceId, now);
-        return toWorkspaceView(repository.findWorkspace(workspaceId), activeStreamRegistryService.activeSessionIdsSnapshot());
+        return toWorkspaceView(repository.findWorkspace(workspaceId),
+                activeStreamRegistryService.activeSessionIdsSnapshot());
     }
 
     @Transactional
@@ -257,8 +260,9 @@ public class AppStateService {
         ensureWorkspaceCanBeClosed(workspace, project);
 
         GitCloseStatus gitStatus = inspectGitCloseStatus(Path.of(workspace.normalizedPath()));
-        return new WorkspaceCloseInspection(workspace.id(), workspace.name(), workspace.normalizedPath(), project.normalizedPath(),
-                gitStatus.uncommittedChanges(), gitStatus.unpushedCommits(), gitStatus.reasons());
+        return new WorkspaceCloseInspection(workspace.id(), workspace.name(), workspace.normalizedPath(),
+                project.normalizedPath(), gitStatus.uncommittedChanges(), gitStatus.unpushedCommits(),
+                gitStatus.reasons());
     }
 
     public void removeWorkspaceWorktree(long workspaceId, boolean force) {
@@ -309,12 +313,12 @@ public class AppStateService {
         var parentSession = repository.findSession(parentSessionId);
         var workspace = repository.findWorkspace(parentSession.workspaceId());
         Long parentAssistantMessageId = repository.findLatestPendingVisibleAssistantMessage(parentSessionId)
-                .map(AppStateRepository.ConversationMessageRow::id)
-                .orElse(null);
+                .map(AppStateRepository.ConversationMessageRow::id).orElse(null);
         Instant now = Instant.now();
         long position = repository.nextSessionPosition(workspace.id());
-        long sessionId = repository.insertSession(workspace.id(), "Subagent: " + subagent.name(), position, now, false, ReviewSource.SESSION, null,
-                true, parentSessionId, parentToolCallId, subagent.id(), subagent.name(), parentAssistantMessageId);
+        long sessionId = repository.insertSession(workspace.id(), "Subagent: " + subagent.name(), position, now, false,
+                ReviewSource.SESSION, null, true, parentSessionId, parentToolCallId, subagent.id(), subagent.name(),
+                parentAssistantMessageId);
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateWorkspaceLastOpened(workspace.id(), now);
         repository.updateSessionLastOpened(sessionId, now);
@@ -347,13 +351,17 @@ public class AppStateService {
         var workspace = repository.findWorkspace(sourceSession.workspaceId());
         Instant now = Instant.now();
         long position = repository.nextSessionPosition(workspace.id());
-        long forkedSessionId = repository.insertSession(workspace.id(), "Fork of " + sourceSession.name(), position, now, false, ReviewSource.SESSION, null);
+        long forkedSessionId = repository.insertSession(workspace.id(), "Fork of " + sourceSession.name(), position,
+                now, false, ReviewSource.SESSION, null);
 
         Map<Long, Long> messageIdRemap = new LinkedHashMap<>();
         for (var message : repository.listMessagesThroughTurnId(sourceSessionId, assistantMessage.turnId())) {
-            long copiedMessageId = repository.insertConversationMessage(forkedSessionId, UUID.randomUUID().toString(), message.role(), message.turnId(), message.sequence(), message.content(),
-                    message.toolCallId(), message.toolCallsJson(), message.showInChat(), message.includeInModel(), message.pending(), message.agentId(), message.agentName(),
-                    message.modelId(), message.thinkingLevel(), message.preferredModelId(), message.compactedThroughTurnId(), message.completedAt(), message.createdAt());
+            long copiedMessageId = repository.insertConversationMessage(forkedSessionId, UUID.randomUUID().toString(),
+                    message.role(), message.turnId(), message.sequence(), message.content(), message.toolCallId(),
+                    message.toolCallsJson(), message.showInChat(), message.includeInModel(), message.pending(),
+                    message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel(),
+                    message.preferredModelId(), message.compactedThroughTurnId(), message.completedAt(),
+                    message.createdAt());
             messageIdRemap.put(message.id(), copiedMessageId);
         }
 
@@ -362,8 +370,9 @@ public class AppStateService {
             if (remappedAssistantMessageId == null) {
                 continue;
             }
-            repository.insertToolCallTrace(forkedSessionId, remappedAssistantMessageId, trace.sequence(), trace.toolCallId(), trace.toolName(), trace.success(),
-                    trace.argsJson(), trace.textSummary(), strippedForkMachineSummaryJson(trace.machineSummaryJson()), trace.completedAt(), trace.createdAt());
+            repository.insertToolCallTrace(forkedSessionId, remappedAssistantMessageId, trace.sequence(),
+                    trace.toolCallId(), trace.toolName(), trace.success(), trace.argsJson(), trace.textSummary(),
+                    strippedForkMachineSummaryJson(trace.machineSummaryJson()), trace.completedAt(), trace.createdAt());
         }
 
         repository.updateProjectLastOpened(workspace.projectId(), now);
@@ -377,7 +386,8 @@ public class AppStateService {
     public Persistence.LifecycleHookSettings loadLifecycleHookSettings() {
         var settings = repository.loadLifecycleHookSettings();
         return new Persistence.LifecycleHookSettings(normalizeOptionalScript(settings.assistantCompletedScript()),
-                normalizeOptionalScript(settings.assistantErroredScript()), normalizeOptionalScript(settings.subagentCompletedScript()),
+                normalizeOptionalScript(settings.assistantErroredScript()),
+                normalizeOptionalScript(settings.subagentCompletedScript()),
                 settings.timeoutSeconds() == null ? DEFAULT_LIFECYCLE_HOOK_TIMEOUT_SECONDS : settings.timeoutSeconds());
     }
 
@@ -389,25 +399,37 @@ public class AppStateService {
             throw new IllegalArgumentException("Lifecycle hook timeout must be between 1 and 3600 seconds");
         }
         repository.updateLifecycleHookSettings(normalizeOptionalScript(settings.assistantCompletedScript()),
-                normalizeOptionalScript(settings.assistantErroredScript()), normalizeOptionalScript(settings.subagentCompletedScript()),
-                settings.timeoutSeconds());
+                normalizeOptionalScript(settings.assistantErroredScript()),
+                normalizeOptionalScript(settings.subagentCompletedScript()), settings.timeoutSeconds());
     }
 
     public AppStateView loadViewData() {
         var appState = repository.loadAppState();
         Set<Long> activeSessionIds = activeStreamRegistryService.activeSessionIdsSnapshot();
         List<ProjectView> projects = repository.listVisibleProjects().stream().map(this::toProjectView).toList();
-        ProjectView activeProject = appState.activeProjectId() == null ? null : toProjectView(repository.findProject(appState.activeProjectId()));
+        ProjectView activeProject = appState.activeProjectId() == null
+                ? null
+                : toProjectView(repository.findProject(appState.activeProjectId()));
 
-        List<WorkspaceView> workspaces = activeProject == null ? List.of() : repository.listWorkspacesByProject(activeProject.id()).stream().map(workspace -> toWorkspaceView(workspace, activeSessionIds)).toList();
-        WorkspaceView activeWorkspace = appState.activeWorkspaceId() == null ? null : toWorkspaceView(repository.findWorkspace(appState.activeWorkspaceId()), activeSessionIds);
+        List<WorkspaceView> workspaces = activeProject == null
+                ? List.of()
+                : repository.listWorkspacesByProject(activeProject.id()).stream()
+                        .map(workspace -> toWorkspaceView(workspace, activeSessionIds)).toList();
+        WorkspaceView activeWorkspace = appState.activeWorkspaceId() == null
+                ? null
+                : toWorkspaceView(repository.findWorkspace(appState.activeWorkspaceId()), activeSessionIds);
 
-        AppStateRepository.SessionRow activeSessionRow = appState.activeSessionId() == null ? null : repository.findSession(appState.activeSessionId());
-        List<SessionView> sessions = activeWorkspace == null ? List.of() : repository.listSessionsByWorkspace(activeWorkspace.id()).stream().map(session -> toSessionView(session, activeSessionIds)).toList();
+        AppStateRepository.SessionRow activeSessionRow = appState.activeSessionId() == null
+                ? null
+                : repository.findSession(appState.activeSessionId());
+        List<SessionView> sessions = activeWorkspace == null
+                ? List.of()
+                : repository.listSessionsByWorkspace(activeWorkspace.id()).stream()
+                        .map(session -> toSessionView(session, activeSessionIds)).toList();
         SessionView activeSession = activeSessionRow == null ? null : toSessionView(activeSessionRow, activeSessionIds);
         SessionDetailView sessionDetail = activeSession == null ? null : loadSessionDetail(activeSession.id());
-        return new AppStateView(projects, activeProject, workspaces, activeWorkspace, sessions, activeSession, sessionDetail,
-                repository.loadAutoGitUpdateEnabled());
+        return new AppStateView(projects, activeProject, workspaces, activeWorkspace, sessions, activeSession,
+                sessionDetail, repository.loadAutoGitUpdateEnabled());
     }
 
     @Transactional(readOnly = true)
@@ -431,13 +453,17 @@ public class AppStateService {
 
     @Transactional
     public void updateProjectWorkspaceInitCommands(long projectId, String workspaceInitCommands) {
-        String normalized = workspaceInitCommands == null || workspaceInitCommands.isBlank() ? null : workspaceInitCommands;
+        String normalized = workspaceInitCommands == null || workspaceInitCommands.isBlank()
+                ? null
+                : workspaceInitCommands;
         repository.updateProjectWorkspaceInitCommands(projectId, normalized);
     }
 
     @Transactional
-    public void updateProjectEnvironmentVariables(long projectId, List<ProjectEnvironmentVariable> environmentVariables) {
-        repository.updateProjectEnvironmentVariables(projectId, json(normalizeEnvironmentVariables(environmentVariables)));
+    public void updateProjectEnvironmentVariables(long projectId,
+            List<ProjectEnvironmentVariable> environmentVariables) {
+        repository.updateProjectEnvironmentVariables(projectId,
+                json(normalizeEnvironmentVariables(environmentVariables)));
     }
 
     @Transactional
@@ -449,11 +475,12 @@ public class AppStateService {
 
     @Transactional
     public void updateProjectSettings(long projectId, String workspaceInitCommands,
-                                     List<ProjectEnvironmentVariable> environmentVariables,
-                                     String commandEnvironmentAllowlist) {
+            List<ProjectEnvironmentVariable> environmentVariables, String commandEnvironmentAllowlist) {
         String normalizedWorkspaceInitCommands = workspaceInitCommands == null || workspaceInitCommands.isBlank()
-                ? null : workspaceInitCommands;
-        List<ProjectEnvironmentVariable> normalizedEnvironmentVariables = normalizeEnvironmentVariables(environmentVariables);
+                ? null
+                : workspaceInitCommands;
+        List<ProjectEnvironmentVariable> normalizedEnvironmentVariables = normalizeEnvironmentVariables(
+                environmentVariables);
         String normalizedEnvironmentVariablesJson = json(normalizedEnvironmentVariables);
         Persistence.ProjectView.parseCommandEnvironmentAllowlist(commandEnvironmentAllowlist);
 
@@ -463,28 +490,36 @@ public class AppStateService {
     }
 
     @Transactional
-    public McpServerView createMcpServer(String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
+    public McpServerView createMcpServer(String name, String url, boolean enabled, List<McpServerHeader> headers,
+            List<Long> exposedProjectIds) {
         String normalizedName = normalizeRequiredName(name, "MCP server name");
         String normalizedUrl = normalizeRequiredName(url, "MCP server URL");
         Instant now = Instant.now();
-        long mcpServerId = repository.insertMcpServer(normalizedName, normalizedUrl, enabled, json(normalizeMcpServerHeaders(headers)), now);
+        long mcpServerId = repository.insertMcpServer(normalizedName, normalizedUrl, enabled,
+                json(normalizeMcpServerHeaders(headers)), now);
         repository.replaceMcpServerProjectExposures(mcpServerId, normalizeProjectIds(exposedProjectIds));
-        return toMcpServerView(repository.findMcpServer(mcpServerId).orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId)));
+        return toMcpServerView(repository.findMcpServer(mcpServerId)
+                .orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId)));
     }
 
     @Transactional
-    public McpServerView updateMcpServer(long mcpServerId, String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
-        repository.findMcpServer(mcpServerId).orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId));
+    public McpServerView updateMcpServer(long mcpServerId, String name, String url, boolean enabled,
+            List<McpServerHeader> headers, List<Long> exposedProjectIds) {
+        repository.findMcpServer(mcpServerId)
+                .orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId));
         String normalizedName = normalizeRequiredName(name, "MCP server name");
         String normalizedUrl = normalizeRequiredName(url, "MCP server URL");
-        repository.updateMcpServer(mcpServerId, normalizedName, normalizedUrl, enabled, json(normalizeMcpServerHeaders(headers)));
+        repository.updateMcpServer(mcpServerId, normalizedName, normalizedUrl, enabled,
+                json(normalizeMcpServerHeaders(headers)));
         repository.replaceMcpServerProjectExposures(mcpServerId, normalizeProjectIds(exposedProjectIds));
-        return toMcpServerView(repository.findMcpServer(mcpServerId).orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId)));
+        return toMcpServerView(repository.findMcpServer(mcpServerId)
+                .orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId)));
     }
 
     @Transactional
     public void deleteMcpServer(long mcpServerId) {
-        repository.findMcpServer(mcpServerId).orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId));
+        repository.findMcpServer(mcpServerId)
+                .orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId));
         repository.deleteMcpServer(mcpServerId);
     }
 
@@ -503,7 +538,8 @@ public class AppStateService {
         var context = repository.findLifecycleHookContext(sessionId)
                 .orElseThrow(() -> new IllegalStateException("Missing session " + sessionId));
         return new Persistence.LifecycleHookContext(context.sessionId(), context.projectName(), context.workspaceName(),
-                context.sessionName(), toEnvironmentVariables(projectEnvironmentVariables(context.environmentVariables())));
+                context.sessionName(),
+                toEnvironmentVariables(projectEnvironmentVariables(context.environmentVariables())));
     }
 
     @Transactional(readOnly = true)
@@ -523,7 +559,8 @@ public class AppStateService {
 
     @Transactional(readOnly = true)
     public Map<String, String> loadProjectEnvironmentVariables(long projectId) {
-        return toEnvironmentVariables(projectEnvironmentVariables(repository.findProject(projectId).environmentVariables()));
+        return toEnvironmentVariables(
+                projectEnvironmentVariables(repository.findProject(projectId).environmentVariables()));
     }
 
     @Transactional(readOnly = true)
@@ -536,17 +573,19 @@ public class AppStateService {
 
     @Transactional(readOnly = true)
     public Set<String> loadProjectCommandEnvironmentAllowlist(long projectId) {
-        return Persistence.ProjectView.parseCommandEnvironmentAllowlist(
-                repository.findProject(projectId).commandEnvironmentAllowlist());
+        return Persistence.ProjectView
+                .parseCommandEnvironmentAllowlist(repository.findProject(projectId).commandEnvironmentAllowlist());
     }
 
     @Transactional
-    public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId, String assistantPublicId, String userText) {
+    public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId,
+            String assistantPublicId, String userText) {
         return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText, null);
     }
 
     @Transactional
-    public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId, String assistantPublicId, String userText, ChatMessageMetadata assistantMetadata) {
+    public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId,
+            String assistantPublicId, String userText, ChatMessageMetadata assistantMetadata) {
         if (userText == null) {
             throw new IllegalStateException("User text is required");
         }
@@ -555,39 +594,39 @@ public class AppStateService {
         long userSequence = repository.nextMessageSequence(sessionId);
         String userId = publicId(userPublicId);
         String assistantId = publicId(assistantPublicId);
-        repository.insertConversationMessage(sessionId, userId, "user", turnId, userSequence, userText, null, null, true, true, false, now);
+        repository.insertConversationMessage(sessionId, userId, "user", turnId, userSequence, userText, null, null,
+                true, true, false, now);
         long assistantSequence = repository.nextMessageSequence(sessionId);
-        repository.insertConversationMessage(sessionId, assistantId, "assistant", turnId, assistantSequence, "Thinking…", null, null, true, false, true,
+        repository.insertConversationMessage(sessionId, assistantId, "assistant", turnId, assistantSequence,
+                "Thinking…", null, null, true, false, true,
                 assistantMetadata == null ? null : assistantMetadata.agentId(),
                 assistantMetadata == null ? null : assistantMetadata.agentName(),
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
-                assistantMetadata == null ? null : assistantMetadata.preferredModelId(),
-                null,
-                null,
-                now);
+                assistantMetadata == null ? null : assistantMetadata.preferredModelId(), null, null, now);
         repository.clearSessionDraft(sessionId);
-        return new QueuedChatTurn(new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, null, List.of(), null),
-                new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, null, List.of(), assistantMetadata));
+        return new QueuedChatTurn(
+                new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, null, List.of(), null),
+                new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, null, List.of(),
+                        assistantMetadata));
     }
 
     @Transactional
-    public ChatMessageView appendPendingAssistantMessage(long sessionId, String assistantPublicId, String content, ChatMessageMetadata assistantMetadata) {
+    public ChatMessageView appendPendingAssistantMessage(long sessionId, String assistantPublicId, String content,
+            ChatMessageMetadata assistantMetadata) {
         Instant now = Instant.now();
         long turnId = repository.nextTurnId(sessionId);
         long assistantSequence = repository.nextMessageSequence(sessionId);
         String assistantId = publicId(assistantPublicId);
-        repository.insertConversationMessage(sessionId, assistantId, "assistant", turnId, assistantSequence, content, null, null, true, false, true,
-                assistantMetadata == null ? null : assistantMetadata.agentId(),
+        repository.insertConversationMessage(sessionId, assistantId, "assistant", turnId, assistantSequence, content,
+                null, null, true, false, true, assistantMetadata == null ? null : assistantMetadata.agentId(),
                 assistantMetadata == null ? null : assistantMetadata.agentName(),
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
-                assistantMetadata == null ? null : assistantMetadata.preferredModelId(),
-                null,
-                null,
-                now);
+                assistantMetadata == null ? null : assistantMetadata.preferredModelId(), null, null, now);
         applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
-        return new ChatMessageView("assistant", content, now.toEpochMilli(), true, assistantId, null, List.of(), assistantMetadata);
+        return new ChatMessageView("assistant", content, now.toEpochMilli(), true, assistantId, null, List.of(),
+                assistantMetadata);
     }
 
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userText) {
@@ -595,7 +634,8 @@ public class AppStateService {
     }
 
     @Transactional
-    public void updateAssistantModelMetadata(long sessionId, String assistantPublicId, String modelId, String preferredModelId) {
+    public void updateAssistantModelMetadata(long sessionId, String assistantPublicId, String modelId,
+            String preferredModelId) {
         var message = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
         if (!message.pending() || !"assistant".equals(message.role())) {
             throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
@@ -636,7 +676,9 @@ public class AppStateService {
         }
 
         String argsJson = json(trace.args());
-        repository.insertStartedToolCallTrace(sessionId, assistantMessage.id(), repository.nextToolCallTraceSequence(sessionId), trace.toolCallId(), trace.toolName(), argsJson, Instant.now());
+        repository.insertStartedToolCallTrace(sessionId, assistantMessage.id(),
+                repository.nextToolCallTraceSequence(sessionId), trace.toolCallId(), trace.toolName(), argsJson,
+                Instant.now());
     }
 
     @Transactional
@@ -648,10 +690,14 @@ public class AppStateService {
         }
 
         long sequence = repository.nextToolCallTraceSequence(sessionId);
-        String toolCallId = trace.toolCallId() == null || trace.toolCallId().isBlank() ? String.valueOf(sequence) : trace.toolCallId();
-        ToolCallTraceInput normalizedTrace = new ToolCallTraceInput(toolCallId, trace.toolName(), trace.args(), trace.success(), trace.textSummary(), trace.machineSummary());
+        String toolCallId = trace.toolCallId() == null || trace.toolCallId().isBlank()
+                ? String.valueOf(sequence)
+                : trace.toolCallId();
+        ToolCallTraceInput normalizedTrace = new ToolCallTraceInput(toolCallId, trace.toolName(), trace.args(),
+                trace.success(), trace.textSummary(), trace.machineSummary());
         List<ToolCallPayload> payloads = toolCallPayloads(assistantMessage.toolCallsJson());
-        if (upsertToolCallPayload(payloads, new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()))) {
+        if (upsertToolCallPayload(payloads,
+                new ToolCallPayload(toolCallId, normalizedTrace.toolName(), normalizedTrace.args()))) {
             repository.updateMessageToolCalls(assistantMessage.id(), json(payloads));
         }
 
@@ -659,26 +705,31 @@ public class AppStateService {
         if (existingTrace.isPresent()) {
             AppStateRepository.ToolCallTraceRow traceRow = existingTrace.get();
             if (traceRow.completedAt() == null) {
-                repository.completeToolCallTrace(traceRow.id(), normalizedTrace.success(), json(normalizedTrace.args()), normalizedTrace.textSummary(), json(normalizedTrace.machineSummary()), now);
+                repository.completeToolCallTrace(traceRow.id(), normalizedTrace.success(), json(normalizedTrace.args()),
+                        normalizedTrace.textSummary(), json(normalizedTrace.machineSummary()), now);
                 insertToolCallContextMessages(sessionId, assistantMessage, normalizedTrace, now);
-                traceRow = repository.findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId)
-                        .orElseThrow(() -> new IllegalStateException("Missing completed tool call trace: " + toolCallId));
+                traceRow = repository.findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId).orElseThrow(
+                        () -> new IllegalStateException("Missing completed tool call trace: " + toolCallId));
             }
             return toToolCallView(traceRow, toolCallId, sessionId);
         }
 
         String argsJson = json(normalizedTrace.args());
         String machineSummaryJson = json(normalizedTrace.machineSummary());
-        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolCallId(), normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(), machineSummaryJson, now, now);
+        repository.insertToolCallTrace(sessionId, assistantMessage.id(), sequence, normalizedTrace.toolCallId(),
+                normalizedTrace.toolName(), normalizedTrace.success(), argsJson, normalizedTrace.textSummary(),
+                machineSummaryJson, now, now);
         insertToolCallContextMessages(sessionId, assistantMessage, normalizedTrace, now);
-        AppStateRepository.ToolCallTraceRow traceRow = repository.findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId)
+        AppStateRepository.ToolCallTraceRow traceRow = repository
+                .findToolCallTraceBySessionAndToolCallId(sessionId, toolCallId)
                 .orElseThrow(() -> new IllegalStateException("Missing inserted tool call trace: " + toolCallId));
 
         return toToolCallView(traceRow, toolCallId, sessionId);
     }
 
     @Transactional
-    public ChatMessageView completeAssistantMessage(long sessionId, String assistantPublicId, String finalText, List<ToolCallTraceInput> traces) {
+    public ChatMessageView completeAssistantMessage(long sessionId, String assistantPublicId, String finalText,
+            List<ToolCallTraceInput> traces) {
         if (finalText == null) {
             throw new IllegalStateException("Final assistant text is required");
         }
@@ -687,7 +738,8 @@ public class AppStateService {
         if (!assistantMessage.pending() || !"assistant".equals(assistantMessage.role())) {
             throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
         }
-        finalizeIncompleteToolCallTraces(assistantMessage.id(), now, "Tool call did not complete before assistant completion");
+        finalizeIncompleteToolCallTraces(assistantMessage.id(), now,
+                "Tool call did not complete before assistant completion");
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true, now);
         markUnreadIfInactive(sessionId);
@@ -763,9 +815,7 @@ public class AppStateService {
         var session = repository.findSession(sessionId);
         var workspace = repository.findWorkspace(session.workspaceId());
         var gitFiles = listGitChangedFiles(Path.of(workspace.normalizedPath()));
-        return gitFiles.stream()
-                .filter(file -> file.path().equals(changedFilePath))
-                .findFirst()
+        return gitFiles.stream().filter(file -> file.path().equals(changedFilePath)).findFirst()
                 .map(this::toChangedFileView)
                 .orElseThrow(() -> new IllegalStateException("Git changed file not found: " + changedFilePath));
     }
@@ -791,12 +841,14 @@ public class AppStateService {
     }
 
     @Transactional
-    public ChatMessageView appendToolResultMessage(long sessionId, String publicId, String toolCallId, String content, boolean showInChat) {
+    public ChatMessageView appendToolResultMessage(long sessionId, String publicId, String toolCallId, String content,
+            boolean showInChat) {
         Instant now = Instant.now();
         long turnId = repository.nextTurnId(sessionId);
         long sequence = repository.nextMessageSequence(sessionId);
         String id = publicId(publicId);
-        repository.insertConversationMessage(sessionId, id, "tool", turnId, sequence, content, toolCallId, null, showInChat, true, false, now);
+        repository.insertConversationMessage(sessionId, id, "tool", turnId, sequence, content, toolCallId, null,
+                showInChat, true, false, now);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
     }
 
@@ -815,9 +867,10 @@ public class AppStateService {
         long turnId = repository.nextTurnId(sessionId);
         long sequence = repository.nextMessageSequence(sessionId);
         String id = UUID.randomUUID().toString();
-        repository.insertConversationMessage(sessionId, id, "info", turnId, sequence, content, null, null, true, false, false,
-                null, null, null, null, null, null, now, now);
-        ChatMessageView message = toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
+        repository.insertConversationMessage(sessionId, id, "info", turnId, sequence, content, null, null, true, false,
+                false, null, null, null, null, null, null, now, now);
+        ChatMessageView message = toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id),
+                sessionId);
         applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
         return message;
     }
@@ -842,8 +895,8 @@ public class AppStateService {
         long turnId = repository.nextTurnId(sessionId);
         long sequence = repository.nextMessageSequence(sessionId);
         String id = UUID.randomUUID().toString();
-        repository.insertConversationMessage(sessionId, id, "system", turnId, sequence, content, null, null, true, true, false,
-                null, null, null, null, null, compactedThroughTurnId, null, now);
+        repository.insertConversationMessage(sessionId, id, "system", turnId, sequence, content, null, null, true, true,
+                false, null, null, null, null, null, compactedThroughTurnId, null, now);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, id), sessionId);
     }
 
@@ -862,17 +915,15 @@ public class AppStateService {
                 .toList();
 
         long compactionCutoffTurnId = messages.stream()
-                .filter(message -> "system".equals(message.role()) && message.showInChat() && message.compactedThroughTurnId() != null)
-                .mapToLong(AppStateRepository.ConversationMessageRow::compactedThroughTurnId)
-                .max()
+                .filter(message -> "system".equals(message.role()) && message.showInChat()
+                        && message.compactedThroughTurnId() != null)
+                .mapToLong(AppStateRepository.ConversationMessageRow::compactedThroughTurnId).max()
                 .orElse(Long.MIN_VALUE);
         if (compactionCutoffTurnId != Long.MIN_VALUE) {
-            messages = messages.stream()
-                    .filter(message -> message.turnId() > compactionCutoffTurnId)
-                    .toList();
+            messages = messages.stream().filter(message -> message.turnId() > compactionCutoffTurnId).toList();
         }
 
-        Map<String, Long> toolCallRoots = new java.util.HashMap<>();
+        Map<String, Long> toolCallRoots = new HashMap<>();
         for (var message : messages) {
             if ("assistant".equals(message.role()) && !message.showInChat()) {
                 for (var payload : toolCallPayloads(message.toolCallsJson())) {
@@ -886,11 +937,11 @@ public class AppStateService {
                         .thenComparingLong(message -> conversationHistoryGroupKey(message, toolCallRoots))
                         .thenComparingInt(this::conversationHistoryOrder)
                         .thenComparingLong(AppStateRepository.ConversationMessageRow::sequence))
-                .map(this::toModelMessage)
-                .toList();
+                .map(this::toModelMessage).toList();
     }
 
-    private long conversationHistoryGroupKey(AppStateRepository.ConversationMessageRow message, Map<String, Long> toolCallRoots) {
+    private long conversationHistoryGroupKey(AppStateRepository.ConversationMessageRow message,
+            Map<String, Long> toolCallRoots) {
         if ("assistant".equals(message.role()) && message.showInChat()) {
             return Long.MAX_VALUE;
         }
@@ -956,9 +1007,11 @@ public class AppStateService {
         if (sessionName == null || sessionName.isBlank()) {
             throw new IllegalStateException("Session name is required");
         }
-        long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, ReviewSource.SESSION, null);
+        long sessionId = repository.insertSession(workspaceId, sessionName, position, now, false, ReviewSource.SESSION,
+                null);
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
-                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null, null, null, null, null, null, null, now);
+                "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null,
+                null, null, null, null, null, null, now);
         var workspace = repository.findWorkspace(workspaceId);
         repository.updateProjectLastOpened(workspace.projectId(), now);
         repository.updateWorkspaceLastOpened(workspaceId, now);
@@ -985,15 +1038,15 @@ public class AppStateService {
             List<String> command = createBranch
                     ? List.of("git", "worktree", "add", "-b", branchName, worktreePath.toString())
                     : List.of("git", "worktree", "add", worktreePath.toString(), branchName);
-            ProcessBuilder processBuilder = new ProcessBuilder(command)
-                    .directory(projectRoot.toFile());
+            ProcessBuilder processBuilder = new ProcessBuilder(command).directory(projectRoot.toFile());
             ProcessEnvironmentSanitizer.sanitize(processBuilder);
             Process process = processBuilder.start();
             stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr, null);
+                throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr,
+                        null);
             }
         } catch (Exception e) {
             if (e instanceof GitWorktreeException gitWorktreeException) {
@@ -1012,7 +1065,8 @@ public class AppStateService {
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new InvalidGitBranchNameException("Invalid Git branch name: " + branchName, gitOutput(stdout, stderr));
+                throw new InvalidGitBranchNameException("Invalid Git branch name: " + branchName,
+                        gitOutput(stdout, stderr));
             }
         } catch (InvalidGitBranchNameException e) {
             throw e;
@@ -1022,9 +1076,8 @@ public class AppStateService {
     }
 
     private String gitOutput(String stdout, String stderr) {
-        return List.of(nonBlank(stdout), nonBlank(stderr)).stream()
-                .filter(value -> !value.isBlank())
-                .collect(java.util.stream.Collectors.joining("\n"));
+        return List.of(nonBlank(stdout), nonBlank(stderr)).stream().filter(value -> !value.isBlank())
+                .collect(Collectors.joining("\n"));
     }
 
     private String nonBlank(String value) {
@@ -1036,9 +1089,11 @@ public class AppStateService {
         boolean uncommittedChanges = !status.isBlank();
 
         boolean unpushedCommits = false;
-        GitCommandResult head = runGitCommandAllowingMissingHead(workspacePath, List.of("git", "rev-parse", "--verify", "--quiet", "HEAD"));
+        GitCommandResult head = runGitCommandAllowingMissingHead(workspacePath,
+                List.of("git", "rev-parse", "--verify", "--quiet", "HEAD"));
         if (head.exists()) {
-            String count = runGitCommand(workspacePath, List.of("git", "rev-list", "--count", "HEAD", "--not", "--remotes=origin")).stdout().trim();
+            String count = runGitCommand(workspacePath,
+                    List.of("git", "rev-list", "--count", "HEAD", "--not", "--remotes=origin")).stdout().trim();
             unpushedCommits = !count.isBlank() && Long.parseLong(count) > 0;
         }
 
@@ -1054,15 +1109,15 @@ public class AppStateService {
 
     private GitCommandResult runGitCommand(Path cwd, List<String> command) {
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(command)
-                    .directory(cwd.toFile());
+            ProcessBuilder processBuilder = new ProcessBuilder(command).directory(cwd.toFile());
             ProcessEnvironmentSanitizer.sanitize(processBuilder);
             Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new IllegalStateException("git command failed with exit code " + exitCode + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr);
+                throw new IllegalStateException("git command failed with exit code " + exitCode + "\nstdout:\n" + stdout
+                        + "\nstderr:\n" + stderr);
             }
             return new GitCommandResult(stdout, stderr, false);
         } catch (Exception e) {
@@ -1075,8 +1130,7 @@ public class AppStateService {
 
     private GitCommandResult runGitCommandAllowingMissingHead(Path cwd, List<String> command) {
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(command)
-                    .directory(cwd.toFile());
+            ProcessBuilder processBuilder = new ProcessBuilder(command).directory(cwd.toFile());
             ProcessEnvironmentSanitizer.sanitize(processBuilder);
             Process process = processBuilder.start();
             String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
@@ -1091,7 +1145,8 @@ public class AppStateService {
         }
     }
 
-    private void ensureWorkspaceCanBeClosed(AppStateRepository.WorkspaceRow workspace, AppStateRepository.ProjectRow project) {
+    private void ensureWorkspaceCanBeClosed(AppStateRepository.WorkspaceRow workspace,
+            AppStateRepository.ProjectRow project) {
         if (workspace.normalizedPath().equals(project.normalizedPath())) {
             throw new IllegalStateException("Default workspace cannot be deleted: " + workspace.id());
         }
@@ -1108,33 +1163,44 @@ public class AppStateService {
     private SessionDetailView loadSessionDetail(long sessionId, boolean fullTrace) {
         var session = repository.findSession(sessionId);
         var workspace = repository.findWorkspace(session.workspaceId());
-        List<AppStateRepository.ConversationMessageRow> visibleMessages = repository.listVisibleMessagesBySession(sessionId);
+        List<AppStateRepository.ConversationMessageRow> visibleMessages = repository
+                .listVisibleMessagesBySession(sessionId);
         Map<Long, List<AppStateRepository.ToolCallTraceRow>> tracesByAssistant = (fullTrace
                 ? repository.listToolCallTracesBySession(sessionId)
                 : repository.listToolCallTraceProjectionsBySession(sessionId)).stream()
-                .collect(java.util.stream.Collectors.groupingBy(AppStateRepository.ToolCallTraceRow::assistantMessageId));
-        Map<Long, AppStateRepository.TaskCallProjectionRow> taskProjectionsById = fullTrace ? Map.of() : repository.listTaskCallProjectionsBySession(sessionId).stream()
-                .collect(java.util.stream.Collectors.toMap(AppStateRepository.TaskCallProjectionRow::id, projection -> projection));
+                .collect(Collectors.groupingBy(AppStateRepository.ToolCallTraceRow::assistantMessageId));
+        Map<Long, AppStateRepository.TaskCallProjectionRow> taskProjectionsById = fullTrace
+                ? Map.of()
+                : repository.listTaskCallProjectionsBySession(sessionId).stream().collect(
+                        Collectors.toMap(AppStateRepository.TaskCallProjectionRow::id, projection -> projection));
         if (!fullTrace) {
             for (var trace : repository.listToolCallTracesBySessionAndToolNames(sessionId, Set.of("display_image"))) {
-                tracesByAssistant.computeIfAbsent(trace.assistantMessageId(), ignored -> new ArrayList<>()).removeIf(existing -> existing.id() == trace.id());
+                tracesByAssistant.computeIfAbsent(trace.assistantMessageId(), ignored -> new ArrayList<>())
+                        .removeIf(existing -> existing.id() == trace.id());
                 tracesByAssistant.computeIfAbsent(trace.assistantMessageId(), ignored -> new ArrayList<>()).add(trace);
-                tracesByAssistant.get(trace.assistantMessageId()).sort(java.util.Comparator.comparingLong(AppStateRepository.ToolCallTraceRow::sequence));
+                tracesByAssistant.get(trace.assistantMessageId())
+                        .sort(Comparator.comparingLong(AppStateRepository.ToolCallTraceRow::sequence));
             }
         }
-        List<ChatMessageView> messages = visibleMessages.stream().map(message -> toChatMessageView(message, sessionId,
-                tracesByAssistant.getOrDefault(message.id(), List.of()), fullTrace, taskProjectionsById)).toList();
+        List<ChatMessageView> messages = visibleMessages.stream()
+                .map(message -> toChatMessageView(message, sessionId,
+                        tracesByAssistant.getOrDefault(message.id(), List.of()), fullTrace, taskProjectionsById))
+                .toList();
         messages = applySyntheticSubagentToolCalls(sessionId, visibleMessages, messages);
         messages = injectSyntheticFailedAssistantMessage(sessionId, visibleMessages, messages);
         messages = clearStalePendingAssistantBindings(messages);
         ReviewSource reviewSource = session.reviewSource();
         List<ChangedFileView> files = reviewSource == ReviewSource.GIT
-                ? listGitChangedFiles(Path.of(workspace.normalizedPath())).stream().map(this::toChangedFileView).toList()
+                ? listGitChangedFiles(Path.of(workspace.normalizedPath())).stream().map(this::toChangedFileView)
+                        .toList()
                 : repository.listChangedFilesBySession(sessionId).stream().map(this::toChangedFileView).toList();
         ChangedFileView selected = reviewSource == ReviewSource.GIT
                 ? null
-                : session.selectedChangedFileId() == null ? null : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
-        return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected, workspace.normalizedPath(), session.chatDraft());
+                : session.selectedChangedFileId() == null
+                        ? null
+                        : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
+        return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected,
+                workspace.normalizedPath(), session.chatDraft());
     }
 
     public ChatMessageView loadAssistantMessageDetails(long sessionId, String assistantPublicId) {
@@ -1146,7 +1212,8 @@ public class AppStateService {
     }
 
     public ChatMessageView loadLazyAssistantMessage(String assistantPublicId, String anchorToolCallId) {
-        if (assistantPublicId == null || assistantPublicId.isBlank() || anchorToolCallId == null || anchorToolCallId.isBlank()) {
+        if (assistantPublicId == null || assistantPublicId.isBlank() || anchorToolCallId == null
+                || anchorToolCallId.isBlank()) {
             throw new IllegalArgumentException("Assistant and tool call ids are required");
         }
         var appState = repository.loadAppState();
@@ -1158,17 +1225,19 @@ public class AppStateService {
         var assistant = repository.findMessageBySessionAndPublicIdOptional(sessionId, assistantPublicId).orElse(null);
         if (assistant == null) {
             assistant = repository.listChildSessionsByParentSession(sessionId).stream()
-                    .map(child -> repository.findMessageBySessionAndPublicIdOptional(child.id(), assistantPublicId).orElse(null))
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("Assistant message is not reachable: " + assistantPublicId));
+                    .map(child -> repository.findMessageBySessionAndPublicIdOptional(child.id(), assistantPublicId)
+                            .orElse(null))
+                    .filter(Objects::nonNull).findFirst().orElseThrow(() -> new IllegalStateException(
+                            "Assistant message is not reachable: " + assistantPublicId));
             sessionId = assistant.sessionId();
         }
         if (!"assistant".equals(assistant.role())) {
             throw new IllegalStateException("Message is not an assistant message: " + assistantPublicId);
         }
-        List<AppStateRepository.ToolCallTraceRow> traces = repository.listToolCallTracesByAssistantMessage(assistant.id());
-        if (traces.stream().noneMatch(trace -> anchorToolCallId.equals(trace.toolCallId()) || anchorToolCallId.equals(String.valueOf(trace.sequence())))) {
+        List<AppStateRepository.ToolCallTraceRow> traces = repository
+                .listToolCallTracesByAssistantMessage(assistant.id());
+        if (traces.stream().noneMatch(trace -> anchorToolCallId.equals(trace.toolCallId())
+                || anchorToolCallId.equals(String.valueOf(trace.sequence())))) {
             throw new IllegalStateException("Tool call does not belong to assistant message: " + anchorToolCallId);
         }
         return toChatMessageView(assistant, sessionId, traces, true);
@@ -1192,15 +1261,18 @@ public class AppStateService {
         if (path == null || path.isBlank()) {
             throw new IllegalStateException("Display image path is required: " + toolCallId);
         }
-        return new DisplayImageView(session.id(), workspace.normalizedPath(), toolCallId, path, asString(machineSummary.get("alt")), asString(machineSummary.get("mediaType")));
+        return new DisplayImageView(session.id(), workspace.normalizedPath(), toolCallId, path,
+                asString(machineSummary.get("alt")), asString(machineSummary.get("mediaType")));
     }
 
-    private List<ChatMessageView> injectSyntheticFailedAssistantMessage(long sessionId, List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
+    private List<ChatMessageView> injectSyntheticFailedAssistantMessage(long sessionId,
+            List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
         if (messages.isEmpty()) {
             return messages;
         }
 
-        AppStateRepository.ConversationMessageRow targetMessage = repository.findLatestPendingVisibleAssistantMessage(sessionId).orElse(null);
+        AppStateRepository.ConversationMessageRow targetMessage = repository
+                .findLatestPendingVisibleAssistantMessage(sessionId).orElse(null);
         if (targetMessage == null || !targetMessage.pending()) {
             return messages;
         }
@@ -1220,14 +1292,9 @@ public class AppStateService {
         }
 
         ArrayList<ChatMessageView> updated = new ArrayList<>(messages);
-        updated.set(targetIndex, new ChatMessageView(
-                visibleRow.role(),
+        updated.set(targetIndex, new ChatMessageView(visibleRow.role(),
                 "*Assistant stream failed because the process ended before this response could be completed. Restart the request to continue.*",
-                visibleRow.ts(),
-                false,
-                visibleRow.id(),
-                visibleRow.completedTs(),
-                visibleRow.toolCalls(),
+                visibleRow.ts(), false, visibleRow.id(), visibleRow.completedTs(), visibleRow.toolCalls(),
                 visibleRow.metadata()));
         return updated;
     }
@@ -1240,14 +1307,16 @@ public class AppStateService {
         ArrayList<ChatMessageView> updated = null;
         for (int i = 0; i < messages.size(); i++) {
             ChatMessageView message = messages.get(i);
-            if (!message.pending() || !"assistant".equals(message.role()) || activeStreamRegistryService.hasActiveStreamForAssistantId(message.id())) {
+            if (!message.pending() || !"assistant".equals(message.role())
+                    || activeStreamRegistryService.hasActiveStreamForAssistantId(message.id())) {
                 continue;
             }
 
             if (updated == null) {
                 updated = new ArrayList<>(messages);
             }
-            updated.set(i, new ChatMessageView(message.role(), message.text(), message.ts(), false, message.id(), message.completedTs(), message.toolCalls(), message.metadata()));
+            updated.set(i, new ChatMessageView(message.role(), message.text(), message.ts(), false, message.id(),
+                    message.completedTs(), message.toolCalls(), message.metadata()));
         }
 
         return updated == null ? messages : updated;
@@ -1265,12 +1334,13 @@ public class AppStateService {
         return -1;
     }
 
-    private List<ChatMessageView> applySyntheticSubagentToolCalls(long parentSessionId, List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
+    private List<ChatMessageView> applySyntheticSubagentToolCalls(long parentSessionId,
+            List<AppStateRepository.ConversationMessageRow> visibleMessages, List<ChatMessageView> messages) {
         if (messages.isEmpty()) {
             return messages;
         }
 
-        Map<Long, Integer> pendingAssistantIndexByMessageId = new java.util.HashMap<>();
+        Map<Long, Integer> pendingAssistantIndexByMessageId = new HashMap<>();
         int latestPendingAssistantIndex = -1;
         for (int i = 0; i < messages.size(); i++) {
             AppStateRepository.ConversationMessageRow visibleMessage = visibleMessages.get(i);
@@ -1281,8 +1351,8 @@ public class AppStateService {
             }
         }
 
-        Map<Integer, Map<String, ToolCallView>> enrichedByMessageIndex = new java.util.HashMap<>();
-        Map<Integer, List<ToolCallView>> syntheticByMessageIndex = new java.util.HashMap<>();
+        Map<Integer, Map<String, ToolCallView>> enrichedByMessageIndex = new HashMap<>();
+        Map<Integer, List<ToolCallView>> syntheticByMessageIndex = new HashMap<>();
         List<ToolCallView> legacySyntheticToolCalls = new ArrayList<>();
         for (var childSession : repository.listChildSessionsByParentSession(parentSessionId)) {
             if (!childSession.hidden()) {
@@ -1301,12 +1371,16 @@ public class AppStateService {
                 if (messageIndex != null) {
                     ChatMessageView targetMessage = messages.get(messageIndex);
                     targetMessage.toolCalls().stream()
-                            .filter(toolCall -> parentToolCallId.equals(toolCall.toolCallId()))
-                            .findFirst()
-                            .ifPresentOrElse(existingToolCall -> enrichedByMessageIndex
-                                    .computeIfAbsent(messageIndex, ignored -> new LinkedHashMap<>())
-                                    .put(parentToolCallId, enrichSubagentToolCallView(existingToolCall, childSession, parentSessionId)),
-                                    () -> syntheticByMessageIndex.computeIfAbsent(messageIndex, ignored -> new ArrayList<>()).add(syntheticToolCall));
+                            .filter(toolCall -> parentToolCallId.equals(toolCall.toolCallId())).findFirst()
+                            .ifPresentOrElse(
+                                    existingToolCall -> enrichedByMessageIndex
+                                            .computeIfAbsent(messageIndex, ignored -> new LinkedHashMap<>())
+                                            .put(parentToolCallId,
+                                                    enrichSubagentToolCallView(existingToolCall, childSession,
+                                                            parentSessionId)),
+                                    () -> syntheticByMessageIndex
+                                            .computeIfAbsent(messageIndex, ignored -> new ArrayList<>())
+                                            .add(syntheticToolCall));
                 }
                 continue;
             }
@@ -1315,7 +1389,8 @@ public class AppStateService {
             }
         }
 
-        if (enrichedByMessageIndex.isEmpty() && syntheticByMessageIndex.isEmpty() && legacySyntheticToolCalls.isEmpty()) {
+        if (enrichedByMessageIndex.isEmpty() && syntheticByMessageIndex.isEmpty()
+                && legacySyntheticToolCalls.isEmpty()) {
             return messages;
         }
 
@@ -1326,13 +1401,15 @@ public class AppStateService {
             for (ToolCallView toolCall : message.toolCalls()) {
                 mergedToolCalls.add(entry.getValue().getOrDefault(toolCall.toolCallId(), toolCall));
             }
-            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(), message.pending(), message.id(), message.completedTs(), mergedToolCalls, message.metadata()));
+            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(),
+                    message.pending(), message.id(), message.completedTs(), mergedToolCalls, message.metadata()));
         }
         for (var entry : syntheticByMessageIndex.entrySet()) {
             ChatMessageView message = updated.get(entry.getKey());
             ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(message.toolCalls());
             mergedToolCalls.addAll(entry.getValue());
-            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(), message.pending(), message.id(), message.completedTs(), mergedToolCalls, message.metadata()));
+            updated.set(entry.getKey(), new ChatMessageView(message.role(), message.text(), message.ts(),
+                    message.pending(), message.id(), message.completedTs(), mergedToolCalls, message.metadata()));
         }
 
         if (!legacySyntheticToolCalls.isEmpty()) {
@@ -1343,24 +1420,37 @@ public class AppStateService {
             ArrayList<ToolCallView> mergedToolCalls = new ArrayList<>(pendingAssistant.toolCalls());
             mergedToolCalls.addAll(legacySyntheticToolCalls);
             int targetIndex = latestPendingAssistantIndex >= 0 ? latestPendingAssistantIndex : messages.size() - 1;
-            updated.set(targetIndex, new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(), pendingAssistant.pending(),
-                    pendingAssistant.id(), pendingAssistant.completedTs(), mergedToolCalls, pendingAssistant.metadata()));
+            updated.set(targetIndex,
+                    new ChatMessageView(pendingAssistant.role(), pendingAssistant.text(), pendingAssistant.ts(),
+                            pendingAssistant.pending(), pendingAssistant.id(), pendingAssistant.completedTs(),
+                            mergedToolCalls, pendingAssistant.metadata()));
         }
 
         return updated;
     }
 
-    private ToolCallView enrichSubagentToolCallView(ToolCallView existingToolCall, AppStateRepository.SessionRow childSession, long parentSessionId) {
+    private ToolCallView enrichSubagentToolCallView(ToolCallView existingToolCall,
+            AppStateRepository.SessionRow childSession, long parentSessionId) {
         String resolvedTaskBody = existingToolCall.taskBody();
         if (resolvedTaskBody == null || resolvedTaskBody.isBlank()) {
             resolvedTaskBody = taskRequestSummary(parentSessionId, existingToolCall.toolCallId());
         }
-        Long subagentSessionId = existingToolCall.subagentSessionId() == null ? childSession.id() : existingToolCall.subagentSessionId();
-        String subagentAgentId = existingToolCall.subagentAgentId() == null || existingToolCall.subagentAgentId().isBlank() ? childSession.subagentAgentId() : existingToolCall.subagentAgentId();
-        String subagentAgentName = existingToolCall.subagentAgentName() == null || existingToolCall.subagentAgentName().isBlank() ? childSession.subagentAgentName() : existingToolCall.subagentAgentName();
-        return new ToolCallView(existingToolCall.toolCallId(), existingToolCall.toolName(), existingToolCall.success(), existingToolCall.inputPreview(), existingToolCall.outputPreview(),
-                existingToolCall.inputTruncated(), existingToolCall.outputTruncated(), subagentSessionId, subagentAgentId, subagentAgentName, "running",
-                existingToolCall.imageUrl(), existingToolCall.imageAlt(), existingToolCall.imagePath(), existingToolCall.imageMediaType(), resolvedTaskBody);
+        Long subagentSessionId = existingToolCall.subagentSessionId() == null
+                ? childSession.id()
+                : existingToolCall.subagentSessionId();
+        String subagentAgentId = existingToolCall.subagentAgentId() == null
+                || existingToolCall.subagentAgentId().isBlank()
+                        ? childSession.subagentAgentId()
+                        : existingToolCall.subagentAgentId();
+        String subagentAgentName = existingToolCall.subagentAgentName() == null
+                || existingToolCall.subagentAgentName().isBlank()
+                        ? childSession.subagentAgentName()
+                        : existingToolCall.subagentAgentName();
+        return new ToolCallView(existingToolCall.toolCallId(), existingToolCall.toolName(), existingToolCall.success(),
+                existingToolCall.inputPreview(), existingToolCall.outputPreview(), existingToolCall.inputTruncated(),
+                existingToolCall.outputTruncated(), subagentSessionId, subagentAgentId, subagentAgentName, "running",
+                existingToolCall.imageUrl(), existingToolCall.imageAlt(), existingToolCall.imagePath(),
+                existingToolCall.imageMediaType(), resolvedTaskBody);
     }
 
     public SubagentSessionDetailView loadSubagentSessionDetail(long sessionId) {
@@ -1368,36 +1458,46 @@ public class AppStateService {
         if (!session.hidden()) {
             throw new IllegalStateException("Session is not a hidden subagent session: " + sessionId);
         }
-        return new SubagentSessionDetailView(loadFullSessionDetail(sessionId), session.parentSessionId(), session.parentToolCallId(),
-                session.subagentAgentId(), session.subagentAgentName());
+        return new SubagentSessionDetailView(loadFullSessionDetail(sessionId), session.parentSessionId(),
+                session.parentToolCallId(), session.subagentAgentId(), session.subagentAgentName());
     }
 
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId) {
-        return toChatMessageView(message, sessionId, repository.listToolCallTracesByAssistantMessage(message.id()), true, Map.of());
+        return toChatMessageView(message, sessionId, repository.listToolCallTracesByAssistantMessage(message.id()),
+                true, Map.of());
     }
 
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId,
-                                               List<AppStateRepository.ToolCallTraceRow> traces, boolean fullDetails) {
+            List<AppStateRepository.ToolCallTraceRow> traces, boolean fullDetails) {
         return toChatMessageView(message, sessionId, traces, fullDetails, Map.of());
     }
 
     private ChatMessageView toChatMessageView(AppStateRepository.ConversationMessageRow message, long sessionId,
-                                               List<AppStateRepository.ToolCallTraceRow> traces, boolean fullDetails,
-                                               Map<Long, AppStateRepository.TaskCallProjectionRow> taskProjectionsById) {
+            List<AppStateRepository.ToolCallTraceRow> traces, boolean fullDetails,
+            Map<Long, AppStateRepository.TaskCallProjectionRow> taskProjectionsById) {
         List<ToolCallPayload> payloads = fullDetails ? toolCallPayloads(message.toolCallsJson()) : List.of();
         List<ToolCallView> toolCalls = new ArrayList<>(traces.size());
         for (int i = 0; i < traces.size(); i++) {
             AppStateRepository.ToolCallTraceRow trace = traces.get(i);
-            String toolCallId = trace.toolCallId() != null ? trace.toolCallId() : i < payloads.size() ? payloads.get(i).toolCallId() : String.valueOf(trace.sequence());
-            toolCalls.add(fullDetails ? toToolCallView(trace, toolCallId, sessionId)
-                    : "task".equals(trace.toolName()) ? toTaskCallProjection(taskProjectionsById.get(trace.id()), trace, toolCallId)
-                    : isEagerTool(trace.toolName()) ? toToolCallView(trace, toolCallId, sessionId)
-                    : toToolCallProjection(trace, toolCallId));
+            String toolCallId = trace.toolCallId() != null
+                    ? trace.toolCallId()
+                    : i < payloads.size() ? payloads.get(i).toolCallId() : String.valueOf(trace.sequence());
+            toolCalls.add(fullDetails
+                    ? toToolCallView(trace, toolCallId, sessionId)
+                    : "task".equals(trace.toolName())
+                            ? toTaskCallProjection(taskProjectionsById.get(trace.id()), trace, toolCallId)
+                            : isEagerTool(trace.toolName())
+                                    ? toToolCallView(trace, toolCallId, sessionId)
+                                    : toToolCallProjection(trace, toolCallId));
         }
-        return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(), message.pending(), message.publicId(),
+        return new ChatMessageView(message.role(), message.content(), message.createdAt().toEpochMilli(),
+                message.pending(), message.publicId(),
                 message.completedAt() == null ? null : message.completedAt().toEpochMilli(), toolCalls,
-                message.agentId() == null && message.agentName() == null && message.modelId() == null && message.thinkingLevel() == null ? null :
-                        new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(), message.thinkingLevel(), message.preferredModelId()));
+                message.agentId() == null && message.agentName() == null && message.modelId() == null
+                        && message.thinkingLevel() == null
+                                ? null
+                                : new ChatMessageMetadata(message.agentId(), message.agentName(), message.modelId(),
+                                        message.thinkingLevel(), message.preferredModelId()));
     }
 
     private static boolean isEagerTool(String toolName) {
@@ -1407,20 +1507,21 @@ public class AppStateService {
     private ToolCallView toToolCallProjection(AppStateRepository.ToolCallTraceRow trace, String toolCallId) {
         boolean success = Boolean.TRUE.equals(trace.success());
         String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
-        return new ToolCallView(toolCallId, trace.toolName(), success, null, null, false, false,
-                null, null, null, status, null, null, null, null, null);
+        return new ToolCallView(toolCallId, trace.toolName(), success, null, null, false, false, null, null, null,
+                status, null, null, null, null, null);
     }
 
     private ToolCallView toTaskCallProjection(AppStateRepository.TaskCallProjectionRow projection,
-                                               AppStateRepository.ToolCallTraceRow trace, String toolCallId) {
+            AppStateRepository.ToolCallTraceRow trace, String toolCallId) {
         boolean success = Boolean.TRUE.equals(trace.success());
         String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
         if (projection == null) {
-            return new ToolCallView(toolCallId, "task", success, null, null, false, false, null, null, null, status, null, null, null, null, null);
+            return new ToolCallView(toolCallId, "task", success, null, null, false, false, null, null, null, status,
+                    null, null, null, null, null);
         }
-        return new ToolCallView(toolCallId, "task", success, null, null, false, false,
-                projection.subagentSessionId(), projection.subagentAgentId(), projection.subagentAgentName(), status,
-                null, null, null, null, projection.requestSummary());
+        return new ToolCallView(toolCallId, "task", success, null, null, false, false, projection.subagentSessionId(),
+                projection.subagentAgentId(), projection.subagentAgentName(), status, null, null, null, null,
+                projection.requestSummary());
     }
 
     private ToolCallView toToolCallView(AppStateRepository.ToolCallTraceRow trace, String toolCallId, long sessionId) {
@@ -1432,7 +1533,8 @@ public class AppStateService {
         }
         boolean success = Boolean.TRUE.equals(trace.success());
         String status = trace.completedAt() == null ? "running" : success ? "success" : "failure";
-        return traceToView(new ToolCallTraceInput(toolCallId, trace.toolName(), readMap(trace.argsJson()), success, trace.textSummary(), machineSummary), sessionId, status);
+        return traceToView(new ToolCallTraceInput(toolCallId, trace.toolName(), readMap(trace.argsJson()), success,
+                trace.textSummary(), machineSummary), sessionId, status);
     }
 
     private ToolCallView traceToView(ToolCallTraceInput trace, long sessionId) {
@@ -1449,23 +1551,28 @@ public class AppStateService {
         SubagentLinkInfo subagent = subagentLinkInfo(trace.machineSummary());
         ImageLinkInfo image = imageLinkInfo(trace, trace.machineSummary(), sessionId);
         String taskBody = taskBody(trace);
-        return new ToolCallView(trace.toolCallId(), trace.toolName(), trace.success(), inPreview, outPreview, inTr[0], outTr[0], subagent.subagentSessionId(),
-                subagent.subagentAgentId(), subagent.subagentAgentName(), status, image.imageUrl(), image.imageAlt(), image.imagePath(), image.imageMediaType(), taskBody);
+        return new ToolCallView(trace.toolCallId(), trace.toolName(), trace.success(), inPreview, outPreview, inTr[0],
+                outTr[0], subagent.subagentSessionId(), subagent.subagentAgentId(), subagent.subagentAgentName(),
+                status, image.imageUrl(), image.imageAlt(), image.imagePath(), image.imageMediaType(), taskBody);
     }
 
     private String taskBody(ToolCallTraceInput trace) {
         return trace == null ? null : taskBody(trace.toolName(), trace.args());
     }
 
-    private void insertToolCallContextMessages(long sessionId, AppStateRepository.ConversationMessageRow assistantMessage, ToolCallTraceInput trace, Instant now) {
+    private void insertToolCallContextMessages(long sessionId,
+            AppStateRepository.ConversationMessageRow assistantMessage, ToolCallTraceInput trace, Instant now) {
         long assistantToolCallSequence = repository.nextMessageSequence(sessionId);
-        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant", assistantMessage.turnId(), assistantToolCallSequence,
-                "", null, json(List.of(new ToolCallPayload(trace.toolCallId(), trace.toolName(), trace.args()))), false, true, false,
-                assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(), assistantMessage.thinkingLevel(), assistantMessage.preferredModelId(), null, null, now);
+        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "assistant",
+                assistantMessage.turnId(), assistantToolCallSequence, "", null,
+                json(List.of(new ToolCallPayload(trace.toolCallId(), trace.toolName(), trace.args()))), false, true,
+                false, assistantMessage.agentId(), assistantMessage.agentName(), assistantMessage.modelId(),
+                assistantMessage.thinkingLevel(), assistantMessage.preferredModelId(), null, null, now);
 
         long toolResultSequence = repository.nextMessageSequence(sessionId);
-        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(), toolResultSequence,
-                trace.textSummary() == null ? "" : trace.textSummary(), trace.toolCallId(), null, false, true, false, now);
+        repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "tool", assistantMessage.turnId(),
+                toolResultSequence, trace.textSummary() == null ? "" : trace.textSummary(), trace.toolCallId(), null,
+                false, true, false, now);
     }
 
     private void finalizeIncompleteToolCallTraces(long assistantMessageId, Instant completedAt, String textSummary) {
@@ -1477,8 +1584,7 @@ public class AppStateService {
             return null;
         }
         return repository.findTaskCallProjection(sessionId, toolCallId)
-                .map(AppStateRepository.TaskCallProjectionRow::requestSummary)
-                .orElse(null);
+                .map(AppStateRepository.TaskCallProjectionRow::requestSummary).orElse(null);
     }
 
     private String taskBody(AppStateRepository.ConversationMessageRow message, String toolCallId) {
@@ -1486,10 +1592,8 @@ public class AppStateService {
             return null;
         }
         return toolCallPayloads(message.toolCallsJson()).stream()
-                .filter(payload -> toolCallId.equals(payload.toolCallId()))
-                .findFirst()
-                .map(payload -> taskBody(payload.toolName(), payload.arguments()))
-                .orElse(null);
+                .filter(payload -> toolCallId.equals(payload.toolCallId())).findFirst()
+                .map(payload -> taskBody(payload.toolName(), payload.arguments())).orElse(null);
     }
 
     private String taskBody(String toolName, Map<String, Object> args) {
@@ -1520,15 +1624,19 @@ public class AppStateService {
             return new ImageLinkInfo(null, null, null, null);
         }
         String toolCallId = trace.toolCallId();
-        String imageUrl = toolCallId == null || toolCallId.isBlank() ? null : "/ui/chat/image/" + sessionId + "/" + toolCallId;
-        return new ImageLinkInfo(imageUrl, asString(machineSummary.get("alt")), path, asString(machineSummary.get("mediaType")));
+        String imageUrl = toolCallId == null || toolCallId.isBlank()
+                ? null
+                : "/ui/chat/image/" + sessionId + "/" + toolCallId;
+        return new ImageLinkInfo(imageUrl, asString(machineSummary.get("alt")), path,
+                asString(machineSummary.get("mediaType")));
     }
 
     private SubagentLinkInfo subagentLinkInfo(Map<String, Object> machineSummary) {
         if (machineSummary == null || machineSummary.isEmpty()) {
             return new SubagentLinkInfo(null, null, null);
         }
-        return new SubagentLinkInfo(asLong(machineSummary.get("subagentSessionId")), asString(machineSummary.get("subagentAgentId")), asString(machineSummary.get("subagentAgentName")));
+        return new SubagentLinkInfo(asLong(machineSummary.get("subagentSessionId")),
+                asString(machineSummary.get("subagentAgentId")), asString(machineSummary.get("subagentAgentName")));
     }
 
     private Long asLong(Object value) {
@@ -1553,10 +1661,12 @@ public class AppStateService {
 
     private Message toModelMessage(AppStateRepository.ConversationMessageRow row) {
         return switch (row.role()) {
-            case "assistant" -> new Message(Message.Role.ASSISTANT, row.content(), null, toolCalls(row.toolCallsJson()), null);
+            case "assistant" ->
+                new Message(Message.Role.ASSISTANT, row.content(), null, toolCalls(row.toolCallsJson()), null);
             case "tool" -> new Message(Message.Role.TOOL, row.content(), row.toolCallId(), null, null);
             case "system" -> row.compactedThroughTurnId() != null
-                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content(), null, null, null)
+                    ? new Message(Message.Role.USER, "Previous conversation summary:\n\n" + row.content(), null, null,
+                            null)
                     : new Message(Message.Role.SYSTEM, row.content(), null, null, null);
             case "user" -> new Message(Message.Role.USER, row.content(), null, null, null);
             default -> throw new IllegalStateException("Unsupported role: " + row.role());
@@ -1564,7 +1674,8 @@ public class AppStateService {
     }
 
     private List<ToolCall> toolCalls(String json) {
-        return toolCallPayloads(json).stream().map(payload -> new ToolCall(payload.toolCallId(), payload.toolName(), payload.arguments())).toList();
+        return toolCallPayloads(json).stream()
+                .map(payload -> new ToolCall(payload.toolCallId(), payload.toolName(), payload.arguments())).toList();
     }
 
     private List<ToolCallPayload> toolCallPayloads(String json) {
@@ -1600,7 +1711,8 @@ public class AppStateService {
         }
     }
 
-    private List<ProjectEnvironmentVariable> normalizeEnvironmentVariables(List<ProjectEnvironmentVariable> environmentVariables) {
+    private List<ProjectEnvironmentVariable> normalizeEnvironmentVariables(
+            List<ProjectEnvironmentVariable> environmentVariables) {
         if (environmentVariables == null || environmentVariables.isEmpty()) {
             return List.of();
         }
@@ -1659,8 +1771,9 @@ public class AppStateService {
             return List.of();
         }
         try {
-            return normalizeEnvironmentVariables(objectMapper.readValue(json, new TypeReference<List<ProjectEnvironmentVariable>>() {
-            }));
+            return normalizeEnvironmentVariables(
+                    objectMapper.readValue(json, new TypeReference<List<ProjectEnvironmentVariable>>() {
+                    }));
         } catch (Exception e) {
             throw new IllegalStateException("Failed to read project environment variables JSON", e);
         }
@@ -1685,7 +1798,8 @@ public class AppStateService {
     private Map<String, String> toEnvironmentVariables(List<ProjectEnvironmentVariable> environmentVariables) {
         Map<String, String> vars = new LinkedHashMap<>();
         for (ProjectEnvironmentVariable environmentVariable : environmentVariables) {
-            vars.put(environmentVariable.name(), environmentVariable.value() == null ? "" : environmentVariable.value());
+            vars.put(environmentVariable.name(),
+                    environmentVariable.value() == null ? "" : environmentVariable.value());
         }
         return Map.copyOf(vars);
     }
@@ -1743,33 +1857,39 @@ public class AppStateService {
     }
 
     public record DisplayImageView(long sessionId, String workspaceRoot, String toolCallId, String path, String alt,
-                                   String mediaType) {
+            String mediaType) {
     }
 
     private record ImageLinkInfo(String imageUrl, String imageAlt, String imagePath, String imageMediaType) {
     }
 
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
-        String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank() ? null : row.workspaceInitCommands();
+        String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank()
+                ? null
+                : row.workspaceInitCommands();
         List<ProjectEnvironmentVariable> environmentVariables = projectEnvironmentVariables(row.environmentVariables());
         return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands, environmentVariables,
                 row.commandEnvironmentAllowlist());
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {
-        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), row.unread(), workspaceRailStatus(row.id(), activeStreamRegistryService.activeSessionIdsSnapshot()));
+        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), row.unread(),
+                workspaceRailStatus(row.id(), activeStreamRegistryService.activeSessionIdsSnapshot()));
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row, Set<Long> activeSessionIds) {
-        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), row.unread(), workspaceRailStatus(row.id(), activeSessionIds));
+        return new WorkspaceView(row.id(), row.name(), row.normalizedPath(), row.unread(),
+                workspaceRailStatus(row.id(), activeSessionIds));
     }
 
     private SessionView toSessionView(AppStateRepository.SessionRow row) {
-        return new SessionView(row.id(), row.name(), row.unread(), railStatus(row.inProgress(), activeStreamRegistryService.activeSessionIdsSnapshot().contains(row.id())));
+        return new SessionView(row.id(), row.name(), row.unread(), railStatus(row.inProgress(),
+                activeStreamRegistryService.activeSessionIdsSnapshot().contains(row.id())));
     }
 
     private SessionView toSessionView(AppStateRepository.SessionRow row, Set<Long> activeSessionIds) {
-        return new SessionView(row.id(), row.name(), row.unread(), railStatus(row.inProgress(), activeSessionIds.contains(row.id())));
+        return new SessionView(row.id(), row.name(), row.unread(),
+                railStatus(row.inProgress(), activeSessionIds.contains(row.id())));
     }
 
     private RailStatus workspaceRailStatus(long workspaceId, Set<Long> activeSessionIds) {
@@ -1797,7 +1917,8 @@ public class AppStateService {
     }
 
     private ChangedFileView toChangedFileView(AppStateRepository.ChangedFileRow row) {
-        return new ChangedFileView("session:" + row.id(), ReviewSource.SESSION, Math.toIntExact(row.id()), row.path(), row.diff());
+        return new ChangedFileView("session:" + row.id(), ReviewSource.SESSION, Math.toIntExact(row.id()), row.path(),
+                row.diff());
     }
 
     private ChangedFileView toChangedFileView(GitChangedFile file) {
@@ -1805,7 +1926,8 @@ public class AppStateService {
     }
 
     private McpServerView toMcpServerView(AppStateRepository.McpServerRow row) {
-        return new McpServerView(row.id(), row.name(), row.url(), row.enabled(), mcpServerHeaders(row.headersJson()), row.exposedProjectIds());
+        return new McpServerView(row.id(), row.name(), row.url(), row.enabled(), mcpServerHeaders(row.headersJson()),
+                row.exposedProjectIds());
     }
 
     private List<McpServerHeader> mcpServerHeaders(String json) {
@@ -1824,14 +1946,16 @@ public class AppStateService {
     }
 
     private List<GitChangedFile> listGitChangedFiles(Path workspaceRoot) {
-        boolean hasHead = runGitCommandAllowingMissingHead(workspaceRoot, List.of("git", "rev-parse", "--verify", "HEAD")).exists();
-        String status = runGitCommand(workspaceRoot, List.of("git", "status", "--porcelain", "-z", "--untracked-files=all")).stdout();
+        boolean hasHead = runGitCommandAllowingMissingHead(workspaceRoot,
+                List.of("git", "rev-parse", "--verify", "HEAD")).exists();
+        String status = runGitCommand(workspaceRoot,
+                List.of("git", "status", "--porcelain", "-z", "--untracked-files=all")).stdout();
         return parseGitStatus(status).stream()
-                .map(entry -> new GitChangedFile(entry.path(), entry.untracked()
-                        ? readUntrackedFileDiff(workspaceRoot, entry.path())
-                        : readTrackedFileDiff(workspaceRoot, entry.path(), hasHead)))
-                .sorted(Comparator.comparing(GitChangedFile::path))
-                .toList();
+                .map(entry -> new GitChangedFile(entry.path(),
+                        entry.untracked()
+                                ? readUntrackedFileDiff(workspaceRoot, entry.path())
+                                : readTrackedFileDiff(workspaceRoot, entry.path(), hasHead)))
+                .sorted(Comparator.comparing(GitChangedFile::path)).toList();
     }
 
     private List<GitStatusEntry> parseGitStatus(String status) {
@@ -1865,7 +1989,8 @@ public class AppStateService {
         if (hasHead) {
             return runGitCommand(workspaceRoot, List.of("git", "diff", "HEAD", "--", path)).stdout().stripTrailing();
         }
-        String staged = runGitCommand(workspaceRoot, List.of("git", "diff", "--cached", "--", path)).stdout().stripTrailing();
+        String staged = runGitCommand(workspaceRoot, List.of("git", "diff", "--cached", "--", path)).stdout()
+                .stripTrailing();
         String unstaged = runGitCommand(workspaceRoot, List.of("git", "diff", "--", path)).stdout().stripTrailing();
         if (staged.isBlank()) {
             return unstaged;
@@ -1892,8 +2017,7 @@ public class AppStateService {
     }
 
     public record WorkspaceCloseInspection(long workspaceId, String workspaceName, String workspacePath,
-                                           String projectPath,
-                                           boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {
+            String projectPath, boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {
     }
 
     private record GitCloseStatus(boolean uncommittedChanges, boolean unpushedCommits, List<String> reasons) {

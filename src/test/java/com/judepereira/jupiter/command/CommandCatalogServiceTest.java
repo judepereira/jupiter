@@ -1,13 +1,12 @@
 package com.judepereira.jupiter.command;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class CommandCatalogServiceTest {
     @TempDir
@@ -80,16 +79,15 @@ class CommandCatalogServiceTest {
         byte[] original = Files.readAllBytes(root.resolve("stable.md"));
         Files.writeString(root.resolve("invalid.md"), "not frontmatter");
 
-        assertThatThrownBy(() -> service.delete("stable"))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.delete("stable")).isInstanceOf(IllegalStateException.class);
 
         assertThat(Files.readAllBytes(root.resolve("stable.md"))).isEqualTo(original);
         assertThat(service.getRequired("stable").body()).isEqualTo("original");
     }
 
     private static CommandCatalogService.CommandDefinition command(String id, String body) {
-        return new CommandCatalogService.CommandDefinition(id, "Name", null,
-                CommandCatalogService.CommandKind.SCRIPT, body, null, null);
+        return new CommandCatalogService.CommandDefinition(id, "Name", null, CommandCatalogService.CommandKind.SCRIPT,
+                body, null, null);
     }
 
     private static String document(String id, String body) {

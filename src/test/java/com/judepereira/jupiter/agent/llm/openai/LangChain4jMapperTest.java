@@ -1,5 +1,13 @@
 package com.judepereira.jupiter.agent.llm.openai;
 
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.integer;
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
@@ -15,26 +23,17 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 import dev.langchain4j.model.openai.OpenAiResponsesChatResponseMetadata;
 import dev.langchain4j.model.openai.OpenAiTokenUsage;
 import dev.langchain4j.model.output.FinishReason;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.integer;
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+import org.junit.jupiter.api.Test;
 
 public class LangChain4jMapperTest {
 
@@ -52,12 +51,12 @@ public class LangChain4jMapperTest {
 
     @Test
     public void converts_conversation_with_tool_calls_and_tool_results() {
-        List<ChatMessage> messages = messageMapper.toChatMessages(List.of(
-                new Message(Message.Role.SYSTEM, "sys", null, null, null),
-                new Message(Message.Role.USER, "user", null, null, null),
-                new Message(Message.Role.ASSISTANT, null, null, List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt"))), null),
-                new Message(Message.Role.TOOL, "written", "call-123", null, null)
-        ));
+        List<ChatMessage> messages = messageMapper
+                .toChatMessages(List.of(new Message(Message.Role.SYSTEM, "sys", null, null, null),
+                        new Message(Message.Role.USER, "user", null, null, null),
+                        new Message(Message.Role.ASSISTANT, null, null,
+                                List.of(new ToolCall("call-123", "write_file", Map.of("path", "x.txt"))), null),
+                        new Message(Message.Role.TOOL, "written", "call-123", null, null)));
 
         assertInstanceOf(SystemMessage.class, messages.get(0));
         assertInstanceOf(UserMessage.class, messages.get(1));
@@ -75,19 +74,15 @@ public class LangChain4jMapperTest {
 
     @Test
     public void converts_tool_definitions_to_langchain4j_tool_specifications() {
-        ToolSchema schema = ToolSchema.object(
-                string("path", "relative path"),
-                ToolParameter.object("options", "options", ToolSchema.object(
-                        integer("startLine", "start line")
-                ))
-        ).required("path");
+        ToolSchema schema = ToolSchema.object(string("path", "relative path"),
+                ToolParameter.object("options", "options", ToolSchema.object(integer("startLine", "start line"))))
+                .required("path");
 
         assertEquals(List.of("path", "options"), schema.properties().stream().map(ToolParameter::name).toList());
         assertEquals(List.of("path"), schema.required());
 
-        List<ToolSpecification> specs = toolSpecificationMapper.toToolSpecifications(List.of(
-                ToolDefinition.builtIn("read_file", "Read a file", schema)
-        ));
+        List<ToolSpecification> specs = toolSpecificationMapper
+                .toToolSpecifications(List.of(ToolDefinition.builtIn("read_file", "Read a file", schema)));
 
         assertEquals(1, specs.size());
         assertEquals("read_file", specs.get(0).name());
@@ -100,17 +95,13 @@ public class LangChain4jMapperTest {
 
     @Test
     public void converts_recursive_array_schemas_to_langchain4j() {
-        ToolParameter objectItem = ToolParameter.object(null, "item", ToolSchema.object(
-                string("label", "label"),
-                ToolParameter.array("children", "children", ToolParameter.integer(null, "child"))
-        ));
-        ToolSchema schema = ToolSchema.object(
-                ToolParameter.array("tags", "tags", string(null, "tag")),
-                ToolParameter.array("items", "items", objectItem)
-        );
+        ToolParameter objectItem = ToolParameter.object(null, "item", ToolSchema.object(string("label", "label"),
+                ToolParameter.array("children", "children", ToolParameter.integer(null, "child"))));
+        ToolSchema schema = ToolSchema.object(ToolParameter.array("tags", "tags", string(null, "tag")),
+                ToolParameter.array("items", "items", objectItem));
 
-        JsonObjectSchema parameters = toolSpecificationMapper.toToolSpecifications(List.of(
-                ToolDefinition.builtIn("test", "test", schema))).getFirst().parameters();
+        JsonObjectSchema parameters = toolSpecificationMapper
+                .toToolSpecifications(List.of(ToolDefinition.builtIn("test", "test", schema))).getFirst().parameters();
         JsonArraySchema tags = assertInstanceOf(JsonArraySchema.class, parameters.properties().get("tags"));
         assertInstanceOf(JsonStringSchema.class, tags.items());
         JsonArraySchema items = assertInstanceOf(JsonArraySchema.class, parameters.properties().get("items"));
@@ -120,9 +111,8 @@ public class LangChain4jMapperTest {
 
     @Test
     public void maps_thinking_level_to_reasoning_effort() {
-        OpenAiResponsesChatRequestParameters parameters = requestParametersMapper.toRequestParameters(
-                new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, true, "low")
-        );
+        OpenAiResponsesChatRequestParameters parameters = requestParametersMapper
+                .toRequestParameters(new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, true, "low"));
 
         assertNotNull(parameters);
         assertEquals("high", parameters.reasoningEffort());
@@ -131,29 +121,23 @@ public class LangChain4jMapperTest {
 
     @Test
     public void omits_reasoning_effort_when_not_supported() {
-        assertNull(requestParametersMapper.toRequestParameters(
-                new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, false, null)
-        ));
+        assertNull(requestParametersMapper
+                .toRequestParameters(new AgentModelOptions("m", "api-model", ThinkingLevel.HIGH, false, null)));
     }
 
     @Test
     public void maps_openai_usage_and_response_metadata() {
         ModelResponse response = messageMapper.toModelResponse(ChatResponse.builder()
                 .aiMessage(AiMessage.from("assistant"))
-                .metadata(OpenAiResponsesChatResponseMetadata.builder()
-                        .id("response-1")
-                        .modelName("gpt-5.4")
-                        .tokenUsage(OpenAiTokenUsage.builder()
-                                .inputTokenCount(100)
-                                .outputTokenCount(40)
+                .metadata(OpenAiResponsesChatResponseMetadata.builder().id("response-1").modelName("gpt-5.4")
+                        .tokenUsage(OpenAiTokenUsage.builder().inputTokenCount(100).outputTokenCount(40)
                                 .totalTokenCount(140)
-                                .inputTokensDetails(OpenAiTokenUsage.InputTokensDetails.builder().cachedTokens(25).build())
-                                .outputTokensDetails(OpenAiTokenUsage.OutputTokensDetails.builder().reasoningTokens(10).build())
+                                .inputTokensDetails(
+                                        OpenAiTokenUsage.InputTokensDetails.builder().cachedTokens(25).build())
+                                .outputTokensDetails(
+                                        OpenAiTokenUsage.OutputTokensDetails.builder().reasoningTokens(10).build())
                                 .build())
-                        .finishReason(FinishReason.STOP)
-                        .createdAt(123L)
-                        .completedAt(456L)
-                        .serviceTier("default")
+                        .finishReason(FinishReason.STOP).createdAt(123L).completedAt(456L).serviceTier("default")
                         .build())
                 .build());
 
@@ -165,27 +149,26 @@ public class LangChain4jMapperTest {
         assertEquals("response-1", response.getMetadata().responseId());
         assertEquals("gpt-5.4", response.getMetadata().modelId());
         assertEquals("STOP", response.getMetadata().finishReason());
-        assertEquals(Map.of("createdAt", 123L, "completedAt", 456L, "serviceTier", "default"), response.getMetadata().providerMetadata());
+        assertEquals(Map.of("createdAt", 123L, "completedAt", 456L, "serviceTier", "default"),
+                response.getMetadata().providerMetadata());
     }
 
     @Test
     public void ignoresProviderContentWhenMappingOpenAiMessages() {
-        var node = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("type", "thinking");
-        List<ChatMessage> mapped = messageMapper.toChatMessages(List.of(
-                new Message(Message.Role.ASSISTANT, "visible", null, null, List.of(node))));
+        var node = new ObjectMapper().createObjectNode().put("type", "thinking");
+        List<ChatMessage> mapped = messageMapper
+                .toChatMessages(List.of(new Message(Message.Role.ASSISTANT, "visible", null, null, List.of(node))));
         assertInstanceOf(AiMessage.class, mapped.getFirst());
         assertEquals("visible", ((AiMessage) mapped.getFirst()).text());
     }
 
     @Test
     public void converts_chat_response_to_model_response_and_tool_call() {
-        ModelResponse response = messageMapper.toModelResponse(ChatResponse.builder()
-                .aiMessage(AiMessage.from("assistant", List.of(ToolExecutionRequest.builder()
-                        .id("call-1")
-                        .name("read_file")
-                        .arguments("{\"path\":\"notes.txt\"}")
-                        .build())))
-                .build());
+        ModelResponse response = messageMapper
+                .toModelResponse(ChatResponse
+                        .builder().aiMessage(AiMessage.from("assistant", List.of(ToolExecutionRequest.builder()
+                                .id("call-1").name("read_file").arguments("{\"path\":\"notes.txt\"}").build())))
+                        .build());
 
         assertEquals("assistant", response.getAssistantText());
         assertNotNull(response.getToolCall());

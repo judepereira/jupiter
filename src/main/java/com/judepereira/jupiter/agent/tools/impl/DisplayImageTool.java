@@ -1,26 +1,21 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
+import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
+
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
-import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
-
 public class DisplayImageTool implements AgentTool {
-    private static final ToolDefinition DEF = ToolDefinition.builtIn(
-            "display_image",
+    private static final ToolDefinition DEF = ToolDefinition.builtIn("display_image",
             "Display an image from the workspace",
-            ToolSchema.object(
-                    string("path", "workspace-relative image path"),
-                    string("alt", "optional alt text")
-            ).required("path")
-    );
+            ToolSchema.object(string("path", "workspace-relative image path"), string("alt", "optional alt text"))
+                    .required("path"));
 
     @Override
     public String name() {
@@ -51,12 +46,7 @@ public class DisplayImageTool implements AgentTool {
 
         long sizeBytes = Files.size(path);
         String alt = (String) args.get("alt");
-        return new ToolExecutionResult(true, "Displayed image: " + rel, Map.of(
-                "displayType", "image",
-                "path", rel,
-                "alt", alt,
-                "mediaType", mediaType,
-                "sizeBytes", sizeBytes
-        ));
+        return new ToolExecutionResult(true, "Displayed image: " + rel, Map.of("displayType", "image", "path", rel,
+                "alt", alt, "mediaType", mediaType, "sizeBytes", sizeBytes));
     }
 }

@@ -1,31 +1,43 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.ModelPickerService;
+import com.judepereira.jupiter.agent.catalog.ModelPreferencesService;
+import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
-import com.judepereira.jupiter.git.GitAutoUpdateService;
-import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
-import com.judepereira.jupiter.command.CommandStreamService;
-import com.judepereira.jupiter.command.CommandCatalogService;
-import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
+import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
+import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
+import com.judepereira.jupiter.command.CommandCatalogService;
+import com.judepereira.jupiter.command.CommandStreamService;
+import com.judepereira.jupiter.config.HttpAuthProperties;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
+import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.LifecycleHookSettings;
 import com.judepereira.jupiter.persistence.Persistence.McpServerHeader;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
+import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
 import com.judepereira.jupiter.persistence.TokenUsageService;
-import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ui.ConcurrentModel;
-
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -35,13 +47,12 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.TimeUnit;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public class UiControllerSettingsTests {
 
@@ -50,7 +61,8 @@ public class UiControllerSettingsTests {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
 
-        OpenAiOAuthService.OpenAiOAuthView disconnected = new OpenAiOAuthService.OpenAiOAuthView(false, false, "OpenAI is not connected.", null, null, null, null);
+        OpenAiOAuthService.OpenAiOAuthView disconnected = new OpenAiOAuthService.OpenAiOAuthView(false, false,
+                "OpenAI is not connected.", null, null, null, null);
         when(context.openAiOAuthService().currentView()).thenReturn(disconnected);
 
         long projectId = context.appStateService().loadViewData().activeProject().id();
@@ -75,7 +87,8 @@ public class UiControllerSettingsTests {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
 
-        OpenAiOAuthService.OpenAiOAuthView disconnected = new OpenAiOAuthService.OpenAiOAuthView(false, false, "OpenAI is not connected.", null, null, null, null);
+        OpenAiOAuthService.OpenAiOAuthView disconnected = new OpenAiOAuthService.OpenAiOAuthView(false, false,
+                "OpenAI is not connected.", null, null, null, null);
         when(context.openAiOAuthService().currentView()).thenReturn(disconnected);
 
         ConcurrentModel model = new ConcurrentModel();
@@ -97,7 +110,8 @@ public class UiControllerSettingsTests {
 
         assertThat(view).isEqualTo("fragments/projects :: settingsModal");
         assertThat(model.getAttribute("activeProject")).isNull();
-        assertThat(model.getAttribute("lifecycleHookSettings")).isEqualTo(new LifecycleHookSettings(null, null, null, 30));
+        assertThat(model.getAttribute("lifecycleHookSettings"))
+                .isEqualTo(new LifecycleHookSettings(null, null, null, 30));
     }
 
     @Test
@@ -114,7 +128,8 @@ public class UiControllerSettingsTests {
     public void applyAutoGitUpdateSettingsPersistsPreference(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
 
-        assertThat(context.controller().applyAutoGitUpdateSettings(false)).isEqualTo("fragments/projects :: modalClose");
+        assertThat(context.controller().applyAutoGitUpdateSettings(false))
+                .isEqualTo("fragments/projects :: modalClose");
         assertThat(context.appStateService().loadAutoGitUpdateEnabled()).isFalse();
 
         context.controller().applyAutoGitUpdateSettings(true);
@@ -126,8 +141,9 @@ public class UiControllerSettingsTests {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long workspaceId = context.appStateService().loadViewData().activeWorkspace().id();
-        when(context.gitAutoUpdateService().updateWorkspaceManually(workspaceId)).thenReturn(
-                new GitAutoUpdateService.UpdateResult(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE, "abc", "abc", null, false));
+        when(context.gitAutoUpdateService().updateWorkspaceManually(workspaceId))
+                .thenReturn(new GitAutoUpdateService.UpdateResult(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE,
+                        "abc", "abc", null, false));
 
         ConcurrentModel model = new ConcurrentModel();
         assertThat(context.controller().pullActiveWorkspace(model)).isEqualTo("fragments/projects :: gitPullControl");
@@ -146,8 +162,9 @@ public class UiControllerSettingsTests {
         TestContext context = newContext(workspaceRoot, new QueuedExecutor(true));
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long workspaceId = context.appStateService().loadViewData().activeWorkspace().id();
-        when(context.gitAutoUpdateService().updateWorkspaceManually(workspaceId)).thenReturn(
-                new GitAutoUpdateService.UpdateResult(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE, "abc", "abc", null, false));
+        when(context.gitAutoUpdateService().updateWorkspaceManually(workspaceId))
+                .thenReturn(new GitAutoUpdateService.UpdateResult(GitAutoUpdateService.UpdateResult.Status.UP_TO_DATE,
+                        "abc", "abc", null, false));
 
         ConcurrentModel model = new ConcurrentModel();
         context.controller().pullActiveWorkspace(model);
@@ -161,7 +178,8 @@ public class UiControllerSettingsTests {
     public void applyLifecycleHookSettingsPersistsWithoutAnActiveProject(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
 
-        String view = context.controller().applyLifecycleHookSettings("echo done", "echo error", "echo subagent", 45, new ConcurrentModel());
+        String view = context.controller().applyLifecycleHookSettings("echo done", "echo error", "echo subagent", 45,
+                new ConcurrentModel());
 
         assertThat(view).isEqualTo("fragments/projects :: modalClose");
         assertThat(context.appStateService().loadLifecycleHookSettings())
@@ -172,15 +190,17 @@ public class UiControllerSettingsTests {
     public void lifecycleHookValidationIsPropagated(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> context.controller().applyLifecycleHookSettings("", "", "", 3601, new ConcurrentModel()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("between 1 and 3600");
+        Assertions
+                .assertThatThrownBy(
+                        () -> context.controller().applyLifecycleHookSettings("", "", "", 3601, new ConcurrentModel()))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("between 1 and 3600");
     }
 
     @Test
     public void logoutEndpointClearsOpenAiOAuthState(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
-        OpenAiOAuthService.OpenAiOAuthView disconnected = new OpenAiOAuthService.OpenAiOAuthView(false, false, "OpenAI is not connected.", null, null, null, null);
+        OpenAiOAuthService.OpenAiOAuthView disconnected = new OpenAiOAuthService.OpenAiOAuthView(false, false,
+                "OpenAI is not connected.", null, null, null, null);
         when(context.openAiOAuthService().resetConnectionState()).thenReturn(disconnected);
 
         ConcurrentModel model = new ConcurrentModel();
@@ -200,16 +220,16 @@ public class UiControllerSettingsTests {
         ConcurrentModel model = new ConcurrentModel();
         String view = context.controller().applySettings(commands, "HOME, PATH",
                 List.of("API_URL", "FEATURE_FLAG", "API_URL", ""),
-                List.of("https://example.test", "true", "https://override.test", "ignored"),
-                model);
+                List.of("https://example.test", "true", "https://override.test", "ignored"), model);
 
         assertThat(view).isEqualTo("fragments/projects :: modalClose");
-        assertThat(context.appStateService().loadViewData().activeProject().workspaceInitCommands()).isEqualTo(commands);
-        assertThat(context.appStateService().loadViewData().activeProject().commandEnvironmentAllowlist()).isEqualTo("HOME, PATH");
+        assertThat(context.appStateService().loadViewData().activeProject().workspaceInitCommands())
+                .isEqualTo(commands);
+        assertThat(context.appStateService().loadViewData().activeProject().commandEnvironmentAllowlist())
+                .isEqualTo("HOME, PATH");
         long projectId = context.appStateService().loadViewData().activeProject().id();
         assertThat(context.appStateService().loadProjectEnvironmentVariables(projectId))
-                .containsEntry("FEATURE_FLAG", "true")
-                .containsEntry("API_URL", "https://override.test")
+                .containsEntry("FEATURE_FLAG", "true").containsEntry("API_URL", "https://override.test")
                 .doesNotContainKey("");
         verify(context.mcpRuntimeManager(), times(1)).reloadProject(projectId);
     }
@@ -221,18 +241,18 @@ public class UiControllerSettingsTests {
         long projectId = context.appStateService().loadViewData().activeProject().id();
         String existingCommands = "echo existing";
         context.appStateService().updateProjectSettings(projectId, existingCommands,
-                List.of(new com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable("API_URL", "old")),
-                "HOME");
+                List.of(new ProjectEnvironmentVariable("API_URL", "old")), "HOME");
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> context.controller().applySettings(
-                        "echo replacement", "INVALID-NAME", List.of("API_URL"), List.of("new"), new ConcurrentModel()))
+        Assertions
+                .assertThatThrownBy(() -> context.controller().applySettings("echo replacement", "INVALID-NAME",
+                        List.of("API_URL"), List.of("new"), new ConcurrentModel()))
                 .isInstanceOf(IllegalArgumentException.class);
 
         var project = context.appStateService().loadViewData().activeProject();
         assertThat(project.workspaceInitCommands()).isEqualTo(existingCommands);
         assertThat(project.commandEnvironmentAllowlist()).isEqualTo("HOME");
-        assertThat(context.appStateService().loadProjectEnvironmentVariables(projectId))
-                .containsEntry("API_URL", "old");
+        assertThat(context.appStateService().loadProjectEnvironmentVariables(projectId)).containsEntry("API_URL",
+                "old");
     }
 
     @Test
@@ -241,16 +261,17 @@ public class UiControllerSettingsTests {
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long sessionId = context.appStateService().loadViewData().activeSession().id();
         Instant hour = Instant.now().truncatedTo(ChronoUnit.HOURS);
-        context.tokenUsageService().recordModelResponse(sessionId, "openai/gpt-5.6-sol", "chat",
-                new ModelResponse("ok", null, new ModelResponseMetadata(10, 5, 15, null, null, null, null, null, null, Map.of()), null));
-        context.tokenUsageService().recordModelResponse(sessionId, "stale-model", "chat",
-                new ModelResponse("ok", null, new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of()), null));
+        context.tokenUsageService().recordModelResponse(sessionId, "openai/gpt-5.6-sol", "chat", new ModelResponse("ok",
+                null, new ModelResponseMetadata(10, 5, 15, null, null, null, null, null, null, Map.of()), null));
+        context.tokenUsageService().recordModelResponse(sessionId, "stale-model", "chat", new ModelResponse("ok", null,
+                new ModelResponseMetadata(null, null, null, null, null, null, null, null, null, Map.of()), null));
 
         ConcurrentModel model = new ConcurrentModel();
         assertThat(context.controller().settingsUsage("7d", model)).isEqualTo("fragments/projects :: settingsUsage");
         assertThat((String) model.getAttribute("usageRange")).isEqualTo("7d");
         String json = (String) model.getAttribute("usageJson");
-        assertThat(json).contains("GPT-5.6 Sol").contains("stale-model").contains("\"input\":10").contains("\"input\":null");
+        assertThat(json).contains("GPT-5.6 Sol").contains("stale-model").contains("\"input\":10")
+                .contains("\"input\":null");
     }
 
     @Test
@@ -314,9 +335,11 @@ public class UiControllerSettingsTests {
     }
 
     @Test
-    public void settingsModalIncludesCustomCommandsFromIsolatedRoot(@TempDir Path workspaceRoot, @TempDir Path commandRoot) {
+    public void settingsModalIncludesCustomCommandsFromIsolatedRoot(@TempDir Path workspaceRoot,
+            @TempDir Path commandRoot) {
         TestContext context = newContext(workspaceRoot, new QueuedExecutor(), commandRoot);
-        context.commandCatalogService().create(new CommandCatalogService.CommandDefinition("custom-one", "Custom one", "A custom command", CommandCatalogService.CommandKind.PROMPT, "Do <thing>", null, null));
+        context.commandCatalogService().create(new CommandCatalogService.CommandDefinition("custom-one", "Custom one",
+                "A custom command", CommandCatalogService.CommandKind.PROMPT, "Do <thing>", null, null));
 
         ConcurrentModel model = new ConcurrentModel();
         assertThat(context.controller().settingsModal(model)).isEqualTo("fragments/projects :: settingsModal");
@@ -327,21 +350,27 @@ public class UiControllerSettingsTests {
     public void createCommandWritesAndListsCustomCommand(@TempDir Path workspaceRoot, @TempDir Path commandRoot) {
         TestContext context = newContext(workspaceRoot, new QueuedExecutor(), commandRoot);
         ConcurrentModel model = new ConcurrentModel();
-        assertThat(context.controller().createCommand("created", "Created", "Description", "script", "echo hi", "/tmp", "30", model))
-                .isEqualTo("fragments/projects :: settingsCommands");
-        assertThat(context.commandCatalogService().listCustom()).extracting(CommandCatalogService.CommandDefinition::id).containsExactly("created");
+        assertThat(context.controller().createCommand("created", "Created", "Description", "script", "echo hi", "/tmp",
+                "30", model)).isEqualTo("fragments/projects :: settingsCommands");
+        assertThat(context.commandCatalogService().listCustom()).extracting(CommandCatalogService.CommandDefinition::id)
+                .containsExactly("created");
         assertThat(context.commandCatalogService().getRequired("created").body()).isEqualTo("echo hi");
     }
 
     @Test
-    public void failedUpdateRendersSubmittedValuesWithoutChangingCatalog(@TempDir Path workspaceRoot, @TempDir Path commandRoot) {
+    public void failedUpdateRendersSubmittedValuesWithoutChangingCatalog(@TempDir Path workspaceRoot,
+            @TempDir Path commandRoot) {
         TestContext context = newContext(workspaceRoot, new QueuedExecutor(), commandRoot);
-        CommandCatalogService.CommandDefinition original = new CommandCatalogService.CommandDefinition("original", "Original", "Original description", CommandCatalogService.CommandKind.PROMPT, "original body", null, null);
+        CommandCatalogService.CommandDefinition original = new CommandCatalogService.CommandDefinition("original",
+                "Original", "Original description", CommandCatalogService.CommandKind.PROMPT, "original body", null,
+                null);
         context.commandCatalogService().create(original);
         ConcurrentModel model = new ConcurrentModel();
-        assertThat(context.controller().updateCommand("original", "bad id", "Changed", "Changed description", "prompt", "changed body", "/work", "12", model))
-                .isEqualTo("fragments/projects :: settingsCommands");
-        assertThat(model.getAttribute("submittedCommand")).isEqualTo(new CommandCatalogService.CommandDefinition("bad id", "Changed", "Changed description", CommandCatalogService.CommandKind.PROMPT, "changed body", "/work", 12));
+        assertThat(context.controller().updateCommand("original", "bad id", "Changed", "Changed description", "prompt",
+                "changed body", "/work", "12", model)).isEqualTo("fragments/projects :: settingsCommands");
+        assertThat(model.getAttribute("submittedCommand"))
+                .isEqualTo(new CommandCatalogService.CommandDefinition("bad id", "Changed", "Changed description",
+                        CommandCatalogService.CommandKind.PROMPT, "changed body", "/work", 12));
         assertThat(model.getAttribute("submittedCommandOriginalId")).isEqualTo("original");
         assertThat(model.getAttribute("submittedCommandOperation")).isEqualTo("update");
         assertThat(context.commandCatalogService().listCustom()).containsExactly(original);
@@ -350,8 +379,10 @@ public class UiControllerSettingsTests {
     @Test
     public void deleteCommandRemovesCustomCommand(@TempDir Path workspaceRoot, @TempDir Path commandRoot) {
         TestContext context = newContext(workspaceRoot, new QueuedExecutor(), commandRoot);
-        context.commandCatalogService().create(new CommandCatalogService.CommandDefinition("to-delete", "Delete me", "", CommandCatalogService.CommandKind.SCRIPT, "echo", null, null));
-        assertThat(context.controller().deleteCommand("to-delete", new ConcurrentModel())).isEqualTo("fragments/projects :: settingsCommands");
+        context.commandCatalogService().create(new CommandCatalogService.CommandDefinition("to-delete", "Delete me", "",
+                CommandCatalogService.CommandKind.SCRIPT, "echo", null, null));
+        assertThat(context.controller().deleteCommand("to-delete", new ConcurrentModel()))
+                .isEqualTo("fragments/projects :: settingsCommands");
         assertThat(context.commandCatalogService().listCustom()).isEmpty();
     }
 
@@ -371,23 +402,37 @@ public class UiControllerSettingsTests {
         McpProjectMcpServerRuntimeManager mcpRuntimeManager = mock(McpProjectMcpServerRuntimeManager.class);
         GitAutoUpdateService gitAutoUpdateService = mock(GitAutoUpdateService.class);
 
-        TestAppStateSupport.AppStateTestContext appStateContext = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext appStateContext = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService appStateService = appStateContext.service();
         TokenUsageService tokenUsageService = new TokenUsageService(appStateContext.repository(), new ObjectMapper());
-        com.judepereira.jupiter.git.ManualGitPullCoordinator coordinator = new com.judepereira.jupiter.git.ManualGitPullCoordinator(
-                appStateService, gitAutoUpdateService, new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), executor);
+        ManualGitPullCoordinator coordinator = new ManualGitPullCoordinator(appStateService, gitAutoUpdateService,
+                new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)), executor);
 
         CommandCatalogService commandCatalogService = new CommandCatalogService(commandRoot.toString());
-        return new TestContext(appStateService,
-                tokenUsageService,
-                openAiOAuthService,
-                mcpRuntimeManager,
-                gitAutoUpdateService,
-                executor,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService, new com.judepereira.jupiter.agent.catalog.AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), org.mockito.Mockito.mock(com.judepereira.jupiter.agent.catalog.ModelPickerService.class), org.mockito.Mockito.mock(com.judepereira.jupiter.agent.catalog.ModelPreferencesService.class), org.mockito.Mockito.mock(com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService.class), org.mockito.Mockito.mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(), openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), gitAutoUpdateService, coordinator, "test"), commandCatalogService);
+        return new TestContext(appStateService, tokenUsageService, openAiOAuthService, mcpRuntimeManager,
+                gitAutoUpdateService, executor,
+                new UiController(mock(CodingAgentHarness.class), properties, appStateService,
+                        new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                        ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                        Mockito.mock(ModelPickerService.class), Mockito.mock(ModelPreferencesService.class),
+                        Mockito.mock(ProviderAvailabilityService.class), Mockito.mock(AnthropicOAuthService.class),
+                        new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                        new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
+                                (emitter, eventName, data) -> emitter
+                                        .send(SseEmitter.event().name(eventName).data(data))),
+                        appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(),
+                        openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService),
+                        tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager,
+                        new ChatPresentationService(), null, null, new HttpAuthProperties(), gitAutoUpdateService,
+                        coordinator, "test"),
+                commandCatalogService);
     }
 
-    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService, OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager, GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor, UiController controller, CommandCatalogService commandCatalogService) {
+    private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService,
+            OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+            GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor, UiController controller,
+            CommandCatalogService commandCatalogService) {
     }
 
     private static final class QueuedExecutor extends AbstractExecutorService {

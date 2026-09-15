@@ -1,29 +1,31 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.judepereira.jupiter.security.EncryptionKey;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.security.TextEncryptor;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledOnOs;
-import org.junit.jupiter.api.condition.OS;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.fail;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
+import org.sqlite.SQLiteDataSource;
 
 class JupiterStartupIntegrationTests {
     @TempDir
@@ -39,11 +41,12 @@ class JupiterStartupIntegrationTests {
         Path home = tempDir.resolve("v25-startup");
         Path database = home.resolve(".jupiter/jupiter.sqlite");
         Files.createDirectories(database.getParent());
-        var dataSource = new org.sqlite.SQLiteDataSource();
+        var dataSource = new SQLiteDataSource();
         dataSource.setUrl("jdbc:sqlite:" + database);
         Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("25").load().migrate();
-        try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement(
-                "INSERT INTO projects (id,name,normalized_path,display_order) VALUES (1,?,?,1)")) {
+        try (var connection = dataSource.getConnection();
+                var statement = connection.prepareStatement(
+                        "INSERT INTO projects (id,name,normalized_path,display_order) VALUES (1,?,?,1)")) {
             statement.setString(1, "startup secret");
             statement.setString(2, "/tmp/startup-secret");
             statement.executeUpdate();
@@ -52,16 +55,17 @@ class JupiterStartupIntegrationTests {
             assertThat(app.responseBody()).contains("UP");
         }
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
-             var query = connection.createStatement();
-             var rows = query.executeQuery("SELECT name, normalized_path, normalized_path_blind_index FROM projects WHERE id=1")) {
+                var query = connection.createStatement();
+                var rows = query.executeQuery(
+                        "SELECT name, normalized_path, normalized_path_blind_index FROM projects WHERE id=1")) {
             assertThat(rows.next()).isTrue();
             assertThat(rows.getString("name")).startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:");
             assertThat(rows.getString("normalized_path")).startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:");
             assertThat(rows.getString("normalized_path_blind_index")).isNotBlank();
         }
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
-             var query = connection.createStatement(); var rows = query.executeQuery(
-                     "SELECT migration_complete FROM encryption_metadata WHERE id=1")) {
+                var query = connection.createStatement();
+                var rows = query.executeQuery("SELECT migration_complete FROM encryption_metadata WHERE id=1")) {
             assertThat(rows.next()).isTrue();
             assertThat(rows.getInt(1)).isEqualTo(1);
         }
@@ -127,21 +131,22 @@ class JupiterStartupIntegrationTests {
 
     private static void seedEncryptedApplicationData(Path home) throws Exception {
         Path database = home.resolve(".jupiter/jupiter.sqlite");
-        String ciphertext = new TextEncryptor(EncryptionKey.fromBase64(KEY)).encrypt(
-                "encrypted restart data", "app_state.assistant_completed_hook_script");
+        String ciphertext = new TextEncryptor(EncryptionKey.fromBase64(KEY)).encrypt("encrypted restart data",
+                "app_state.assistant_completed_hook_script");
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database)) {
-            try (var update = connection.prepareStatement(
-                    "UPDATE app_state SET assistant_completed_hook_script = ?, "
-                            + "assistant_errored_hook_script = NULL, subagent_completed_hook_script = NULL WHERE id = 1")) {
+            try (var update = connection.prepareStatement("UPDATE app_state SET assistant_completed_hook_script = ?, "
+                    + "assistant_errored_hook_script = NULL, subagent_completed_hook_script = NULL WHERE id = 1")) {
                 update.setString(1, ciphertext);
                 assertThat(update.executeUpdate()).isEqualTo(1);
             }
-            try (var query = connection.createStatement(); var rows = query.executeQuery(
-                    "SELECT assistant_completed_hook_script FROM app_state WHERE id = 1")) {
+            try (var query = connection.createStatement();
+                    var rows = query
+                            .executeQuery("SELECT assistant_completed_hook_script FROM app_state WHERE id = 1")) {
                 assertThat(rows.next()).isTrue();
                 assertThat(rows.getString(1)).isNotEmpty();
             }
-            try (var update = connection.prepareStatement("UPDATE encryption_metadata SET migration_complete = 0 WHERE id = 1")) {
+            try (var update = connection
+                    .prepareStatement("UPDATE encryption_metadata SET migration_complete = 0 WHERE id = 1")) {
                 update.executeUpdate();
             }
         }
@@ -169,11 +174,12 @@ class JupiterStartupIntegrationTests {
         Files.createDirectories(home.resolve(".jupiter"));
         String database = home.resolve(".jupiter/jupiter.sqlite").toAbsolutePath().normalize().toString();
         Path environmentMarker = home.resolve("environment-marker");
-        ProcessBuilder builder = new ProcessBuilder(javaExecutable(), "-Dspring.devtools.restart.enabled=false", "--enable-native-access=ALL-UNNAMED",
-                "-XX:+DisableAttachMechanism", "-cp", System.getProperty("java.class.path"), EnvironmentProbe.class.getName(),
-                Jupiter.class.getName(), environmentMarker.toString(),
-                "--server.port=" + port,
-                "--spring.datasource.url=jdbc:sqlite:file:" + database + "?journal_mode=WAL&foreign_keys=on&busy_timeout=20000",
+        ProcessBuilder builder = new ProcessBuilder(javaExecutable(), "-Dspring.devtools.restart.enabled=false",
+                "--enable-native-access=ALL-UNNAMED", "-XX:+DisableAttachMechanism", "-cp",
+                System.getProperty("java.class.path"), EnvironmentProbe.class.getName(), Jupiter.class.getName(),
+                environmentMarker.toString(), "--server.port=" + port,
+                "--spring.datasource.url=jdbc:sqlite:file:" + database
+                        + "?journal_mode=WAL&foreign_keys=on&busy_timeout=20000",
                 "--spring.flyway.enabled=true", "--spring.main.banner-mode=off",
                 "--spring.devtools.restart.enabled=false", "--agent.workspace-root=" + home,
                 "--models.dev.catalog-url=" + catalogUrl());
@@ -204,7 +210,8 @@ class JupiterStartupIntegrationTests {
                 throw new AssertionError("Jupiter exited during startup: " + readLog(log));
             }
             try {
-                HttpURLConnection connection = (HttpURLConnection) new java.net.URL("http://127.0.0.1:" + port + "/health").openConnection();
+                HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:" + port + "/health")
+                        .openConnection();
                 connection.setConnectTimeout(500);
                 connection.setReadTimeout(500);
                 if (connection.getResponseCode() == 200) {
@@ -248,7 +255,8 @@ class JupiterStartupIntegrationTests {
         return new String(bytes, start, bytes.length - start, StandardCharsets.UTF_8);
     }
 
-    private record StartupResult(int exitCode, String output) { }
+    private record StartupResult(int exitCode, String output) {
+    }
 
     public static final class EnvironmentProbe {
         public static void main(String[] args) throws Exception {
@@ -257,7 +265,7 @@ class JupiterStartupIntegrationTests {
             if (present) {
                 throw new AssertionError("JUPITER_ENCRYPTION_KEY was present in the launched JVM");
             }
-            Jupiter.main(java.util.Arrays.copyOfRange(args, 2, args.length));
+            Jupiter.main(Arrays.copyOfRange(args, 2, args.length));
         }
     }
 
@@ -275,8 +283,8 @@ class JupiterStartupIntegrationTests {
         }
 
         String responseBody() throws IOException {
-            return new String(((HttpURLConnection) new java.net.URL("http://127.0.0.1:" + port + "/health")
-                    .openConnection()).getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            return new String(((HttpURLConnection) new URL("http://127.0.0.1:" + port + "/health").openConnection())
+                    .getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         }
 
         @Override

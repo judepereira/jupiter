@@ -58,7 +58,8 @@ public class HttpBasicAuthFilter implements Filter {
             if (separator < 0) {
                 return false;
             }
-            byte[] expected = (properties.getUsername() + ":" + properties.getPassword()).getBytes(StandardCharsets.UTF_8);
+            byte[] expected = (properties.getUsername() + ":" + properties.getPassword())
+                    .getBytes(StandardCharsets.UTF_8);
             return MessageDigest.isEqual(expected, credentials.getBytes(StandardCharsets.UTF_8));
         } catch (IllegalArgumentException e) {
             return false;

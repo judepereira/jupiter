@@ -4,22 +4,19 @@ import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import jakarta.annotation.PreDestroy;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Service;
-
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
 
 /** Owns the lifetime and deduplication of user-requested Git pulls. */
 @Service
 @Log4j2
 public class ManualGitPullCoordinator {
     public enum DispatchResult {
-        ACCEPTED,
-        ALREADY_RUNNING,
-        FAILED
+        ACCEPTED, ALREADY_RUNNING, FAILED
     }
 
     private final AppStateService appStateService;
@@ -29,8 +26,7 @@ public class ManualGitPullCoordinator {
     private final ConcurrentMap<Long, Boolean> activePulls = new ConcurrentHashMap<>();
 
     public ManualGitPullCoordinator(AppStateService appStateService, GitAutoUpdateService gitAutoUpdateService,
-                                    SystemBalloonService systemBalloonService,
-                                    @Qualifier("manualGitPullExecutor") ExecutorService executor) {
+            SystemBalloonService systemBalloonService, @Qualifier("manualGitPullExecutor") ExecutorService executor) {
         this.appStateService = appStateService;
         this.gitAutoUpdateService = gitAutoUpdateService;
         this.systemBalloonService = systemBalloonService;
@@ -64,8 +60,10 @@ public class ManualGitPullCoordinator {
         try {
             GitAutoUpdateService.UpdateResult result = gitAutoUpdateService.updateWorkspaceManually(workspace.id());
             switch (result.status()) {
-                case UPDATED -> systemBalloonService.publishSuccess("Git Pull", "Updated workspace \"" + workspace.name() + "\".");
-                case UP_TO_DATE -> systemBalloonService.publishSuccess("Git Pull", "Workspace \"" + workspace.name() + "\" is already up to date.");
+                case UPDATED ->
+                    systemBalloonService.publishSuccess("Git Pull", "Updated workspace \"" + workspace.name() + "\".");
+                case UP_TO_DATE -> systemBalloonService.publishSuccess("Git Pull",
+                        "Workspace \"" + workspace.name() + "\" is already up to date.");
                 case SKIPPED -> systemBalloonService.publishWarning("Git Pull", result.message());
                 case FAILED -> systemBalloonService.publishError("Git Pull", result.message());
             }

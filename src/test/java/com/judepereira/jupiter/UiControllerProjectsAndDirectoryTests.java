@@ -1,27 +1,29 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+
+import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
+import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.persistence.AppStateService;
-import com.judepereira.jupiter.ui.UiController;
-import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ui.ConcurrentModel;
-
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
+import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.UiController;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ui.ConcurrentModel;
 
 public class UiControllerProjectsAndDirectoryTests {
 
@@ -41,8 +43,7 @@ public class UiControllerProjectsAndDirectoryTests {
                 .containsExactly(tuple("Default Workspace", projectPath.toAbsolutePath().normalize().toString()));
         assertThat(activeWorkspace(model)).isNotNull();
         assertThat(activeWorkspace(model).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
-        assertThat(sessions(model)).extracting(UiController.Session::name)
-                .containsExactly("Session #1");
+        assertThat(sessions(model)).extracting(UiController.Session::name).containsExactly("Session #1");
         assertThat(activeSession(model)).isNotNull();
         assertThat(activeSession(model).name()).isEqualTo("Session #1");
         assertThat(model.getAttribute("includeChatContainer")).isEqualTo(true);
@@ -70,8 +71,8 @@ public class UiControllerProjectsAndDirectoryTests {
         String view = controller.addSession("Feature work", addSession);
 
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
-        assertThat(sessions(addSession)).extracting(UiController.Session::name)
-                .containsExactly("Session #1", "Feature work");
+        assertThat(sessions(addSession)).extracting(UiController.Session::name).containsExactly("Session #1",
+                "Feature work");
         assertThat(activeSession(addSession).name()).isEqualTo("Feature work");
         assertThat(activeSession(addSession).id()).isNotEqualTo(sessionOneId);
         assertThat(activeWorkspace(addSession).path()).isEqualTo(projectPath.toAbsolutePath().normalize().toString());
@@ -80,7 +81,8 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
-    public void collapseWorkspaceClearsTheActiveWorkspaceAndSessionWhileKeepingTheProjectSelected(@TempDir Path projectPath) {
+    public void collapseWorkspaceClearsTheActiveWorkspaceAndSessionWhileKeepingTheProjectSelected(
+            @TempDir Path projectPath) {
         UiController controller = newController();
 
         ConcurrentModel addProject = new ConcurrentModel();
@@ -92,8 +94,7 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(view).isEqualTo("fragments/projects :: shellUpdates");
         assertThat(activeProject(collapse)).isNotNull();
         assertThat(activeProject(collapse).name()).isEqualTo("Alpha");
-        assertThat(workspaces(collapse)).extracting(UiController.Workspace::name)
-                .containsExactly("Default Workspace");
+        assertThat(workspaces(collapse)).extracting(UiController.Workspace::name).containsExactly("Default Workspace");
         assertThat(activeWorkspace(collapse)).isNull();
         assertThat(sessions(collapse)).isEmpty();
         assertThat(activeSession(collapse)).isNull();
@@ -101,7 +102,7 @@ public class UiControllerProjectsAndDirectoryTests {
 
     @Test
     public void indexExposesProjectTabsAndActiveWorkspaceSessionData(@TempDir Path firstProject,
-                                                                     @TempDir Path secondProject) {
+            @TempDir Path secondProject) {
         UiController controller = newController();
 
         ConcurrentModel addOne = new ConcurrentModel();
@@ -115,13 +116,11 @@ public class UiControllerProjectsAndDirectoryTests {
         ConcurrentModel model = new ConcurrentModel();
         controller.index(model);
 
-        assertThat(projects(model)).extracting(UiController.Project::name)
-                .containsExactly("First", "Second");
+        assertThat(projects(model)).extracting(UiController.Project::name).containsExactly("First", "Second");
         assertThat(activeProject(model).id()).isEqualTo(secondProjectId);
         assertThat(workspaces(model)).extracting(UiController.Workspace::path)
                 .containsExactly(secondProject.toAbsolutePath().normalize().toString());
-        assertThat(sessions(model)).extracting(UiController.Session::name)
-                .containsExactly("Session #1");
+        assertThat(sessions(model)).extracting(UiController.Session::name).containsExactly("Session #1");
 
         ConcurrentModel switched = new ConcurrentModel();
         controller.activateProject(firstProjectId, switched);
@@ -173,9 +172,9 @@ public class UiControllerProjectsAndDirectoryTests {
         assertThat(listing.getAttribute("expanded")).isEqualTo(true);
         assertThat(listing.getAttribute("selectedPath")).isEqualTo(visibleDir.toAbsolutePath().normalize().toString());
         assertThat(listing.getAttribute("selectedName")).isEqualTo("visible-dir");
-        assertThat(directoryEntries(listing)).extracting("name")
-                .containsExactly("nested-dir");
-        assertThat(directoryEntries(listing)).allSatisfy(entry -> assertThat(entry).extracting("directory").isEqualTo(true));
+        assertThat(directoryEntries(listing)).extracting("name").containsExactly("nested-dir");
+        assertThat(directoryEntries(listing))
+                .allSatisfy(entry -> assertThat(entry).extracting("directory").isEqualTo(true));
         assertThat(directoryEntries(listing)).extracting("path")
                 .containsExactly(visibleDir.resolve("nested-dir").toAbsolutePath().normalize().toString());
     }
@@ -193,12 +192,12 @@ public class UiControllerProjectsAndDirectoryTests {
         ConcurrentModel listing = new ConcurrentModel();
         controller.listDirectory(tempDir.toString(), listing);
 
-        assertThat(directoryEntries(listing)).extracting("name")
-                .containsExactly("alpha", "beta", ".cache", ".config");
+        assertThat(directoryEntries(listing)).extracting("name").containsExactly("alpha", "beta", ".cache", ".config");
     }
 
     @Test
-    public void directoryBrowserCollapseReturnsCollapsedNodeAndKeepsSelectionConsistent(@TempDir Path tempDir) throws Exception {
+    public void directoryBrowserCollapseReturnsCollapsedNodeAndKeepsSelectionConsistent(@TempDir Path tempDir)
+            throws Exception {
         UiController controller = newController();
 
         Path visibleDir = Files.createDirectory(tempDir.resolve("visible-dir"));
@@ -232,7 +231,8 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     @Test
-    public void unpushedNonDefaultWorkspaceWithoutAnUpstreamReturnsTheConfirmationModal(@TempDir Path projectPath) throws Exception {
+    public void unpushedNonDefaultWorkspaceWithoutAnUpstreamReturnsTheConfirmationModal(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
         UiController controller = newController();
 
@@ -248,8 +248,10 @@ public class UiControllerProjectsAndDirectoryTests {
         String view = controller.closeWorkspace(featureWorkspace.id(), close);
 
         assertThat(view).isEqualTo("fragments/projects :: workspaceCloseModal");
-        assertThat(close.getAttribute("workspaceCloseStatus")).isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
-        AppStateService.WorkspaceCloseInspection inspection = (AppStateService.WorkspaceCloseInspection) close.getAttribute("workspaceCloseStatus");
+        assertThat(close.getAttribute("workspaceCloseStatus"))
+                .isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
+        AppStateService.WorkspaceCloseInspection inspection = (AppStateService.WorkspaceCloseInspection) close
+                .getAttribute("workspaceCloseStatus");
         assertThat(inspection.uncommittedChanges()).isFalse();
         assertThat(inspection.unpushedCommits()).isTrue();
         assertThat(inspection.reasons()).contains("Local commits detected, that haven't been pushed");
@@ -274,12 +276,15 @@ public class UiControllerProjectsAndDirectoryTests {
         String view = controller.closeWorkspace(featureWorkspace.id(), close);
 
         assertThat(view).isEqualTo("fragments/projects :: workspaceCloseModal");
-        assertThat(close.getAttribute("workspaceCloseStatus")).isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
-        assertThat(((AppStateService.WorkspaceCloseInspection) close.getAttribute("workspaceCloseStatus")).uncommittedChanges()).isTrue();
+        assertThat(close.getAttribute("workspaceCloseStatus"))
+                .isInstanceOf(AppStateService.WorkspaceCloseInspection.class);
+        assertThat(((AppStateService.WorkspaceCloseInspection) close.getAttribute("workspaceCloseStatus"))
+                .uncommittedChanges()).isTrue();
     }
 
     @Test
-    public void confirmedDirtyWorkspaceCloseForceRemovesTheWorktreeAndReturnsShellUpdates(@TempDir Path projectPath) throws Exception {
+    public void confirmedDirtyWorkspaceCloseForceRemovesTheWorktreeAndReturnsShellUpdates(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
         UiController controller = newController();
 
@@ -314,7 +319,7 @@ public class UiControllerProjectsAndDirectoryTests {
 
     @Test
     public void chatMessagesStayScopedToTheActiveProjectAndSession(@TempDir Path firstProject,
-                                                                 @TempDir Path secondProject) {
+            @TempDir Path secondProject) {
         RecordingHarness harness = new RecordingHarness();
         UiController controller = TestAppStateSupport.controller(harness, agentProperties());
 
@@ -358,7 +363,10 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     private static UiController newController() {
-        return TestAppStateSupport.controller(new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        return TestAppStateSupport.controller(new CodingAgentHarness(null, null, null, null, null, null, null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 AgentTurnResult result = new AgentTurnResult("reply", List.of());
@@ -368,8 +376,8 @@ public class UiControllerProjectsAndDirectoryTests {
         }, agentProperties());
     }
 
-    private static com.judepereira.jupiter.agent.config.AgentProperties agentProperties() {
-        com.judepereira.jupiter.agent.config.AgentProperties props = new com.judepereira.jupiter.agent.config.AgentProperties();
+    private static AgentProperties agentProperties() {
+        AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(".");
         return props;
     }
@@ -385,9 +393,7 @@ public class UiControllerProjectsAndDirectoryTests {
     }
 
     private static void runGit(Path workingDirectory, String... command) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command)
-                .directory(workingDirectory.toFile())
-                .redirectErrorStream(true)
+        Process process = new ProcessBuilder(command).directory(workingDirectory.toFile()).redirectErrorStream(true)
                 .start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
@@ -440,15 +446,17 @@ public class UiControllerProjectsAndDirectoryTests {
 
     private static List<String> conversation(AgentTurnRequest request) {
         return request.getConversationHistory().stream()
-                .map(message -> message.getRole().name() + ":" + message.getContent())
-                .toList();
+                .map(message -> message.getRole().name() + ":" + message.getContent()).toList();
     }
 
     private static final class RecordingHarness extends CodingAgentHarness {
         private final List<AgentTurnRequest> requests = new ArrayList<>();
 
         private RecordingHarness() {
-            super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+            super(null, null, null, null, null, null, null, null, null,
+                    new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                    SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                    SkillTestSupport.defaultComponents().injector());
         }
 
         @Override

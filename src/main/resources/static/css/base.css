@@ -5,21 +5,23 @@ body {
     overflow: hidden;
     background: var(--rail-bg);
     color: #111b31;
-    font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, Roboto, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
 button {
     font-size: 14px;
 }
 
-b, strong {
+b,
+strong {
     font-weight: 600;
 }
 
-input[type=radio] {
+input[type="radio"] {
     width: auto !important;
 }
-input:focus, textarea:focus {
+input:focus,
+textarea:focus {
     border: 1px solid var(--accent) !important;
     outline: none;
 }

@@ -6,11 +6,6 @@ import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import com.pty4j.WinSize;
 import jakarta.annotation.PreDestroy;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.stereotype.Service;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -26,6 +21,10 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.stereotype.Service;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
 
 @Log4j2
 @Service
@@ -47,7 +46,8 @@ public class TerminalManager {
         return createTerminal(workspaceRoot, "Terminal " + terminalSequence.getAndIncrement(), environmentVariables);
     }
 
-    public TerminalHandle createTerminal(String workspaceRoot, String title, Map<String, String> projectEnvironmentVariables) {
+    public TerminalHandle createTerminal(String workspaceRoot, String title,
+            Map<String, String> projectEnvironmentVariables) {
         String terminalId = UUID.randomUUID().toString();
         PtyProcess process = startProcess(workspaceRoot, projectEnvironmentVariables);
         TerminalRuntime runtime = new TerminalRuntime(terminalId, title, process);
@@ -96,7 +96,8 @@ public class TerminalManager {
 
     private PtyProcess startProcess(String workspaceRoot, Map<String, String> environmentVariables) {
         try {
-            String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank()).orElse("/bin/bash");
+            String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank())
+                    .orElse("/bin/bash");
             Map<String, String> env = terminalEnvironment(environmentVariables);
             env.put("TERM", "xterm-256color");
             return startProcess(workspaceRoot, new String[]{shell, "-l"}, env);
@@ -108,14 +109,9 @@ public class TerminalManager {
     static PtyProcess startProcess(String workspaceRoot, String[] command, Map<String, String> environment)
             throws IOException {
         ProcessEnvironmentSanitizer.sanitize(environment);
-        return new PtyProcessBuilder(command)
-                .setEnvironment(environment)
-                .setDirectory(Path.of(workspaceRoot).toAbsolutePath().normalize().toString())
-                .setConsole(false)
-                .setRedirectErrorStream(true)
-                .setInitialColumns(120)
-                .setInitialRows(32)
-                .start();
+        return new PtyProcessBuilder(command).setEnvironment(environment)
+                .setDirectory(Path.of(workspaceRoot).toAbsolutePath().normalize().toString()).setConsole(false)
+                .setRedirectErrorStream(true).setInitialColumns(120).setInitialRows(32).start();
     }
 
     static Map<String, String> terminalEnvironment(Map<String, String> projectEnvironmentVariables) {
@@ -188,7 +184,8 @@ public class TerminalManager {
             } catch (Exception e) {
                 log.error("Terminal {} failed", terminalId, e);
                 synchronized (outputLock) {
-                    sendToSessions(Map.of("type", "error", "message", e.getMessage() == null ? "terminal_error" : e.getMessage()));
+                    sendToSessions(Map.of("type", "error", "message",
+                            e.getMessage() == null ? "terminal_error" : e.getMessage()));
                 }
             } finally {
                 cleanup(exitCode);

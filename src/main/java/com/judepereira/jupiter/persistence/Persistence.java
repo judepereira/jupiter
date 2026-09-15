@@ -11,21 +11,18 @@ import java.util.regex.Pattern;
 public final class Persistence {
 
     public enum ReviewSource {
-        SESSION,
-        GIT
+        SESSION, GIT
     }
 
     public enum RailStatus {
-        NONE,
-        IN_PROGRESS,
-        FAILED
+        NONE, IN_PROGRESS, FAILED
     }
 
     private Persistence() {
     }
 
-    public record ProjectView(long id, String name, String path, String workspaceInitCommands, List<ProjectEnvironmentVariable> environmentVariables,
-                              String commandEnvironmentAllowlist) {
+    public record ProjectView(long id, String name, String path, String workspaceInitCommands,
+            List<ProjectEnvironmentVariable> environmentVariables, String commandEnvironmentAllowlist) {
         private static final Pattern ENVIRONMENT_VARIABLE_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
         public Set<String> commandEnvironmentAllowlistNames() {
@@ -57,7 +54,8 @@ public final class Persistence {
     public record McpServerHeader(String name, String value) {
     }
 
-    public record McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers, List<Long> exposedProjectIds) {
+    public record McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers,
+            List<Long> exposedProjectIds) {
     }
 
     public record WorkspaceView(long id, String name, String path, boolean unread, RailStatus railStatus) {
@@ -82,48 +80,54 @@ public final class Persistence {
         }
     }
 
-    public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview, boolean inputTruncated, boolean outputTruncated,
-                                Long subagentSessionId, String subagentAgentId, String subagentAgentName, String status,
-                                String imageUrl, String imageAlt, String imagePath, String imageMediaType, String taskBody) {
+    public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview,
+            String outputPreview, boolean inputTruncated, boolean outputTruncated, Long subagentSessionId,
+            String subagentAgentId, String subagentAgentName, String status, String imageUrl, String imageAlt,
+            String imagePath, String imageMediaType, String taskBody) {
     }
 
-    public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel, String preferredModelId) {
+    public record ChatMessageMetadata(String agentId, String agentName, String modelId, String thinkingLevel,
+            String preferredModelId) {
 
         public boolean isFallback() {
             return preferredModelId != null && !preferredModelId.isBlank() && !preferredModelId.equals(modelId);
         }
     }
 
-    public record ChatMessageView(String role, String text, long ts, boolean pending, String id, Long completedTs, List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
+    public record ChatMessageView(String role, String text, long ts, boolean pending, String id, Long completedTs,
+            List<ToolCallView> toolCalls, ChatMessageMetadata metadata) {
     }
 
     public record ChangedFileView(String key, ReviewSource source, Integer id, String path, String diff) {
     }
 
-    public record SessionDetailView(List<ChatMessageView> chatMessages, List<ChangedFileView> changedFiles, boolean reviewPanelOpen,
-                                    ReviewSource reviewSource, ChangedFileView selectedFile, String workspaceRoot, String chatDraft) {
+    public record SessionDetailView(List<ChatMessageView> chatMessages, List<ChangedFileView> changedFiles,
+            boolean reviewPanelOpen, ReviewSource reviewSource, ChangedFileView selectedFile, String workspaceRoot,
+            String chatDraft) {
     }
 
-    public record SubagentSessionDetailView(SessionDetailView sessionDetail, Long parentSessionId, String parentToolCallId,
-                                            String subagentAgentId, String subagentAgentName) {
+    public record SubagentSessionDetailView(SessionDetailView sessionDetail, Long parentSessionId,
+            String parentToolCallId, String subagentAgentId, String subagentAgentName) {
     }
 
-    public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces, WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession, SessionDetailView activeSessionDetail,
-                               boolean autoGitUpdateEnabled) {
+    public record AppStateView(List<ProjectView> projects, ProjectView activeProject, List<WorkspaceView> workspaces,
+            WorkspaceView activeWorkspace, List<SessionView> sessions, SessionView activeSession,
+            SessionDetailView activeSessionDetail, boolean autoGitUpdateEnabled) {
     }
 
-    public record AutoGitUpdateFailureState(boolean failureEpisodeActive, Instant failureStartedAt, Instant lastSuccessAt) {
+    public record AutoGitUpdateFailureState(boolean failureEpisodeActive, Instant failureStartedAt,
+            Instant lastSuccessAt) {
     }
 
     public record AutoGitUpdateFailureNotification(boolean firstFailure) {
     }
 
     public record LifecycleHookSettings(String assistantCompletedScript, String assistantErroredScript,
-                                        String subagentCompletedScript, int timeoutSeconds) {
+            String subagentCompletedScript, int timeoutSeconds) {
     }
 
     public record LifecycleHookContext(long sessionId, String projectName, String workspaceName, String sessionName,
-                                       Map<String, String> projectEnvironmentVariables) {
+            Map<String, String> projectEnvironmentVariables) {
     }
 
     public record QueuedChatTurn(ChatMessageView userMessage, ChatMessageView assistantMessage) {
@@ -132,21 +136,25 @@ public final class Persistence {
     public record ChangedFileDraft(String path, String diff) {
     }
 
-    public record ToolCallTraceInput(String toolCallId, String toolName, Map<String, Object> args, boolean success, String textSummary, Map<String, Object> machineSummary) {
+    public record ToolCallTraceInput(String toolCallId, String toolName, Map<String, Object> args, boolean success,
+            String textSummary, Map<String, Object> machineSummary) {
     }
 
-    public record TokenUsageFact(String sessionUsageKey, long sessionIdSnapshot, long workspaceIdSnapshot, long projectIdSnapshot,
-                                 String sessionNameSnapshot, String workspaceNameSnapshot, String projectNameSnapshot,
-                                 String workspacePathSnapshot, String projectPathSnapshot, Instant occurredAt, Instant hourStartUtc,
-                                 String modelKey, String operation, Integer inputTokenCount, Integer outputTokenCount, Integer totalTokenCount,
-                                 Integer cachedInputTokenCount, Integer cacheWriteTokenCount, Integer reasoningTokenCount, String responseId,
-                                 String responseModelId, String finishReason, Map<String, Object> providerMetadata) {}
+    public record TokenUsageFact(String sessionUsageKey, long sessionIdSnapshot, long workspaceIdSnapshot,
+            long projectIdSnapshot, String sessionNameSnapshot, String workspaceNameSnapshot,
+            String projectNameSnapshot, String workspacePathSnapshot, String projectPathSnapshot, Instant occurredAt,
+            Instant hourStartUtc, String modelKey, String operation, Integer inputTokenCount, Integer outputTokenCount,
+            Integer totalTokenCount, Integer cachedInputTokenCount, Integer cacheWriteTokenCount,
+            Integer reasoningTokenCount, String responseId, String responseModelId, String finishReason,
+            Map<String, Object> providerMetadata) {
+    }
 
-    public record TokenUsageHourly(String sessionUsageKey, Instant hourStartUtc, String modelKey,
-                                   long requestCount, Long inputTokenCount, Long outputTokenCount, Long totalTokenCount,
-                                   Long cachedInputTokenCount, Long cacheWriteTokenCount, Long reasoningTokenCount,
-                                   Instant lastOccurredAt) {}
+    public record TokenUsageHourly(String sessionUsageKey, Instant hourStartUtc, String modelKey, long requestCount,
+            Long inputTokenCount, Long outputTokenCount, Long totalTokenCount, Long cachedInputTokenCount,
+            Long cacheWriteTokenCount, Long reasoningTokenCount, Instant lastOccurredAt) {
+    }
 
     public record ProjectTokenUsageHourly(Instant hourStartUtc, String modelKey, long requestCount,
-                                          Long inputTokenCount, Long outputTokenCount, Long totalTokenCount) {}
+            Long inputTokenCount, Long outputTokenCount, Long totalTokenCount) {
+    }
 }

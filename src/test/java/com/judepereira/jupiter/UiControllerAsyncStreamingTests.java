@@ -1,38 +1,70 @@
 package com.judepereira.jupiter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.ModelDefinition;
+import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
+import com.judepereira.jupiter.agent.config.AgentProperties;
+import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
-import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
+import com.judepereira.jupiter.agent.llm.AgentModelClient;
+import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter.agent.llm.AgentModelOptions;
+import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
+import com.judepereira.jupiter.agent.llm.dto.ToolCall;
+import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
+import com.judepereira.jupiter.agent.tools.AgentTool;
+import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
+import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
+import com.judepereira.jupiter.agent.tools.ToolRegistry;
+import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
+import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
-import com.judepereira.jupiter.persistence.ContextCompactionService;
+import com.judepereira.jupiter.config.HttpAuthProperties;
+import com.judepereira.jupiter.git.GitAutoUpdateService;
+import com.judepereira.jupiter.git.ManualGitPullCoordinator;
+import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
+import com.judepereira.jupiter.persistence.AppStateRepository;
 import com.judepereira.jupiter.persistence.AppStateService;
-import com.judepereira.jupiter.ui.UiController;
-import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.persistence.ContextCompactionService;
+import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
-import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
+import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ui.Model;
-import org.springframework.ui.ConcurrentModel;
-
+import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import java.net.http.HttpClient;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.ui.Model;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public class UiControllerAsyncStreamingTests {
 
@@ -43,7 +75,10 @@ public class UiControllerAsyncStreamingTests {
     @Test
     public void sendReturnsQuickly_withPending_andDoesNotRunHarnessSynchronously() throws Exception {
         AtomicBoolean runCalled = new AtomicBoolean(false);
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 runCalled.set(true);
@@ -51,13 +86,13 @@ public class UiControllerAsyncStreamingTests {
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 runCalled.set(true);
                 return new AgentTurnResult("final reply", List.of());
             }
         };
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(".");
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -67,10 +102,10 @@ public class UiControllerAsyncStreamingTests {
         long dur = Instant.now().toEpochMilli() - start;
         // should return quickly (<2s)
         assertThat(dur).isLessThan(2000);
-        List<?> msgs = (List<?>) ((ConcurrentModel)model).getAttribute("chatMessages");
+        List<?> msgs = (List<?>) ((ConcurrentModel) model).getAttribute("chatMessages");
         assertThat(msgs).isNotEmpty();
         // last message should be pending assistant
-        Object last = msgs.get(msgs.size()-1);
+        Object last = msgs.get(msgs.size() - 1);
         assertThat(last.toString()).contains("Thinking");
 
         // harness should NOT have been called during send
@@ -79,24 +114,29 @@ public class UiControllerAsyncStreamingTests {
         // fragment should be the chat response composite
         assertThat(frag).contains("fragments/chat-response :: response");
         // model should include only the newly created rows for append responses
-        List<?> newRows = (List<?>) ((ConcurrentModel)model).getAttribute("newChatMessages");
+        List<?> newRows = (List<?>) ((ConcurrentModel) model).getAttribute("newChatMessages");
         assertThat(newRows).isNotNull();
         assertThat(newRows.stream().anyMatch(o -> o.toString().contains("Thinking"))).isTrue();
-        Boolean hasPending = (Boolean) ((ConcurrentModel)model).getAttribute("hasPending");
+        Boolean hasPending = (Boolean) ((ConcurrentModel) model).getAttribute("hasPending");
         assertThat(hasPending).isTrue();
     }
 
     @Test
-    public void multiTurnRequestHistory_excludesSystemAndPendingPlaceholder_butKeepsPriorTurns(@TempDir java.nio.file.Path tmp) throws Exception {
+    public void multiTurnRequestHistory_excludesSystemAndPendingPlaceholder_butKeepsPriorTurns(@TempDir Path tmp)
+            throws Exception {
         class RecordingHarness extends CodingAgentHarness {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 requests.add(request);
                 AgentTurnResult result = new AgentTurnResult("reply-" + requests.size(), List.of());
                 listener.onComplete(result);
@@ -106,7 +146,7 @@ public class UiControllerAsyncStreamingTests {
 
         RecordingHarness fake = new RecordingHarness();
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -127,25 +167,28 @@ public class UiControllerAsyncStreamingTests {
         }
 
         assertThat(fake.requests).hasSize(2);
-        assertThat(fake.requests.get(0).getSystemPrompt())
-                .isNull();
+        assertThat(fake.requests.get(0).getSystemPrompt()).isNull();
         assertThat(render(fake.requests.get(0).getConversationHistory())).containsExactly("USER:first");
-        assertThat(fake.requests.get(1).getSystemPrompt())
-                .isNull();
-        assertThat(render(fake.requests.get(1).getConversationHistory())).containsExactly("USER:first", "ASSISTANT:reply-1", "USER:second");
+        assertThat(fake.requests.get(1).getSystemPrompt()).isNull();
+        assertThat(render(fake.requests.get(1).getConversationHistory())).containsExactly("USER:first",
+                "ASSISTANT:reply-1", "USER:second");
     }
 
     @Test
-    public void sendMessageForwardsSelectedAgentModelAndThinkingLevel(@TempDir java.nio.file.Path tmp) throws Exception {
+    public void sendMessageForwardsSelectedAgentModelAndThinkingLevel(@TempDir Path tmp) throws Exception {
         class RecordingHarness extends CodingAgentHarness {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 requests.add(request);
                 AgentTurnResult result = new AgentTurnResult("reply", List.of());
                 listener.onComplete(result);
@@ -155,7 +198,7 @@ public class UiControllerAsyncStreamingTests {
 
         RecordingHarness fake = new RecordingHarness();
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -177,16 +220,20 @@ public class UiControllerAsyncStreamingTests {
     }
 
     @Test
-    public void sendMessageCompactsOldHistoryAndRendersSummaryInResponse(@TempDir java.nio.file.Path tmp) throws Exception {
+    public void sendMessageCompactsOldHistoryAndRendersSummaryInResponse(@TempDir Path tmp) throws Exception {
         class RecordingHarness extends CodingAgentHarness {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 if (request.getSystemPrompt() != null && request.getSystemPrompt().toLowerCase().contains("compact")) {
                     return new AgentTurnResult("compact summary", List.of());
                 }
@@ -199,10 +246,11 @@ public class UiControllerAsyncStreamingTests {
 
         RecordingHarness fake = new RecordingHarness();
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         AppStateService appStateService = TestAppStateSupport.appStateService();
-        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "openai/gpt-5.6-sol", ThinkingLevel.LOW, null, true, true,
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT,
+                "openai/gpt-5.6-sol", ThinkingLevel.LOW, null, true, true,
                 List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command"));
         AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper()) {
             @Override
@@ -242,27 +290,38 @@ public class UiControllerAsyncStreamingTests {
                   }
                 }
                 """);
-        java.util.concurrent.atomic.AtomicInteger compactionCalls = new java.util.concurrent.atomic.AtomicInteger();
+        AtomicInteger compactionCalls = new AtomicInteger();
         ContextCompactionService contextCompactionService = new ContextCompactionService(appStateService,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
+                new AgentModelClientFactory(null) {
 
                     @Override
-                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) {
+                    public AgentModelClient getClient(String provider) {
                         return null;
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery()) {
             @Override
-            public java.util.Optional<com.judepereira.jupiter.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
-                                                                                                                       com.judepereira.jupiter.agent.catalog.ModelDefinition model,
-                                                                                                                       ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
+            public Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
+                    ModelDefinition model, ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
                 if (compactionCalls.incrementAndGet() < 8) {
-                    return java.util.Optional.empty();
+                    return Optional.empty();
                 }
                 appStateService.markTurnsIncludeInModelFalse(sessionId, 7);
-                return java.util.Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 7L));
+                return Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 7L));
             }
         };
-        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog, com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null, mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(), new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class), null), contextCompactionService, null, mock(CommandStreamService.class), new com.judepereira.jupiter.command.CommandCatalogService(""), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(com.judepereira.jupiter.git.GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
+                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+                mock(AnthropicOAuthService.class),
+                new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
+                        (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
+                appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
+                new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
+                        mock(AppStateRepository.class), null),
+                contextCompactionService, null, mock(CommandStreamService.class), new CommandCatalogService(""), null,
+                new ChatPresentationService(), null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
 
         for (int i = 1; i <= 7; i++) {
             Model model = new ConcurrentModel();
@@ -280,12 +339,13 @@ public class UiControllerAsyncStreamingTests {
 
         assertThat(fake.requests).isNotEmpty();
         AgentTurnRequest lastRequest = fake.requests.getLast();
-        assertThat(render(lastRequest.getConversationHistory())).anyMatch(row -> row.contains("USER:Previous conversation summary:\n\ncompact summary"));
+        assertThat(render(lastRequest.getConversationHistory()))
+                .anyMatch(row -> row.contains("USER:Previous conversation summary:\n\ncompact summary"));
         assertThat(render(lastRequest.getConversationHistory())).anyMatch(row -> row.contains("USER:turn-8"));
     }
 
     @Test
-    public void midTurnCompactionRebuildsConversationBeforeSecondModelRequest(@TempDir java.nio.file.Path tmp) throws Exception {
+    public void midTurnCompactionRebuildsConversationBeforeSecondModelRequest(@TempDir Path tmp) throws Exception {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", tmp.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
@@ -293,11 +353,12 @@ public class UiControllerAsyncStreamingTests {
         for (int i = 1; i <= 3; i++) {
             String userText = "prior-" + i + " " + "u".repeat(120);
             var turn = appStateService.appendUserMessageAndPendingAssistant(sessionId, userText);
-            appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(80), List.of());
+            appStateService.completeAssistantMessage(sessionId, turn.assistantMessage().id(),
+                    "reply-" + i + " " + "a".repeat(80), List.of());
         }
 
-        AgentDefinition agent = new AgentDefinition("engineer", "Engineer", "", "Implement", AgentMode.AGENT, "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true,
-                List.of("big_tool"));
+        AgentDefinition agent = new AgentDefinition("engineer", "Engineer", "", "Implement", AgentMode.AGENT,
+                "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true, List.of("big_tool"));
 
         AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper()) {
             @Override
@@ -339,77 +400,96 @@ public class UiControllerAsyncStreamingTests {
                 }
                 """);
 
-        class RecordingModel implements com.judepereira.jupiter.agent.llm.AgentModelClient {
+        class RecordingModel implements AgentModelClient {
             final List<List<Message>> conversations = new ArrayList<>();
             private int index;
 
             @Override
-            public com.judepereira.jupiter.agent.llm.dto.ModelResponse chat(List<Message> conversation, List<com.judepereira.jupiter.agent.llm.dto.ToolDefinition> tools) {
-                return chatStreaming(conversation, tools, null, delta -> {});
+            public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
+                return chatStreaming(conversation, tools, null, delta -> {
+                });
             }
 
             @Override
-            public com.judepereira.jupiter.agent.llm.dto.ModelResponse chatStreaming(List<Message> conversation, List<com.judepereira.jupiter.agent.llm.dto.ToolDefinition> tools,
-                                                                                      com.judepereira.jupiter.agent.llm.AgentModelOptions options,
-                                                                                      java.util.function.Consumer<String> onDelta) {
+            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+                    AgentModelOptions options, Consumer<String> onDelta) {
                 conversations.add(List.copyOf(conversation));
                 return switch (index++) {
-                    case 0 -> new com.judepereira.jupiter.agent.llm.dto.ModelResponse(null,
-                            new com.judepereira.jupiter.agent.llm.dto.ToolCall(null, "big_tool", java.util.Map.of()), com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
-                    default -> new com.judepereira.jupiter.agent.llm.dto.ModelResponse("all done", null, com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata.empty(), null);
+                    case 0 -> new ModelResponse(null, new ToolCall(null, "big_tool", Map.of()),
+                            ModelResponseMetadata.empty(), null);
+                    default -> new ModelResponse("all done", null, ModelResponseMetadata.empty(), null);
                 };
             }
         }
 
         RecordingModel model = new RecordingModel();
-        var registry = new com.judepereira.jupiter.agent.tools.ToolRegistry();
-        registry.register(new com.judepereira.jupiter.agent.tools.AgentTool() {
+        var registry = new ToolRegistry();
+        registry.register(new AgentTool() {
             @Override
             public String name() {
                 return "big_tool";
             }
 
             @Override
-            public com.judepereira.jupiter.agent.llm.dto.ToolDefinition definition() {
-                return com.judepereira.jupiter.agent.llm.dto.ToolDefinition.builtIn("big_tool", "Big tool",
-                        com.judepereira.jupiter.agent.llm.dto.ToolSchema.object());
+            public ToolDefinition definition() {
+                return ToolDefinition.builtIn("big_tool", "Big tool", ToolSchema.object());
             }
 
             @Override
-            public com.judepereira.jupiter.agent.tools.ToolExecutionResult execute(java.util.Map<String, Object> args,
-                                                                                   com.judepereira.jupiter.agent.tools.ToolExecutionContext context) {
+            public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) {
                 String text = "tool-result-" + "x".repeat(5000);
-                return new com.judepereira.jupiter.agent.tools.ToolExecutionResult(true, text, java.util.Map.of("path", "generated.txt"));
+                return new ToolExecutionResult(true, text, Map.of("path", "generated.txt"));
             }
         });
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         props.setMaxIterations(5);
         props.getTooling().setAllowWrite(true);
 
-        CodingAgentHarness harness = new CodingAgentHarness(new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
-            @Override public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) { return model; }
-        }, registry, props, agentDefinitionService, modelCatalog, com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
-
-        java.util.concurrent.atomic.AtomicInteger compactionCalls = new java.util.concurrent.atomic.AtomicInteger();
-        ContextCompactionService contextCompactionService = new ContextCompactionService(appStateService,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
-                    @Override public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) { return model; }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+        CodingAgentHarness harness = new CodingAgentHarness(new AgentModelClientFactory(null) {
             @Override
-            public java.util.Optional<com.judepereira.jupiter.persistence.Persistence.ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
-                                                                                                                       com.judepereira.jupiter.agent.catalog.ModelDefinition model,
-                                                                                                                       ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
+            public AgentModelClient getClient(String provider) {
+                return model;
+            }
+        }, registry, props, agentDefinitionService, modelCatalog,
+                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector());
+
+        AtomicInteger compactionCalls = new AtomicInteger();
+        ContextCompactionService contextCompactionService = new ContextCompactionService(appStateService,
+                new AgentModelClientFactory(null) {
+                    @Override
+                    public AgentModelClient getClient(String provider) {
+                        return model;
+                    }
+                }, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery()) {
+            @Override
+            public Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent,
+                    ModelDefinition model, ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
                 if (compactionCalls.incrementAndGet() < 2) {
-                    return java.util.Optional.empty();
+                    return Optional.empty();
                 }
                 appStateService.markTurnsIncludeInModelFalse(sessionId, 3);
-                return java.util.Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
+                return Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
             }
         };
 
-        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog, com.judepereira.jupiter.testsupport.ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null, mock(com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService.class), new SystemBalloonService(new ObjectMapper(), () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L)), new com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService(() -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(0L), (emitter, eventName, data) -> emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name(eventName).data(data))), appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(), new com.judepereira.jupiter.openai.oauth.OpenAiOAuthService(new com.judepereira.jupiter.agent.config.OpenAiOAuthProperties(), new ObjectMapper(), java.net.http.HttpClient.newHttpClient(), mock(com.judepereira.jupiter.persistence.AppStateRepository.class), null), contextCompactionService, null, mock(CommandStreamService.class), new com.judepereira.jupiter.command.CommandCatalogService(""), null, new com.judepereira.jupiter.ui.ChatPresentationService(), null, null, new com.judepereira.jupiter.config.HttpAuthProperties(), mock(com.judepereira.jupiter.git.GitAutoUpdateService.class), mock(com.judepereira.jupiter.git.ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
+                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+                mock(AnthropicOAuthService.class),
+                new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
+                        (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
+                appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
+                new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
+                        mock(AppStateRepository.class), null),
+                contextCompactionService, null, mock(CommandStreamService.class), new CommandCatalogService(""), null,
+                new ChatPresentationService(), null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
 
         Model sendModel = new ConcurrentModel();
         ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);
@@ -424,20 +504,22 @@ public class UiControllerAsyncStreamingTests {
         assertThat(second).anyMatch(row -> row.contains("TOOL:tool-result-"));
         assertThat(second).anyMatch(row -> row.contains("ASSISTANT:"));
         assertThat(appStateService.loadViewData().activeSessionDetail().chatMessages().stream()
-                .map(com.judepereira.jupiter.persistence.Persistence.ChatMessageView::text)
-                .toList()).contains("compact summary");
+                .map(ChatMessageView::text).toList()).contains("compact summary");
     }
 
     @Test
     public void streaming_preserves_spaces_and_newlines_in_final_text() throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 // emit deltas including space and newline chunks
                 listener.onTextDelta("hello");
                 listener.onTextDelta(" ");
@@ -450,7 +532,7 @@ public class UiControllerAsyncStreamingTests {
             }
         };
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(".");
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -458,12 +540,12 @@ public class UiControllerAsyncStreamingTests {
         Model m1 = new ConcurrentModel();
         String respFrag = ctrl.sendMessage("go", m1, null);
         assertThat(respFrag).contains("fragments/chat-response :: response");
-        List<?> newRows1 = (List<?>) ((ConcurrentModel)m1).getAttribute("newChatMessages");
+        List<?> newRows1 = (List<?>) ((ConcurrentModel) m1).getAttribute("newChatMessages");
         assertThat(newRows1).isNotNull();
         assertThat(newRows1.size()).isGreaterThanOrEqualTo(1);
 
-        List<?> msgs = (List<?>) ((ConcurrentModel)m1).getAttribute("chatMessages");
-        Object last = msgs.get(msgs.size()-1);
+        List<?> msgs = (List<?>) ((ConcurrentModel) m1).getAttribute("chatMessages");
+        Object last = msgs.get(msgs.size() - 1);
         String assistantId = null;
         try {
             var cls = last.getClass();
@@ -473,7 +555,8 @@ public class UiControllerAsyncStreamingTests {
         } catch (Exception e) {
             String s = last.toString();
             int i = s.indexOf("id=");
-            if (i >= 0) assistantId = s.substring(i+3).replaceAll("[^a-zA-Z0-9-]", "");
+            if (i >= 0)
+                assistantId = s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
         }
         assertThat(assistantId).isNotNull();
         final String finalAssistantId = assistantId;
@@ -486,7 +569,7 @@ public class UiControllerAsyncStreamingTests {
         // after streaming completes, index should reflect final assistant text
         Model m2 = new ConcurrentModel();
         ctrl.index(m2);
-        List<?> after = (List<?>) ((ConcurrentModel)m2).getAttribute("chatMessages");
+        List<?> after = (List<?>) ((ConcurrentModel) m2).getAttribute("chatMessages");
         // find assistant by id
         Object found = after.stream().filter(o -> {
             try {
@@ -504,16 +587,24 @@ public class UiControllerAsyncStreamingTests {
         boolean pending = true;
         try {
             var cls = found.getClass();
-            var ft = cls.getDeclaredField("text"); ft.setAccessible(true); text = (String) ft.get(found);
-            var fp = cls.getDeclaredField("pending"); fp.setAccessible(true); pending = fp.getBoolean(found);
+            var ft = cls.getDeclaredField("text");
+            ft.setAccessible(true);
+            text = (String) ft.get(found);
+            var fp = cls.getDeclaredField("pending");
+            fp.setAccessible(true);
+            pending = fp.getBoolean(found);
         } catch (Exception e) {
             String s = found.toString();
-            int ti = s.indexOf("text="); if(ti>=0){ text = s.substring(ti+5).replaceAll("[,}].*$","\"").replaceAll("\"","\""); }
+            int ti = s.indexOf("text=");
+            if (ti >= 0) {
+                text = s.substring(ti + 5).replaceAll("[,}].*$", "\"").replaceAll("\"", "\"");
+            }
         }
         assertThat(text).isEqualTo("hello world\nnext");
         assertThat(pending).isFalse();
 
-        // final assistant message should include toolCalls list when present (none in this fake), but ensure field exists via reflection
+        // final assistant message should include toolCalls list when present (none in
+        // this fake), but ensure field exists via reflection
         Object foundMsg = found;
         try {
             var cls = foundMsg.getClass();
@@ -521,7 +612,7 @@ public class UiControllerAsyncStreamingTests {
             f.setAccessible(true);
             Object tc = f.get(foundMsg);
             // allow null or empty list here; assert extraction is robust
-            assertThat(tc == null || (tc instanceof java.util.List<?>)).isTrue();
+            assertThat(tc == null || (tc instanceof List<?>)).isTrue();
         } catch (NoSuchFieldException nsf) {
             // ignore: some toString-based fallbacks may not expose fields
         }
@@ -531,19 +622,22 @@ public class UiControllerAsyncStreamingTests {
     public void streaming_error_normalizes_openai_json_message() throws Exception {
         String quotaJson = "{\"error\":{\"message\":\"You exceeded your current quota, please check your plan and billing details.\",\"type\":\"insufficient_quota\",\"param\":null,\"code\":\"insufficient_quota\"}}";
 
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 throw new RuntimeException("provider error: " + quotaJson);
             }
         };
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(".");
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -561,7 +655,8 @@ public class UiControllerAsyncStreamingTests {
         } catch (Exception e) {
             String s = last.toString();
             int i = s.indexOf("id=");
-            if (i >= 0) assistantId = s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
+            if (i >= 0)
+                assistantId = s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
         }
         assertThat(assistantId).isNotNull();
         final String finalAssistantId = assistantId;
@@ -594,7 +689,8 @@ public class UiControllerAsyncStreamingTests {
         } catch (Exception e) {
             String s = found.toString();
             int i = s.indexOf("text=");
-            if (i >= 0) text = s.substring(i + 5).replaceAll(",.*$", "");
+            if (i >= 0)
+                text = s.substring(i + 5).replaceAll(",.*$", "");
         }
 
         assertThat(text).contains("You exceeded your current quota, please check your plan and billing details.");
@@ -606,20 +702,23 @@ public class UiControllerAsyncStreamingTests {
     public void streaming_error_normalizes_nested_openai_token_expired_json() throws Exception {
         String nestedJson = "{\"error\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"},\"detail\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"}}";
 
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 RuntimeException nested = new RuntimeException("provider nested: " + nestedJson);
                 throw new RuntimeException("OpenAI streaming request failed", nested);
             }
         };
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(".");
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -634,8 +733,7 @@ public class UiControllerAsyncStreamingTests {
         ctrl.index(afterModel);
         List<?> after = (List<?>) ((ConcurrentModel) afterModel).getAttribute("chatMessages");
         ChatPresentationService.ChatMessage assistant = (ChatPresentationService.ChatMessage) after.stream()
-                .filter(message -> assistantId.equals(((ChatPresentationService.ChatMessage) message).id()))
-                .findFirst()
+                .filter(message -> assistantId.equals(((ChatPresentationService.ChatMessage) message).id())).findFirst()
                 .orElseThrow();
 
         assertThat(assistant.text()).contains("Your ChatGPT/OpenAI session has expired. Please sign in again.");
@@ -645,15 +743,18 @@ public class UiControllerAsyncStreamingTests {
     }
 
     @Test
-    public void stopChatCancelsInFlightStreamAndPersistsStoppedAssistantMessage(@TempDir java.nio.file.Path tmp) throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+    public void stopChatCancelsInFlightStreamAndPersistsStoppedAssistantMessage(@TempDir Path tmp) throws Exception {
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 return new AgentTurnResult("", List.of());
             }
 
             @Override
-            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, com.judepereira.jupiter.agent.llm.AgentStreamListener listener) {
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 listener.onTextDelta("partial ");
                 while (request.getCancellationToken() != null && !request.getCancellationToken().isCancelled()) {
                     try {
@@ -667,7 +768,7 @@ public class UiControllerAsyncStreamingTests {
             }
         };
 
-        var props = new com.judepereira.jupiter.agent.config.AgentProperties();
+        var props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         UiController ctrl = TestAppStateSupport.controller(fake, props);
 
@@ -688,8 +789,7 @@ public class UiControllerAsyncStreamingTests {
         ctrl.index(after);
         List<?> chatMessages = (List<?>) after.getAttribute("chatMessages");
         Object assistant = chatMessages.stream()
-                .filter(message -> assistantId.equals(((ChatPresentationService.ChatMessage) message).id()))
-                .findFirst()
+                .filter(message -> assistantId.equals(((ChatPresentationService.ChatMessage) message).id())).findFirst()
                 .orElseThrow();
 
         assertThat(((ChatPresentationService.ChatMessage) assistant).pending()).isFalse();
@@ -706,7 +806,8 @@ public class UiControllerAsyncStreamingTests {
         } catch (Exception e) {
             String s = last.toString();
             int i = s.indexOf("id=");
-            if (i >= 0) return s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
+            if (i >= 0)
+                return s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
             throw e;
         }
     }

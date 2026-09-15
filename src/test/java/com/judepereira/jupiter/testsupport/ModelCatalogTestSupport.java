@@ -1,21 +1,21 @@
 package com.judepereira.jupiter.testsupport;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentModelResolutionService;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
-
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 import com.judepereira.jupiter.agent.config.ModelCatalogProperties;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import org.springframework.web.client.RestClient;
 import org.springframework.test.web.client.MockRestServiceServer;
-
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import org.springframework.web.client.RestClient;
 
 public final class ModelCatalogTestSupport {
 
@@ -146,8 +146,7 @@ public final class ModelCatalogTestSupport {
         properties.setCatalogUrl(catalogUrl);
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        server.expect(requestTo(catalogUrl))
-                .andExpect(method(org.springframework.http.HttpMethod.GET))
+        server.expect(requestTo(catalogUrl)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
         ModelCatalogService service = new ModelCatalogService(new ObjectMapper(), builder, properties);
         server.verify();

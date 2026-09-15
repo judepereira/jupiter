@@ -27,17 +27,13 @@ public final class LangChain4jToolSpecificationMapper {
         for (ToolDefinition tool : tools) {
             ToolSpecification nativeSpecification = tool.getNativeToolSpecification();
             if (nativeSpecification != null) {
-                specifications.add(ToolSpecification.builder()
-                        .name(tool.getName())
-                        .description(nativeSpecification.description())
-                        .parameters(nativeSpecification.parameters())
-                        .build());
+                specifications.add(
+                        ToolSpecification.builder().name(tool.getName()).description(nativeSpecification.description())
+                                .parameters(nativeSpecification.parameters()).build());
             } else {
-                specifications.add(ToolSpecification.builder()
-                        .name(tool.getName())
+                specifications.add(ToolSpecification.builder().name(tool.getName())
                         .description(tool.getDescription() == null ? "" : tool.getDescription())
-                        .parameters(toObjectSchema(tool.getSchema()))
-                        .build());
+                        .parameters(toObjectSchema(tool.getSchema())).build());
             }
         }
         return specifications;
@@ -55,7 +51,8 @@ public final class LangChain4jToolSpecificationMapper {
         }
 
         String description = schema.description();
-        if ((description == null || description.isBlank()) && descriptionFallback != null && !descriptionFallback.isBlank()) {
+        if ((description == null || description.isBlank()) && descriptionFallback != null
+                && !descriptionFallback.isBlank()) {
             description = descriptionFallback;
         }
         if (description != null && !description.isBlank()) {
@@ -91,19 +88,15 @@ public final class LangChain4jToolSpecificationMapper {
             return JsonBooleanSchema.builder().description(booleanParameter.description()).build();
         }
         if (parameter instanceof ToolParameter.EnumParameter enumParameter) {
-            return JsonEnumSchema.builder()
-                    .description(enumParameter.description())
-                    .enumValues(enumParameter.values())
+            return JsonEnumSchema.builder().description(enumParameter.description()).enumValues(enumParameter.values())
                     .build();
         }
         if (parameter instanceof ToolParameter.ObjectParameter objectParameter) {
             return toObjectSchema(objectParameter.schema(), objectParameter.description());
         }
         if (parameter instanceof ToolParameter.ArrayParameter arrayParameter) {
-            return JsonArraySchema.builder()
-                    .description(arrayParameter.description())
-                    .items(toSchemaElement(arrayParameter.items()))
-                    .build();
+            return JsonArraySchema.builder().description(arrayParameter.description())
+                    .items(toSchemaElement(arrayParameter.items())).build();
         }
 
         throw new IllegalStateException("Unsupported tool parameter type: " + parameter.getClass().getName());

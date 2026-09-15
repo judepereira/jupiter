@@ -1,17 +1,16 @@
 package com.judepereira.jupiter.agent.tools.impl;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
 import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class RunCommandEnvironmentTest {
     @Test
     void emptyAllowlistExposesNoHostVariables() {
-        Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
-                Map.of("HOST_ONLY", "host-value"), Set.of(), Map.of());
+        Map<String, String> environment = RunCommandTool.buildCommandEnvironment(Map.of("HOST_ONLY", "host-value"),
+                Set.of(), Map.of());
 
         assertThat(environment).doesNotContainKey("HOST_ONLY");
     }
@@ -19,28 +18,23 @@ class RunCommandEnvironmentTest {
     @Test
     void allowlistPassesOnlyRequestedHostVariables() {
         Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
-                Map.of("ALLOWED_HOST", "allowed", "OTHER_HOST", "hidden"),
-                Set.of("ALLOWED_HOST"), Map.of());
+                Map.of("ALLOWED_HOST", "allowed", "OTHER_HOST", "hidden"), Set.of("ALLOWED_HOST"), Map.of());
 
-        assertThat(environment).containsEntry("ALLOWED_HOST", "allowed")
-                .doesNotContainKey("OTHER_HOST");
+        assertThat(environment).containsEntry("ALLOWED_HOST", "allowed").doesNotContainKey("OTHER_HOST");
     }
 
     @Test
     void projectVariablesOverrideAllowedHostValues() {
-        Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
-                Map.of("SHARED", "host-value"), Set.of("SHARED"),
-                Map.of("SHARED", "project-value", "PROJECT_ONLY", "project"));
+        Map<String, String> environment = RunCommandTool.buildCommandEnvironment(Map.of("SHARED", "host-value"),
+                Set.of("SHARED"), Map.of("SHARED", "project-value", "PROJECT_ONLY", "project"));
 
-        assertThat(environment).containsEntry("SHARED", "project-value")
-                .containsEntry("PROJECT_ONLY", "project");
+        assertThat(environment).containsEntry("SHARED", "project-value").containsEntry("PROJECT_ONLY", "project");
     }
 
     @Test
     void encryptionKeyIsBlockedEvenWhenProjectEnvironmentReintroducesIt() {
         Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
-                Map.of("JUPITER_ENCRYPTION_KEY", "host-key"),
-                Set.of("JUPITER_ENCRYPTION_KEY"),
+                Map.of("JUPITER_ENCRYPTION_KEY", "host-key"), Set.of("JUPITER_ENCRYPTION_KEY"),
                 Map.of("JUPITER_ENCRYPTION_KEY", "project-key"));
 
         assertThat(environment).doesNotContainKey("JUPITER_ENCRYPTION_KEY");
@@ -49,11 +43,9 @@ class RunCommandEnvironmentTest {
     @Test
     void authCredentialsAreBlockedFromBothSources() {
         Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
-                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "host-password",
-                        "JUPITER_HTTP_AUTH_USERNAME", "host-user"),
+                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "host-password", "JUPITER_HTTP_AUTH_USERNAME", "host-user"),
                 Set.of("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME"),
-                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "project-password",
-                        "JUPITER_HTTP_AUTH_USERNAME", "project-user"));
+                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "project-password", "JUPITER_HTTP_AUTH_USERNAME", "project-user"));
 
         assertThat(environment).doesNotContainKeys("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME");
     }

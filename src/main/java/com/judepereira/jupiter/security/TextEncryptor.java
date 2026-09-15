@@ -3,6 +3,7 @@ package com.judepereira.jupiter.security;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 import javax.crypto.Cipher;
@@ -23,7 +24,7 @@ public class TextEncryptor {
 
     private final SecretKeySpec aesKey;
     private final SecretKeySpec hmacKey;
-    private final java.security.SecureRandom random = new java.security.SecureRandom();
+    private final SecureRandom random = new SecureRandom();
 
     public TextEncryptor(EncryptionKey key) {
         byte[] master = key.bytes();
@@ -36,7 +37,8 @@ public class TextEncryptor {
     }
 
     public String encrypt(String plaintext, String aad) {
-        if (plaintext == null) return null;
+        if (plaintext == null)
+            return null;
         try {
             byte[] nonce = new byte[NONCE_SIZE];
             random.nextBytes(nonce);
@@ -52,11 +54,14 @@ public class TextEncryptor {
     }
 
     public String decrypt(String value, String aad) {
-        if (value == null) return null;
-        if (!value.startsWith(PREFIX)) throw new EncryptionException("Malformed encrypted value");
+        if (value == null)
+            return null;
+        if (!value.startsWith(PREFIX))
+            throw new EncryptionException("Malformed encrypted value");
         try {
             byte[] packed = Base64.getDecoder().decode(value.substring(PREFIX.length()));
-            if (packed.length < NONCE_SIZE + 16) throw new EncryptionException("Malformed encrypted value");
+            if (packed.length < NONCE_SIZE + 16)
+                throw new EncryptionException("Malformed encrypted value");
             Cipher cipher = Cipher.getInstance(CIPHER);
             cipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(TAG_SIZE_BITS, packed, 0, NONCE_SIZE));
             cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
@@ -67,12 +72,14 @@ public class TextEncryptor {
     }
 
     public String blindIndex(String value, String domain) {
-        if (value == null) return null;
+        if (value == null)
+            return null;
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(hmacKey);
             mac.update((BLIND_INDEX_PREFIX + domain + ":").getBytes(StandardCharsets.UTF_8));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
+            return Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
         } catch (GeneralSecurityException exception) {
             throw new EncryptionException("Blind index failed", exception);
         }
@@ -111,7 +118,11 @@ public class TextEncryptor {
     }
 
     public static class EncryptionException extends RuntimeException {
-        public EncryptionException(String message) { super(message); }
-        public EncryptionException(String message, Throwable cause) { super(message, cause); }
+        public EncryptionException(String message) {
+            super(message);
+        }
+        public EncryptionException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

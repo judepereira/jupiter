@@ -5,10 +5,7 @@ public final class McpRuntimeEvents {
     }
 
     public enum ConnectionStatus {
-        CONNECTING,
-        READY,
-        FAILED,
-        CLOSED
+        CONNECTING, READY, FAILED, CLOSED
     }
 
     public record ProjectMcpRuntimeChanged(long projectId) {
@@ -17,6 +14,7 @@ public final class McpRuntimeEvents {
     public record ProjectMcpToolsChanged(long projectId) {
     }
 
-    public record ProjectMcpServerStatusChanged(long projectId, long serverId, String serverName, ConnectionStatus status, String message) {
+    public record ProjectMcpServerStatusChanged(long projectId, long serverId, String serverName,
+            ConnectionStatus status, String message) {
     }
 }

@@ -3,8 +3,7 @@ package com.judepereira.jupiter.agent.catalog;
 import com.fasterxml.jackson.annotation.JsonCreator;
 
 public enum AgentMode {
-    AGENT,
-    SUBAGENT;
+    AGENT, SUBAGENT;
 
     @JsonCreator
     public static AgentMode fromValue(String value) {

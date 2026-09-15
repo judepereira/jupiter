@@ -8,10 +8,14 @@ import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
-import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
-import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter.agent.llm.AgentModelOptions;
+import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ToolCall;
+import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpProjectToolExecutor;
 import com.judepereira.jupiter.agent.mcp.McpProjectToolSnapshot;
@@ -19,20 +23,12 @@ import com.judepereira.jupiter.agent.skill.SkillCatalog;
 import com.judepereira.jupiter.agent.skill.SkillContextInjector;
 import com.judepereira.jupiter.agent.skill.SkillDiscoveryService;
 import com.judepereira.jupiter.agent.skill.SkillInvocationResolver;
-import com.judepereira.jupiter.agent.llm.dto.Message;
-import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
-import com.judepereira.jupiter.agent.llm.dto.ToolCall;
-import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
-import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.TokenUsageService;
-import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Autowired;
-
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -40,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 @Service
 public class CodingAgentHarness {
@@ -60,12 +58,11 @@ public class CodingAgentHarness {
 
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
-                              AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-                              AgentModelResolutionService agentModelResolutionService,
-                              AppStateService appStateService, TokenUsageService tokenUsageService,
-                              McpProjectMcpServerRuntimeManager mcpRuntimeManager,
-                              SystemPromptComposer systemPromptComposer, SkillDiscoveryService skillDiscoveryService,
-                              SkillInvocationResolver skillInvocationResolver, SkillContextInjector skillContextInjector) {
+            AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
+            AgentModelResolutionService agentModelResolutionService, AppStateService appStateService,
+            TokenUsageService tokenUsageService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+            SystemPromptComposer systemPromptComposer, SkillDiscoveryService skillDiscoveryService,
+            SkillInvocationResolver skillInvocationResolver, SkillContextInjector skillContextInjector) {
         this.modelFactory = modelFactory;
         this.registry = registry;
         this.props = props;
@@ -82,12 +79,14 @@ public class CodingAgentHarness {
     }
 
     public AgentTurnResult runTurn(AgentTurnRequest request) {
-        return runTurnStreaming(request, new AgentStreamListener() {});
+        return runTurnStreaming(request, new AgentStreamListener() {
+        });
     }
 
     public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
         String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
-                ? props.getWorkspaceRoot() : request.getWorkspaceRoot();
+                ? props.getWorkspaceRoot()
+                : request.getWorkspaceRoot();
         Path workspace = Path.of(workspaceRoot);
         SkillCatalog skillCatalog = skillDiscoveryService.discover(workspace);
         AgentDefinition agent = resolveAgent(request);
@@ -96,15 +95,18 @@ public class CodingAgentHarness {
         if (selectedModel != null) {
             listener.onModelResolved(selectedResolution.preferredModelId(), selectedModel);
         }
-        AgentModelClient model = modelFactory.getClient(selectedModel == null ? props.getProvider() : selectedModel.provider());
+        AgentModelClient model = modelFactory
+                .getClient(selectedModel == null ? props.getProvider() : selectedModel.provider());
         ThinkingLevel thinkingLevel = resolveThinkingLevel(request, agent);
-        AgentModelOptions modelOptions = selectedModel == null ? null : new AgentModelOptions(
-                selectedModel.id(), selectedModel.apiModelId(), thinkingLevel, selectedModel.supportsReasoning(),
-                agent == null ? null : agent.textVerbosity());
+        AgentModelOptions modelOptions = selectedModel == null
+                ? null
+                : new AgentModelOptions(selectedModel.id(), selectedModel.apiModelId(), thinkingLevel,
+                        selectedModel.supportsReasoning(), agent == null ? null : agent.textVerbosity());
 
         String systemPrompt = resolveSystemPrompt(request, agent, skillCatalog);
         List<Message> convo = new ArrayList<>(seedConversation(systemPrompt, request.getConversationHistory()));
-        Message newestUser = convo.stream().filter(message -> message.getRole() == Message.Role.USER).reduce((a, b) -> b).orElse(null);
+        Message newestUser = convo.stream().filter(message -> message.getRole() == Message.Role.USER)
+                .reduce((a, b) -> b).orElse(null);
         if (newestUser != null) {
             var resolution = skillInvocationResolver.resolveExplicit(newestUser.getContent(), skillCatalog);
             convo = new ArrayList<>(skillContextInjector.injectBeforeNewestUser(convo, resolution));
@@ -118,12 +120,8 @@ public class CodingAgentHarness {
         ToolExecutionContext execCtxTemplate = new ToolExecutionContext(Path.of(workspaceRoot),
                 agent != null ? agent.allowWrite() : props.getTooling().isAllowWrite(),
                 agent != null ? agent.allowCommand() : props.getTooling().isAllowCommand(),
-                props.getCommandTimeoutSeconds(),
-                request.getSessionId(),
-                request.getAgentId(),
-                agent == null ? null : agent.mode(),
-                null,
-                environmentVariables, commandEnvironmentAllowlist,
+                props.getCommandTimeoutSeconds(), request.getSessionId(), request.getAgentId(),
+                agent == null ? null : agent.mode(), null, environmentVariables, commandEnvironmentAllowlist,
                 ToolProgressSink.noop(), null);
 
         long projectId = resolveProjectId(request.getSessionId());
@@ -163,15 +161,19 @@ public class CodingAgentHarness {
                 String assistantText = resp.getAssistantText();
 
                 if (assistantText == null || assistantText.isEmpty()) {
-                    // When using OpenAI through the codex backend, this field is always empty. However,
-                    // we know that the streaming request is completed when the call above returns, so we're
+                    // When using OpenAI through the codex backend, this field is always empty.
+                    // However,
+                    // we know that the streaming request is completed when the call above returns,
+                    // so we're
                     // good to assume that the assistantText is the accumulated text itself.
                     assistantText = accumulated.toString();
                 }
 
                 if (call != null) {
                     String toolName = call.getToolName();
-                    String resolvedToolName = (toolName == null || toolName.isBlank()) ? "(missing_tool_name)" : toolName;
+                    String resolvedToolName = (toolName == null || toolName.isBlank())
+                            ? "(missing_tool_name)"
+                            : toolName;
                     Map<String, Object> args = call.getArguments() == null ? Map.of() : call.getArguments();
                     String toolCallId = normalizeToolCallId(call.getToolCallId(), i, 0);
 
@@ -204,20 +206,18 @@ public class CodingAgentHarness {
                     try {
                         throwIfCancelled(cancellationToken);
                         ToolExecutionContext execCtx = new ToolExecutionContext(execCtxTemplate.getWorkspaceRoot(),
-                                execCtxTemplate.isAllowWrite(),
-                                execCtxTemplate.isAllowCommand(),
-                                execCtxTemplate.getCommandTimeoutSeconds(),
-                                execCtxTemplate.getSessionId(),
-                                execCtxTemplate.getAgentId(),
-                                execCtxTemplate.getAgentMode(),
-                                toolCallId,
-                                execCtxTemplate.getEnvironmentVariables(), execCtxTemplate.getCommandEnvironmentAllowlist(),
-                                (eventName, payload) -> listener.onToolCallProgress(toolCallId, toolName, eventName, payload),
+                                execCtxTemplate.isAllowWrite(), execCtxTemplate.isAllowCommand(),
+                                execCtxTemplate.getCommandTimeoutSeconds(), execCtxTemplate.getSessionId(),
+                                execCtxTemplate.getAgentId(), execCtxTemplate.getAgentMode(), toolCallId,
+                                execCtxTemplate.getEnvironmentVariables(),
+                                execCtxTemplate.getCommandEnvironmentAllowlist(), (eventName, payload) -> listener
+                                        .onToolCallProgress(toolCallId, toolName, eventName, payload),
                                 cancellationToken);
                         ToolExecutionResult result = executeTool(toolName, args, execCtx, mcpSnapshot);
                         String toolText = result.getText() == null ? "" : result.getText();
                         convo.add(new Message(Message.Role.TOOL, toolText, toolCallId, null, null));
-                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, result.isSuccess(), result.getText(), result.getMachine());
+                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, result.isSuccess(),
+                                result.getText(), result.getMachine());
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_result:" + toolName);
@@ -226,14 +226,16 @@ public class CodingAgentHarness {
                     } catch (IllegalArgumentException e) {
                         String toolMsg = "[tool_error] Unknown tool: " + toolName;
                         convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId, null, null));
-                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg, Map.of("error", e.getMessage()));
+                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg,
+                                Map.of("error", e.getMessage()));
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_error:" + toolName);
                     } catch (Exception e) {
                         String toolMsg = "[tool_error] " + e.getMessage();
                         convo.add(new Message(Message.Role.TOOL, toolMsg, toolCallId, null, null));
-                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg, Map.of("exception", e.toString()));
+                        ToolCallTrace trace = new ToolCallTrace(toolCallId, toolName, args, false, toolMsg,
+                                Map.of("exception", e.toString()));
                         traces.add(trace);
                         listener.onToolCallTrace(trace);
                         listener.onStatus("tool_exception:" + toolName);
@@ -241,7 +243,8 @@ public class CodingAgentHarness {
                     // continue loop
                 } else if (assistantText != null && !assistantText.isBlank()) {
                     throwIfCancelled(cancellationToken);
-                    AgentTurnResult result = new AgentTurnResult(accumulated.length() == 0 ? assistantText : accumulated.toString(), traces);
+                    AgentTurnResult result = new AgentTurnResult(
+                            accumulated.length() == 0 ? assistantText : accumulated.toString(), traces);
                     listener.onComplete(result);
                     return result;
                 } else {
@@ -292,12 +295,14 @@ public class CodingAgentHarness {
                 var resolution = agentModelResolutionService.resolve(agent);
                 return new ModelResolution(resolution.preferredModelId(), resolution.model());
             }
-            return new ModelResolution(null, modelCatalogService == null ? null : modelCatalogService.getRequired(props.getModel()));
+            return new ModelResolution(null,
+                    modelCatalogService == null ? null : modelCatalogService.getRequired(props.getModel()));
         }
         return new ModelResolution(null, modelCatalogService.getRequired(requestedModelId));
     }
 
-    private record ModelResolution(String preferredModelId, ModelDefinition model) {}
+    private record ModelResolution(String preferredModelId, ModelDefinition model) {
+    }
 
     private ThinkingLevel resolveThinkingLevel(AgentTurnRequest request, AgentDefinition agent) {
         if (request.getThinkingLevel() != null) {
@@ -338,7 +343,8 @@ public class CodingAgentHarness {
 
     private Set<String> resolveAllowedTools(AgentDefinition agent) {
         if (agent == null) {
-            return registry.all().keySet().stream().filter(tool -> !"task".equals(tool)).collect(Collectors.toCollection(HashSet::new));
+            return registry.all().keySet().stream().filter(tool -> !"task".equals(tool))
+                    .collect(Collectors.toCollection(HashSet::new));
         }
         Set<String> allowed = new HashSet<>(agent.allowedTools());
         if (agent.mode() == AgentMode.SUBAGENT) {
@@ -350,8 +356,7 @@ public class CodingAgentHarness {
     private List<ToolDefinition> resolveToolDefinitions(Set<String> allowedTools, McpProjectToolSnapshot mcpSnapshot) {
         List<ToolDefinition> builtIns = registry.all().values().stream()
                 .filter(tool -> allowedTools != null && allowedTools.contains(tool.name()))
-                .map(tool -> tool.definition())
-                .collect(Collectors.toCollection(ArrayList::new));
+                .map(tool -> tool.definition()).collect(Collectors.toCollection(ArrayList::new));
         if (!allowsMcpTools(allowedTools)) {
             return builtIns;
         }
@@ -365,7 +370,7 @@ public class CodingAgentHarness {
     }
 
     private ToolExecutionResult executeTool(String toolName, Map<String, Object> args, ToolExecutionContext context,
-                                           McpProjectToolSnapshot mcpSnapshot) throws Exception {
+            McpProjectToolSnapshot mcpSnapshot) throws Exception {
         if (registry.get(toolName) != null) {
             return registry.executeByName(toolName, args, context);
         }

@@ -16,18 +16,24 @@ public class AgentModelResolutionService {
     public ModelResolution resolve(AgentDefinition agent) {
         for (String id : agent.modelIds()) {
             ModelDefinition model = catalog.getRequired(id);
-            if (availability.isAvailable(model.provider())) return new ModelResolution(agent.defaultModel(), model);
+            if (availability.isAvailable(model.provider()))
+                return new ModelResolution(agent.defaultModel(), model);
         }
         throw new IllegalStateException("No configured provider is available for agent '" + agent.id() + "'");
     }
 
-    /** Resolves the catalog preference for display; provider availability is intentionally not checked. */
+    /**
+     * Resolves the catalog preference for display; provider availability is
+     * intentionally not checked.
+     */
     public ModelResolution resolveForDisplay(AgentDefinition agent) {
         ModelDefinition model = catalog.getRequired(agent.defaultModel());
         return new ModelResolution(agent.defaultModel(), model);
     }
 
     public record ModelResolution(String preferredModelId, ModelDefinition model) {
-        public boolean fallback() { return !preferredModelId.equals(model.id()); }
+        public boolean fallback() {
+            return !preferredModelId.equals(model.id());
+        }
     }
 }

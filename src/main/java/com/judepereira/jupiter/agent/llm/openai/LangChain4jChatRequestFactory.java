@@ -17,21 +17,20 @@ public final class LangChain4jChatRequestFactory {
     private final OpenAiRequestParametersMapper requestParametersMapper;
 
     public LangChain4jChatRequestFactory(LangChain4jMessageMapper messageMapper,
-                                         LangChain4jToolSpecificationMapper toolSpecificationMapper,
-                                         OpenAiRequestParametersMapper requestParametersMapper) {
+            LangChain4jToolSpecificationMapper toolSpecificationMapper,
+            OpenAiRequestParametersMapper requestParametersMapper) {
         this.messageMapper = messageMapper;
         this.toolSpecificationMapper = toolSpecificationMapper;
         this.requestParametersMapper = requestParametersMapper;
     }
 
-    public ChatRequest create(String modelName, List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options) {
+    public ChatRequest create(String modelName, List<Message> conversation, List<ToolDefinition> tools,
+            AgentModelOptions options) {
         List<ChatMessage> messages = messageMapper.toChatMessages(conversation);
         List<ToolSpecification> toolSpecifications = toolSpecificationMapper.toToolSpecifications(tools);
         OpenAiResponsesChatRequestParameters parameters = requestParametersMapper.toRequestParameters(options);
 
-        ChatRequest.Builder builder = ChatRequest.builder()
-                .modelName(modelName)
-                .messages(messages);
+        ChatRequest.Builder builder = ChatRequest.builder().modelName(modelName).messages(messages);
 
         if (!toolSpecifications.isEmpty()) {
             builder.toolSpecifications(toolSpecifications);

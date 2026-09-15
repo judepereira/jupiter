@@ -1,23 +1,24 @@
 package com.judepereira.jupiter.agent.tools;
 
-import com.judepereira.jupiter.agent.tools.impl.RunCommandTool;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.judepereira.jupiter.agent.tools.impl.RunCommandTool;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class RunCommandToolTest {
 
     @Test
     public void does_not_hang_on_output(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, Set.of(),
+                null, null);
         String cmd = "for i in $(seq 1 10); do echo out$i; echo err$i 1>&2; done";
         var res = t.execute(Map.of("command", cmd), ctx);
         assertTrue(res.isSuccess());
@@ -35,7 +36,7 @@ public class RunCommandToolTest {
     public void passesEnvironmentVariablesToProcess(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
         ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null,
-                Map.of("PROJECT_ENV_VAR", "project-value"), java.util.Set.of(), ToolProgressSink.noop(), null);
+                Map.of("PROJECT_ENV_VAR", "project-value"), Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("command", "printf '%s' \"$PROJECT_ENV_VAR\""), ctx);
 
@@ -46,12 +47,14 @@ public class RunCommandToolTest {
     @Test
     public void does_not_pass_http_auth_credentials_to_process(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null,
-                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "secret-password",
-                        "JUPITER_HTTP_AUTH_USERNAME", "secret-user",
-                        "PROJECT_ENV_VAR", "project-value"), java.util.Set.of(), ToolProgressSink.noop(), null);
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                tmp, true, true, 5, null, null, null, null, Map.of("JUPITER_HTTP_AUTH_PASSWORD", "secret-password",
+                        "JUPITER_HTTP_AUTH_USERNAME", "secret-user", "PROJECT_ENV_VAR", "project-value"),
+                Set.of(), ToolProgressSink.noop(), null);
 
-        var res = t.execute(Map.of("command", "printf '%s|%s|%s' \"${JUPITER_HTTP_AUTH_PASSWORD-}\" \"${JUPITER_HTTP_AUTH_USERNAME-}\" \"$PROJECT_ENV_VAR\""), ctx);
+        var res = t.execute(Map.of("command",
+                "printf '%s|%s|%s' \"${JUPITER_HTTP_AUTH_PASSWORD-}\" \"${JUPITER_HTTP_AUTH_USERNAME-}\" \"$PROJECT_ENV_VAR\""),
+                ctx);
 
         assertThat(res.isSuccess()).isTrue();
         assertThat((String) res.getMachine().get("stdout")).isEqualTo("||project-value\n");
@@ -60,7 +63,8 @@ public class RunCommandToolTest {
     @Test
     public void long_stdout_is_previewed_with_utf8_boundaries_and_written_to_file(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, Set.of(),
+                null, null);
         String cmd = "i=0; while [ $i -lt 3000 ]; do printf '😀'; i=$((i+1)); done";
 
         var res = t.execute(Map.of("command", cmd), ctx);
@@ -85,7 +89,8 @@ public class RunCommandToolTest {
     @Test
     public void preserves_utf8_when_a_character_crosses_a_read_boundary(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, Set.of(),
+                null, null);
         String cmd = "head -c 8188 /dev/zero | tr '\\0' a; printf '\\360\\237\\230\\200'; printf '%05000d' 0";
 
         var res = t.execute(Map.of("command", cmd), ctx);
@@ -100,7 +105,8 @@ public class RunCommandToolTest {
     @Test
     public void long_stderr_is_previewed_with_utf8_boundaries_and_written_to_file(@TempDir Path tmp) throws Exception {
         RunCommandTool t = new RunCommandTool();
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, java.util.Set.of(), null, null);
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, null, Set.of(),
+                null, null);
         String cmd = "for i in $(seq 1 3000); do printf '😀' 1>&2; done";
 
         var res = t.execute(Map.of("command", cmd), ctx);

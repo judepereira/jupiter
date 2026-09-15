@@ -1,12 +1,12 @@
 package com.judepereira.jupiter.ui;
 
-import org.springframework.stereotype.Service;
-
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
+import org.springframework.stereotype.Service;
 
 @Service
 public class ActiveStreamRegistryService {
@@ -28,7 +28,7 @@ public class ActiveStreamRegistryService {
     }
 
     public Set<Long> activeSessionIdsSnapshot() {
-        return streamsByAssistantId.values().stream().map(StreamRef::sessionId).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return streamsByAssistantId.values().stream().map(StreamRef::sessionId).collect(Collectors.toUnmodifiableSet());
     }
 
     public Set<String> activeAssistantIdsSnapshot() {
@@ -57,11 +57,10 @@ public class ActiveStreamRegistryService {
     }
 
     public Optional<String> assistantIdForSession(long sessionId) {
-        return streamsByAssistantId.entrySet().stream()
-                .filter(entry -> entry.getValue().sessionId() == sessionId)
-                .map(Map.Entry::getKey)
-                .findFirst();
+        return streamsByAssistantId.entrySet().stream().filter(entry -> entry.getValue().sessionId() == sessionId)
+                .map(Map.Entry::getKey).findFirst();
     }
 
-    private record StreamRef(long sessionId, String workspaceRoot) {}
+    private record StreamRef(long sessionId, String workspaceRoot) {
+    }
 }

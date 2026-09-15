@@ -1,22 +1,20 @@
 package com.judepereira.jupiter.ui;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class UiControllerChatMessageGroupingTests {
 
     @Test
     void exploratoryToolCallsGroupAcrossNamesAndAggregateSuccess() {
-        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
-                toolCall("read-1", "read_file", true),
-                toolCall("read-2", "read_file", false),
-                toolCall("list-1", "list_files", true),
-                toolCall("task-1", "task", true),
-                toolCall("list-2", "list_files", true)
-        ), null, null);
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking",
+                1L, false, "assistant-1", null,
+                List.of(toolCall("read-1", "read_file", true), toolCall("read-2", "read_file", false),
+                        toolCall("list-1", "list_files", true), toolCall("task-1", "task", true),
+                        toolCall("list-2", "list_files", true)),
+                null, null);
 
         List<ChatPresentationService.ToolCallGroupView> groups = message.toolCallGroups();
 
@@ -37,10 +35,9 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void adjacentNonExploratorySameNameCallsStillGroupAsBefore() {
-        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
-                toolCall("write-1", "write_file", true),
-                toolCall("write-2", "write_file", true)
-        ), null, null);
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking",
+                1L, false, "assistant-1", null,
+                List.of(toolCall("write-1", "write_file", true), toolCall("write-2", "write_file", true)), null, null);
 
         List<ChatPresentationService.ToolCallGroupView> groups = message.toolCallGroups();
 
@@ -52,12 +49,11 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void toolCallBlocksPreserveChronologicalOrderAcrossStandaloneSpecialTools() {
-        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking", 1L, false, "assistant-1", null, List.of(
-                toolCall("read-1", "read_file", true),
-                toolCall("read-2", "read_file", true),
-                toolCall("task-1", "task", true),
-                toolCall("read-3", "read_file", true)
-        ), null, null);
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "thinking",
+                1L, false, "assistant-1", null,
+                List.of(toolCall("read-1", "read_file", true), toolCall("read-2", "read_file", true),
+                        toolCall("task-1", "task", true), toolCall("read-3", "read_file", true)),
+                null, null);
 
         List<ChatPresentationService.ToolCallBlockView> blocks = message.toolCallBlocks();
 
@@ -69,8 +65,8 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void presentationModelsOwnStableSafeDomIds() {
-        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "", 1L, false,
-                "assistant / ü", null, List.of(toolCall("call / ü", "read_file", true)), null, null);
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "", 1L,
+                false, "assistant / ü", null, List.of(toolCall("call / ü", "read_file", true)), null, null);
 
         assertThat(message.toolCallHostId()).isEqualTo("assistant-tool-calls-assistant-20-2f-20-c3-bc");
         assertThat(message.toolCallBlocks().get(0).bundle().domId(message.id()))
@@ -83,14 +79,15 @@ class UiControllerChatMessageGroupingTests {
 
     @Test
     void emptyAssistantToolCallHostIsStableAndHasNoToolCallChildren() {
-        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "", 1L, false,
-                "assistant-1", null, List.of(), null, null);
+        ChatPresentationService.ChatMessage message = new ChatPresentationService.ChatMessage("assistant", "", 1L,
+                false, "assistant-1", null, List.of(), null, null);
 
         assertThat(message.toolCallHostId()).isEqualTo("assistant-tool-calls-assistant-1");
         assertThat(message.toolCallBlocks()).isEmpty();
     }
 
     private static ChatPresentationService.ToolCallView toolCall(String id, String toolName, boolean success) {
-        return new ChatPresentationService.ToolCallView(id, toolName, success, "input", "output", false, false, null, null, null, null, null, null, null, null, null);
+        return new ChatPresentationService.ToolCallView(id, toolName, success, "input", "output", false, false, null,
+                null, null, null, null, null, null, null, null);
     }
 }

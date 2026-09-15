@@ -1,52 +1,54 @@
 package com.judepereira.jupiter.persistence;
 
-import com.judepereira.jupiter.agent.llm.dto.Message;
-import com.judepereira.jupiter.agent.llm.AgentModelClient;
-import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
-import com.judepereira.jupiter.agent.llm.AgentModelOptions;
-import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
-import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
-import com.judepereira.jupiter.agent.llm.dto.ToolCall;
-import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
+
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
+import com.judepereira.jupiter.agent.llm.AgentModelClient;
+import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter.agent.llm.AgentModelOptions;
+import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
+import com.judepereira.jupiter.agent.llm.dto.ToolCall;
+import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
-import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
-import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
+import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
+import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.Persistence.LifecycleHookSettings;
-import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
-import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
-import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter.persistence.Persistence.McpServerHeader;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
 import com.judepereira.jupiter.persistence.Persistence.ProjectEnvironmentVariable;
 import com.judepereira.jupiter.persistence.Persistence.ProjectView;
+import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
+import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter.persistence.Persistence.SessionView;
+import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter.persistence.Persistence.WorkspaceView;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.tuple;
+import java.util.function.Consumer;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 public class AppStateServicePersistenceTests {
 
@@ -74,11 +76,13 @@ public class AppStateServicePersistenceTests {
 
         assertThat(service.loadWorkspaceAutoGitUpdateFailureState(workspaceId).failureEpisodeActive()).isFalse();
         assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isTrue();
-        assertThat(service.loadSessionDetail(secondSessionId).chatMessages()).extracting(ChatMessageView::text).contains("failure");
+        assertThat(service.loadSessionDetail(secondSessionId).chatMessages()).extracting(ChatMessageView::text)
+                .contains("failure");
         assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isFalse();
         service.activateSession(firstSessionId);
         assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isTrue();
-        assertThat(service.loadSessionDetail(firstSessionId).chatMessages()).extracting(ChatMessageView::text).contains("failure");
+        assertThat(service.loadSessionDetail(firstSessionId).chatMessages()).extracting(ChatMessageView::text)
+                .contains("failure");
         assertThat(service.loadWorkspaceAutoGitUpdateFailureState(workspaceId).failureEpisodeActive()).isTrue();
 
         service.resetWorkspaceAutoGitUpdateFailure(workspaceId);
@@ -97,18 +101,21 @@ public class AppStateServicePersistenceTests {
         service.addOrReopenProject("Alpha", projectPath.toString());
         long workspaceId = service.loadViewData().activeWorkspace().id();
         long sessionId = service.loadViewData().activeSession().id();
-        TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(context.dataSource()));
+        TransactionTemplate transaction = new TransactionTemplate(
+                new DataSourceTransactionManager(context.dataSource()));
 
         assertThatThrownBy(() -> transaction.execute(status -> {
             service.appendAutoGitUpdateFailureMessage(workspaceId, "failure");
             return null;
         })).isInstanceOf(IllegalStateException.class).hasMessage("event publication failed");
         assertThat(service.loadWorkspaceAutoGitUpdateFailureState(workspaceId).failureEpisodeActive()).isFalse();
-        assertThat(service.loadSessionDetail(sessionId).chatMessages()).extracting(ChatMessageView::text).doesNotContain("failure");
+        assertThat(service.loadSessionDetail(sessionId).chatMessages()).extracting(ChatMessageView::text)
+                .doesNotContain("failure");
 
         failEventPublication.set(false);
         assertThat(service.appendAutoGitUpdateFailureMessage(workspaceId, "failure").firstFailure()).isTrue();
-        assertThat(service.loadSessionDetail(sessionId).chatMessages()).extracting(ChatMessageView::text).contains("failure");
+        assertThat(service.loadSessionDetail(sessionId).chatMessages()).extracting(ChatMessageView::text)
+                .contains("failure");
     }
 
     @Test
@@ -124,8 +131,8 @@ public class AppStateServicePersistenceTests {
                 .contains("Updated in background");
         assertThat(service.buildConversationHistory(sessionId)).extracting(Message::getContent)
                 .doesNotContain("Updated in background");
-        assertThat(service.listConversationMessages(sessionId)).anyMatch(row -> row.publicId().equals(message.id())
-                && row.showInChat() && !row.includeInModel());
+        assertThat(service.listConversationMessages(sessionId))
+                .anyMatch(row -> row.publicId().equals(message.id()) && row.showInChat() && !row.includeInModel());
     }
 
     @Test
@@ -149,8 +156,7 @@ public class AppStateServicePersistenceTests {
                 .contains(tuple(inactiveSessionId, false), tuple(activeSessionId, false));
         assertThat(afterInfo.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
                 .containsExactly(tuple(workspaceId, false));
-        assertThat(events).extracting(Object::getClass)
-                .containsExactly(WorkspaceRailRefreshEvent.class);
+        assertThat(events).extracting(Object::getClass).containsExactly(WorkspaceRailRefreshEvent.class);
 
         repository.updateSessionUnread(inactiveSessionId, true);
         events.clear();
@@ -161,8 +167,7 @@ public class AppStateServicePersistenceTests {
                 .contains(tuple(inactiveSessionId, true), tuple(activeSessionId, false));
         assertThat(afterExistingUnread.workspaces()).extracting(WorkspaceView::id, WorkspaceView::unread)
                 .containsExactly(tuple(workspaceId, true));
-        assertThat(events).extracting(Object::getClass)
-                .containsExactly(WorkspaceRailRefreshEvent.class);
+        assertThat(events).extracting(Object::getClass).containsExactly(WorkspaceRailRefreshEvent.class);
     }
 
     @Test
@@ -174,8 +179,8 @@ public class AppStateServicePersistenceTests {
         long otherSessionId = service.createSession(workspaceId, "Other").id();
         service.activateSession(activeSessionId);
 
-        assertThat(service.findMostRecentlyOpenedVisiblePrimarySession(workspaceId)).get()
-                .extracting(SessionView::id).isEqualTo(activeSessionId);
+        assertThat(service.findMostRecentlyOpenedVisiblePrimarySession(workspaceId)).get().extracting(SessionView::id)
+                .isEqualTo(activeSessionId);
         assertThat(service.loadViewData().activeSession().id()).isEqualTo(activeSessionId);
         assertThat(otherSessionId).isNotEqualTo(activeSessionId);
     }
@@ -188,9 +193,11 @@ public class AppStateServicePersistenceTests {
 
         assertThat(service.loadLifecycleHookSettings()).isEqualTo(new LifecycleHookSettings(null, null, null, 30));
 
-        service.updateLifecycleHookSettings(new LifecycleHookSettings("  echo done  ", "echo failed", "echo subagent", 45));
+        service.updateLifecycleHookSettings(
+                new LifecycleHookSettings("  echo done  ", "echo failed", "echo subagent", 45));
 
-        assertThat(service.loadLifecycleHookSettings()).isEqualTo(new LifecycleHookSettings("echo done", "echo failed", "echo subagent", 45));
+        assertThat(service.loadLifecycleHookSettings())
+                .isEqualTo(new LifecycleHookSettings("echo done", "echo failed", "echo subagent", 45));
     }
 
     @Test
@@ -231,7 +238,8 @@ public class AppStateServicePersistenceTests {
     @Test
     public void completedInactiveTurnsMarkOnlyThatSessionAndWorkspaceUnread(@TempDir Path projectPath) {
         List<Object> events = new ArrayList<>();
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> events.add(event));
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport
+                .appStateContext(event -> events.add(event));
         AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
@@ -241,10 +249,12 @@ public class AppStateServicePersistenceTests {
         service.createSession(workspaceId, "Feature work");
         long sessionTwoId = service.loadViewData().activeSession().id();
 
-        QueuedChatTurn inactiveTurn = service.appendUserMessageAndPendingAssistant(sessionOneId, "hello from inactive session");
-        service.appendToolCallTrace(sessionOneId, inactiveTurn.assistantMessage().id(),
-                new ToolCallTraceInput("tool-1", "read_file", Map.of("path", "README.md"), true, "read README", Map.of()));
-        context.activeStreamRegistryService().register(inactiveTurn.assistantMessage().id(), sessionOneId, projectPath.toString());
+        QueuedChatTurn inactiveTurn = service.appendUserMessageAndPendingAssistant(sessionOneId,
+                "hello from inactive session");
+        service.appendToolCallTrace(sessionOneId, inactiveTurn.assistantMessage().id(), new ToolCallTraceInput("tool-1",
+                "read_file", Map.of("path", "README.md"), true, "read README", Map.of()));
+        context.activeStreamRegistryService().register(inactiveTurn.assistantMessage().id(), sessionOneId,
+                projectPath.toString());
 
         AppStateView afterToolCall = service.loadViewData();
         assertThat(afterToolCall.sessions()).extracting(SessionView::id, SessionView::inProgress)
@@ -286,7 +296,8 @@ public class AppStateServicePersistenceTests {
 
     @Test
     public void completedAssistantMessagePersistsCompletedAtAndThreadsItIntoSessionDetail(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
@@ -300,7 +311,8 @@ public class AppStateServicePersistenceTests {
         assertThat(pendingRow.completedAt()).isNull();
         assertThat(pendingRow.pending()).isTrue();
 
-        ChatMessageView completed = service.completeAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "reply", List.of());
+        ChatMessageView completed = service.completeAssistantMessage(sessionId, queuedTurn.assistantMessage().id(),
+                "reply", List.of());
         assertThat(completed.completedTs()).isNotNull();
 
         var completedRow = repository.findMessageBySessionAndPublicId(sessionId, queuedTurn.assistantMessage().id());
@@ -308,16 +320,15 @@ public class AppStateServicePersistenceTests {
         assertThat(completedRow.pending()).isFalse();
 
         ChatMessageView threaded = service.loadSessionDetail(sessionId).chatMessages().stream()
-                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id()))
-                .findFirst()
-                .orElseThrow();
+                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id())).findFirst().orElseThrow();
         assertThat(threaded.completedTs()).isEqualTo(completedRow.completedAt().toEpochMilli());
         assertThat(threaded.text()).isEqualTo("reply");
     }
 
     @Test
     public void stopAssistantMessagePersistsStoppedTextAndClearsPendingFlag(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
@@ -325,10 +336,12 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn queuedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "hello");
-        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Stop me"), false, null, Map.of());
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Stop me"), false, null, Map.of());
         service.startToolCallTrace(sessionId, queuedTurn.assistantMessage().id(), started);
 
-        ChatMessageView stopped = service.stopAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "partial reply");
+        ChatMessageView stopped = service.stopAssistantMessage(sessionId, queuedTurn.assistantMessage().id(),
+                "partial reply");
 
         assertThat(stopped.pending()).isFalse();
         assertThat(stopped.completedTs()).isNotNull();
@@ -340,16 +353,15 @@ public class AppStateServicePersistenceTests {
         assertThat(trace.textSummary()).isEqualTo("Action Interrupted");
 
         ChatMessageView threaded = service.loadSessionDetail(sessionId).chatMessages().stream()
-                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id()))
-                .findFirst()
-                .orElseThrow();
+                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id())).findFirst().orElseThrow();
         assertThat(threaded.pending()).isFalse();
         assertThat(threaded.text()).isEqualTo("partial reply\n\nAction Interrupted");
     }
 
     @Test
     public void failAssistantMessageFinalizesIncompleteToolCallTracesWithFailureSummary(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
@@ -357,10 +369,12 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn queuedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "hello");
-        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Fail me"), false, null, Map.of());
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Fail me"), false, null, Map.of());
         service.startToolCallTrace(sessionId, queuedTurn.assistantMessage().id(), started);
 
-        ChatMessageView failed = service.failAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "Agent execution failed: boom");
+        ChatMessageView failed = service.failAssistantMessage(sessionId, queuedTurn.assistantMessage().id(),
+                "Agent execution failed: boom");
 
         assertThat(failed.pending()).isFalse();
         assertThat(failed.completedTs()).isNotNull();
@@ -373,16 +387,15 @@ public class AppStateServicePersistenceTests {
         assertThat(trace.argsJson()).contains("requestSummary");
 
         ChatMessageView threaded = service.loadSessionDetail(sessionId).chatMessages().stream()
-                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id()))
-                .findFirst()
-                .orElseThrow();
+                .filter(message -> message.id().equals(queuedTurn.assistantMessage().id())).findFirst().orElseThrow();
         assertThat(threaded.pending()).isFalse();
         assertThat(threaded.text()).isEqualTo("Agent execution failed: boom");
     }
 
     @Test
     public void completeAssistantMessageFinalizesAnyIncompleteToolCallTracesAsFailures(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
@@ -390,10 +403,12 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn queuedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "hello");
-        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Complete me"), false, null, Map.of());
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Complete me"), false, null, Map.of());
         service.startToolCallTrace(sessionId, queuedTurn.assistantMessage().id(), started);
 
-        ChatMessageView completed = service.completeAssistantMessage(sessionId, queuedTurn.assistantMessage().id(), "done", List.of());
+        ChatMessageView completed = service.completeAssistantMessage(sessionId, queuedTurn.assistantMessage().id(),
+                "done", List.of());
 
         assertThat(completed.pending()).isFalse();
         assertThat(completed.completedTs()).isNotNull();
@@ -407,7 +422,8 @@ public class AppStateServicePersistenceTests {
 
     @Test
     public void startToolCallTracePersistsRunningTraceAndSessionDetailShowsRunningStatus(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
@@ -415,10 +431,9 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
 
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of(
-                "agentId", "engineer",
-                "requestSummary", "Write the parser implementation"
-        ), false, null, Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), false, null,
+                Map.of());
 
         service.startToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
 
@@ -431,9 +446,7 @@ public class AppStateServicePersistenceTests {
         assertThat(assistantRow.toolCallsJson()).isNotNull();
 
         ChatMessageView assistant = service.loadSessionDetail(sessionId).chatMessages().stream()
-                .filter(message -> message.id().equals(turn.assistantMessage().id()))
-                .findFirst()
-                .orElseThrow();
+                .filter(message -> message.id().equals(turn.assistantMessage().id())).findFirst().orElseThrow();
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> {
             assertThat(call.status()).isEqualTo("running");
             assertThat(call.success()).isFalse();
@@ -444,26 +457,26 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void appendToolCallTraceAfterStartCompletesSameRowWithoutDuplicatingContextMessages(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+    public void appendToolCallTraceAfterStartCompletesSameRowWithoutDuplicatingContextMessages(
+            @TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of(
-                "agentId", "engineer",
-                "requestSummary", "Write the parser implementation"
-        ), false, null, Map.of());
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), false, null,
+                Map.of());
         service.startToolCallTrace(sessionId, turn.assistantMessage().id(), started);
 
         long beforeCompletionMessages = repository.listMessagesBySession(sessionId).size();
 
-        ToolCallTraceInput completed = new ToolCallTraceInput("task-1", "task", Map.of(
-                "agentId", "engineer",
-                "requestSummary", "Write the parser implementation"
-        ), true, "done", Map.of("summary", "finished"));
+        ToolCallTraceInput completed = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "done",
+                Map.of("summary", "finished"));
 
         var firstView = service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), completed);
 
@@ -482,8 +495,8 @@ public class AppStateServicePersistenceTests {
         assertThat(repository.listMessagesBySession(sessionId)).hasSize(Math.toIntExact(afterFirstCompletionMessages));
         assertThat(duplicateView.success()).isTrue();
         assertThat(duplicateView.status()).isEqualTo("success");
-        assertThat(service.loadSessionDetail(sessionId).chatMessages()).filteredOn(message -> "assistant".equals(message.role()) && !message.pending())
-                .singleElement()
+        assertThat(service.loadSessionDetail(sessionId).chatMessages())
+                .filteredOn(message -> "assistant".equals(message.role()) && !message.pending()).singleElement()
                 .satisfies(message -> assertThat(message.toolCalls()).singleElement().satisfies(call -> {
                     assertThat(call.status()).isEqualTo("success");
                     assertThat(call.success()).isTrue();
@@ -491,8 +504,10 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void completedTaskToolCallKeepsItsPersistedToolCallIdAfterCompletionClearsToolCallsJson(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+    public void completedTaskToolCallKeepsItsPersistedToolCallIdAfterCompletionClearsToolCallsJson(
+            @TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
@@ -500,122 +515,138 @@ public class AppStateServicePersistenceTests {
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "running",
+                Map.of());
 
         service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
 
         var assistantRow = repository.findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
         assertThat(assistantRow.toolCallsJson()).isNull();
-        assertThat(repository.listToolCallTracesByAssistantMessage(assistantRow.id()))
-                .singleElement()
-                .extracting(AppStateRepository.ToolCallTraceRow::toolCallId)
-                .isEqualTo("task-1");
+        assertThat(repository.listToolCallTracesByAssistantMessage(assistantRow.id())).singleElement()
+                .extracting(AppStateRepository.ToolCallTraceRow::toolCallId).isEqualTo("task-1");
 
         ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
-                .filter(message -> "assistant".equals(message.role()))
-                .findFirst()
-                .orElseThrow();
-        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.toolCallId()).isEqualTo("task-1"));
+                .filter(message -> "assistant".equals(message.role())).findFirst().orElseThrow();
+        assertThat(assistant.toolCalls()).singleElement()
+                .satisfies(call -> assertThat(call.toolCallId()).isEqualTo("task-1"));
     }
 
     @Test
     public void taskToolCallViewPrefersRequestSummaryAndFallsBackToLegacyTaskBody(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of(
-                "agentId", "engineer",
-                "requestSummary", "Implement the parser",
-                "task", "Write the parser implementation"
-        ), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer",
+                "requestSummary", "Implement the parser", "task", "Write the parser implementation"), true, "running",
+                Map.of());
 
         service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
 
         ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
-                .filter(message -> "assistant".equals(message.role()))
-                .findFirst()
-                .orElseThrow();
-        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
+                .filter(message -> "assistant".equals(message.role())).findFirst().orElseThrow();
+        assertThat(assistant.toolCalls()).singleElement()
+                .satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
     }
 
     @Test
     public void taskToolCallViewDerivesTaskBodyFromLegacyTaskField(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Implement the parser", "task", "Write the parser implementation"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer",
+                "requestSummary", "Implement the parser", "task", "Write the parser implementation"), true, "running",
+                Map.of());
 
         service.appendToolCallTrace(sessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "done", List.of(trace));
 
         ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
-                .filter(message -> "assistant".equals(message.role()))
-                .findFirst()
-                .orElseThrow();
-        assertThat(assistant.toolCalls()).singleElement().satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
+                .filter(message -> "assistant".equals(message.role())).findFirst().orElseThrow();
+        assertThat(assistant.toolCalls()).singleElement()
+                .satisfies(call -> assertThat(call.taskBody()).isEqualTo("Implement the parser"));
     }
     @Test
     public void assistantModelPreferencesAreEncryptedAndRoundTrip(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "actual-model", "HIGH", "preferred-model");
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "actual-model", "HIGH",
+                "preferred-model");
 
-        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "hello", metadata);
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "hello",
+                metadata);
         String rawPreferred = new JdbcTemplate(context.dataSource()).queryForObject(
-                "SELECT preferred_model_id FROM conversation_messages WHERE public_id = ?", String.class, turn.assistantMessage().id());
-        assertThat(rawPreferred).isNotNull().startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:").doesNotContain("preferred-model");
+                "SELECT preferred_model_id FROM conversation_messages WHERE public_id = ?", String.class,
+                turn.assistantMessage().id());
+        assertThat(rawPreferred).isNotNull().startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:")
+                .doesNotContain("preferred-model");
 
-        AppStateRepository.ConversationMessageRow loaded = context.repository().findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
+        AppStateRepository.ConversationMessageRow loaded = context.repository()
+                .findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
         assertThat(loaded.modelId()).isEqualTo("actual-model");
         assertThat(loaded.preferredModelId()).isEqualTo("preferred-model");
-        assertThat(service.loadSessionDetail(sessionId).chatMessages()).filteredOn(message -> message.id().equals(turn.assistantMessage().id()))
-                .singleElement().extracting(ChatMessageView::metadata)
-                .isEqualTo(metadata);
+        assertThat(service.loadSessionDetail(sessionId).chatMessages())
+                .filteredOn(message -> message.id().equals(turn.assistantMessage().id())).singleElement()
+                .extracting(ChatMessageView::metadata).isEqualTo(metadata);
     }
 
     @Test
     public void nullPreferredModelRemainsBackwardCompatible(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
         ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "actual-model", "HIGH", null);
 
-        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "hello", metadata);
-        AppStateRepository.ConversationMessageRow loaded = context.repository().findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "hello",
+                metadata);
+        AppStateRepository.ConversationMessageRow loaded = context.repository()
+                .findMessageBySessionAndPublicId(sessionId, turn.assistantMessage().id());
         assertThat(loaded.modelId()).isEqualTo("actual-model");
         assertThat(loaded.preferredModelId()).isNull();
-        assertThat(service.loadSessionDetail(sessionId).chatMessages()).filteredOn(message -> message.id().equals(turn.assistantMessage().id()))
-                .singleElement().extracting(ChatMessageView::metadata).isEqualTo(metadata);
+        assertThat(service.loadSessionDetail(sessionId).chatMessages())
+                .filteredOn(message -> message.id().equals(turn.assistantMessage().id())).singleElement()
+                .extracting(ChatMessageView::metadata).isEqualTo(metadata);
     }
 
     @Test
-    public void forkPrimarySessionCopiesConversationAndToolCallStateWithoutDraftOrReviewState(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+    public void forkPrimarySessionCopiesConversationAndToolCallStateWithoutDraftOrReviewState(
+            @TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sourceSessionId = service.loadViewData().activeSession().id();
         service.updateSessionDraft(sourceSessionId, "draft text");
         service.addChangedFilesToSession(sourceSessionId, List.of(new ChangedFileDraft("src/Fork.java", "diff")));
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5", "HIGH", "anthropic/claude-sonnet");
-        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sourceSessionId, "user-1", "assistant-1", "use a task", metadata);
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "task output", Map.of("sessionId", sourceSessionId));
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.5", "HIGH",
+                "anthropic/claude-sonnet");
+        QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sourceSessionId, "user-1", "assistant-1",
+                "use a task", metadata);
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), true, "task output",
+                Map.of("sessionId", sourceSessionId));
         service.appendToolCallTrace(sourceSessionId, turn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sourceSessionId, turn.assistantMessage().id(), "final reply", List.of(trace));
-        long forkedSessionId = service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.assistantMessage().id());
+        long forkedSessionId = service.forkPrimarySessionAtAssistantMessage(sourceSessionId,
+                turn.assistantMessage().id());
         AppStateView forkedView = service.loadViewData();
         assertThat(forkedView.activeSession().id()).isEqualTo(forkedSessionId);
         assertThat(forkedView.activeSessionDetail().chatDraft()).isEmpty();
@@ -624,8 +655,11 @@ public class AppStateServicePersistenceTests {
         var forkMessages = repository.listMessagesBySession(forkedSessionId);
         assertThat(forkMessages).hasSize(sourceMessages.size());
         assertThat(forkMessages).extracting(AppStateRepository.ConversationMessageRow::publicId)
-                .doesNotContainAnyElementsOf(sourceMessages.stream().map(AppStateRepository.ConversationMessageRow::publicId).toList());
-        var forkAssistant = forkMessages.stream().filter(message -> "assistant".equals(message.role()) && message.showInChat()).findFirst().orElseThrow();
+                .doesNotContainAnyElementsOf(
+                        sourceMessages.stream().map(AppStateRepository.ConversationMessageRow::publicId).toList());
+        var forkAssistant = forkMessages.stream()
+                .filter(message -> "assistant".equals(message.role()) && message.showInChat()).findFirst()
+                .orElseThrow();
         var sourceAssistant = repository.findMessageBySessionAndPublicId(sourceSessionId, turn.assistantMessage().id());
         assertThat(forkAssistant.completedAt()).isNotNull();
         assertThat(forkAssistant.pending()).isFalse();
@@ -639,12 +673,15 @@ public class AppStateServicePersistenceTests {
         assertThat(forkTraces).hasSize(sourceTraces.size());
         assertThat(forkTraces).allSatisfy(traceRow -> {
             assertThat(traceRow.assistantMessageId()).isEqualTo(forkAssistant.id());
-            assertThat(traceRow.machineSummaryJson()).doesNotContain("subagentSessionId", "subagentAgentId", "subagentAgentName");
+            assertThat(traceRow.machineSummaryJson()).doesNotContain("subagentSessionId", "subagentAgentId",
+                    "subagentAgentName");
         });
     }
     @Test
-    public void forkPrimarySessionFailsLoudlyForHiddenSessionsNonAssistantPendingAndForeignMessages(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+    public void forkPrimarySessionFailsLoudlyForHiddenSessionsNonAssistantPendingAndForeignMessages(
+            @TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sourceSessionId = service.loadViewData().activeSession().id();
@@ -654,38 +691,41 @@ public class AppStateServicePersistenceTests {
         long hiddenSessionId = service.createHiddenSubagentSession(sourceSessionId, "task-1", subagent);
         QueuedChatTurn hiddenTurn = service.appendUserMessageAndPendingAssistant(hiddenSessionId, "child");
         assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.userMessage().id()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("assistant message");
-        assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.assistantMessage().id()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("pending assistant message");
-        assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(hiddenSessionId, hiddenTurn.assistantMessage().id()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Hidden sessions");
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("assistant message");
+        assertThatThrownBy(
+                () -> service.forkPrimarySessionAtAssistantMessage(sourceSessionId, turn.assistantMessage().id()))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("pending assistant message");
+        assertThatThrownBy(
+                () -> service.forkPrimarySessionAtAssistantMessage(hiddenSessionId, hiddenTurn.assistantMessage().id()))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Hidden sessions");
 
         service.addOrReopenProject("Beta", projectPath.resolveSibling("beta").toString());
         long foreignSessionId = service.loadViewData().activeSession().id();
         QueuedChatTurn foreignTurn = service.appendUserMessageAndPendingAssistant(foreignSessionId, "foreign");
-        service.completeAssistantMessage(foreignSessionId, foreignTurn.assistantMessage().id(), "foreign reply", List.of());
+        service.completeAssistantMessage(foreignSessionId, foreignTurn.assistantMessage().id(), "foreign reply",
+                List.of());
         service.activateSession(sourceSessionId);
-        assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(sourceSessionId, foreignTurn.assistantMessage().id()))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> service.forkPrimarySessionAtAssistantMessage(sourceSessionId,
+                foreignTurn.assistantMessage().id())).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("message");
     }
     @Test
-    public void completedTaskTurnWithHiddenChildSessionDoesNotSynthesizeTheOldCallOntoALaterPendingTurn(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+    public void completedTaskTurnWithHiddenChildSessionDoesNotSynthesizeTheOldCallOntoALaterPendingTurn(
+            @TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Use a task"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Use a task"), true, "running", Map.of());
         service.appendToolCallTrace(sessionId, firstTurn.assistantMessage().id(), trace);
 
-        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt",
+                AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
         var child = service.loadSubagentSessionDetail(hiddenSessionId);
         assertThat(child.parentSessionId()).isEqualTo(sessionId);
@@ -693,21 +733,23 @@ public class AppStateServicePersistenceTests {
 
         service.completeAssistantMessage(sessionId, firstTurn.assistantMessage().id(), "done", List.of(trace));
         QueuedChatTurn nextTurn = service.appendUserMessageAndPendingAssistant(sessionId, "next turn");
-        context.activeStreamRegistryService().register(nextTurn.assistantMessage().id(), sessionId, projectPath.toString());
+        context.activeStreamRegistryService().register(nextTurn.assistantMessage().id(), sessionId,
+                projectPath.toString());
 
         List<ChatMessageView> messages = service.loadViewData().activeSessionDetail().chatMessages();
         assertThat(messages).filteredOn(message -> "assistant".equals(message.role()) && !message.pending())
-                .singleElement()
-                .satisfies(message -> assertThat(message.toolCalls()).extracting(call -> call.toolCallId()).containsExactly("task-1"));
+                .singleElement().satisfies(message -> assertThat(message.toolCalls())
+                        .extracting(call -> call.toolCallId()).containsExactly("task-1"));
         assertThat(messages).filteredOn(message -> "assistant".equals(message.role()) && message.pending())
-                .singleElement()
-                .satisfies(message -> assertThat(message.toolCalls()).isEmpty());
+                .singleElement().satisfies(message -> assertThat(message.toolCalls()).isEmpty());
         context.activeStreamRegistryService().unregister(nextTurn.assistantMessage().id());
     }
 
     @Test
-    public void pendingParentAssistantWithHiddenChildSessionShowsASyntheticRunningTaskCallBeforeTheTraceIsAppended(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+    public void pendingParentAssistantWithHiddenChildSessionShowsASyntheticRunningTaskCallBeforeTheTraceIsAppended(
+            @TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
@@ -715,14 +757,12 @@ public class AppStateServicePersistenceTests {
 
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
         context.activeStreamRegistryService().register(turn.assistantMessage().id(), sessionId, projectPath.toString());
-        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt",
+                AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
 
         ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
-                .filter(message -> "assistant".equals(message.role()) && message.pending())
-                .findFirst()
-                .orElseThrow();
+                .filter(message -> "assistant".equals(message.role()) && message.pending()).findFirst().orElseThrow();
 
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> {
             assertThat(call.toolCallId()).isEqualTo("task-1");
@@ -736,28 +776,27 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void pendingParentAssistantWithHiddenChildSessionEnrichesExistingStartedTaskTrace(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+    public void pendingParentAssistantWithHiddenChildSessionEnrichesExistingStartedTaskTrace(
+            @TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task", Map.of(
-                "agentId", "engineer",
-                "requestSummary", "Write the parser implementation"
-        ), false, null, Map.of());
+        ToolCallTraceInput started = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Write the parser implementation"), false, null,
+                Map.of());
         service.startToolCallTrace(sessionId, turn.assistantMessage().id(), started);
         context.activeStreamRegistryService().register(turn.assistantMessage().id(), sessionId, projectPath.toString());
-        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt",
+                AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
 
         ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
-                .filter(message -> "assistant".equals(message.role()) && message.pending())
-                .findFirst()
-                .orElseThrow();
+                .filter(message -> "assistant".equals(message.role()) && message.pending()).findFirst().orElseThrow();
 
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> {
             assertThat(call.toolCallId()).isEqualTo("task-1");
@@ -774,28 +813,30 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void laterPendingAssistantWithHiddenChildSessionStillShowsASyntheticRunningTaskCallWhenAnEarlierTurnUsedTheSameToolCallId(@TempDir Path projectPath) {
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {});
+    public void laterPendingAssistantWithHiddenChildSessionStillShowsASyntheticRunningTaskCallWhenAnEarlierTurnUsedTheSameToolCallId(
+            @TempDir Path projectPath) {
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> {
+        });
         AppStateService service = context.service();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
         long sessionId = service.loadViewData().activeSession().id();
 
         QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use a task");
-        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task", Map.of("agentId", "engineer", "requestSummary", "Use a task again"), true, "running", Map.of());
+        ToolCallTraceInput trace = new ToolCallTraceInput("task-1", "task",
+                Map.of("agentId", "engineer", "requestSummary", "Use a task again"), true, "running", Map.of());
         service.appendToolCallTrace(sessionId, firstTurn.assistantMessage().id(), trace);
         service.completeAssistantMessage(sessionId, firstTurn.assistantMessage().id(), "done", List.of(trace));
 
         QueuedChatTurn nextTurn = service.appendUserMessageAndPendingAssistant(sessionId, "use the same task again");
-        context.activeStreamRegistryService().register(nextTurn.assistantMessage().id(), sessionId, projectPath.toString());
-        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        context.activeStreamRegistryService().register(nextTurn.assistantMessage().id(), sessionId,
+                projectPath.toString());
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt",
+                AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long hiddenSessionId = service.createHiddenSubagentSession(sessionId, "task-1", subagent);
 
         ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
-                .filter(message -> "assistant".equals(message.role()) && message.pending())
-                .findFirst()
-                .orElseThrow();
+                .filter(message -> "assistant".equals(message.role()) && message.pending()).findFirst().orElseThrow();
 
         assertThat(assistant.toolCalls()).singleElement().satisfies(call -> {
             assertThat(call.toolCallId()).isEqualTo("task-1");
@@ -805,15 +846,18 @@ public class AppStateServicePersistenceTests {
             assertThat(call.subagentAgentId()).isEqualTo("engineer");
             assertThat(call.subagentAgentName()).isEqualTo("Engineer");
         });
-        assertThat(service.loadViewData().activeSessionDetail().chatMessages()).filteredOn(message -> "assistant".equals(message.role()) && !message.pending())
-                .anySatisfy(message -> assertThat(message.toolCalls()).extracting(call -> call.toolCallId()).contains("task-1"));
+        assertThat(service.loadViewData().activeSessionDetail().chatMessages())
+                .filteredOn(message -> "assistant".equals(message.role()) && !message.pending())
+                .anySatisfy(message -> assertThat(message.toolCalls()).extracting(call -> call.toolCallId())
+                        .contains("task-1"));
         context.activeStreamRegistryService().unregister(nextTurn.assistantMessage().id());
     }
 
     @Test
     public void activeHiddenAndAlreadyUnreadSessionsDoNotPublishUnreadEvents(@TempDir Path projectPath) {
         List<Object> events = new ArrayList<>();
-        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport.appStateContext(event -> events.add(event));
+        TestAppStateSupport.AppStateTestContext context = TestAppStateSupport
+                .appStateContext(event -> events.add(event));
         AppStateService service = context.service();
         AppStateRepository repository = context.repository();
 
@@ -824,17 +868,19 @@ public class AppStateServicePersistenceTests {
 
         QueuedChatTurn activeTurn = service.appendUserMessageAndPendingAssistant(activeSessionId, "active user");
         events.clear();
-        service.completeAssistantMessage(activeSessionId, activeTurn.assistantMessage().id(), "active reply", List.of());
+        service.completeAssistantMessage(activeSessionId, activeTurn.assistantMessage().id(), "active reply",
+                List.of());
         assertThat(events).isEmpty();
         assertThat(service.loadViewData().sessions()).filteredOn(session -> session.id() == activeSessionId)
                 .singleElement().satisfies(session -> assertThat(session.unread()).isFalse());
 
-        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt", AgentMode.SUBAGENT,
-                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Hidden subagent prompt",
+                AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         long hiddenSessionId = service.createHiddenSubagentSession(activeSessionId, "parent-tool-call", subagent);
         QueuedChatTurn hiddenTurn = service.appendUserMessageAndPendingAssistant(hiddenSessionId, "hidden user");
         events.clear();
-        service.completeAssistantMessage(hiddenSessionId, hiddenTurn.assistantMessage().id(), "hidden reply", List.of());
+        service.completeAssistantMessage(hiddenSessionId, hiddenTurn.assistantMessage().id(), "hidden reply",
+                List.of());
         assertThat(events).isEmpty();
         assertThat(repository.findSession(hiddenSessionId).unread()).isFalse();
         assertThat(repository.findSession(hiddenSessionId).hidden()).isTrue();
@@ -845,7 +891,8 @@ public class AppStateServicePersistenceTests {
         repository.updateSessionUnread(unreadSessionId, true);
         QueuedChatTurn unreadTurn = service.appendUserMessageAndPendingAssistant(unreadSessionId, "unread user");
         events.clear();
-        service.completeAssistantMessage(unreadSessionId, unreadTurn.assistantMessage().id(), "unread reply", List.of());
+        service.completeAssistantMessage(unreadSessionId, unreadTurn.assistantMessage().id(), "unread reply",
+                List.of());
         assertThat(events).isEmpty();
         assertThat(repository.findSession(unreadSessionId).unread()).isTrue();
     }
@@ -870,16 +917,15 @@ public class AppStateServicePersistenceTests {
         assertThat(afterCreate.sessions()).extracting(SessionView::name).containsExactly("Session #1", "Feature work");
         assertThat(sessionTwoId).isNotEqualTo(sessionOneId);
 
-        QueuedChatTurn secondTurn = service.appendUserMessageAndPendingAssistant(sessionTwoId, "hello from session two");
+        QueuedChatTurn secondTurn = service.appendUserMessageAndPendingAssistant(sessionTwoId,
+                "hello from session two");
         service.completeAssistantMessage(sessionTwoId, secondTurn.assistantMessage().id(), "reply two", List.of());
 
         assertThat(service.buildConversationHistory(sessionOneId)).extracting(Message::getRole, Message::getContent)
-                .containsExactly(
-                        tuple(Message.Role.USER, "hello from session one"),
+                .containsExactly(tuple(Message.Role.USER, "hello from session one"),
                         tuple(Message.Role.ASSISTANT, "reply one"));
         assertThat(service.buildConversationHistory(sessionTwoId)).extracting(Message::getRole, Message::getContent)
-                .containsExactly(
-                        tuple(Message.Role.USER, "hello from session two"),
+                .containsExactly(tuple(Message.Role.USER, "hello from session two"),
                         tuple(Message.Role.ASSISTANT, "reply two"));
     }
 
@@ -908,7 +954,8 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void closingTheOnlySessionLeavesTheActiveProjectAndWorkspaceButClearsTheActiveSession(@TempDir Path projectPath) {
+    public void closingTheOnlySessionLeavesTheActiveProjectAndWorkspaceButClearsTheActiveSession(
+            @TempDir Path projectPath) {
         AppStateService service = TestAppStateSupport.appStateService();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
@@ -924,7 +971,8 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void activatingOrReopeningAWorkspaceWithNoSessionsRestoresTheWorkspaceAndClearsTheActiveSession(@TempDir Path projectPath) {
+    public void activatingOrReopeningAWorkspaceWithNoSessionsRestoresTheWorkspaceAndClearsTheActiveSession(
+            @TempDir Path projectPath) {
         AppStateService service = TestAppStateSupport.appStateService();
 
         service.addOrReopenProject("Alpha", projectPath.toString());
@@ -957,7 +1005,8 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void closingANonDefaultWorkspaceDeletesItsRowsAndFallsBackToAnotherWorkspace(@TempDir Path projectPath) throws Exception {
+    public void closingANonDefaultWorkspaceDeletesItsRowsAndFallsBackToAnotherWorkspace(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
 
         AppStateService service = TestAppStateSupport.appStateService();
@@ -986,7 +1035,8 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void inspectingANonDefaultWorkspaceWithoutAnUpstreamMarksLocalCommitsAsUnpushed(@TempDir Path projectPath) throws Exception {
+    public void inspectingANonDefaultWorkspaceWithoutAnUpstreamMarksLocalCommitsAsUnpushed(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
 
         AppStateService service = TestAppStateSupport.appStateService();
@@ -1011,12 +1061,12 @@ public class AppStateServicePersistenceTests {
         AppStateView initial = service.loadViewData();
 
         assertThatThrownBy(() -> service.closeWorkspace(initial.activeWorkspace().id()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Default workspace cannot be deleted");
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Default workspace cannot be deleted");
     }
 
     @Test
-    public void creatingAWorkspaceCreatesGitWorktreeAndSessionOneForThatWorkspace(@TempDir Path projectPath) throws Exception {
+    public void creatingAWorkspaceCreatesGitWorktreeAndSessionOneForThatWorkspace(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
 
         AppStateService service = TestAppStateSupport.appStateService();
@@ -1026,10 +1076,7 @@ public class AppStateServicePersistenceTests {
 
         String branchName = "feature-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         Path worktreePath = projectPath.toAbsolutePath().normalize().resolveSibling(".trees")
-                .resolve(projectPath.getFileName().toString())
-                .resolve(branchName)
-                .toAbsolutePath()
-                .normalize();
+                .resolve(projectPath.getFileName().toString()).resolve(branchName).toAbsolutePath().normalize();
 
         WorkspaceView workspace = service.createWorkspace(projectId, branchName, true);
         AppStateView view = service.loadViewData();
@@ -1056,10 +1103,7 @@ public class AppStateServicePersistenceTests {
 
         String branchName = "feature/slash-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         Path worktreePath = projectPath.toAbsolutePath().normalize().resolveSibling(".trees")
-                .resolve(projectPath.getFileName().toString())
-                .resolve(branchName)
-                .toAbsolutePath()
-                .normalize();
+                .resolve(projectPath.getFileName().toString()).resolve(branchName).toAbsolutePath().normalize();
 
         WorkspaceView workspace = service.createWorkspace(projectId, branchName, true);
 
@@ -1069,7 +1113,8 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void creatingAWorkspaceRejectsInvalidNewBranchNameBeforePersistingWorkspace(@TempDir Path projectPath) throws Exception {
+    public void creatingAWorkspaceRejectsInvalidNewBranchNameBeforePersistingWorkspace(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
 
         AppStateService service = TestAppStateSupport.appStateService();
@@ -1078,18 +1123,16 @@ public class AppStateServicePersistenceTests {
         long projectId = initial.activeProject().id();
 
         assertThatThrownBy(() -> service.createWorkspace(projectId, "feature unsafe", true))
-                .isInstanceOf(InvalidGitBranchNameException.class)
-                .hasMessageContaining("Invalid Git branch name");
+                .isInstanceOf(InvalidGitBranchNameException.class).hasMessageContaining("Invalid Git branch name");
 
         AppStateView view = service.loadViewData();
-        assertThat(view.workspaces()).extracting(WorkspaceView::id)
-                .containsExactly(initial.activeWorkspace().id());
-        assertThat(view.sessions()).extracting(SessionView::id)
-                .containsExactly(initial.activeSession().id());
+        assertThat(view.workspaces()).extracting(WorkspaceView::id).containsExactly(initial.activeWorkspace().id());
+        assertThat(view.sessions()).extracting(SessionView::id).containsExactly(initial.activeSession().id());
     }
 
     @Test
-    public void creatingAWorkspaceRejectsBlankNewBranchNameBeforePersistingWorkspace(@TempDir Path projectPath) throws Exception {
+    public void creatingAWorkspaceRejectsBlankNewBranchNameBeforePersistingWorkspace(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
 
         AppStateService service = TestAppStateSupport.appStateService();
@@ -1098,14 +1141,11 @@ public class AppStateServicePersistenceTests {
         long projectId = initial.activeProject().id();
 
         assertThatThrownBy(() -> service.createWorkspace(projectId, "   ", true))
-                .isInstanceOf(InvalidGitBranchNameException.class)
-                .hasMessageContaining("Branch name is required");
+                .isInstanceOf(InvalidGitBranchNameException.class).hasMessageContaining("Branch name is required");
 
         AppStateView view = service.loadViewData();
-        assertThat(view.workspaces()).extracting(WorkspaceView::id)
-                .containsExactly(initial.activeWorkspace().id());
-        assertThat(view.sessions()).extracting(SessionView::id)
-                .containsExactly(initial.activeSession().id());
+        assertThat(view.workspaces()).extracting(WorkspaceView::id).containsExactly(initial.activeWorkspace().id());
+        assertThat(view.sessions()).extracting(SessionView::id).containsExactly(initial.activeSession().id());
     }
 
     @Test
@@ -1117,8 +1157,7 @@ public class AppStateServicePersistenceTests {
         long projectId = service.loadViewData().activeProject().id();
 
         assertThatThrownBy(() -> service.createWorkspace(projectId, "feature unsafe", false))
-                .isInstanceOf(GitWorktreeException.class)
-                .isNotInstanceOf(InvalidGitBranchNameException.class);
+                .isInstanceOf(GitWorktreeException.class).isNotInstanceOf(InvalidGitBranchNameException.class);
     }
 
     @Test
@@ -1137,7 +1176,7 @@ public class AppStateServicePersistenceTests {
         AppStateView sessionView = service.loadViewData();
         assertThat(sessionView.activeSessionDetail()).isNotNull();
         assertThat(sessionView.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.SESSION);
-        assertThat(sessionView.activeSessionDetail().changedFiles()).extracting(com.judepereira.jupiter.persistence.Persistence.ChangedFileView::path)
+        assertThat(sessionView.activeSessionDetail().changedFiles()).extracting(ChangedFileView::path)
                 .containsExactly("session-only.txt");
 
         service.switchReviewSource(sessionId, ReviewSource.GIT);
@@ -1145,12 +1184,13 @@ public class AppStateServicePersistenceTests {
         AppStateView gitView = service.loadViewData();
         assertThat(gitView.activeSessionDetail()).isNotNull();
         assertThat(gitView.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.GIT);
-        assertThat(gitView.activeSessionDetail().changedFiles()).extracting(com.judepereira.jupiter.persistence.Persistence.ChangedFileView::path)
+        assertThat(gitView.activeSessionDetail().changedFiles()).extracting(ChangedFileView::path)
                 .contains("session-only.txt", "outside-only.txt");
     }
 
     @Test
-    public void recordingChangedFilesKeepsReviewPanelClosedAndSelectsLatestSessionFile(@TempDir Path projectPath) throws Exception {
+    public void recordingChangedFilesKeepsReviewPanelClosedAndSelectsLatestSessionFile(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
 
         AppStateService service = TestAppStateSupport.appStateService();
@@ -1159,10 +1199,8 @@ public class AppStateServicePersistenceTests {
 
         assertThat(service.loadViewData().activeSessionDetail().reviewPanelOpen()).isFalse();
 
-        service.addChangedFilesToSession(sessionId, List.of(
-                new ChangedFileDraft("first-review-file.txt", "first diff"),
-                new ChangedFileDraft("second-review-file.txt", "second diff")
-        ));
+        service.addChangedFilesToSession(sessionId, List.of(new ChangedFileDraft("first-review-file.txt", "first diff"),
+                new ChangedFileDraft("second-review-file.txt", "second diff")));
 
         AppStateView view = service.loadViewData();
         assertThat(view.activeSessionDetail()).isNotNull();
@@ -1170,12 +1208,13 @@ public class AppStateServicePersistenceTests {
         assertThat(view.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.SESSION);
         assertThat(view.activeSessionDetail().selectedFile()).isNotNull();
         assertThat(view.activeSessionDetail().selectedFile().path()).isEqualTo("second-review-file.txt");
-        assertThat(view.activeSessionDetail().changedFiles()).extracting(com.judepereira.jupiter.persistence.Persistence.ChangedFileView::path)
+        assertThat(view.activeSessionDetail().changedFiles()).extracting(ChangedFileView::path)
                 .containsExactly("second-review-file.txt", "first-review-file.txt");
     }
 
     @Test
-    public void gitReviewReloadIgnoresDeletedSelectedFilesAndKeepsLiveChangedFiles(@TempDir Path projectPath) throws Exception {
+    public void gitReviewReloadIgnoresDeletedSelectedFilesAndKeepsLiveChangedFiles(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
 
         AppStateService service = TestAppStateSupport.appStateService();
@@ -1200,8 +1239,7 @@ public class AppStateServicePersistenceTests {
         assertThat(reloaded.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.GIT);
         assertThat(reloaded.activeSessionDetail().selectedFile()).isNull();
         assertThat(reloaded.activeSessionDetail().changedFiles()).extracting(ChangedFileView::path)
-                .contains("live-git.txt")
-                .doesNotContain("removed-git.txt");
+                .contains("live-git.txt").doesNotContain("removed-git.txt");
     }
 
     @Test
@@ -1212,20 +1250,16 @@ public class AppStateServicePersistenceTests {
         long projectId = view.activeProject().id();
         long sessionId = view.activeSession().id();
 
-        service.updateProjectEnvironmentVariables(projectId, List.of(
-                new ProjectEnvironmentVariable("API_URL", "https://first.test"),
-                new ProjectEnvironmentVariable("", "ignored"),
-                new ProjectEnvironmentVariable("API_URL", "https://override.test"),
-                new ProjectEnvironmentVariable("FEATURE_FLAG", "true")
-        ));
+        service.updateProjectEnvironmentVariables(projectId,
+                List.of(new ProjectEnvironmentVariable("API_URL", "https://first.test"),
+                        new ProjectEnvironmentVariable("", "ignored"),
+                        new ProjectEnvironmentVariable("API_URL", "https://override.test"),
+                        new ProjectEnvironmentVariable("FEATURE_FLAG", "true")));
 
-        assertThat(service.loadProjectEnvironmentVariables(projectId))
-                .containsEntry("API_URL", "https://override.test")
-                .containsEntry("FEATURE_FLAG", "true")
-                .doesNotContainKey("");
+        assertThat(service.loadProjectEnvironmentVariables(projectId)).containsEntry("API_URL", "https://override.test")
+                .containsEntry("FEATURE_FLAG", "true").doesNotContainKey("");
         assertThat(service.loadSessionProjectEnvironmentVariables(sessionId))
-                .containsEntry("API_URL", "https://override.test")
-                .containsEntry("FEATURE_FLAG", "true")
+                .containsEntry("API_URL", "https://override.test").containsEntry("FEATURE_FLAG", "true")
                 .doesNotContainKey("");
     }
 
@@ -1235,21 +1269,19 @@ public class AppStateServicePersistenceTests {
         service.addOrReopenProject("Alpha", projectPath.toString());
         long projectId = service.loadViewData().activeProject().id();
 
-        McpServerView created = service.createMcpServer("  Local MCP  ", "  http://localhost:3000/mcp  ", true, List.of(
-                new McpServerHeader(" Authorization ", "  Bearer token  "),
-                new McpServerHeader("Authorization", "Bearer override"),
-                new McpServerHeader("X-Trace", " 1 ")
-        ), List.of(projectId, projectId));
+        McpServerView created = service.createMcpServer("  Local MCP  ", "  http://localhost:3000/mcp  ", true,
+                List.of(new McpServerHeader(" Authorization ", "  Bearer token  "),
+                        new McpServerHeader("Authorization", "Bearer override"), new McpServerHeader("X-Trace", " 1 ")),
+                List.of(projectId, projectId));
 
         assertThat(created.name()).isEqualTo("Local MCP");
         assertThat(created.url()).isEqualTo("http://localhost:3000/mcp");
-        assertThat(created.headers()).containsExactly(
-                new McpServerHeader("Authorization", "Bearer override"),
-                new McpServerHeader("X-Trace", "1")
-        );
+        assertThat(created.headers()).containsExactly(new McpServerHeader("Authorization", "Bearer override"),
+                new McpServerHeader("X-Trace", "1"));
         assertThat(created.exposedProjectIds()).containsExactly(projectId);
 
-        assertThat(service.loadEnabledMcpServersForProject(projectId)).singleElement().extracting(McpServerView::id).isEqualTo(created.id());
+        assertThat(service.loadEnabledMcpServersForProject(projectId)).singleElement().extracting(McpServerView::id)
+                .isEqualTo(created.id());
     }
 
     @Test
@@ -1262,7 +1294,8 @@ public class AppStateServicePersistenceTests {
 
         McpServerView server = service.createMcpServer("Server", "http://localhost:3000", true,
                 List.of(new McpServerHeader("Authorization", "Bearer token")), List.of(projectId));
-        assertThat(service.loadEnabledMcpServersForProject(projectId)).extracting(McpServerView::id).containsExactly(server.id());
+        assertThat(service.loadEnabledMcpServersForProject(projectId)).extracting(McpServerView::id)
+                .containsExactly(server.id());
 
         service.closeProject(projectId);
         service.addOrReopenProject("Alpha", projectPath.toString());
@@ -1270,12 +1303,12 @@ public class AppStateServicePersistenceTests {
         AppStateView reopened = service.loadViewData();
         long reopenedProjectId = reopened.activeProject().id();
         assertThat(reopenedProjectId).isEqualTo(projectId);
-        assertThat(service.loadEnabledMcpServersForProject(reopenedProjectId)).extracting(McpServerView::id).containsExactly(server.id());
+        assertThat(service.loadEnabledMcpServersForProject(reopenedProjectId)).extracting(McpServerView::id)
+                .containsExactly(server.id());
     }
 
     @Test
-    public void closeProjectFallsBackToPreviousVisibleProject(@TempDir Path firstProject,
-                                                              @TempDir Path secondProject) {
+    public void closeProjectFallsBackToPreviousVisibleProject(@TempDir Path firstProject, @TempDir Path secondProject) {
         AppStateService service = TestAppStateSupport.appStateService();
 
         service.addOrReopenProject("First", firstProject.toString());
@@ -1361,10 +1394,12 @@ public class AppStateServicePersistenceTests {
         for (int i = 1; i <= 7; i++) {
             String userText = "turn-" + i + " " + "u".repeat(800);
             QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, userText);
-            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(120), List.of());
+            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(),
+                    "reply-" + i + " " + "a".repeat(120), List.of());
         }
 
-        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "openai/gpt-5.6-sol", ThinkingLevel.LOW, null, true, true,
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT,
+                "openai/gpt-5.6-sol", ThinkingLevel.LOW, null, true, true,
                 List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "run_command"));
         var modelCatalog = ModelCatalogTestSupport.modelCatalogService("https://models.dev/catalog.json", """
                 {
@@ -1386,25 +1421,30 @@ public class AppStateServicePersistenceTests {
 
         RecordingSummaryClient client = new RecordingSummaryClient();
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
+                new AgentModelClientFactory(null) {
                     @Override
-                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) {
+                    public AgentModelClient getClient(String provider) {
                         return client;
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery()) {
             @Override
-            public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
-                                                                         ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
+            public Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent,
+                    ModelDefinition ignoredModel, ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot,
+                    String ignoredUpcomingUserText) {
                 service.markTurnsIncludeInModelFalse(sessionId, 5);
-                client.chat(List.of(new Message(Message.Role.SYSTEM, "Summarize", null, null, null), new Message(Message.Role.USER, "transcript", null, null, null)), List.of(),
-                        new AgentModelOptions(ignoredModel.id(), ignoredModel.apiModelId(), ignoredThinkingLevel, ignoredModel.supportsReasoning(), ignoredAgent.textVerbosity()));
-                return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 5L));
+                client.chat(
+                        List.of(new Message(Message.Role.SYSTEM, "Summarize", null, null, null),
+                                new Message(Message.Role.USER, "transcript", null, null, null)),
+                        List.of(), new AgentModelOptions(ignoredModel.id(), ignoredModel.apiModelId(),
+                                ignoredThinkingLevel, ignoredModel.supportsReasoning(), ignoredAgent.textVerbosity()));
+                return Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 5L));
             }
         };
         var model = modelCatalog.getRequired(agent.defaultModel());
 
-        ChatMessageView summary = compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(),
-                "new user turn " + "x".repeat(800)).orElseThrow();
+        ChatMessageView summary = compactionService.compactIfNeeded(sessionId, agent, model,
+                agent.defaultThinkingLevel(), projectPath.toString(), "new user turn " + "x".repeat(800)).orElseThrow();
 
         assertThat(summary.text()).isEqualTo("compact summary");
         assertThat(client.toolCalls).allMatch(List::isEmpty);
@@ -1413,8 +1453,8 @@ public class AppStateServicePersistenceTests {
         assertThat(client.options.getFirst().apiModelId()).isEqualTo(model.apiModelId());
         assertThat(client.options.getFirst().thinkingLevel()).isEqualTo(agent.defaultThinkingLevel());
         assertThat(client.options.getFirst().supportsReasoning()).isEqualTo(model.supportsReasoning());
-        assertThat(client.conversations.getFirst()).extracting(Message::getRole)
-                .containsExactly(Message.Role.SYSTEM, Message.Role.USER);
+        assertThat(client.conversations.getFirst()).extracting(Message::getRole).containsExactly(Message.Role.SYSTEM,
+                Message.Role.USER);
         assertThat(service.loadViewData().activeSessionDetail().chatMessages()).extracting(ChatMessageView::text)
                 .contains("compact summary");
 
@@ -1432,56 +1472,65 @@ public class AppStateServicePersistenceTests {
         for (int i = 1; i <= 3; i++) {
             String userText = "turn-" + i + " " + "u".repeat(200);
             QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, userText);
-            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(200), List.of());
+            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(),
+                    "reply-" + i + " " + "a".repeat(200), List.of());
         }
 
-        QueuedChatTurn toolTurn = service.appendUserMessageAndPendingAssistant(sessionId, "tool turn " + "t".repeat(200));
+        QueuedChatTurn toolTurn = service.appendUserMessageAndPendingAssistant(sessionId,
+                "tool turn " + "t".repeat(200));
         ToolCallTraceInput trace = new ToolCallTraceInput("tool-call-1", "write_file",
                 Map.of("path", "x.txt", "content", "hello"), true, "wrote x.txt", Map.of("path", "x.txt"));
         service.appendToolCallTrace(sessionId, toolTurn.assistantMessage().id(), trace);
-        service.completeAssistantMessage(sessionId, toolTurn.assistantMessage().id(), "tool reply " + "r".repeat(200), List.of(trace));
+        service.completeAssistantMessage(sessionId, toolTurn.assistantMessage().id(), "tool reply " + "r".repeat(200),
+                List.of(trace));
 
         for (int i = 5; i <= 6; i++) {
             String userText = "turn-" + i + " " + "u".repeat(200);
             QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, userText);
-            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(200), List.of());
+            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(),
+                    "reply-" + i + " " + "a".repeat(200), List.of());
         }
 
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
+                new AgentModelClientFactory(null) {
                     @Override
-                    public com.judepereira.jupiter.agent.llm.AgentModelClient getClient(String provider) {
+                    public AgentModelClient getClient(String provider) {
                         return new RecordingSummaryClient();
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery()) {
             @Override
-            public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
-                                                                       ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
+            public Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent,
+                    ModelDefinition ignoredModel, ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot,
+                    String ignoredUpcomingUserText) {
                 service.markTurnsIncludeInModelFalse(sessionId, 3);
-                return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
+                return Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
             }
         };
-        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true, List.of());
-        ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, false, 5000, 32, null, null, null);
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model",
+                ThinkingLevel.LOW, null, true, true, List.of());
+        ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, false, 5000, 32, null,
+                null, null);
 
-        compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(), "next user " + "q".repeat(20))
-                .orElseThrow();
+        compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(),
+                "next user " + "q".repeat(20)).orElseThrow();
 
-        QueuedChatTurn nextTurn = service.appendUserMessageAndPendingAssistant(sessionId, "after compaction " + "n".repeat(40));
-        service.completeAssistantMessage(sessionId, nextTurn.assistantMessage().id(), "after compaction reply", List.of());
+        QueuedChatTurn nextTurn = service.appendUserMessageAndPendingAssistant(sessionId,
+                "after compaction " + "n".repeat(40));
+        service.completeAssistantMessage(sessionId, nextTurn.assistantMessage().id(), "after compaction reply",
+                List.of());
 
         List<Message> history = service.buildConversationHistory(sessionId);
         assertThat(history).extracting(Message::getContent)
                 .contains("Previous conversation summary:\n\ncompact summary")
-                .doesNotContain("turn-1 " + "u".repeat(200))
-                .contains("wrote x.txt");
-        assertThat(history).filteredOn(message -> message.getRole() == Message.Role.ASSISTANT && message.getToolCalls() != null && !message.getToolCalls().isEmpty())
-                .singleElement()
-                .satisfies(message -> assertThat(message.getToolCalls()).extracting(ToolCall::getToolCallId).contains("tool-call-1"));
-        assertThat(history).filteredOn(message -> message.getRole() == Message.Role.TOOL)
-                .singleElement()
-                .extracting(Message::getToolCallId)
-                .isEqualTo("tool-call-1");
+                .doesNotContain("turn-1 " + "u".repeat(200)).contains("wrote x.txt");
+        assertThat(history)
+                .filteredOn(message -> message.getRole() == Message.Role.ASSISTANT && message.getToolCalls() != null
+                        && !message.getToolCalls().isEmpty())
+                .singleElement().satisfies(message -> assertThat(message.getToolCalls())
+                        .extracting(ToolCall::getToolCallId).contains("tool-call-1"));
+        assertThat(history).filteredOn(message -> message.getRole() == Message.Role.TOOL).singleElement()
+                .extracting(Message::getToolCallId).isEqualTo("tool-call-1");
         assertThat(history).anySatisfy(message -> assertThat(message.getContent()).contains("after compaction"));
 
         assertThat(history).extracting(Message::getRole).contains(Message.Role.TOOL);
@@ -1496,43 +1545,49 @@ public class AppStateServicePersistenceTests {
         for (int i = 1; i <= 3; i++) {
             String userText = "turn-" + i + " " + "u".repeat(120);
             QueuedChatTurn turn = service.appendUserMessageAndPendingAssistant(sessionId, userText);
-            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply-" + i + " " + "a".repeat(80), List.of());
+            service.completeAssistantMessage(sessionId, turn.assistantMessage().id(),
+                    "reply-" + i + " " + "a".repeat(80), List.of());
         }
 
-        QueuedChatTurn toolTurn = service.appendUserMessageAndPendingAssistant(sessionId, "tool turn " + "t".repeat(120));
+        QueuedChatTurn toolTurn = service.appendUserMessageAndPendingAssistant(sessionId,
+                "tool turn " + "t".repeat(120));
         String hugeOutput = "tool-result-" + "x".repeat(5000);
         ToolCallTraceInput trace = new ToolCallTraceInput("tool-call-1", "write_file",
                 Map.of("path", "x.txt", "content", "hello"), true, hugeOutput, Map.of("path", "x.txt"));
         service.appendToolCallTrace(sessionId, toolTurn.assistantMessage().id(), trace);
 
         ContextCompactionService compactionService = new ContextCompactionService(service,
-                new com.judepereira.jupiter.agent.llm.AgentModelClientFactory(null) {
+                new AgentModelClientFactory(null) {
                     @Override
                     public AgentModelClient getClient(String provider) {
                         return new RecordingSummaryClient();
                     }
-                }, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery()) {
+                }, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery()) {
             @Override
-            public java.util.Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent, ModelDefinition ignoredModel,
-                                                                       ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot, String ignoredUpcomingUserText) {
+            public Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition ignoredAgent,
+                    ModelDefinition ignoredModel, ThinkingLevel ignoredThinkingLevel, String ignoredWorkspaceRoot,
+                    String ignoredUpcomingUserText) {
                 service.markTurnsIncludeInModelFalse(sessionId, 3);
-                return java.util.Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
+                return Optional.of(service.appendVisibleSystemMessage(sessionId, "compact summary", 3L));
             }
         };
-        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model", ThinkingLevel.LOW, null, true, true, List.of("write_file"));
-        ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, false, 5000, 32, null, null, null);
+        AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model",
+                ThinkingLevel.LOW, null, true, true, List.of("write_file"));
+        ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, false, 5000, 32, null,
+                null, null);
 
-        compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(), null)
+        compactionService
+                .compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(), projectPath.toString(), null)
                 .orElseThrow();
 
         List<Message> history = service.buildConversationHistory(sessionId);
         assertThat(history).extracting(Message::getContent)
-                .contains("Previous conversation summary:\n\ncompact summary")
-                .contains("tool turn " + "t".repeat(120))
-                .contains(hugeOutput)
-                .doesNotContain("turn-1 " + "u".repeat(120))
+                .contains("Previous conversation summary:\n\ncompact summary").contains("tool turn " + "t".repeat(120))
+                .contains(hugeOutput).doesNotContain("turn-1 " + "u".repeat(120))
                 .doesNotContain("turn-2 " + "u".repeat(120));
-        assertThat(history).extracting(Message::getRole).contains(Message.Role.USER, Message.Role.ASSISTANT, Message.Role.TOOL);
+        assertThat(history).extracting(Message::getRole).contains(Message.Role.USER, Message.Role.ASSISTANT,
+                Message.Role.TOOL);
         assertThat(history).anySatisfy(message -> {
             assertThat(message.getRole()).isEqualTo(Message.Role.USER);
             assertThat(message.getContent()).startsWith("Previous conversation summary:\n\n");
@@ -1567,8 +1622,8 @@ public class AppStateServicePersistenceTests {
         }
 
         @Override
-        public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools, AgentModelOptions options,
-                                           java.util.function.Consumer<String> onDelta) {
+        public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+                AgentModelOptions options, Consumer<String> onDelta) {
             throw new AssertionError("context compaction should not stream");
         }
     }
@@ -1584,15 +1639,11 @@ public class AppStateServicePersistenceTests {
         service.appendUserMessageAndPendingAssistant(sessionId, null, null, "hello", metadata);
 
         ChatMessageView assistant = service.loadViewData().activeSessionDetail().chatMessages().stream()
-                .filter(message -> "assistant".equals(message.role()))
-                .findFirst()
-                .orElseThrow();
+                .filter(message -> "assistant".equals(message.role())).findFirst().orElseThrow();
         assertThat(assistant.metadata()).isEqualTo(metadata);
         assertThat(service.loadViewData().activeSessionDetail().chatMessages().stream()
-                .filter(message -> "assistant".equals(message.role()))
-                .findFirst()
-                .orElseThrow()
-                .metadata()).isEqualTo(metadata);
+                .filter(message -> "assistant".equals(message.role())).findFirst().orElseThrow().metadata())
+                .isEqualTo(metadata);
     }
 
     private static void initGitRepo(Path projectPath) throws IOException, InterruptedException {
@@ -1606,9 +1657,7 @@ public class AppStateServicePersistenceTests {
     }
 
     private static void runGit(Path workingDirectory, String... command) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command)
-                .directory(workingDirectory.toFile())
-                .redirectErrorStream(true)
+        Process process = new ProcessBuilder(command).directory(workingDirectory.toFile()).redirectErrorStream(true)
                 .start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {

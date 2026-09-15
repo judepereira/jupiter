@@ -1,8 +1,4 @@
-import {
-    focusChatInput,
-    getCurrentOpenSubagentSessionId,
-    getHtmxRequestPath
-} from './shared.js';
+import { focusChatInput, getCurrentOpenSubagentSessionId, getHtmxRequestPath } from "./shared.js";
 
 const INITIAL_SCROLL_MAX_MS = 5000;
 const INITIAL_SCROLL_STABLE_FRAMES = 3;
@@ -26,22 +22,21 @@ function setHistoryScrollTop(history, target) {
 
 export function scrollChatToBottom(after) {
     try {
-        const history = document.getElementById('chat-history');
-        const list = document.getElementById('chat-messages-list');
+        const history = document.getElementById("chat-history");
+        const list = document.getElementById("chat-messages-list");
         if (!history || !list) return;
         requestAnimationFrame(() => {
             const target = history.scrollHeight - history.clientHeight;
             if (Number.isFinite(target)) setHistoryScrollTop(history, target);
-            if (typeof after === 'function') after();
+            if (typeof after === "function") after();
         });
-    } catch (_) {
-    }
+    } catch (_) {}
 }
 
 function removeInitialImageListeners(state) {
     state.imageListeners.forEach((listener, image) => {
-        image.removeEventListener('load', listener);
-        image.removeEventListener('error', listener);
+        image.removeEventListener("load", listener);
+        image.removeEventListener("error", listener);
     });
     state.imageListeners.clear();
 }
@@ -74,12 +69,12 @@ function queueInitialChatScroll(resetStability) {
 }
 
 function observeInitialImages(state, list) {
-    list.querySelectorAll('img').forEach(image => {
+    list.querySelectorAll("img").forEach((image) => {
         if (state.imageListeners.has(image)) return;
         const listener = () => queueInitialChatScroll(true);
         state.imageListeners.set(image, listener);
-        image.addEventListener('load', listener);
-        image.addEventListener('error', listener);
+        image.addEventListener("load", listener);
+        image.addEventListener("error", listener);
     });
 }
 
@@ -100,7 +95,7 @@ function connectInitialChatObservers(state, history, list) {
     state.initialList = list;
     if (state.resizeObserver) state.resizeObserver.observe(list);
     if (state.mutationObserver) {
-        state.mutationObserver.observe(list, {childList: true, subtree: true});
+        state.mutationObserver.observe(list, { childList: true, subtree: true });
     }
     observeInitialImages(state, list);
     state.stableFrames = 0;
@@ -117,8 +112,8 @@ function runInitialChatScroll() {
         return;
     }
 
-    const history = document.getElementById('chat-history');
-    const list = document.getElementById('chat-messages-list');
+    const history = document.getElementById("chat-history");
+    const list = document.getElementById("chat-messages-list");
     if (!history || !list) {
         queueInitialChatScroll(false);
         return;
@@ -153,32 +148,34 @@ function bindInitialChatScrollListeners() {
         history: null,
         imageListeners: new Map(),
         list: null,
-        mutationObserver: typeof MutationObserver === 'function' ? new MutationObserver(() => queueInitialChatScroll(true)) : null,
-        pageLoaded: document.readyState === 'complete',
+        mutationObserver:
+            typeof MutationObserver === "function" ? new MutationObserver(() => queueInitialChatScroll(true)) : null,
+        pageLoaded: document.readyState === "complete",
         rafId: null,
-        resizeObserver: typeof ResizeObserver === 'function' ? new ResizeObserver(() => queueInitialChatScroll(true)) : null,
+        resizeObserver:
+            typeof ResizeObserver === "function" ? new ResizeObserver(() => queueInitialChatScroll(true)) : null,
         stableFrames: 0,
-        timeoutId: null
+        timeoutId: null,
     };
 
-    const markUserInteraction = event => {
+    const markUserInteraction = (event) => {
         const target = event && event.target;
-        if (target && target.closest && target.closest('#chat-history')) cancelInitialChatScroll();
+        if (target && target.closest && target.closest("#chat-history")) cancelInitialChatScroll();
     };
-    document.addEventListener('pointerdown', markUserInteraction, true);
-    document.addEventListener('wheel', markUserInteraction, {capture: true, passive: true});
-    document.addEventListener('touchstart', markUserInteraction, {capture: true, passive: true});
-    document.addEventListener('keydown', markUserInteraction, true);
+    document.addEventListener("pointerdown", markUserInteraction, true);
+    document.addEventListener("wheel", markUserInteraction, { capture: true, passive: true });
+    document.addEventListener("touchstart", markUserInteraction, { capture: true, passive: true });
+    document.addEventListener("keydown", markUserInteraction, true);
     initialChatScroll.interactionCleanup = () => {
-        document.removeEventListener('pointerdown', markUserInteraction, true);
-        document.removeEventListener('wheel', markUserInteraction, true);
-        document.removeEventListener('touchstart', markUserInteraction, true);
-        document.removeEventListener('keydown', markUserInteraction, true);
+        document.removeEventListener("pointerdown", markUserInteraction, true);
+        document.removeEventListener("wheel", markUserInteraction, true);
+        document.removeEventListener("touchstart", markUserInteraction, true);
+        document.removeEventListener("keydown", markUserInteraction, true);
     };
 
     const startAfterDomReady = () => queueInitialChatScroll(true);
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startAfterDomReady, {once: true});
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", startAfterDomReady, { once: true });
     } else {
         startAfterDomReady();
     }
@@ -188,8 +185,8 @@ function bindInitialChatScrollListeners() {
         initialChatScroll.pageLoaded = true;
         queueInitialChatScroll(true);
     };
-    if (document.readyState !== 'complete') {
-        window.addEventListener('load', markPageLoaded, {once: true});
+    if (document.readyState !== "complete") {
+        window.addEventListener("load", markPageLoaded, { once: true });
     }
 
     initialChatScroll.timeoutId = setTimeout(finishInitialChatScroll, INITIAL_SCROLL_MAX_MS);
@@ -202,7 +199,7 @@ export function isInitialChatScrollActive() {
 
 export function checkAndMaybeScroll() {
     try {
-        const list = document.getElementById('chat-messages-list');
+        const list = document.getElementById("chat-messages-list");
         if (!list) {
             lastMessageCount = -1;
             return;
@@ -219,18 +216,17 @@ export function checkAndMaybeScroll() {
         } else {
             lastMessageCount = count;
         }
-    } catch (_) {
-    }
+    } catch (_) {}
 }
 
 export function isHistoryNearBottom() {
     try {
-        const history = document.getElementById('chat-history');
+        const history = document.getElementById("chat-history");
         if (!history) return false;
         const max = history.scrollHeight - history.clientHeight;
         const cur = history.scrollTop;
         if (!Number.isFinite(max) || !Number.isFinite(cur)) return false;
-        return (max - cur) <= 48;
+        return max - cur <= 48;
     } catch (_) {
         return false;
     }
@@ -239,7 +235,7 @@ export function isHistoryNearBottom() {
 function capturePrimaryChatScrollState() {
     try {
         if (getCurrentOpenSubagentSessionId()) return;
-        const history = document.getElementById('chat-history');
+        const history = document.getElementById("chat-history");
         if (!history) return;
         const max = Math.max(0, history.scrollHeight - history.clientHeight);
         const scrollTop = history.scrollTop;
@@ -247,45 +243,46 @@ function capturePrimaryChatScrollState() {
         primaryChatScrollState = {
             scrollTop: scrollTop,
             bottomOffset: bottomOffset,
-            nearBottom: bottomOffset <= 48
+            nearBottom: bottomOffset <= 48,
         };
         primaryChatScrollRestorePending = false;
-    } catch (_) {
-    }
+    } catch (_) {}
 }
 
 function restorePrimaryChatScrollState() {
     try {
         if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
-        const history = document.getElementById('chat-history');
+        const history = document.getElementById("chat-history");
         if (!history) return;
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-            try {
-                const max = Math.max(0, history.scrollHeight - history.clientHeight);
-                const target = primaryChatScrollState.nearBottom
-                    ? max
-                    : Math.min(Math.max(primaryChatScrollState.scrollTop, 0), max);
-                history.scrollTop = target;
-                primaryChatScrollRestorePending = false;
-            } catch (_) {
-            }
-        }));
-    } catch (_) {
-    }
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+                try {
+                    const max = Math.max(0, history.scrollHeight - history.clientHeight);
+                    const target = primaryChatScrollState.nearBottom
+                        ? max
+                        : Math.min(Math.max(primaryChatScrollState.scrollTop, 0), max);
+                    history.scrollTop = target;
+                    primaryChatScrollRestorePending = false;
+                } catch (_) {}
+            }),
+        );
+    } catch (_) {}
 }
 
 function isChatContextTransitionPath(path) {
-    const value = String(path || '');
-    return value.includes('/ui/sessions/add')
-        || /\/ui\/(?:projects|workspaces|sessions)\/[^/?#]+\/(?:activate|collapse|close)(?:[/?#]|$)/.test(value)
-        || value.includes('/ui/workspaces/add');
+    const value = String(path || "");
+    return (
+        value.includes("/ui/sessions/add") ||
+        /\/ui\/(?:projects|workspaces|sessions)\/[^/?#]+\/(?:activate|collapse|close)(?:[/?#]|$)/.test(value) ||
+        value.includes("/ui/workspaces/add")
+    );
 }
 
 function finishTransitionChatScroll(state) {
     if (!state || state.finished) return;
     state.finished = true;
     if (state.rafId != null) cancelAnimationFrame(state.rafId);
-    state.history.removeEventListener('scroll', state.scrollListener);
+    state.history.removeEventListener("scroll", state.scrollListener);
     state.interactionCleanup();
     if (transitionChatScroll === state) transitionChatScroll = null;
 }
@@ -296,8 +293,8 @@ function cancelTransitionChatScroll() {
 
 function syncChatAfterSessionChange() {
     try {
-        const list = document.getElementById('chat-messages-list');
-        const history = document.getElementById('chat-history');
+        const list = document.getElementById("chat-messages-list");
+        const history = document.getElementById("chat-history");
         if (!list || !history) return;
         cancelTransitionChatScroll();
         lastMessageCount = list.children ? list.children.length : 0;
@@ -310,31 +307,31 @@ function syncChatAfterSessionChange() {
             lastAutoScrollTop: null,
             list,
             rafId: null,
-            scrollListener: null
+            scrollListener: null,
         };
         transitionChatScroll = state;
-        const cancelForUserInteraction = event => {
+        const cancelForUserInteraction = (event) => {
             const target = event && event.target;
-            if (target && target.closest && target.closest('#chat-history') === history) {
+            if (target && target.closest && target.closest("#chat-history") === history) {
                 finishTransitionChatScroll(state);
             }
         };
-        document.addEventListener('pointerdown', cancelForUserInteraction, true);
-        document.addEventListener('wheel', cancelForUserInteraction, {capture: true, passive: true});
-        document.addEventListener('touchstart', cancelForUserInteraction, {capture: true, passive: true});
-        document.addEventListener('keydown', cancelForUserInteraction, true);
+        document.addEventListener("pointerdown", cancelForUserInteraction, true);
+        document.addEventListener("wheel", cancelForUserInteraction, { capture: true, passive: true });
+        document.addEventListener("touchstart", cancelForUserInteraction, { capture: true, passive: true });
+        document.addEventListener("keydown", cancelForUserInteraction, true);
         state.interactionCleanup = () => {
-            document.removeEventListener('pointerdown', cancelForUserInteraction, true);
-            document.removeEventListener('wheel', cancelForUserInteraction, true);
-            document.removeEventListener('touchstart', cancelForUserInteraction, true);
-            document.removeEventListener('keydown', cancelForUserInteraction, true);
+            document.removeEventListener("pointerdown", cancelForUserInteraction, true);
+            document.removeEventListener("wheel", cancelForUserInteraction, true);
+            document.removeEventListener("touchstart", cancelForUserInteraction, true);
+            document.removeEventListener("keydown", cancelForUserInteraction, true);
         };
         state.scrollListener = () => {
             if (state.lastAutoScrollTop != null && Math.abs(history.scrollTop - state.lastAutoScrollTop) > 1) {
                 finishTransitionChatScroll(state);
             }
         };
-        history.addEventListener('scroll', state.scrollListener, {passive: true});
+        history.addEventListener("scroll", state.scrollListener, { passive: true });
 
         const deadline = Date.now() + INITIAL_SCROLL_MAX_MS;
         const settle = () => {
@@ -356,7 +353,9 @@ function syncChatAfterSessionChange() {
             state.lastMax = max;
             state.lastAutoScrollTop = max;
             setHistoryScrollTop(history, max);
-            const signature = [history.scrollHeight, history.clientHeight, list.getBoundingClientRect().height].join(':');
+            const signature = [history.scrollHeight, history.clientHeight, list.getBoundingClientRect().height].join(
+                ":",
+            );
             state.stableFrames = signature === state.previousSignature ? (state.stableFrames || 0) + 1 : 0;
             state.previousSignature = signature;
             if (state.stableFrames >= TRANSITION_SCROLL_STABLE_FRAMES || Date.now() >= deadline) {
@@ -367,74 +366,84 @@ function syncChatAfterSessionChange() {
             state.rafId = requestAnimationFrame(settle);
         };
         state.rafId = requestAnimationFrame(settle);
-    } catch (_) {
-    }
+    } catch (_) {}
 }
 
 function bindSubagentScrollListeners() {
     if (subagentScrollRestoreBound) return;
     subagentScrollRestoreBound = true;
 
-    document.addEventListener('click', function (evt) {
-        try {
-            const target = evt && evt.target;
-            const subagentButton = target && target.closest ? target.closest('.tool-call-subagent-button') : null;
-            if (subagentButton) {
-                capturePrimaryChatScrollState();
-                return;
-            }
-            const backButton = target && target.closest ? target.closest('.subagent-back-button') : null;
-            if (backButton && primaryChatScrollState) {
-                primaryChatScrollRestorePending = true;
-            }
-        } catch (_) {
-        }
-    }, true);
+    document.addEventListener(
+        "click",
+        function (evt) {
+            try {
+                const target = evt && evt.target;
+                const subagentButton = target && target.closest ? target.closest(".tool-call-subagent-button") : null;
+                if (subagentButton) {
+                    capturePrimaryChatScrollState();
+                    return;
+                }
+                const backButton = target && target.closest ? target.closest(".subagent-back-button") : null;
+                if (backButton && primaryChatScrollState) {
+                    primaryChatScrollRestorePending = true;
+                }
+            } catch (_) {}
+        },
+        true,
+    );
 
-    document.body.addEventListener('htmx:afterSettle', function (evt) {
-        try {
-            const detail = evt && evt.detail;
-            const target = detail && detail.target;
-            const path = getHtmxRequestPath(evt);
-            if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
-            if (!path.includes('/ui/chat/primary')) return;
-            if (!target || target.id !== 'chat-container') return;
-            restorePrimaryChatScrollState();
-        } catch (_) {
-        }
-    }, true);
+    document.body.addEventListener(
+        "htmx:afterSettle",
+        function (evt) {
+            try {
+                const detail = evt && evt.detail;
+                const target = detail && detail.target;
+                const path = getHtmxRequestPath(evt);
+                if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
+                if (!path.includes("/ui/chat/primary")) return;
+                if (!target || target.id !== "chat-container") return;
+                restorePrimaryChatScrollState();
+            } catch (_) {}
+        },
+        true,
+    );
 }
 
 function bindSessionChangeScrollListeners() {
     if (sessionChangeScrollRestoreBound) return;
     sessionChangeScrollRestoreBound = true;
 
-    const syncAfterContextTransition = evt => {
+    const syncAfterContextTransition = (evt) => {
         try {
             const path = getHtmxRequestPath(evt);
             if (!isChatContextTransitionPath(path)) return;
-            const container = document.getElementById('chat-container');
+            const container = document.getElementById("chat-container");
             if (container === lastSettledChatContainer) return;
             lastSettledChatContainer = container;
             Promise.resolve().then(syncChatAfterSessionChange);
-        } catch (_) {
-        }
+        } catch (_) {}
     };
-    document.body.addEventListener('htmx:afterSwap', syncAfterContextTransition, true);
-    document.body.addEventListener('htmx:afterSettle', syncAfterContextTransition, true);
+    document.body.addEventListener("htmx:afterSwap", syncAfterContextTransition, true);
+    document.body.addEventListener("htmx:afterSettle", syncAfterContextTransition, true);
 }
 
 function htmxBeforeSwapListener(evt) {
     try {
         const trg = (evt && evt.detail && evt.detail.target) || evt.target;
         if (!trg) return;
-        if (trg.id === 'chat-container') cancelInitialChatScroll();
-        if (trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
-            (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))) {
+        if (trg.id === "chat-container") cancelInitialChatScroll();
+        if (
+            trg.id === "chat-history" ||
+            trg.id === "chat-messages-list" ||
+            (trg.closest &&
+                (trg.closest("#chat-history") ||
+                    trg.closest("#chat-messages-list") ||
+                    trg.closest("#chat-send-form") ||
+                    trg.closest("#chat-input")))
+        ) {
             wasNearBottomBeforeSwap = isHistoryNearBottom();
         }
-    } catch (_) {
-    }
+    } catch (_) {}
 }
 
 function htmxChatListener(evt) {
@@ -442,8 +451,15 @@ function htmxChatListener(evt) {
         const trg = (evt && evt.detail && evt.detail.target) || evt.target;
         if (!trg) return;
 
-        if (trg.id === 'chat-history' || trg.id === 'chat-messages-list' ||
-            (trg.closest && (trg.closest('#chat-history') || trg.closest('#chat-messages-list') || trg.closest('#chat-send-form') || trg.closest('#chat-input')))) {
+        if (
+            trg.id === "chat-history" ||
+            trg.id === "chat-messages-list" ||
+            (trg.closest &&
+                (trg.closest("#chat-history") ||
+                    trg.closest("#chat-messages-list") ||
+                    trg.closest("#chat-send-form") ||
+                    trg.closest("#chat-input")))
+        ) {
             Promise.resolve().then(checkAndMaybeScroll);
             if (wasNearBottomBeforeSwap) {
                 Promise.resolve().then(() => {
@@ -452,16 +468,15 @@ function htmxChatListener(evt) {
                 });
             }
         }
-    } catch (_) {
-    }
+    } catch (_) {}
 }
 
 export function bindAutoScrollListeners() {
     if (chatAutoScrollBound) return;
     chatAutoScrollBound = true;
-    document.body.addEventListener('htmx:beforeSwap', htmxBeforeSwapListener, true);
-    document.body.addEventListener('htmx:afterSwap', htmxChatListener, true);
-    document.body.addEventListener('htmx:afterSettle', htmxChatListener, true);
+    document.body.addEventListener("htmx:beforeSwap", htmxBeforeSwapListener, true);
+    document.body.addEventListener("htmx:afterSwap", htmxChatListener, true);
+    document.body.addEventListener("htmx:afterSettle", htmxChatListener, true);
     bindSubagentScrollListeners();
     bindSessionChangeScrollListeners();
     bindInitialChatScrollListeners();

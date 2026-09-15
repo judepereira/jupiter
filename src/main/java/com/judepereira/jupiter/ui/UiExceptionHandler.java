@@ -29,13 +29,10 @@ public class UiExceptionHandler {
             exceptionDetail = exception.getClass().getSimpleName();
         }
 
-        String body = "An internal error occurred.\n\nException: "
-                + exceptionDetail
+        String body = "An internal error occurred.\n\nException: " + exceptionDetail
                 + "\n\nThe full stacktrace is available in the logs.";
         systemBalloonService.publishError("Internal Error", body);
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .contentType(MediaType.TEXT_PLAIN)
-                .body(body);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.TEXT_PLAIN).body(body);
     }
 }

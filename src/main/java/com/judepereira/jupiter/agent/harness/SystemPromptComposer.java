@@ -3,11 +3,13 @@ package com.judepereira.jupiter.agent.harness;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.skill.SkillCatalog;
 import com.judepereira.jupiter.agent.skill.SkillCatalogRenderer;
-import org.springframework.stereotype.Service;
-
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import org.springframework.stereotype.Service;
 
 @Service
 public class SystemPromptComposer {
@@ -23,27 +25,27 @@ public class SystemPromptComposer {
     }
 
     public String composeForAgent(AgentDefinition agent, String workspaceRoot, SkillCatalog catalog) {
-        return compose(requireNonBlank(agent.systemPrompt(), "agent system prompt appendage: " + agent.id()), workspaceRoot, catalog);
+        return compose(requireNonBlank(agent.systemPrompt(), "agent system prompt appendage: " + agent.id()),
+                workspaceRoot, catalog);
     }
 
     public String compose(String appendage, String workspaceRoot, SkillCatalog catalog) {
         String defaultPrompt = requireNonBlank(defaultSystemPrompt, "default system prompt resource");
         String resolvedWorkspaceRoot = requireNonBlank(workspaceRoot, "workspace root");
         String renderedCatalog = skillCatalogRenderer.render(catalog);
-        java.util.List<String> sections = new java.util.ArrayList<>(java.util.List.of(defaultPrompt));
-        if (appendage != null && !appendage.isBlank()) sections.add(appendage);
-        if (!renderedCatalog.isBlank()) sections.add(renderedCatalog);
+        List<String> sections = new ArrayList<>(List.of(defaultPrompt));
+        if (appendage != null && !appendage.isBlank())
+            sections.add(appendage);
+        if (!renderedCatalog.isBlank())
+            sections.add(renderedCatalog);
         sections.add(buildEnvAppendage(resolvedWorkspaceRoot));
         return String.join("\n\n", sections);
     }
 
     private static String buildEnvAppendage(String workspaceRoot) {
-        return "<env>\n" +
-                "Working directory: " + Path.of(workspaceRoot).toAbsolutePath().normalize() + "\n" +
-                "Current date: " + java.time.LocalDate.now() + "\n" +
-                "Operating system: Ubuntu Linux\n" +
-                "Shell: bash\n" +
-                "</env>";
+        return "<env>\n" + "Working directory: " + Path.of(workspaceRoot).toAbsolutePath().normalize() + "\n"
+                + "Current date: " + LocalDate.now() + "\n" + "Operating system: Ubuntu Linux\n" + "Shell: bash\n"
+                + "</env>";
     }
 
     private static String requireNonBlank(String value, String label) {

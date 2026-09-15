@@ -1,23 +1,25 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThat;
 
 class ConnectionLossOverlayE2ETest extends E2ETestSupport {
 
@@ -33,7 +35,8 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
 
         RunningApp app = null;
         try (BrowserContext context = newBrowserContext()) {
-            context.addInitScript("(() => { const key = 'connection-loss-reload-count'; const current = Number(sessionStorage.getItem(key) || '0'); sessionStorage.setItem(key, String(current + 1)); })();");
+            context.addInitScript(
+                    "(() => { const key = 'connection-loss-reload-count'; const current = Number(sessionStorage.getItem(key) || '0'); sessionStorage.setItem(key, String(current + 1)); })();");
 
             app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
             Page page = context.newPage();
@@ -48,16 +51,19 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
             app = null;
 
             assertThat(page.locator("#connection-loss-overlay")).isVisible();
-            assertThat((Boolean) page.locator("body").evaluate("body => body.classList.contains('connection-loss-overlay-open')")).isTrue();
+            assertThat((Boolean) page.locator("body")
+                    .evaluate("body => body.classList.contains('connection-loss-overlay-open')")).isTrue();
 
             try (RunningApp restarted = startApp(fakeHome, sqliteDbFile, port, TestAppConfig.class)) {
                 assertThat(restarted.port()).isEqualTo(port);
-                page.waitForFunction("() => Number(sessionStorage.getItem('connection-loss-reload-count') || '0') >= 2");
+                page.waitForFunction(
+                        "() => Number(sessionStorage.getItem('connection-loss-reload-count') || '0') >= 2");
                 page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
                 page.waitForFunction("() => !document.body.classList.contains('connection-loss-overlay-open')");
 
                 assertThat(page.locator("#connection-loss-overlay")).isHidden();
-                assertThat((Boolean) page.locator("body").evaluate("body => body.classList.contains('connection-loss-overlay-open')")).isFalse();
+                assertThat((Boolean) page.locator("body")
+                        .evaluate("body => body.classList.contains('connection-loss-overlay-open')")).isFalse();
 
                 page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).click();
                 assertThat(page.locator("#project-modal")).isVisible();
@@ -80,10 +86,13 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector()) {
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                    new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                    SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                    SkillTestSupport.defaultComponents().injector()) {
                 @Override
                 public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                    AgentTurnResult result = new AgentTurnResult("done", java.util.List.of());
+                    AgentTurnResult result = new AgentTurnResult("done", List.of());
                     listener.onComplete(result);
                     return result;
                 }

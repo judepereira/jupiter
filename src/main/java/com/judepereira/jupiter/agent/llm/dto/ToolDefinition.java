@@ -10,7 +10,8 @@ public class ToolDefinition {
     private final ToolSchema schema;
     private final ToolSpecification nativeToolSpecification;
 
-    private ToolDefinition(String name, String description, ToolSchema schema, ToolSpecification nativeToolSpecification) {
+    private ToolDefinition(String name, String description, ToolSchema schema,
+            ToolSpecification nativeToolSpecification) {
         this.name = name;
         this.description = description;
         this.schema = schema;
@@ -22,7 +23,7 @@ public class ToolDefinition {
     }
 
     public static ToolDefinition withNativeToolSpecification(String name, String description, ToolSchema schema,
-                                                             ToolSpecification nativeToolSpecification) {
+            ToolSpecification nativeToolSpecification) {
         return new ToolDefinition(name, description, schema, nativeToolSpecification);
     }
 }

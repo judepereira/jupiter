@@ -1,13 +1,12 @@
 package com.judepereira.jupiter.agent.catalog;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import java.util.List;
+import org.junit.jupiter.api.Test;
 
 class AgentModelResolutionServiceTest {
     private final ModelCatalogService catalog = mock(ModelCatalogService.class);
@@ -19,8 +18,7 @@ class AgentModelResolutionServiceTest {
         when(catalog.getRequired("anthropic/missing")).thenThrow(new IllegalArgumentException("Unknown model id"));
 
         assertThatThrownBy(() -> service.resolve(agent("anthropic/missing")))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unknown model id");
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Unknown model id");
     }
 
     @Test
@@ -58,18 +56,17 @@ class AgentModelResolutionServiceTest {
         when(catalog.getRequired(model.id())).thenReturn(model);
         when(availability.isAvailable("anthropic")).thenReturn(false);
 
-        assertThatThrownBy(() -> service.resolve(agent(model.id())))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> service.resolve(agent(model.id()))).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("No configured provider");
     }
 
     private static AgentDefinition agent(String... models) {
-        return new AgentDefinition("test", "Test", "test", "prompt", AgentMode.SUBAGENT,
-                List.of(models), ThinkingLevel.HIGH, "low", false, false, List.of("read_file"));
+        return new AgentDefinition("test", "Test", "test", "prompt", AgentMode.SUBAGENT, List.of(models),
+                ThinkingLevel.HIGH, "low", false, false, List.of("read_file"));
     }
 
     private static ModelDefinition model(String id, String provider) {
-        return new ModelDefinition(id, id, provider, id.substring(id.indexOf('/') + 1), true, true,
-                100, 20, null, null, null);
+        return new ModelDefinition(id, id, provider, id.substring(id.indexOf('/') + 1), true, true, 100, 20, null, null,
+                null);
     }
 }

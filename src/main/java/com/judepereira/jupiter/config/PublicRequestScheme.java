@@ -43,6 +43,7 @@ public final class PublicRequestScheme {
 
     private static String stripQuotes(String value) {
         return value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")
-                ? value.substring(1, value.length() - 1) : value;
+                ? value.substring(1, value.length() - 1)
+                : value;
     }
 }

@@ -1,10 +1,10 @@
-import {getRawChatMarkdown, renderChatMarkdown} from '../markdown.js';
-import {isInitialChatScrollActive} from '../scroll.js';
+import { getRawChatMarkdown, renderChatMarkdown } from "../markdown.js";
+import { isInitialChatScrollActive } from "../scroll.js";
 
 function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) {
     const FLUSH_INTERVAL_MS = 40;
 
-    let buffer = '';
+    let buffer = "";
     let gotDelta = false;
     let rafPending = false;
     let flushTimer = null;
@@ -22,18 +22,18 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
 
     function currentTextSpan() {
         const liveRow = currentRow();
-        return liveRow ? liveRow.querySelector('.chat-message-text') : null;
+        return liveRow ? liveRow.querySelector(".chat-message-text") : null;
     }
 
     function wasNearBottom() {
         if (!canAccessActiveHistory()) return false;
         try {
-            const history = document.getElementById('chat-history');
+            const history = document.getElementById("chat-history");
             if (!history) return false;
             const max = history.scrollHeight - history.clientHeight;
             const cur = history.scrollTop;
             if (!Number.isFinite(max) || !Number.isFinite(cur)) return false;
-            return (max - cur) <= 96;
+            return max - cur <= 96;
         } catch (_) {
             return false;
         }
@@ -48,9 +48,9 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
     function bindHistoryScrollListener() {
         if (!canAccessActiveHistory()) return;
         try {
-            streamHistoryEl = document.getElementById('chat-history');
+            streamHistoryEl = document.getElementById("chat-history");
             if (streamHistoryEl && streamHistoryEl.addEventListener) {
-                streamHistoryEl.addEventListener('scroll', streamScrollListener, {passive: true});
+                streamHistoryEl.addEventListener("scroll", streamScrollListener, { passive: true });
             }
         } catch (_) {
             streamHistoryEl = null;
@@ -60,10 +60,9 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
     function removeHistoryScrollListener() {
         try {
             if (streamHistoryEl && streamHistoryEl.removeEventListener) {
-                streamHistoryEl.removeEventListener('scroll', streamScrollListener, {passive: true});
+                streamHistoryEl.removeEventListener("scroll", streamScrollListener, { passive: true });
             }
-        } catch (_) {
-        }
+        } catch (_) {}
     }
 
     function flushInner() {
@@ -84,10 +83,9 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
         } catch (_) {
             try {
                 textSpan.textContent = textSpan.textContent + buffer;
-            } catch (_) {
-            }
+            } catch (_) {}
         }
-        buffer = '';
+        buffer = "";
         rafPending = false;
         lastFlushTime = Date.now();
         if (flushTimer) {
@@ -98,7 +96,7 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
 
     function flushBuffer() {
         if (!canAccessActiveHistory()) {
-            buffer = '';
+            buffer = "";
             rafPending = false;
             if (flushTimer) {
                 clearTimeout(flushTimer);
@@ -112,11 +110,10 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
             requestAnimationFrame(() => {
                 if (!canAccessActiveHistory()) return;
                 try {
-                    const history = document.getElementById('chat-history');
+                    const history = document.getElementById("chat-history");
                     if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
                     shouldStickToBottom = true;
-                } catch (_) {
-                }
+                } catch (_) {}
             });
         }
     }
@@ -149,7 +146,7 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
     }
 
     function clearBuffer() {
-        buffer = '';
+        buffer = "";
     }
 
     function hasDelta() {
@@ -175,10 +172,8 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
         scheduleFlush,
         setShouldStickToBottom,
         shouldStick,
-        wasNearBottom
+        wasNearBottom,
     };
 }
 
-export {
-    createStreamBuffer
-};
+export { createStreamBuffer };

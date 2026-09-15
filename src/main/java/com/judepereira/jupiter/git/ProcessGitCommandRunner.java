@@ -1,8 +1,6 @@
 package com.judepereira.jupiter.git;
 
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -13,6 +11,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.springframework.stereotype.Component;
 
 @Component
 public class ProcessGitCommandRunner implements GitCommandRunner {
@@ -23,7 +22,7 @@ public class ProcessGitCommandRunner implements GitCommandRunner {
     }
 
     GitCommandResult runWithEnvironment(Path workingDirectory, List<String> command, Duration timeout,
-                                        Map<String, String> suppliedEnvironment) {
+            Map<String, String> suppliedEnvironment) {
         try {
             ProcessBuilder builder = new ProcessBuilder(command).directory(workingDirectory.toFile());
             builder.environment().putAll(suppliedEnvironment);
@@ -38,8 +37,7 @@ public class ProcessGitCommandRunner implements GitCommandRunner {
                     process.destroyForcibly();
                     return new GitCommandResult(-1, "", "Git command timed out after " + timeout);
                 }
-                return new GitCommandResult(process.exitValue(),
-                        new String(stdout.get(), StandardCharsets.UTF_8),
+                return new GitCommandResult(process.exitValue(), new String(stdout.get(), StandardCharsets.UTF_8),
                         new String(stderr.get(), StandardCharsets.UTF_8));
             }
         } catch (IOException e) {

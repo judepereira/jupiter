@@ -1,15 +1,14 @@
 package com.judepereira.jupiter.security;
 
-import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
 
 class EncryptionKeyBootstrapReaderTests {
     private static final String KEY = TestEncryptionSupport.KEY;
@@ -17,10 +16,13 @@ class EncryptionKeyBootstrapReaderTests {
     @Test
     void rejectsMissingInvalidWrongLengthAndTrailingInput() {
         assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes(""))).hasMessageContaining("missing");
-        assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes("not-base64"))).hasMessageContaining("invalid Base64");
-        assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes("AQ=="))).hasMessageContaining("exactly 32 bytes");
+        assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes("not-base64")))
+                .hasMessageContaining("invalid Base64");
+        assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes("AQ==")))
+                .hasMessageContaining("exactly 32 bytes");
         assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes(KEY + "x"))).hasMessageContaining("trailing");
-        assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes(KEY + "\nextra"))).hasMessageContaining("interior whitespace");
+        assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes(KEY + "\nextra")))
+                .hasMessageContaining("interior whitespace");
         assertThatThrownBy(() -> EncryptionKeyBootstrapReader.read(bytes("x".repeat(129))))
                 .hasMessageContaining("excessive");
     }

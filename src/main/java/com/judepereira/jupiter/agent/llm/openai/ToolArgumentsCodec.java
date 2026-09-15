@@ -22,7 +22,8 @@ public final class ToolArgumentsCodec {
             return Map.of();
         }
         try {
-            return OBJECT_MAPPER.readValue(text, new TypeReference<Map<String, Object>>() {});
+            return OBJECT_MAPPER.readValue(text, new TypeReference<Map<String, Object>>() {
+            });
         } catch (Exception e) {
             throw new IllegalStateException("Failed to parse tool call arguments", e);
         }

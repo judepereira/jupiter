@@ -2,9 +2,9 @@ package com.judepereira.jupiter.agent.tools.impl;
 
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
-
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -42,10 +42,12 @@ public final class RipgrepToolSupport {
         try {
             resolvedRoot = resolveWorkspacePath(workspaceRoot, relativePath);
         } catch (IOException e) {
-            return new ToolExecutionResult(false, "failed to resolve path: " + normalizeRelativePath(relativePath), Map.of());
+            return new ToolExecutionResult(false, "failed to resolve path: " + normalizeRelativePath(relativePath),
+                    Map.of());
         }
         if (!Files.exists(resolvedRoot)) {
-            return new ToolExecutionResult(false, "path does not exist: " + normalizeRelativePath(relativePath), Map.of());
+            return new ToolExecutionResult(false, "path does not exist: " + normalizeRelativePath(relativePath),
+                    Map.of());
         }
 
         List<String> command = new ArrayList<>();
@@ -76,7 +78,8 @@ public final class RipgrepToolSupport {
         return new ToolExecutionResult(true, text, Map.of("files", files));
     }
 
-    public ToolExecutionResult searchCode(Path workspaceRoot, String relativePath, String pattern, String include, int timeoutSeconds) {
+    public ToolExecutionResult searchCode(Path workspaceRoot, String relativePath, String pattern, String include,
+            int timeoutSeconds) {
         if (pattern == null || pattern.isBlank()) {
             return new ToolExecutionResult(false, "pattern is required", Map.of());
         }
@@ -85,10 +88,12 @@ public final class RipgrepToolSupport {
         try {
             resolvedRoot = resolveWorkspacePath(workspaceRoot, relativePath);
         } catch (IOException e) {
-            return new ToolExecutionResult(false, "failed to resolve path: " + normalizeRelativePath(relativePath), Map.of());
+            return new ToolExecutionResult(false, "failed to resolve path: " + normalizeRelativePath(relativePath),
+                    Map.of());
         }
         if (!Files.exists(resolvedRoot)) {
-            return new ToolExecutionResult(false, "path does not exist: " + normalizeRelativePath(relativePath), Map.of());
+            return new ToolExecutionResult(false, "path does not exist: " + normalizeRelativePath(relativePath),
+                    Map.of());
         }
 
         List<String> command = new ArrayList<>();
@@ -102,7 +107,8 @@ public final class RipgrepToolSupport {
         command.add("--");
         command.add(pattern);
         if (relativePath == null || relativePath.isBlank()) {
-            // rg reads from stdin when no path is provided; pin it to the workspace root instead.
+            // rg reads from stdin when no path is provided; pin it to the workspace root
+            // instead.
             command.add(".");
         } else {
             command.add(normalizeRelativePath(relativePath));
@@ -224,7 +230,7 @@ public final class RipgrepToolSupport {
         return RunResult.completed(process.exitValue(), stdout.toString(), stderr.toString());
     }
 
-    private static void readStream(java.io.InputStream stream, StringBuilder output) {
+    private static void readStream(InputStream stream, StringBuilder output) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -247,9 +253,10 @@ public final class RipgrepToolSupport {
     }
 
     private record RunResult(int exitCode, String stdout, String stderr, boolean timedOut, boolean missingCommand,
-                             Throwable failure) {
+            Throwable failure) {
         static RunResult completed(int exitCode, String stdout, String stderr) {
-            return new RunResult(exitCode, stdout == null ? "" : stdout, stderr == null ? "" : stderr, false, false, null);
+            return new RunResult(exitCode, stdout == null ? "" : stdout, stderr == null ? "" : stderr, false, false,
+                    null);
         }
 
         static RunResult timedOut(String stdout, String stderr, Throwable failure) {

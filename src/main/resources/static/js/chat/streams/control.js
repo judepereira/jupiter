@@ -1,13 +1,13 @@
-import {getCurrentOpenSubagentSessionId} from '../shared.js';
-import {initChatComposer} from '../composer.js';
-import {formatAllChatSubtitles, renderAllChatMarkdown} from '../markdown.js';
-import {isStopRequestInFlight, setStopRequestInFlight} from './state.js';
+import { getCurrentOpenSubagentSessionId } from "../shared.js";
+import { initChatComposer } from "../composer.js";
+import { formatAllChatSubtitles, renderAllChatMarkdown } from "../markdown.js";
+import { isStopRequestInFlight, setStopRequestInFlight } from "./state.js";
 
 let bindPendingStreamsHook = () => {};
 
 function configureChatStreamControls(config) {
     if (!config) return;
-    if (typeof config.bindPendingStreams === 'function') {
+    if (typeof config.bindPendingStreams === "function") {
         bindPendingStreamsHook = config.bindPendingStreams;
     }
 }
@@ -15,7 +15,7 @@ function configureChatStreamControls(config) {
 function activePrimaryPendingAssistantRow() {
     try {
         if (getCurrentOpenSubagentSessionId()) return null;
-        const list = document.getElementById('chat-messages-list');
+        const list = document.getElementById("chat-messages-list");
         if (!list) return null;
         return list.querySelector('li[data-role="assistant"][data-pending="true"][data-stream-url]');
     } catch (_) {
@@ -25,38 +25,37 @@ function activePrimaryPendingAssistantRow() {
 
 function updateChatSendButtonState() {
     try {
-        const form = document.getElementById('chat-send-form');
-        const button = document.getElementById('chat-send-btn');
+        const form = document.getElementById("chat-send-form");
+        const button = document.getElementById("chat-send-btn");
         if (!form || !button) return;
         const activeRow = activePrimaryPendingAssistantRow();
         const running = Boolean(activeRow);
-        form.dataset.chatRunning = running ? 'true' : 'false';
-        button.classList.toggle('btn-outline-danger', running);
-        button.classList.toggle('btn-outline-light', isStopRequestInFlight());
+        form.dataset.chatRunning = running ? "true" : "false";
+        button.classList.toggle("btn-outline-danger", running);
+        button.classList.toggle("btn-outline-light", isStopRequestInFlight());
         if (isStopRequestInFlight()) {
-            button.textContent = 'Stopping...';
-            button.setAttribute('aria-label', 'Stopping current response');
-            button.setAttribute('aria-busy', 'true');
+            button.textContent = "Stopping...";
+            button.setAttribute("aria-label", "Stopping current response");
+            button.setAttribute("aria-busy", "true");
         } else if (running) {
-            button.textContent = 'Stop';
-            button.setAttribute('aria-label', 'Stop current response');
-            button.removeAttribute('aria-busy');
+            button.textContent = "Stop";
+            button.setAttribute("aria-label", "Stop current response");
+            button.removeAttribute("aria-busy");
         } else {
-            button.textContent = 'Send';
-            button.setAttribute('aria-label', 'Send message');
-            button.removeAttribute('aria-busy');
+            button.textContent = "Send";
+            button.setAttribute("aria-label", "Send message");
+            button.removeAttribute("aria-busy");
         }
-    } catch (_) {
-    }
+    } catch (_) {}
 }
 
 function replaceChatContainerFromHtml(html) {
     try {
         if (!html) return;
-        const template = document.createElement('template');
+        const template = document.createElement("template");
         template.innerHTML = html.trim();
-        const incoming = template.content.querySelector('#chat-container');
-        const current = document.getElementById('chat-container');
+        const incoming = template.content.querySelector("#chat-container");
+        const current = document.getElementById("chat-container");
         if (incoming && current) {
             current.outerHTML = incoming.outerHTML;
             Promise.resolve().then(() => {
@@ -67,8 +66,7 @@ function replaceChatContainerFromHtml(html) {
                 updateChatSendButtonState();
             });
         }
-    } catch (_) {
-    }
+    } catch (_) {}
 }
 
 function requestStopActiveChat() {
@@ -79,16 +77,18 @@ function requestStopActiveChat() {
         setStopRequestInFlight(true);
         updateChatSendButtonState();
         const body = new URLSearchParams();
-        body.set('assistantId', row.dataset.id);
-        fetch('/ui/chat/stop', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', 'HX-Request': 'true'},
-            body: body.toString()
-        }).then(response => {
-            if (!response.ok) throw new Error('Stop request failed');
-            return response.text();
-        }).then(replaceChatContainerFromHtml)
-            .catch(error => console.error(error))
+        body.set("assistantId", row.dataset.id);
+        fetch("/ui/chat/stop", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", "HX-Request": "true" },
+            body: body.toString(),
+        })
+            .then((response) => {
+                if (!response.ok) throw new Error("Stop request failed");
+                return response.text();
+            })
+            .then(replaceChatContainerFromHtml)
+            .catch((error) => console.error(error))
             .finally(() => {
                 setStopRequestInFlight(false);
                 updateChatSendButtonState();
@@ -102,14 +102,16 @@ function requestStopActiveChat() {
 function getLiveChatRow(assistantId) {
     try {
         if (!assistantId) return null;
-        const list = document.getElementById('chat-messages-list');
+        const list = document.getElementById("chat-messages-list");
         if (!list) return null;
         const candidates = Array.from(list.querySelectorAll('li[data-id="' + assistantId + '"]'));
-        const visibleCandidates = candidates.filter(row => row && row.getClientRects && row.getClientRects().length > 0);
-        const visiblePendingCandidates = visibleCandidates.filter(row => row.dataset.pending === 'true');
+        const visibleCandidates = candidates.filter(
+            (row) => row && row.getClientRects && row.getClientRects().length > 0,
+        );
+        const visiblePendingCandidates = visibleCandidates.filter((row) => row.dataset.pending === "true");
         if (visiblePendingCandidates.length > 0) return visiblePendingCandidates[0];
         if (visibleCandidates.length > 0) return visibleCandidates[0];
-        const pendingCandidates = candidates.filter(row => row.dataset.pending === 'true');
+        const pendingCandidates = candidates.filter((row) => row.dataset.pending === "true");
         return pendingCandidates[0] || candidates[0] || null;
     } catch (_) {
         return null;
@@ -122,5 +124,5 @@ export {
     getLiveChatRow,
     requestStopActiveChat,
     replaceChatContainerFromHtml,
-    updateChatSendButtonState
+    updateChatSendButtonState,
 };

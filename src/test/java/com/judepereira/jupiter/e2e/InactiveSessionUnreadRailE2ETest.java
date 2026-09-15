@@ -1,20 +1,18 @@
 package com.judepereira.jupiter.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.AriaRole;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
-import org.springframework.jdbc.core.JdbcTemplate;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Timestamp;
@@ -23,9 +21,13 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
@@ -45,13 +47,12 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
-            assertThat(page.locator("#topbar-logo"))
-                    .hasAttribute("src", "/favicon-32x32.png");
+            assertThat(page.locator("#topbar-logo")).hasAttribute("src", "/favicon-32x32.png");
             assertThat(page.locator("#favicon-32x32")).hasAttribute("href", "/favicon-32x32.png");
             assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-16x16.png");
 
@@ -60,17 +61,18 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New session")).click();
             assertThat(page.locator("#session-name-input")).isVisible();
             page.locator("#session-name-input").fill("Session #2");
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
+            page.waitForResponse(response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
                     () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
 
             assertThat(page.locator(".session-row")).hasCount(2);
-            Locator sessionOneRow = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #1"));
-            Locator sessionTwoRow = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #2"));
+            Locator sessionOneRow = page.locator(".session-row")
+                    .filter(new Locator.FilterOptions().setHasText("Session #1"));
+            Locator sessionTwoRow = page.locator(".session-row")
+                    .filter(new Locator.FilterOptions().setHasText("Session #2"));
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
 
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/") && response.url().contains("/activate") && response.status() == 200,
+            page.waitForResponse(response -> response.url().contains("/ui/sessions/")
+                    && response.url().contains("/activate") && response.status() == 200,
                     () -> sessionOneRow.locator(".session-item").click());
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #1");
 
@@ -82,8 +84,8 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             assertThat(sessionOneRow.locator(".pending-dot")).hasCount(1);
             assertThat(sessionOneRow.locator(".failed-dot")).hasCount(0);
 
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/") && response.url().contains("/activate") && response.status() == 200,
+            page.waitForResponse(response -> response.url().contains("/ui/sessions/")
+                    && response.url().contains("/activate") && response.status() == 200,
                     () -> sessionTwoRow.locator(".session-item").click());
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
             assertThat(sessionOneRow.locator(".pending-dot")).hasCount(1);
@@ -98,8 +100,8 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             assertThat(page.locator("#favicon-32x32")).hasAttribute("href", "/favicon-complete-32x32.png");
             assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-complete-16x16.png");
 
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/") && response.url().contains("/activate") && response.status() == 200,
+            page.waitForResponse(response -> response.url().contains("/ui/sessions/")
+                    && response.url().contains("/activate") && response.status() == 200,
                     () -> sessionOneRow.locator(".session-item").click());
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #1");
             assertThat(sessionOneRow.locator(".unread-dot")).hasCount(0);
@@ -130,7 +132,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -142,8 +144,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New session")).click();
             assertThat(page.locator("#session-name-input")).isVisible();
             page.locator("#session-name-input").fill("Session #2");
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
+            page.waitForResponse(response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
                     () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
 
             long sessionTwoId = app.context().getBean(AppStateService.class).loadViewData().activeSession().id();
@@ -155,13 +156,15 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
 
             page.reload();
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
-            page.waitForFunction("() => { const history = document.getElementById('chat-history'); return history && history.scrollHeight > history.clientHeight + 100; }");
+            page.waitForFunction(
+                    "() => { const history = document.getElementById('chat-history'); return history && history.scrollHeight > history.clientHeight + 100; }");
 
-            Locator sessionOneRow = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #1"));
-            Locator sessionTwoRow = page.locator(".session-row").filter(new Locator.FilterOptions().setHasText("Session #2"));
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/" + sessionOneId + "/activate") && response.status() == 200,
-                    () -> sessionOneRow.locator(".session-item").click());
+            Locator sessionOneRow = page.locator(".session-row")
+                    .filter(new Locator.FilterOptions().setHasText("Session #1"));
+            Locator sessionTwoRow = page.locator(".session-row")
+                    .filter(new Locator.FilterOptions().setHasText("Session #2"));
+            page.waitForResponse(response -> response.url().contains("/ui/sessions/" + sessionOneId + "/activate")
+                    && response.status() == 200, () -> sessionOneRow.locator(".session-item").click());
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #1");
 
             page.evaluate("""
@@ -191,28 +194,29 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             TestAppConfig.awaitPrimaryStarted();
             page.locator("#chat-messages-list > li.pending").waitFor();
 
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/sessions/" + sessionTwoId + "/activate") && response.status() == 200,
-                    () -> sessionTwoRow.locator(".session-item").click());
+            page.waitForResponse(response -> response.url().contains("/ui/sessions/" + sessionTwoId + "/activate")
+                    && response.status() == 200, () -> sessionTwoRow.locator(".session-item").click());
             assertThat(page.locator(".session-item.active .session-label")).hasText("Session #2");
-            page.waitForFunction("() => { const history = document.getElementById('chat-history'); return history && history.scrollHeight - history.clientHeight > 200; }");
-            page.locator("#chat-history").evaluate("""
-                    async history => {
-                        const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
-                        await nextFrame();
-                        await nextFrame();
-                        await nextFrame();
+            page.waitForFunction(
+                    "() => { const history = document.getElementById('chat-history'); return history && history.scrollHeight - history.clientHeight > 200; }");
+            page.locator("#chat-history").evaluate(
+                    """
+                            async history => {
+                                const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+                                await nextFrame();
+                                await nextFrame();
+                                await nextFrame();
 
-                        const maxScrollTop = history.scrollHeight - history.clientHeight;
-                        if (maxScrollTop <= 200) throw new Error('chat history is not scrollable enough');
-                        const targetScrollTop = maxScrollTop / 2;
-                        history.scrollTop = targetScrollTop;
-                        const actualScrollTop = history.scrollTop;
-                        if (Math.abs(actualScrollTop - targetScrollTop) > 1) {
-                            throw new Error(`chat history did not accept manual scroll: ${actualScrollTop} != ${targetScrollTop}`);
-                        }
-                    }
-                    """);
+                                const maxScrollTop = history.scrollHeight - history.clientHeight;
+                                if (maxScrollTop <= 200) throw new Error('chat history is not scrollable enough');
+                                const targetScrollTop = maxScrollTop / 2;
+                                history.scrollTop = targetScrollTop;
+                                const actualScrollTop = history.scrollTop;
+                                if (Math.abs(actualScrollTop - targetScrollTop) > 1) {
+                                    throw new Error(`chat history did not accept manual scroll: ${actualScrollTop} != ${targetScrollTop}`);
+                                }
+                            }
+                            """);
 
             double beforeScrollTop = scrollTop(page);
             double beforeBottomOffset = bottomOffset(page);
@@ -243,11 +247,13 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
     }
 
     private static double bottomOffset(Page page) {
-        return ((Number) page.locator("#chat-history").evaluate("history => history.scrollHeight - history.clientHeight - history.scrollTop")).doubleValue();
+        return ((Number) page.locator("#chat-history")
+                .evaluate("history => history.scrollHeight - history.clientHeight - history.scrollTop")).doubleValue();
     }
 
     @Test
-    void restartingWithPendingAssistantShowsFailedRailAndSyntheticFailureMessage(@TempDir Path tempDir) throws Exception {
+    void restartingWithPendingAssistantShowsFailedRailAndSyntheticFailureMessage(@TempDir Path tempDir)
+            throws Exception {
         TestAppConfig.reset();
 
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
@@ -261,7 +267,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         try {
             long sessionId;
             try (RunningApp first = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
                 page.navigate(first.baseUrl());
                 page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
@@ -272,7 +278,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             }
 
             try (RunningApp second = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-                 BrowserContext context = newBrowserContext()) {
+                    BrowserContext context = newBrowserContext()) {
                 Page page = context.newPage();
                 page.navigate(second.baseUrl());
                 page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
@@ -282,8 +288,8 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
                 assertThat(page.locator("#chat-messages-list > li.pending")).hasCount(0);
                 assertThat(page.locator("#chat-messages-list > li[data-stream-url]")).hasCount(0);
                 assertThat(page.locator("#chat-messages-list .chat-message-text em")).hasText(FAILURE_TEXT);
-                org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText())
-                        .doesNotContain("no_job", "[Error: no_job]");
+                Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job",
+                        "[Error: no_job]");
             }
         } finally {
             TestAppConfig.reset();
@@ -296,7 +302,8 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
     }
 
     @Test
-    void olderPendingAssistantDoesNotDriveRailWhenLaterVisibleAssistantIsComplete(@TempDir Path tempDir) throws Exception {
+    void olderPendingAssistantDoesNotDriveRailWhenLaterVisibleAssistantIsComplete(@TempDir Path tempDir)
+            throws Exception {
         TestAppConfig.reset();
 
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
@@ -308,7 +315,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-             BrowserContext context = newBrowserContext()) {
+                BrowserContext context = newBrowserContext()) {
 
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -325,8 +332,8 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             assertThat(page.locator(".session-item.active .failed-dot")).hasCount(0);
             assertThat(page.locator("#chat-messages-list")).containsText("later complete");
             assertThat(page.locator("#chat-messages-list > li.pending")).hasCount(0);
-            org.assertj.core.api.Assertions.assertThat(page.locator("#chat-container").innerText())
-                    .doesNotContain("no_job", "[Error: no_job]");
+            Assertions.assertThat(page.locator("#chat-container").innerText()).doesNotContain("no_job",
+                    "[Error: no_job]");
         } finally {
             TestAppConfig.reset();
             if (previousHome == null) {
@@ -341,24 +348,18 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         insertAssistantMessage(jdbcTemplate, sessionId, true, "Thinking…");
     }
 
-    private static void insertAssistantMessage(JdbcTemplate jdbcTemplate, long sessionId, boolean pending, String content) {
+    private static void insertAssistantMessage(JdbcTemplate jdbcTemplate, long sessionId, boolean pending,
+            String content) {
         long turnId = jdbcTemplate.queryForObject(
-                "SELECT COALESCE(MAX(turn_id), 0) + 1 FROM conversation_messages WHERE session_id = ?",
-                Long.class,
+                "SELECT COALESCE(MAX(turn_id), 0) + 1 FROM conversation_messages WHERE session_id = ?", Long.class,
                 sessionId);
         long sequence = jdbcTemplate.queryForObject(
-                "SELECT COALESCE(MAX(sequence), 0) + 1 FROM conversation_messages WHERE session_id = ?",
-                Long.class,
+                "SELECT COALESCE(MAX(sequence), 0) + 1 FROM conversation_messages WHERE session_id = ?", Long.class,
                 sessionId);
         jdbcTemplate.update(
                 "INSERT INTO conversation_messages (session_id, public_id, role, turn_id, sequence, content, show_in_chat, include_in_model, pending, created_at) VALUES (?, ?, 'assistant', ?, ?, ?, 1, ?, ?, ?)",
-                sessionId,
-                UUID.randomUUID().toString(),
-                turnId,
-                sequence,
-                TestEncryptionSupport.encrypt("conversation_messages", "content", content),
-                pending ? 0 : 1,
-                pending,
+                sessionId, UUID.randomUUID().toString(), turnId, sequence,
+                TestEncryptionSupport.encrypt("conversation_messages", "content", content), pending ? 0 : 1, pending,
                 Timestamp.from(Instant.now()));
     }
 
@@ -416,7 +417,11 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, null, new com.judepereira.jupiter.agent.harness.SystemPromptComposer(com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().renderer()), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().discovery(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().resolver(), com.judepereira.jupiter.testsupport.SkillTestSupport.defaultComponents().injector());
+                super(null, null, null, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector());
             }
 
             @Override

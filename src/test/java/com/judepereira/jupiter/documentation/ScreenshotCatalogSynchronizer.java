@@ -1,24 +1,28 @@
 package com.judepereira.jupiter.documentation;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
+import javax.imageio.ImageIO;
 
-/** Synchronizes direct catalog PNGs using decoded pixels rather than file bytes. */
+/**
+ * Synchronizes direct catalog PNGs using decoded pixels rather than file bytes.
+ */
 public final class ScreenshotCatalogSynchronizer {
     private ScreenshotCatalogSynchronizer() {
     }
 
     public static void main(String[] args) {
         if (args.length != 2) {
-            throw new IllegalArgumentException("Usage: ScreenshotCatalogSynchronizer <generated-catalog> <tracked-catalog>");
+            throw new IllegalArgumentException(
+                    "Usage: ScreenshotCatalogSynchronizer <generated-catalog> <tracked-catalog>");
         }
         Path repository = Path.of("").toAbsolutePath().normalize();
         Summary summary = synchronize(repository, Path.of(args[0]), Path.of(args[1]));
@@ -36,7 +40,7 @@ public final class ScreenshotCatalogSynchronizer {
             generatedFiles.validateImages();
 
             CatalogFiles trackedFiles;
-            if (Files.exists(trackedDirectory, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            if (Files.exists(trackedDirectory, LinkOption.NOFOLLOW_LINKS)) {
                 requireDirectory(trackedDirectory, "Tracked catalog");
                 trackedFiles = directPngFiles(trackedDirectory, "tracked catalog", false);
                 trackedFiles.validateImages();
@@ -72,7 +76,8 @@ public final class ScreenshotCatalogSynchronizer {
             }
             return new Summary(unchanged, updated, added, removed);
         } catch (IOException | RuntimeException exception) {
-            throw new IllegalStateException("Failed to synchronize screenshot catalogs: " + exception.getMessage(), exception);
+            throw new IllegalStateException("Failed to synchronize screenshot catalogs: " + exception.getMessage(),
+                    exception);
         }
     }
 
@@ -96,25 +101,26 @@ public final class ScreenshotCatalogSynchronizer {
     }
 
     private static void requireDirectory(Path path, String description) throws IOException {
-        if (Files.isSymbolicLink(path) || !Files.isDirectory(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        if (Files.isSymbolicLink(path) || !Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException(description + " is not a directory: " + path);
         }
     }
 
-    private static CatalogFiles directPngFiles(Path directory, String description, boolean generated) throws IOException {
+    private static CatalogFiles directPngFiles(Path directory, String description, boolean generated)
+            throws IOException {
         CatalogFiles files = new CatalogFiles(directory);
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory)) {
             for (Path path : entries) {
                 if (Files.isSymbolicLink(path)) {
                     throw new IOException(description + " contains a symbolic link: " + path);
                 }
-                if (Files.isDirectory(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
                     if (generated) {
                         throw new IOException(description + " contains a nested directory: " + path);
                     }
                     continue;
                 }
-                if (!Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                     continue;
                 }
                 if (!path.getFileName().toString().endsWith(".png")) {

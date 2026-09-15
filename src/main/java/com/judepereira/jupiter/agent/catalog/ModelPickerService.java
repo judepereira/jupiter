@@ -15,8 +15,7 @@ public class ModelPickerService {
     }
 
     public List<ModelDefinition> listPickerModels() {
-        return preferences.favouriteModels().stream()
-                .filter(model -> availability.isAvailable(model.provider()))
+        return preferences.favouriteModels().stream().filter(model -> availability.isAvailable(model.provider()))
                 .toList();
     }
 }

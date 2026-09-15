@@ -2,16 +2,17 @@ package com.judepereira.jupiter.ui;
 
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
-import org.springframework.stereotype.Service;
-
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import org.springframework.stereotype.Service;
 
-/** Builds the view models shared by full-page and incremental chat rendering. */
+/**
+ * Builds the view models shared by full-page and incremental chat rendering.
+ */
 @Service
 public class ChatPresentationService {
 
@@ -21,16 +22,18 @@ public class ChatPresentationService {
     public ChatMessage toChatMessage(ChatMessageView view, Function<String, String> modelLabelResolver) {
         String modelLabel = view.metadata() == null ? null : modelLabelResolver.apply(view.metadata().modelId());
         if (view.metadata() != null && view.metadata().isFallback()) {
-            modelLabel = "Preferred " + modelLabelResolver.apply(view.metadata().preferredModelId()) + " · Used " + modelLabel;
+            modelLabel = "Preferred " + modelLabelResolver.apply(view.metadata().preferredModelId()) + " · Used "
+                    + modelLabel;
         }
         return new ChatMessage(view.role(), view.text(), view.ts(), view.pending(), view.id(), view.completedTs(),
                 view.toolCalls().stream().map(this::toToolCallView).toList(), view.metadata(), modelLabel);
     }
 
     public ToolCallView toToolCallView(com.judepereira.jupiter.persistence.Persistence.ToolCallView view) {
-        return new ToolCallView(view.toolCallId(), view.toolName(), view.success(), view.inputPreview(), view.outputPreview(),
-                view.inputTruncated(), view.outputTruncated(), view.subagentSessionId(), view.subagentAgentId(), view.subagentAgentName(),
-                view.status(), view.imageUrl(), view.imageAlt(), view.imagePath(), view.imageMediaType(), view.taskBody());
+        return new ToolCallView(view.toolCallId(), view.toolName(), view.success(), view.inputPreview(),
+                view.outputPreview(), view.inputTruncated(), view.outputTruncated(), view.subagentSessionId(),
+                view.subagentAgentId(), view.subagentAgentName(), view.status(), view.imageUrl(), view.imageAlt(),
+                view.imagePath(), view.imageMediaType(), view.taskBody());
     }
 
     static List<ToolCallGroupView> toolCallGroups(List<ToolCallView> toolCalls) {
@@ -79,7 +82,10 @@ public class ChatPresentationService {
         return List.copyOf(blocks);
     }
 
-    /** Encodes arbitrary persisted IDs into deterministic, CSS/HTML-safe DOM ID components. */
+    /**
+     * Encodes arbitrary persisted IDs into deterministic, CSS/HTML-safe DOM ID
+     * components.
+     */
     public static String domToken(String value) {
         if (value == null || value.isEmpty()) {
             return "unknown";
@@ -106,7 +112,8 @@ public class ChatPresentationService {
         if (isSpecialStandalone(previous.toolName()) || isSpecialStandalone(current.toolName())) {
             return true;
         }
-        if (EXPLORATORY_TOOL_NAMES.contains(previous.toolName()) && EXPLORATORY_TOOL_NAMES.contains(current.toolName())) {
+        if (EXPLORATORY_TOOL_NAMES.contains(previous.toolName())
+                && EXPLORATORY_TOOL_NAMES.contains(current.toolName())) {
             return false;
         }
         return !previous.toolName().equals(current.toolName());
@@ -123,7 +130,8 @@ public class ChatPresentationService {
     private static ToolCallGroupView toGroup(List<ToolCallView> calls) {
         ToolCallView first = calls.get(0);
         String status = calls.stream().anyMatch(call -> "running".equals(call.status()))
-                ? "running" : calls.stream().allMatch(ToolCallView::success) ? "success" : "failure";
+                ? "running"
+                : calls.stream().allMatch(ToolCallView::success) ? "success" : "failure";
         return new ToolCallGroupView(first.toolName(), displayLabel(calls), status,
                 calls.stream().allMatch(ToolCallView::success), calls.size(), List.copyOf(calls));
     }
@@ -176,17 +184,17 @@ public class ChatPresentationService {
         }
     }
 
-    public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview, String outputPreview,
-                               boolean inputTruncated, boolean outputTruncated, Long subagentSessionId,
-                               String subagentAgentId, String subagentAgentName, String status, String imageUrl,
-                               String imageAlt, String imagePath, String imageMediaType, String taskBody) {
+    public record ToolCallView(String toolCallId, String toolName, boolean success, String inputPreview,
+            String outputPreview, boolean inputTruncated, boolean outputTruncated, Long subagentSessionId,
+            String subagentAgentId, String subagentAgentName, String status, String imageUrl, String imageAlt,
+            String imagePath, String imageMediaType, String taskBody) {
         public String domId(String assistantId) {
             return "assistant-tool-call-" + domToken(assistantId) + "-" + domToken(toolCallId);
         }
     }
 
     public record ToolCallGroupView(String toolName, String displayLabel, String status, boolean success, int count,
-                                    List<ToolCallView> calls) {
+            List<ToolCallView> calls) {
         public String domId(String assistantId) {
             return "assistant-tool-group-" + domToken(assistantId) + "-" + domToken(calls.get(0).toolCallId());
         }
@@ -202,7 +210,8 @@ public class ChatPresentationService {
 
     public record ToolCallBundleView(String summaryLabel, List<ToolCallGroupView> groups) {
         public String domId(String assistantId) {
-            return "assistant-tool-bundle-" + domToken(assistantId) + "-" + domToken(groups.get(0).calls().get(0).toolCallId());
+            return "assistant-tool-bundle-" + domToken(assistantId) + "-"
+                    + domToken(groups.get(0).calls().get(0).toolCallId());
         }
 
         public String summaryDomId(String assistantId) {
@@ -225,7 +234,7 @@ public class ChatPresentationService {
     }
 
     public record ChatMessage(String role, String text, long ts, boolean pending, String id, Long completedTs,
-                              List<ToolCallView> toolCalls, ChatMessageMetadata metadata, String modelLabel) {
+            List<ToolCallView> toolCalls, ChatMessageMetadata metadata, String modelLabel) {
         public String toolCallHostId() {
             return "assistant-tool-calls-" + domToken(id);
         }

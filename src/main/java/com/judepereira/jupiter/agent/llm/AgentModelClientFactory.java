@@ -1,8 +1,9 @@
 package com.judepereira.jupiter.agent.llm;
 
-import org.springframework.context.ApplicationContext;
-
+import com.judepereira.jupiter.agent.llm.anthropic.AnthropicAgentModelClient;
+import com.judepereira.jupiter.agent.llm.openai.OpenAiAgentModelClient;
 import java.util.Locale;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,8 +24,8 @@ public class AgentModelClientFactory {
         }
         String normalizedProvider = provider.trim().toLowerCase(Locale.ROOT);
         return switch (normalizedProvider) {
-            case "openai" -> ctx.getBean(com.judepereira.jupiter.agent.llm.openai.OpenAiAgentModelClient.class);
-            case "anthropic" -> ctx.getBean(com.judepereira.jupiter.agent.llm.anthropic.AnthropicAgentModelClient.class);
+            case "openai" -> ctx.getBean(OpenAiAgentModelClient.class);
+            case "anthropic" -> ctx.getBean(AnthropicAgentModelClient.class);
             default -> throw new IllegalStateException("Unsupported model provider: " + provider);
         };
     }

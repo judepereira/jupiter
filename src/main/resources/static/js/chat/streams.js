@@ -1,12 +1,18 @@
-import {configureChatStreamControls, activePrimaryPendingAssistantRow, requestStopActiveChat, replaceChatContainerFromHtml, updateChatSendButtonState} from './streams/control.js';
-import {bindPendingStreams} from './streams/bind.js';
+import {
+    configureChatStreamControls,
+    activePrimaryPendingAssistantRow,
+    requestStopActiveChat,
+    replaceChatContainerFromHtml,
+    updateChatSendButtonState,
+} from "./streams/control.js";
+import { bindPendingStreams } from "./streams/bind.js";
 
-configureChatStreamControls({bindPendingStreams});
+configureChatStreamControls({ bindPendingStreams });
 
 export {
     activePrimaryPendingAssistantRow,
     bindPendingStreams,
     requestStopActiveChat,
     replaceChatContainerFromHtml,
-    updateChatSendButtonState
+    updateChatSendButtonState,
 };

@@ -31,5 +31,5 @@ export {
     getPendingStreamSource,
     isStopRequestInFlight,
     registerPendingStream,
-    setStopRequestInFlight
+    setStopRequestInFlight,
 };

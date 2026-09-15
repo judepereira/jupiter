@@ -4,11 +4,6 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +23,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.stereotype.Service;
 
 @Service
 public class CommandCatalogService {
@@ -263,7 +262,8 @@ public class CommandCatalogService {
             all.forEach(command -> byId.put(command.id(), command));
             Map<String, CustomEntry> customById = new LinkedHashMap<>();
             custom.forEach(entry -> customById.put(entry.definition().id(), entry));
-            return new CatalogSnapshot(List.copyOf(all), Collections.unmodifiableMap(byId), List.copyOf(custom), Collections.unmodifiableMap(customById));
+            return new CatalogSnapshot(List.copyOf(all), Collections.unmodifiableMap(byId), List.copyOf(custom),
+                    Collections.unmodifiableMap(customById));
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load command catalog", e);
         }
@@ -274,8 +274,7 @@ public class CommandCatalogService {
         return Arrays.stream(resolver.getResources(RESOURCE_PATTERN))
                 .sorted(Comparator.comparing(Resource::getFilename, Comparator.nullsLast(String::compareTo))
                         .thenComparing(CommandCatalogService::resourceSortKey))
-                .map(CommandCatalogService::loadCommand)
-                .toList();
+                .map(CommandCatalogService::loadCommand).toList();
     }
 
     private List<CustomEntry> loadUserCommands() throws IOException {
@@ -288,8 +287,7 @@ public class CommandCatalogService {
                     .filter(path -> path.getFileName().toString().endsWith(".md"))
                     .map(path -> checkedCustomPath(path, realRoot))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
-                    .map(path -> new CustomEntry(path, loadCommand(path)))
-                    .toList();
+                    .map(path -> new CustomEntry(path, loadCommand(path))).toList();
         }
     }
 
@@ -308,7 +306,8 @@ public class CommandCatalogService {
         try (InputStream in = resource.getInputStream()) {
             return loadCommand(resourceSortKey(resource), new String(in.readAllBytes(), StandardCharsets.UTF_8));
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to load command definition from classpath:" + resourceSortKey(resource), e);
+            throw new IllegalStateException(
+                    "Failed to load command definition from classpath:" + resourceSortKey(resource), e);
         }
     }
 
@@ -329,7 +328,9 @@ public class CommandCatalogService {
                 throw new IllegalStateException("type is required for command: " + id);
             }
             return new CommandDefinition(id,
-                    frontMatter.name() == null || frontMatter.name().isBlank() ? idToDisplayName(id) : frontMatter.name().trim(),
+                    frontMatter.name() == null || frontMatter.name().isBlank()
+                            ? idToDisplayName(id)
+                            : frontMatter.name().trim(),
                     normalizeOptional(frontMatter.description()), frontMatter.type(), parsed.body().stripTrailing(),
                     normalizeOptional(frontMatter.workingDir()), frontMatter.timeoutSeconds());
         } catch (IOException | RuntimeException e) {
@@ -351,29 +352,38 @@ public class CommandCatalogService {
             throw new IllegalStateException("Missing closing YAML frontmatter delimiter in " + source);
         }
         int yamlStart = 3;
-        while (yamlStart < content.length() && (content.charAt(yamlStart) == '\r' || content.charAt(yamlStart) == '\n')) yamlStart++;
+        while (yamlStart < content.length() && (content.charAt(yamlStart) == '\r' || content.charAt(yamlStart) == '\n'))
+            yamlStart++;
         int bodyStart = closing + delimiterLength;
-        while (bodyStart < content.length() && (content.charAt(bodyStart) == '\r' || content.charAt(bodyStart) == '\n')) bodyStart++;
+        while (bodyStart < content.length() && (content.charAt(bodyStart) == '\r' || content.charAt(bodyStart) == '\n'))
+            bodyStart++;
         return new FrontMatterAndBody(content.substring(yamlStart, closing).trim(), content.substring(bodyStart));
     }
 
     private static void validateCommands(List<CommandDefinition> commands) {
-        if (commands.isEmpty()) throw new IllegalStateException("Command catalog is empty");
+        if (commands.isEmpty())
+            throw new IllegalStateException("Command catalog is empty");
         Set<String> ids = new HashSet<>();
         for (CommandDefinition command : commands) {
-            if (command.id() == null || command.id().isBlank() || !ids.add(command.id())) throw new IllegalStateException("Duplicate command id: " + command.id());
-            if (command.name() == null || command.name().isBlank()) throw new IllegalStateException("name is required for command: " + command.id());
-            if (command.type() == null) throw new IllegalStateException("type is required for command: " + command.id());
-            if (command.body() == null || command.body().isBlank()) throw new IllegalStateException("body is required for command: " + command.id());
-            if (command.type() == CommandKind.SCRIPT && command.timeoutSeconds() != null && command.timeoutSeconds() <= 0) throw new IllegalStateException("timeoutSeconds must be greater than zero for command: " + command.id());
+            if (command.id() == null || command.id().isBlank() || !ids.add(command.id()))
+                throw new IllegalStateException("Duplicate command id: " + command.id());
+            if (command.name() == null || command.name().isBlank())
+                throw new IllegalStateException("name is required for command: " + command.id());
+            if (command.type() == null)
+                throw new IllegalStateException("type is required for command: " + command.id());
+            if (command.body() == null || command.body().isBlank())
+                throw new IllegalStateException("body is required for command: " + command.id());
+            if (command.type() == CommandKind.SCRIPT && command.timeoutSeconds() != null
+                    && command.timeoutSeconds() <= 0)
+                throw new IllegalStateException(
+                        "timeoutSeconds must be greater than zero for command: " + command.id());
         }
     }
 
     private static String serialize(CommandDefinition command) {
         try {
-            String frontMatter = YAML_MAPPER.writeValueAsString(new FrontMatter(
-                    command.id(), command.name(), command.description(), command.type(),
-                    command.workingDir(), command.timeoutSeconds()));
+            String frontMatter = YAML_MAPPER.writeValueAsString(new FrontMatter(command.id(), command.name(),
+                    command.description(), command.type(), command.workingDir(), command.timeoutSeconds()));
             if (frontMatter.startsWith("---\n")) {
                 frontMatter = frontMatter.substring(4);
             }
@@ -384,37 +394,79 @@ public class CommandCatalogService {
     }
 
     private static CommandDefinition normalizeAndValidateInput(CommandDefinition input) {
-        if (input == null) throw userError("Command definition is required");
+        if (input == null)
+            throw userError("Command definition is required");
         String id = normalize(input.id());
-        if (!SAFE_ID.matcher(id).matches()) throw userError("Invalid command id: " + input.id());
+        if (!SAFE_ID.matcher(id).matches())
+            throw userError("Invalid command id: " + input.id());
         String name = input.name() == null ? null : input.name().trim();
         String body = input.body() == null ? null : input.body().stripTrailing();
-        if (name == null || name.isBlank()) throw userError("Command name is required");
-        if (input.type() == null) throw userError("Command type is required");
-        if (body == null || body.isBlank()) throw userError("Command body is required");
-        if (input.type() == CommandKind.SCRIPT && input.timeoutSeconds() != null && input.timeoutSeconds() <= 0) throw userError("timeoutSeconds must be greater than zero");
-        return new CommandDefinition(id, name, normalizeOptional(input.description()), input.type(), body, normalizeOptional(input.workingDir()), input.timeoutSeconds());
+        if (name == null || name.isBlank())
+            throw userError("Command name is required");
+        if (input.type() == null)
+            throw userError("Command type is required");
+        if (body == null || body.isBlank())
+            throw userError("Command body is required");
+        if (input.type() == CommandKind.SCRIPT && input.timeoutSeconds() != null && input.timeoutSeconds() <= 0)
+            throw userError("timeoutSeconds must be greater than zero");
+        return new CommandDefinition(id, name, normalizeOptional(input.description()), input.type(), body,
+                normalizeOptional(input.workingDir()), input.timeoutSeconds());
     }
 
-    private static CommandMutationException userError(String message) { return new CommandMutationException(message); }
-    private static String normalize(String id) { if (id == null || id.isBlank()) throw userError("Command id is required"); return id.trim(); }
-    private static String resolveId(String source, String id) { if (id != null && !id.isBlank()) return id; String filename = source.substring(source.lastIndexOf('/') + 1); return filename.endsWith(".md") ? filename.substring(0, filename.length() - 3).replaceFirst("^\\d+-", "") : filename; }
-    private static String idToDisplayName(String id) { return Arrays.stream(id.split("[-_]" )).filter(part -> !part.isBlank()).map(part -> Character.toUpperCase(part.charAt(0)) + part.substring(1)).reduce((a, b) -> a + " " + b).orElse(id); }
-    private static String normalizeOptional(String value) { return value == null || value.isBlank() ? null : value.trim(); }
-    private static String resourceSortKey(Resource resource) { return resource.getDescription(); }
+    private static CommandMutationException userError(String message) {
+        return new CommandMutationException(message);
+    }
+    private static String normalize(String id) {
+        if (id == null || id.isBlank())
+            throw userError("Command id is required");
+        return id.trim();
+    }
+    private static String resolveId(String source, String id) {
+        if (id != null && !id.isBlank())
+            return id;
+        String filename = source.substring(source.lastIndexOf('/') + 1);
+        return filename.endsWith(".md")
+                ? filename.substring(0, filename.length() - 3).replaceFirst("^\\d+-", "")
+                : filename;
+    }
+    private static String idToDisplayName(String id) {
+        return Arrays.stream(id.split("[-_]")).filter(part -> !part.isBlank())
+                .map(part -> Character.toUpperCase(part.charAt(0)) + part.substring(1)).reduce((a, b) -> a + " " + b)
+                .orElse(id);
+    }
+    private static String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+    private static String resourceSortKey(Resource resource) {
+        return resource.getDescription();
+    }
 
-    private record FrontMatterAndBody(String yaml, String body) {}
-    private record FrontMatter(String id, String name, String description, @JsonAlias("kind") @JsonProperty("type") CommandKind type, String workingDir, Integer timeoutSeconds) {}
-    private record CustomEntry(Path path, CommandDefinition definition) {}
-    private record CatalogSnapshot(List<CommandDefinition> commands, Map<String, CommandDefinition> byId, List<CustomEntry> custom, Map<String, CustomEntry> customById) {}
+    private record FrontMatterAndBody(String yaml, String body) {
+    }
+    private record FrontMatter(String id, String name, String description,
+            @JsonAlias("kind") @JsonProperty("type") CommandKind type, String workingDir, Integer timeoutSeconds) {
+    }
+    private record CustomEntry(Path path, CommandDefinition definition) {
+    }
+    private record CatalogSnapshot(List<CommandDefinition> commands, Map<String, CommandDefinition> byId,
+            List<CustomEntry> custom, Map<String, CustomEntry> customById) {
+    }
 
     public static class CommandMutationException extends RuntimeException {
-        public CommandMutationException(String message) { super(message); }
-        public CommandMutationException(String message, Throwable cause) { super(message, cause); }
+        public CommandMutationException(String message) {
+            super(message);
+        }
+        public CommandMutationException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 
-    public record CommandDefinition(String id, String name, String description, @JsonProperty("type") CommandKind type, String body, String workingDir, Integer timeoutSeconds) {
-        @JsonProperty("kind") public CommandKind kind() { return type; }
+    public record CommandDefinition(String id, String name, String description, @JsonProperty("type") CommandKind type,
+            String body, String workingDir, Integer timeoutSeconds) {
+        @JsonProperty("kind")
+        public CommandKind kind() {
+            return type;
+        }
     }
 
     public enum CommandKind {
@@ -422,7 +474,8 @@ public class CommandCatalogService {
 
         @JsonCreator
         public static CommandKind fromValue(String value) {
-            if (value == null || value.isBlank()) throw new IllegalArgumentException("type is required");
+            if (value == null || value.isBlank())
+                throw new IllegalArgumentException("type is required");
             return switch (value.trim().toLowerCase()) {
                 case "prompt" -> PROMPT;
                 case "script" -> SCRIPT;

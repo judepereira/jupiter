@@ -5,9 +5,6 @@ import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import jakarta.annotation.PreDestroy;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -19,13 +16,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.stereotype.Service;
 
-/** Executes one explicitly selected, persisted lifecycle action without changing persisted lifecycle state. */
+/**
+ * Executes one explicitly selected, persisted lifecycle action without changing
+ * persisted lifecycle state.
+ */
 @Log4j2
 @Service
 public class LifecycleHookService {
@@ -45,7 +46,7 @@ public class LifecycleHookService {
     private final AtomicBoolean shutdownStarted = new AtomicBoolean(false);
 
     public LifecycleHookService(AppStateService appStateService, SystemBalloonService systemBalloonService,
-                                LifecycleHookRuntime runtime) {
+            LifecycleHookRuntime runtime) {
         this.appStateService = appStateService;
         this.systemBalloonService = systemBalloonService;
         this.executor = runtime.executor();
@@ -53,7 +54,10 @@ public class LifecycleHookService {
         this.tempDirectory = runtime.tempDirectory();
     }
 
-    /** Queues the selected action and returns a future useful to callers that need to observe its outcome. */
+    /**
+     * Queues the selected action and returns a future useful to callers that need
+     * to observe its outcome.
+     */
     public CompletableFuture<HookExecutionResult> dispatch(LifecycleEvent event, long sessionId) {
         if (event == null) {
             throw new IllegalArgumentException("Lifecycle event is required");
@@ -99,7 +103,7 @@ public class LifecycleHookService {
     }
 
     private HookExecutionResult run(LifecycleEvent event, String script, Persistence.LifecycleHookContext context,
-                                    int timeoutSeconds) {
+            int timeoutSeconds) {
         Path scriptFile = null;
         Process process = null;
         OutputCapture stdout = new OutputCapture(MAX_DIAGNOSTIC_OUTPUT_BYTES);
@@ -121,8 +125,10 @@ public class LifecycleHookService {
             }
 
             Process runningProcess = process;
-            stdoutReader = Thread.ofVirtual().name("lifecycle-hook-stdout").start(() -> readOutput(runningProcess.getInputStream(), stdout));
-            stderrReader = Thread.ofVirtual().name("lifecycle-hook-stderr").start(() -> readOutput(runningProcess.getErrorStream(), stderr));
+            stdoutReader = Thread.ofVirtual().name("lifecycle-hook-stdout")
+                    .start(() -> readOutput(runningProcess.getInputStream(), stdout));
+            stderrReader = Thread.ofVirtual().name("lifecycle-hook-stderr")
+                    .start(() -> readOutput(runningProcess.getErrorStream(), stderr));
 
             boolean finished;
             try {
@@ -178,8 +184,9 @@ public class LifecycleHookService {
     }
 
     private void reportFailure(LifecycleEvent event, long sessionId, HookStatus status, Integer exitCode,
-                               OutputCapture stdout, OutputCapture stderr) {
-        log.error("Lifecycle action failed: event={}, sessionId={}, status={}, exitCode={}, stdoutBytes={}, stderrBytes={}",
+            OutputCapture stdout, OutputCapture stderr) {
+        log.error(
+                "Lifecycle action failed: event={}, sessionId={}, status={}, exitCode={}, stdoutBytes={}, stderrBytes={}",
                 event, sessionId, status, exitCode, stdout.size(), stderr.size());
         systemBalloonService.publishError("Lifecycle action failed",
                 "The configured lifecycle action failed for session " + sessionId + " (" + status.displayName + ").");
@@ -294,9 +301,11 @@ public class LifecycleHookService {
 
     private void restrictFile(Path file) {
         try {
-            Files.setPosixFilePermissions(file, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+            Files.setPosixFilePermissions(file,
+                    Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
         } catch (UnsupportedOperationException ignored) {
-            // The temp directory normally supports POSIX permissions; the file remains securely created by the OS.
+            // The temp directory normally supports POSIX permissions; the file remains
+            // securely created by the OS.
         } catch (IOException e) {
             throw new IllegalStateException("Failed to secure lifecycle action temporary file", e);
         }
@@ -352,12 +361,8 @@ public class LifecycleHookService {
     }
 
     public enum HookStatus {
-        SKIPPED("skipped"),
-        SUCCEEDED("succeeded"),
-        NON_ZERO_EXIT("returned a non-zero exit code"),
-        TIMED_OUT("timed out"),
-        LAUNCH_FAILED("could not be started"),
-        CANCELLED("cancelled");
+        SKIPPED("skipped"), SUCCEEDED("succeeded"), NON_ZERO_EXIT("returned a non-zero exit code"), TIMED_OUT(
+                "timed out"), LAUNCH_FAILED("could not be started"), CANCELLED("cancelled");
 
         private final String displayName;
 
@@ -366,8 +371,8 @@ public class LifecycleHookService {
         }
     }
 
-    public record HookExecutionResult(LifecycleEvent event, HookStatus status, Integer exitCode,
-                                      int stdoutBytes, int stderrBytes) {
+    public record HookExecutionResult(LifecycleEvent event, HookStatus status, Integer exitCode, int stdoutBytes,
+            int stderrBytes) {
     }
 
     private static final class OutputCapture {

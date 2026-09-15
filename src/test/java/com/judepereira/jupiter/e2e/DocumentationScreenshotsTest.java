@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.e2e;
 
+import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateRepository;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.DocumentationScreenshotFixture;
@@ -15,15 +16,8 @@ import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.ReducedMotion;
 import com.microsoft.playwright.options.ScreenshotScale;
 import com.microsoft.playwright.options.ViewportSize;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
-
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-
-import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -41,6 +35,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 
 class DocumentationScreenshotsTest extends E2ETestSupport {
 
@@ -54,33 +53,25 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static final String FIXED_BROWSER_TIME = "2026-09-08T09:45:00+02:00";
 
-    private static final List<String> CATALOG = List.of(
-            "interface-desktop.png",
-            "interface-mobile.png",
-            "projects.png",
-            "workspaces.png",
-            "sessions-and-chat.png",
-            "agents-models-thinking.png",
-            "review-and-diffs.png",
-            "tool-calls-and-images.png",
-            "subagent-session.png",
-            "terminal.png",
-            "project-settings.png",
-            "lifecycle-hooks.png",
-            "mcp-servers.png",
-            "openai-authentication.png",
-            "usage-and-token-tracking.png",
-            "slash-commands.png"
-    );
+    private static final List<String> CATALOG = List.of("interface-desktop.png", "interface-mobile.png", "projects.png",
+            "workspaces.png", "sessions-and-chat.png", "agents-models-thinking.png", "review-and-diffs.png",
+            "tool-calls-and-images.png", "subagent-session.png", "terminal.png", "project-settings.png",
+            "lifecycle-hooks.png", "mcp-servers.png", "openai-authentication.png", "usage-and-token-tracking.png",
+            "slash-commands.png");
 
     private static final List<Persistence.ProjectTokenUsageHourly> FIXED_USAGE = List.of(
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T04:00:00Z"), "openai/gpt-5.6-terra", 2, 9_800L, 2_400L, 12_200L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T05:00:00Z"), "openai/gpt-5.6-terra", 4, 22_300L, 5_200L, 27_500L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T05:00:00Z"), "openai/gpt-5.6-luna", 3, 11_100L, 2_700L, 13_800L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T06:00:00Z"), "openai/gpt-5.6-sol", 1, 18_700L, 4_900L, 23_600L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T07:00:00Z"), "openai/gpt-5.6-terra", 3, 16_900L, 3_800L, 20_700L),
-            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T07:00:00Z"), "openai/gpt-5.6-luna", 5, 13_200L, 3_100L, 16_300L)
-    );
+            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T04:00:00Z"), "openai/gpt-5.6-terra", 2,
+                    9_800L, 2_400L, 12_200L),
+            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T05:00:00Z"), "openai/gpt-5.6-terra", 4,
+                    22_300L, 5_200L, 27_500L),
+            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T05:00:00Z"), "openai/gpt-5.6-luna", 3,
+                    11_100L, 2_700L, 13_800L),
+            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T06:00:00Z"), "openai/gpt-5.6-sol", 1,
+                    18_700L, 4_900L, 23_600L),
+            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T07:00:00Z"), "openai/gpt-5.6-terra", 3,
+                    16_900L, 3_800L, 20_700L),
+            new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T07:00:00Z"), "openai/gpt-5.6-luna", 5,
+                    13_200L, 3_100L, 16_300L));
 
     private static final String MODEL_CATALOG_JSON = """
             {
@@ -136,8 +127,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     void captureDocumentationScreenshots() throws Exception {
         Path repositoryRoot = Path.of("").toAbsolutePath().normalize();
         Path fixtureRoot = repositoryRoot.resolve("target/documentation-screenshot-fixture");
-        Path outputDir = repositoryRoot.resolve(
-                System.getProperty("documentation.screenshots.output", "target/documentation-screenshots"));
+        Path outputDir = repositoryRoot
+                .resolve(System.getProperty("documentation.screenshots.output", "target/documentation-screenshots"));
 
         recreateDirectory(fixtureRoot);
         Files.createDirectories(outputDir);
@@ -154,22 +145,18 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         System.setProperty("user.home", fakeHome.toString());
 
         try (FixtureServer fixtureServer = FixtureServer.start();
-             RunningApp app = startApp(fakeHome, dbFile,
-                     Map.of(
-                             "models.dev.catalog-url", fixtureServer.catalogUrl(),
-                             "openai.oauth.issuer", fixtureServer.baseUrl(),
-                             "openai.oauth.client-id", "documentation-screenshots"
-                     ), ScreenshotUsageConfig.class)) {
+                RunningApp app = startApp(fakeHome, dbFile,
+                        Map.of("models.dev.catalog-url", fixtureServer.catalogUrl(), "openai.oauth.issuer",
+                                fixtureServer.baseUrl(), "openai.oauth.client-id", "documentation-screenshots"),
+                        ScreenshotUsageConfig.class)) {
             AppStateRepository repository = app.context().getBean(AppStateRepository.class);
-            Fixture fixture = DocumentationScreenshotFixture.seed(repository, new FixturePaths(
-                    git.jupiterProject(),
-                    git.docsWorkspace(),
-                    git.mcpWorkspace(),
-                    git.blueCaveProject(),
-                    git.websiteProject()));
+            Fixture fixture = DocumentationScreenshotFixture.seed(repository, new FixturePaths(git.jupiterProject(),
+                    git.docsWorkspace(), git.mcpWorkspace(), git.blueCaveProject(), git.websiteProject()));
 
-            // The model picker only exposes catalog favourites for connected providers. Establish
-            // that state through the same mocked device flow used by the OAuth E2E coverage.
+            // The model picker only exposes catalog favourites for connected providers.
+            // Establish
+            // that state through the same mocked device flow used by the OAuth E2E
+            // coverage.
             connectOpenAi(app, fixture);
 
             captureInterfaceDesktop(app, fixture, outputDir);
@@ -208,11 +195,14 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             page.locator("#settings-model-providers-tab").click();
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/openai/start") && response.status() == 200,
-                    () -> page.getByRole(AriaRole.BUTTON,
-                            new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")).click());
+                    () -> page
+                            .getByRole(AriaRole.BUTTON,
+                                    new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))
+                            .click());
             page.locator("#openai-oauth-section").waitFor();
-            page.waitForFunction("() => document.querySelector('#openai-oauth-section')?.textContent.includes('Status: Connected')", null,
-                    new Page.WaitForFunctionOptions().setTimeout(120000));
+            page.waitForFunction(
+                    "() => document.querySelector('#openai-oauth-section')?.textContent.includes('Status: Connected')",
+                    null, new Page.WaitForFunctionOptions().setTimeout(120000));
         } finally {
             page.context().close();
         }
@@ -228,8 +218,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     private static void captureInterfaceMobile(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
         ensureReviewState(app, fixture, false);
         Browser.NewContextOptions options = commonContextOptions(MOBILE_WIDTH, MOBILE_HEIGHT, MOBILE_DPR)
-                .setIsMobile(true)
-                .setHasTouch(true);
+                .setIsMobile(true).setHasTouch(true);
         try (BrowserContext context = newBrowserContext(options)) {
             Page page = context.newPage();
             preparePage(page, app, fixture, MOBILE_DPR);
@@ -239,7 +228,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         }
     }
 
-    private static void captureProjects(RunningApp app, Fixture fixture, Path sampleProject, Path outputDir) throws Exception {
+    private static void captureProjects(RunningApp app, Fixture fixture, Path sampleProject, Path outputDir)
+            throws Exception {
         captureDesktop(app, fixture, false, outputDir.resolve("projects.png"), page -> {
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).click();
             page.locator("#project-modal").waitFor();
@@ -262,7 +252,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     }
 
     private static void captureSessionsAndChat(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        captureDesktop(app, fixture, false, outputDir.resolve("sessions-and-chat.png"), DocumentationScreenshotsTest::settleChat);
+        captureDesktop(app, fixture, false, outputDir.resolve("sessions-and-chat.png"),
+                DocumentationScreenshotsTest::settleChat);
     }
 
     private static void captureAgentsModelsThinking(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
@@ -284,7 +275,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static void captureToolCallsAndImages(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
         captureDesktop(app, fixture, false, outputDir.resolve("tool-calls-and-images.png"), page -> {
-            var imageGroup = page.locator("[data-tool-call-target='group'][data-tool-call-tool-name='display_image']").first();
+            var imageGroup = page.locator("[data-tool-call-target='group'][data-tool-call-tool-name='display_image']")
+                    .first();
             imageGroup.waitFor();
             page.waitForFunction("() => document.querySelector('.tool-call-image-preview img')?.naturalWidth > 0");
             imageGroup.evaluate("el => el.scrollIntoView({block: 'center', inline: 'nearest'})");
@@ -333,15 +325,16 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     }
 
     private static void captureOpenAiAuthentication(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
-        app.context().getBean(com.judepereira.jupiter.openai.oauth.OpenAiOAuthService.class).resetConnectionState();
+        app.context().getBean(OpenAiOAuthService.class).resetConnectionState();
         captureDesktop(app, fixture, false, outputDir.resolve("openai-authentication.png"), page -> {
             openSettings(page);
             page.locator("#settings-model-providers-tab").click();
             page.locator("#openai-oauth-section").waitFor();
-            page.getByRole(AriaRole.BUTTON,
-                    new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")).click();
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))
+                    .click();
             page.locator(".settings-openai-user-code").waitFor();
-            page.waitForFunction("() => document.querySelector('.settings-openai-user-code')?.textContent.trim() === 'JUPI-TER7'");
+            page.waitForFunction(
+                    "() => document.querySelector('.settings-openai-user-code')?.textContent.trim() === 'JUPI-TER7'");
             settlePage(page);
         });
     }
@@ -352,7 +345,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             page.evaluate("() => { if (window.Chart) { Chart.defaults.animation = false; } }");
             page.locator("#settings-usage-tab").click();
             page.locator("[data-settings-usage-chart]").waitFor();
-            page.waitForFunction("() => Number((document.querySelector('[data-usage-requests]')?.textContent || '0').replace(/[^0-9]/g, '')) > 0");
+            page.waitForFunction(
+                    "() => Number((document.querySelector('[data-usage-requests]')?.textContent || '0').replace(/[^0-9]/g, '')) > 0");
             settlePage(page);
         });
     }
@@ -376,9 +370,11 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             page.locator("#toggle-terminal-rail-btn").click();
             page.locator("#bottom-panel .terminal-mount .xterm").waitFor();
             page.locator(".terminal-mount").click();
-            page.keyboard().type("export PS1='jupiter:docs/screenshots$ '; clear; printf 'Documentation screenshot catalog\\n16 captures -> .wiki/images\\n'");
+            page.keyboard().type(
+                    "export PS1='jupiter:docs/screenshots$ '; clear; printf 'Documentation screenshot catalog\\n16 captures -> .wiki/images\\n'");
             page.keyboard().press("Enter");
-            page.waitForFunction("() => document.querySelector('.terminal-mount .xterm-rows')?.textContent.includes('16 captures -> .wiki/images')");
+            page.waitForFunction(
+                    "() => document.querySelector('.terminal-mount .xterm-rows')?.textContent.includes('16 captures -> .wiki/images')");
             settlePage(page);
             captureViewport(page, outputDir.resolve("terminal.png"), DESKTOP_WIDTH, DESKTOP_HEIGHT, DESKTOP_DPR);
             page.locator("#toggle-terminal-rail-btn").click();
@@ -386,7 +382,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     }
 
     private static void captureDesktop(RunningApp app, Fixture fixture, boolean reviewOpen, Path output,
-                                       Consumer<Page> setup) throws Exception {
+            Consumer<Page> setup) throws Exception {
         ensureReviewState(app, fixture, reviewOpen);
         Browser.NewContextOptions options = commonContextOptions(DESKTOP_WIDTH, DESKTOP_HEIGHT, DESKTOP_DPR);
         try (BrowserContext context = newBrowserContext(options)) {
@@ -419,13 +415,9 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
     }
 
     private static Browser.NewContextOptions commonContextOptions(int width, int height, double dpr) {
-        return new Browser.NewContextOptions()
-                .setViewportSize(new ViewportSize(width, height))
-                .setScreenSize(width, height)
-                .setDeviceScaleFactor(dpr)
-                .setLocale("en-GB")
-                .setTimezoneId("Europe/Amsterdam")
-                .setColorScheme(ColorScheme.LIGHT)
+        return new Browser.NewContextOptions().setViewportSize(new ViewportSize(width, height))
+                .setScreenSize(width, height).setDeviceScaleFactor(dpr).setLocale("en-GB")
+                .setTimezoneId("Europe/Amsterdam").setColorScheme(ColorScheme.LIGHT)
                 .setReducedMotion(ReducedMotion.REDUCE);
     }
 
@@ -441,8 +433,9 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         page.waitForFunction("() => document.querySelectorAll('#chat-messages-list > li').length >= 10");
         page.waitForFunction("() => Array.from(document.querySelectorAll('#chat-messages-list .chat-message-text'))"
                 + ".every(node => node.dataset.markdownRendered === 'true')");
-        page.waitForFunction("() => Array.from(document.querySelectorAll('#chat-messages-list .chat-message-subtitle-text'))"
-                + ".every(node => node.textContent.trim().length > 0)");
+        page.waitForFunction(
+                "() => Array.from(document.querySelectorAll('#chat-messages-list .chat-message-subtitle-text'))"
+                        + ".every(node => node.textContent.trim().length > 0)");
     }
 
     private static void settleChat(Page page) {
@@ -454,11 +447,10 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     }
 
-    private static void captureViewport(Page page, Path output, int cssWidth, int cssHeight, double dpr) throws IOException {
-        page.screenshot(new Page.ScreenshotOptions()
-                .setPath(output)
-                .setFullPage(false)
-                .setScale(ScreenshotScale.DEVICE));
+    private static void captureViewport(Page page, Path output, int cssWidth, int cssHeight, double dpr)
+            throws IOException {
+        page.screenshot(
+                new Page.ScreenshotOptions().setPath(output).setFullPage(false).setScale(ScreenshotScale.DEVICE));
 
         BufferedImage image = ImageIO.read(output.toFile());
         if (image == null) {
@@ -467,9 +459,9 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         int expectedWidth = (int) Math.round(cssWidth * dpr);
         int expectedHeight = (int) Math.round(cssHeight * dpr);
         if (image.getWidth() != expectedWidth || image.getHeight() != expectedHeight) {
-            throw new IllegalStateException("Unexpected screenshot dimensions for " + output + ": got "
-                    + image.getWidth() + "x" + image.getHeight() + ", expected "
-                    + expectedWidth + "x" + expectedHeight);
+            throw new IllegalStateException(
+                    "Unexpected screenshot dimensions for " + output + ": got " + image.getWidth() + "x"
+                            + image.getHeight() + ", expected " + expectedWidth + "x" + expectedHeight);
         }
     }
 
@@ -484,16 +476,18 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static void createCustomCommands(Path fakeHome) throws IOException {
         Path commands = Files.createDirectories(fakeHome.resolve(".jupiter/commands"));
-        Files.writeString(commands.resolve("review-pr.md"), """
-                ---
-                id: review-pr
-                name: Review PR
-                description: Review the current changes before opening a pull request
-                type: prompt
-                ---
+        Files.writeString(commands.resolve("review-pr.md"),
+                """
+                        ---
+                        id: review-pr
+                        name: Review PR
+                        description: Review the current changes before opening a pull request
+                        type: prompt
+                        ---
 
-                Review the current changes for correctness, tests and anything that should be fixed before opening a pull request.
-                """.stripLeading());
+                        Review the current changes for correctness, tests and anything that should be fixed before opening a pull request.
+                        """
+                        .stripLeading());
         Files.writeString(commands.resolve("smoke-test.md"), """
                 ---
                 id: smoke-test
@@ -518,7 +512,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         Map<String, String> architectureCommitEnvironment = new HashMap<>();
         architectureCommitEnvironment.put("GIT_AUTHOR_DATE", "2026-09-08T07:02:00Z");
         architectureCommitEnvironment.put("GIT_COMMITTER_DATE", "2026-09-08T07:02:00Z");
-        runCommand(jupiter, architectureCommitEnvironment, "git", "commit", "--quiet", "-m", "Add architecture fixture");
+        runCommand(jupiter, architectureCommitEnvironment, "git", "commit", "--quiet", "-m",
+                "Add architecture fixture");
 
         runGit(jupiter, "git", "branch", "docs/screenshots");
         runGit(jupiter, "git", "branch", "feature/mcp-auth");
@@ -593,18 +588,17 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         runCommand(directory, fixedGitEnvironment, "git", "commit", "--quiet", "-m", "Initial fixture");
     }
 
-    private static void runCommand(Path workingDirectory, Map<String, String> extraEnvironment,
-                                   String... command) throws Exception {
-        ProcessBuilder builder = new ProcessBuilder(command)
-                .directory(workingDirectory.toFile())
+    private static void runCommand(Path workingDirectory, Map<String, String> extraEnvironment, String... command)
+            throws Exception {
+        ProcessBuilder builder = new ProcessBuilder(command).directory(workingDirectory.toFile())
                 .redirectErrorStream(true);
         builder.environment().putAll(extraEnvironment);
         Process process = builder.start();
         byte[] output = process.getInputStream().readAllBytes();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new IllegalStateException("Command failed (" + exitCode + "): " + String.join(" ", command)
-                    + "\n" + new String(output, StandardCharsets.UTF_8));
+            throw new IllegalStateException("Command failed (" + exitCode + "): " + String.join(" ", command) + "\n"
+                    + new String(output, StandardCharsets.UTF_8));
         }
     }
 
@@ -626,8 +620,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         TokenUsageService documentationScreenshotTokenUsageService() {
             return new TokenUsageService(null, null) {
                 @Override
-                public List<Persistence.ProjectTokenUsageHourly> findProjectHourlyUsage(long projectId, Instant fromInclusive,
-                                                                                        Instant toExclusive) {
+                public List<Persistence.ProjectTokenUsageHourly> findProjectHourlyUsage(long projectId,
+                        Instant fromInclusive, Instant toExclusive) {
                     return FIXED_USAGE;
                 }
             };
@@ -695,7 +689,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         }
     }
 
-    private record GitFixture(Path jupiterProject, Path docsWorkspace, Path mcpWorkspace,
-                              Path blueCaveProject, Path websiteProject, Path sampleProject) {
+    private record GitFixture(Path jupiterProject, Path docsWorkspace, Path mcpWorkspace, Path blueCaveProject,
+            Path websiteProject, Path sampleProject) {
     }
 }

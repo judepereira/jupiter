@@ -1,13 +1,12 @@
 package com.judepereira.jupiter.agent.tools;
 
-import com.judepereira.jupiter.agent.tools.impl.FileUtils;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import java.io.IOException;
 import java.nio.file.Path;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class FileUtilsTest {
 
@@ -17,7 +16,8 @@ public class FileUtilsTest {
         Path ws = tmp.resolve("sub");
         ws.toFile().mkdirs();
         Path resolved = FileUtils.resolveWorkspacePath(Path.of("."), "src");
-        // should not throw and should be within workspace of current dir; just assert not null
+        // should not throw and should be within workspace of current dir; just assert
+        // not null
         assertNotNull(resolved);
     }
 }

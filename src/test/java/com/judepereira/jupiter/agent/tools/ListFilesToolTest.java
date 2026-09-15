@@ -1,14 +1,18 @@
 package com.judepereira.jupiter.agent.tools;
 
-import com.judepereira.jupiter.agent.tools.impl.ListFilesTool;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
+import com.judepereira.jupiter.agent.tools.impl.ListFilesTool;
+import com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport;
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class ListFilesToolTest {
 
@@ -20,12 +24,13 @@ public class ListFilesToolTest {
         Files.writeString(a, "x");
         Files.writeString(b, "y");
 
-        ListFilesTool t = new ListFilesTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        ListFilesTool t = new ListFilesTool(new RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(),
+                Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", "", "include", "**/*.java"), ctx);
         assertTrue(res.isSuccess());
-        var files = (java.util.List<String>) res.getMachine().get("files");
+        var files = (List<String>) res.getMachine().get("files");
         assertNotNull(files);
         assertTrue(files.stream().anyMatch(s -> s.endsWith("src/Main.java")));
         assertFalse(files.stream().anyMatch(s -> s.endsWith("a.txt")));
@@ -38,12 +43,13 @@ public class ListFilesToolTest {
         Files.createDirectories(nested);
         Files.writeString(nested.resolve("AGENTS.md"), "nested");
 
-        ListFilesTool t = new ListFilesTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        ListFilesTool t = new ListFilesTool(new RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(tmp, true, true, 5, null, null, null, null, Map.of(),
+                Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", "", "include", "**/AGENTS.md"), ctx);
         assertTrue(res.isSuccess());
-        var files = (java.util.List<String>) res.getMachine().get("files");
+        var files = (List<String>) res.getMachine().get("files");
         assertNotNull(files);
         assertTrue(files.stream().anyMatch(s -> s.endsWith("AGENTS.md") && !s.contains("docs/")));
         assertTrue(files.stream().anyMatch(s -> s.endsWith("docs/AGENTS.md")));
@@ -51,7 +57,8 @@ public class ListFilesToolTest {
 
     @Test
     public void default_root_path_dot_matches(@TempDir Path unusedTmp) throws Exception {
-        // create a temporary workspace under the current working dir and use Path.of('.') as workspace root
+        // create a temporary workspace under the current working dir and use
+        // Path.of('.') as workspace root
         Path ws = Files.createTempDirectory(Path.of("."), "jupiter-test-ws-");
         Path a = ws.resolve("a.txt");
         Path b = ws.resolve("src/Main.java");
@@ -59,21 +66,20 @@ public class ListFilesToolTest {
         Files.writeString(a, "x");
         Files.writeString(b, "y");
 
-        ListFilesTool t = new ListFilesTool(new com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport());
-        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5, null, null, null, null, Map.of(), java.util.Set.of(), ToolProgressSink.noop(), null);
+        ListFilesTool t = new ListFilesTool(new RipgrepToolSupport());
+        ToolExecutionContext ctx = new ToolExecutionContext(Path.of("."), true, true, 5, null, null, null, null,
+                Map.of(), Set.of(), ToolProgressSink.noop(), null);
 
         var res = t.execute(Map.of("path", ws.getFileName().toString(), "include", "**/*.java"), ctx);
         assertTrue(res.isSuccess());
-        var files = (java.util.List<String>) res.getMachine().get("files");
+        var files = (List<String>) res.getMachine().get("files");
         assertNotNull(files);
         assertTrue(files.stream().anyMatch(s -> s.endsWith("src/Main.java")));
         assertFalse(files.stream().anyMatch(s -> s.endsWith("a.txt")));
         // cleanup created ws
         try {
-            java.nio.file.Files.walk(ws)
-                    .sorted(java.util.Comparator.reverseOrder())
-                    .map(java.nio.file.Path::toFile)
-                    .forEach(java.io.File::delete);
-        } catch (Exception ignored) {}
+            Files.walk(ws).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+        } catch (Exception ignored) {
+        }
     }
 }

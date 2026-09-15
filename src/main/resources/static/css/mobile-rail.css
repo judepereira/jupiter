@@ -51,7 +51,8 @@
     /* collapse review by default on small screens to leave space for chat.
        Closed state should not leave a footprint — use display:none via the
        .closed modifier (applied to .review-panel or .review-shell). */
-    .review-shell[data-open="false"] { /* internal content hidden above; keep container flow */
+    .review-shell[data-open="false"] {
+        /* internal content hidden above; keep container flow */
     }
 
     .terminal-shell {
@@ -97,7 +98,9 @@
         margin: 0;
         z-index: 1700;
         transform: translateX(100%);
-        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease 180ms;
+        transition:
+            var(--mobile-offcanvas-transition),
+            box-shadow 0ms ease 180ms;
         box-shadow: -2px 0 5px rgba(2, 12, 32, 0);
         will-change: transform;
         overflow: auto;
@@ -114,7 +117,9 @@
         transform: translateX(0);
         pointer-events: auto;
         box-shadow: none;
-        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease;
+        transition:
+            var(--mobile-offcanvas-transition),
+            box-shadow 0ms ease;
     }
 
     body.mobile-review-open::after {
@@ -136,7 +141,9 @@
         max-width: none;
         z-index: 1700;
         transform: translateX(-100%);
-        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease 180ms;
+        transition:
+            var(--mobile-offcanvas-transition),
+            box-shadow 0ms ease 180ms;
         box-shadow: 2px 0 5px rgba(2, 12, 32, 0);
         will-change: transform;
         background: rgba(6, 23, 51, 0);
@@ -150,7 +157,9 @@
     body.mobile-left-rail-open .left-rail {
         transform: translateX(0);
         box-shadow: none;
-        transition: var(--mobile-offcanvas-transition), box-shadow 0ms ease;
+        transition:
+            var(--mobile-offcanvas-transition),
+            box-shadow 0ms ease;
     }
 
     body.mobile-left-rail-open::before {

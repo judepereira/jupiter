@@ -1,17 +1,18 @@
 package com.judepereira.jupiter.agent.skill;
 
-import com.judepereira.jupiter.testsupport.SkillTestSupport;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.judepereira.jupiter.testsupport.SkillTestSupport;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 class SkillDiscoveryServiceTest {
-    @TempDir Path temp;
+    @TempDir
+    Path temp;
 
     @Test
     void repositoryOverridesUserAndDiscoveryIsSorted() throws Exception {
@@ -25,8 +26,10 @@ class SkillDiscoveryServiceTest {
         var skills = SkillTestSupport.components(home);
         var catalog = skills.discovery().discover(workspace);
 
-        assertEquals(java.util.List.of("repo-only", "shared", "user-only"), catalog.skills().stream().map(SkillDefinition::name).toList());
-        assertEquals("repo", catalog.skills().stream().filter(s -> s.name().equals("shared")).findFirst().orElseThrow().description());
+        assertEquals(List.of("repo-only", "shared", "user-only"),
+                catalog.skills().stream().map(SkillDefinition::name).toList());
+        assertEquals("repo", catalog.skills().stream().filter(s -> s.name().equals("shared")).findFirst().orElseThrow()
+                .description());
     }
 
     @Test
@@ -39,7 +42,7 @@ class SkillDiscoveryServiceTest {
         var skills = SkillTestSupport.components(temp.resolve("home"));
         var catalog = skills.discovery().discover(workspace);
 
-        assertEquals(java.util.List.of("good"), catalog.skills().stream().map(SkillDefinition::name).toList());
+        assertEquals(List.of("good"), catalog.skills().stream().map(SkillDefinition::name).toList());
         assertTrue(catalog.errors().stream().anyMatch(e -> e.path().toString().contains("bad")));
     }
 
@@ -57,7 +60,9 @@ class SkillDiscoveryServiceTest {
 
     private static void write(Path directory, String name, String description) throws Exception {
         Files.createDirectories(directory);
-        String body = description.startsWith("---") ? description : "---\nname: " + name + "\ndescription: " + description + "\n---\nbody\n";
+        String body = description.startsWith("---")
+                ? description
+                : "---\nname: " + name + "\ndescription: " + description + "\n---\nbody\n";
         Files.writeString(directory.resolve("SKILL.md"), body);
     }
 }

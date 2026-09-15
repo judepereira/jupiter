@@ -1,5 +1,5 @@
 (() => {
-    const HEALTH_URL = '/health';
+    const HEALTH_URL = "/health";
     const HEALTH_TIMEOUT_MS = 2500;
     const HEALTH_POLL_MS = 2000;
 
@@ -13,16 +13,16 @@
         overlay: null,
         refreshButton: null,
         initialProbeStarted: false,
-        probeShouldReloadOnHealthy: false
+        probeShouldReloadOnHealthy: false,
     };
 
     function getOverlay() {
         if (state.overlay && document.contains(state.overlay)) return state.overlay;
-        state.overlay = document.getElementById('connection-loss-overlay');
-        state.refreshButton = state.overlay ? state.overlay.querySelector('[data-connection-loss-refresh]') : null;
+        state.overlay = document.getElementById("connection-loss-overlay");
+        state.refreshButton = state.overlay ? state.overlay.querySelector("[data-connection-loss-refresh]") : null;
         if (state.refreshButton && !state.refreshButton.dataset.bound) {
-            state.refreshButton.dataset.bound = 'true';
-            state.refreshButton.addEventListener('click', () => reloadPage());
+            state.refreshButton.dataset.bound = "true";
+            state.refreshButton.addEventListener("click", () => reloadPage());
         }
         return state.overlay;
     }
@@ -32,9 +32,9 @@
         if (!overlay) return;
         state.overlayVisible = Boolean(visible);
         overlay.hidden = !visible;
-        overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
-        document.documentElement.classList.toggle('connection-loss-overlay-open', visible);
-        document.body.classList.toggle('connection-loss-overlay-open', visible);
+        overlay.setAttribute("aria-hidden", visible ? "false" : "true");
+        document.documentElement.classList.toggle("connection-loss-overlay-open", visible);
+        document.body.classList.toggle("connection-loss-overlay-open", visible);
     }
 
     function clearTimer() {
@@ -60,13 +60,13 @@
 
         try {
             const response = await fetch(HEALTH_URL, {
-                method: 'GET',
-                cache: 'no-store',
+                method: "GET",
+                cache: "no-store",
                 headers: {
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
+                    "Cache-Control": "no-cache",
+                    Pragma: "no-cache",
                 },
-                signal: controller.signal
+                signal: controller.signal,
             });
             if (response.ok) {
                 if (state.probeShouldReloadOnHealthy) {
@@ -120,7 +120,7 @@
         transportFailure,
         showOverlayAndPoll,
         probeHealth,
-        reloadPage
+        reloadPage,
     };
     window.connectionLossMonitor = api;
     window.__connectionLossMonitor = api;
@@ -132,15 +132,15 @@
         probeHealth();
     }
 
-    document.addEventListener('htmx:sendError', transportFailure, true);
-    document.addEventListener('htmx:timeout', transportFailure, true);
+    document.addEventListener("htmx:sendError", transportFailure, true);
+    document.addEventListener("htmx:timeout", transportFailure, true);
 
-    window.addEventListener('online', () => {
+    window.addEventListener("online", () => {
         if (state.overlayVisible) probeHealth();
     });
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    if (document.readyState === "complete" || document.readyState === "interactive") {
         startInitialProbe();
     } else {
-        document.addEventListener('DOMContentLoaded', startInitialProbe, {once: true});
+        document.addEventListener("DOMContentLoaded", startInitialProbe, { once: true });
     }
 })();

@@ -3,17 +3,16 @@ package com.judepereira.jupiter.agent.mcp;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
 
 @Log4j2
 @Service
@@ -90,13 +89,8 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
         if (runtime == null) {
             return;
         }
-        applicationEventPublisher.publishEvent(new McpRuntimeEvents.ProjectMcpServerStatusChanged(
-                runtime.projectId(),
-                serverId,
-                runtime.serverName(serverId),
-                status,
-                message
-        ));
+        applicationEventPublisher.publishEvent(new McpRuntimeEvents.ProjectMcpServerStatusChanged(runtime.projectId(),
+                serverId, runtime.serverName(serverId), status, message));
     }
 
     @Override
@@ -131,7 +125,8 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
             for (McpServerView server : servers) {
                 McpProjectMcpServerRuntime runtime = byServerId.get(server.id());
                 if (runtime == null) {
-                    runtime = McpProjectMcpServerRuntime.connect(server, env, templateResolver, clientFactory, McpProjectMcpServerRuntimeManager.this);
+                    runtime = McpProjectMcpServerRuntime.connect(server, env, templateResolver, clientFactory,
+                            McpProjectMcpServerRuntimeManager.this);
                 } else {
                     runtime.updateProjectEnvironmentVariables(env);
                     runtime.reconnect();
@@ -166,7 +161,8 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
             for (McpProjectMcpServerRuntime runtime : byServerId.values()) {
                 McpProjectToolSnapshot snapshot = runtime.snapshot(projectId);
                 for (ToolDefinition definition : snapshot.toolDefinitions()) {
-                    if (executors.putIfAbsent(definition.getName(), snapshot.executors().get(definition.getName())) != null) {
+                    if (executors.putIfAbsent(definition.getName(),
+                            snapshot.executors().get(definition.getName())) != null) {
                         throw new McpToolCollisionException("MCP tool name collision: " + definition.getName());
                     }
                     definitions.add(definition);
@@ -176,7 +172,8 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
         }
 
         private String toolFingerprint() {
-            return snapshot().toolDefinitions().stream().map(ToolDefinition::getName).sorted().reduce((left, right) -> left + "\u0000" + right).orElse("");
+            return snapshot().toolDefinitions().stream().map(ToolDefinition::getName).sorted()
+                    .reduce((left, right) -> left + "\u0000" + right).orElse("");
         }
 
         private Map<Long, McpRuntimeEvents.ConnectionStatus> connectionStatuses() {

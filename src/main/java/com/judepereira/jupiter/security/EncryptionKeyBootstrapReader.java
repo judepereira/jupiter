@@ -5,7 +5,10 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Base64;
 
-/** Reads the one-shot encryption key from stdin until the caller closes the channel (EOF). */
+/**
+ * Reads the one-shot encryption key from stdin until the caller closes the
+ * channel (EOF).
+ */
 public final class EncryptionKeyBootstrapReader {
     private static final int ENCODED_KEY_LENGTH = 44;
     private static final int MAX_INPUT_LENGTH = 128;

@@ -1,15 +1,14 @@
 package com.judepereira.jupiter.ui.rail;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import java.io.IOException;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 class WorkspaceRailRefreshServiceTests {
 
@@ -18,11 +17,10 @@ class WorkspaceRailRefreshServiceTests {
         TestEmitter emitter = new TestEmitter();
         AtomicReference<String> eventName = new AtomicReference<>();
         AtomicReference<Object> payload = new AtomicReference<>();
-        WorkspaceRailRefreshService service = new WorkspaceRailRefreshService(() -> emitter,
-                (target, name, data) -> {
-                    eventName.set(name);
-                    payload.set(data);
-                });
+        WorkspaceRailRefreshService service = new WorkspaceRailRefreshService(() -> emitter, (target, name, data) -> {
+            eventName.set(name);
+            payload.set(data);
+        });
 
         service.connect();
         service.publishWorkspaceRailRefresh();
@@ -35,8 +33,8 @@ class WorkspaceRailRefreshServiceTests {
     @Test
     void closeContextCompletesAndRemovesActiveEmitters() {
         TestEmitter emitter = new TestEmitter();
-        WorkspaceRailRefreshService service = new WorkspaceRailRefreshService(() -> emitter,
-                (target, name, data) -> { });
+        WorkspaceRailRefreshService service = new WorkspaceRailRefreshService(() -> emitter, (target, name, data) -> {
+        });
 
         service.connect();
         service.onContextClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
@@ -48,8 +46,8 @@ class WorkspaceRailRefreshServiceTests {
     @Test
     void connectAfterShutdownReturnsCompletedUntrackedEmitter() {
         TestEmitter emitter = new TestEmitter();
-        WorkspaceRailRefreshService service = new WorkspaceRailRefreshService(() -> emitter,
-                (target, name, data) -> { });
+        WorkspaceRailRefreshService service = new WorkspaceRailRefreshService(() -> emitter, (target, name, data) -> {
+        });
 
         service.onContextClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
         SseEmitter connected = service.connect();
@@ -63,8 +61,6 @@ class WorkspaceRailRefreshServiceTests {
     void workspaceRailRefreshEventConstantUsesExpectedSseName() {
         assertThat(WorkspaceRailRefreshService.WORKSPACE_RAIL_REFRESH_EVENT).isEqualTo("workspace-rail-refresh");
     }
-
-
 
     private static final class TestEmitter extends SseEmitter {
         private volatile boolean completed;

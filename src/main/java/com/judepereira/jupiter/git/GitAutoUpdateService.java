@@ -2,12 +2,6 @@ package com.judepereira.jupiter.git;
 
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
-import lombok.extern.log4j.Log4j2;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +10,11 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
 
 @Service
 @Log4j2
@@ -43,7 +42,10 @@ public class GitAutoUpdateService {
         runUpdatePass();
     }
 
-    /** Runs one non-overlapping pass. This is also the entry point for a manual update-all action. */
+    /**
+     * Runs one non-overlapping pass. This is also the entry point for a manual
+     * update-all action.
+     */
     public void runUpdatePass() {
         if (!passRunning.compareAndSet(false, true)) {
             return;
@@ -60,7 +62,9 @@ public class GitAutoUpdateService {
         }
     }
 
-    /** Updates one workspace and is safe to call from a future manual controller. */
+    /**
+     * Updates one workspace and is safe to call from a future manual controller.
+     */
     public UpdateResult updateWorkspace(long workspaceId) {
         return updateWorkspace(appStateService.loadAutoGitUpdateWorkspace(workspaceId));
     }
@@ -89,7 +93,8 @@ public class GitAutoUpdateService {
                 return fail(workspace, "Could not determine the active Git branch", branch);
             }
 
-            GitCommandRunner.GitCommandResult upstream = run(path, "git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
+            GitCommandRunner.GitCommandResult upstream = run(path, "git", "rev-parse", "--abbrev-ref",
+                    "--symbolic-full-name", "@{u}");
             String remote = null;
             if (!upstream.succeeded() || upstream.stdout().trim().isBlank()) {
                 if (upstreamIndicatesNoUpstream(upstream)) {
@@ -130,7 +135,8 @@ public class GitAutoUpdateService {
                 }
                 String commitCount = count.stdout().trim();
                 if (!commitCount.matches("[0-9]+") || new BigInteger(commitCount).signum() <= 0) {
-                    return fail(workspace, "Could not determine commits introduced by the Git update: invalid commit count", count);
+                    return fail(workspace,
+                            "Could not determine commits introduced by the Git update: invalid commit count", count);
                 }
                 BigInteger introducedCommitCount = new BigInteger(commitCount);
 
@@ -143,8 +149,10 @@ public class GitAutoUpdateService {
                 String latestSubject = firstLine(subject.stdout());
                 appStateService.findMostRecentlyOpenedVisiblePrimarySession(workspace.id())
                         .ifPresent(session -> appStateService.appendInfoMessage(session.id(),
-                                "Background git update brought " + introducedCommitCount + (introducedCommitCount.equals(BigInteger.ONE) ? " commit" : " commits")
-                                        + " into this workspace. Latest commit: " + truncateCodePoints(latestSubject, 256)));
+                                "Background git update brought " + introducedCommitCount
+                                        + (introducedCommitCount.equals(BigInteger.ONE) ? " commit" : " commits")
+                                        + " into this workspace. Latest commit: "
+                                        + truncateCodePoints(latestSubject, 256)));
                 return UpdateResult.updated(beforeRevision, afterRevision);
             }
             appStateService.resetWorkspaceAutoGitUpdateFailure(workspace.id());
@@ -172,13 +180,15 @@ public class GitAutoUpdateService {
                     "Git workspace has no upstream branch and multiple remotes are configured; configure an upstream branch or keep an origin remote"));
         }
 
-        GitCommandRunner.GitCommandResult remoteBranch = run(path, "git", "ls-remote", "--exit-code", "--heads", remote, "refs/heads/" + branch);
+        GitCommandRunner.GitCommandResult remoteBranch = run(path, "git", "ls-remote", "--exit-code", "--heads", remote,
+                "refs/heads/" + branch);
         if (!remoteBranch.succeeded()) {
             if (remoteBranch.exitCode() == 2 && remoteBranch.stdout().isBlank() && remoteBranch.stderr().isBlank()) {
-                return new RemoteSelection(null, skip(workspace,
-                        "Git workspace has no upstream branch and remote " + remote + " has no branch named " + branch));
+                return new RemoteSelection(null, skip(workspace, "Git workspace has no upstream branch and remote "
+                        + remote + " has no branch named " + branch));
             }
-            return new RemoteSelection(null, fail(workspace, "Could not determine whether remote branch exists", remoteBranch));
+            return new RemoteSelection(null,
+                    fail(workspace, "Could not determine whether remote branch exists", remoteBranch));
         }
         return new RemoteSelection(remote, null);
     }
@@ -191,7 +201,8 @@ public class GitAutoUpdateService {
     private record RemoteSelection(String remote, UpdateResult result) {
     }
 
-    private UpdateResult fail(Persistence.WorkspaceView workspace, String summary, GitCommandRunner.GitCommandResult result) {
+    private UpdateResult fail(Persistence.WorkspaceView workspace, String summary,
+            GitCommandRunner.GitCommandResult result) {
         String details = output(result.stdout(), result.stderr());
         return fail(workspace, summary + (details.isBlank() ? "" : "\n\n" + details));
     }
@@ -221,7 +232,8 @@ public class GitAutoUpdateService {
             if (Files.isRegularFile(gitPath)) {
                 String gitdir = Files.readString(gitPath).trim();
                 if (gitdir.startsWith("gitdir:")) {
-                    Path worktreeGitDir = Path.of(gitdir.substring("gitdir:".length()).trim()).toAbsolutePath().normalize();
+                    Path worktreeGitDir = Path.of(gitdir.substring("gitdir:".length()).trim()).toAbsolutePath()
+                            .normalize();
                     return worktreeGitDir.getParent().getParent().toString();
                 }
             }
@@ -233,13 +245,13 @@ public class GitAutoUpdateService {
 
     private boolean upstreamIndicatesNoUpstream(GitCommandRunner.GitCommandResult result) {
         String text = (result.stdout() + "\n" + result.stderr()).toLowerCase();
-        return text.contains("no upstream") || text.contains("no such ref") || text.contains("does not point to a valid object");
+        return text.contains("no upstream") || text.contains("no such ref")
+                || text.contains("does not point to a valid object");
     }
 
     private String output(String stdout, String stderr) {
         return List.of(stdout == null ? "" : stdout.trim(), stderr == null ? "" : stderr.trim()).stream()
-                .filter(value -> !value.isBlank())
-                .reduce((left, right) -> left + "\n" + right).orElse("");
+                .filter(value -> !value.isBlank()).reduce((left, right) -> left + "\n" + right).orElse("");
     }
 
     private String firstLine(String value) {
@@ -258,8 +270,11 @@ public class GitAutoUpdateService {
         return value.substring(0, value.offsetByCodePoints(0, maximum));
     }
 
-    public record UpdateResult(Status status, String beforeRevision, String afterRevision, String message, boolean firstFailure) {
-        public enum Status { SKIPPED, UP_TO_DATE, UPDATED, FAILED }
+    public record UpdateResult(Status status, String beforeRevision, String afterRevision, String message,
+            boolean firstFailure) {
+        public enum Status {
+            SKIPPED, UP_TO_DATE, UPDATED, FAILED
+        }
 
         static UpdateResult skipped(String message) {
             return new UpdateResult(Status.SKIPPED, null, null, message, false);
