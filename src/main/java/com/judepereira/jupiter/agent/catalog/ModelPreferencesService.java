@@ -1,9 +1,11 @@
 package com.judepereira.jupiter.agent.catalog;
 
 import com.judepereira.jupiter.persistence.AppStateRepository;
-import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ModelPreferencesService {
@@ -15,43 +17,48 @@ public class ModelPreferencesService {
         this.catalog = catalog;
     }
 
-    public void initializeProvider(String provider, String defaultModelId) {
-        if (repository.isProviderInitialized(provider))
-            return;
-        var favourites = new ArrayList<>(favouriteModelIds());
-        boolean hasProviderFavourite = favourites.stream().map(this::resolveKnownModel)
-                .anyMatch(model -> model != null && model.provider().equals(provider));
-        if (!hasProviderFavourite && defaultModelId != null)
-            favourites.add(defaultModelId);
-        repository.updateFavouriteModelIds(favourites);
-        repository.updateProviderInitialized(provider, true);
+    public void initializeProvider(String provider, Collection<String> defaults) {
+        validateProvider(provider);
+        var ids = new LinkedHashSet<>(defaults);
+        ids.forEach(id -> validateModel(provider, id));
+        repository.initializeSelectedModelIds(provider, ids);
     }
 
-    public List<String> favouriteModelIds() {
-        return repository.loadFavouriteModelIds();
+    public List<String> selectedModelIds(String provider) {
+        validateProvider(provider);
+        return repository.loadSelectedModelIds(provider);
     }
 
-    public boolean isFavourite(String modelId) {
-        return favouriteModelIds().contains(modelId);
+    @Transactional
+    public void replaceSelectedModelIds(String provider, Collection<String> modelIds) {
+        validateProvider(provider);
+        replaceSelectedModelIdsInternal(provider, modelIds, true);
     }
 
-    public void setFavourite(String modelId, boolean favourite) {
-        var ids = new ArrayList<>(favouriteModelIds());
-        ids.remove(modelId);
-        if (favourite)
-            ids.add(modelId);
-        repository.updateFavouriteModelIds(ids);
+    public List<ModelDefinition> selectedModels(String provider) {
+        validateProvider(provider);
+        return selectedModelIds(provider).stream()
+                .map(id -> catalog.list().stream()
+                        .filter(model -> model.id().equals(id) && provider.equals(model.provider())).findFirst()
+                        .orElse(null))
+                .filter(model -> model != null).toList();
     }
 
-    public List<ModelDefinition> favouriteModels() {
-        return favouriteModelIds().stream().map(this::resolveKnownModel).filter(model -> model != null).toList();
+    private void replaceSelectedModelIdsInternal(String provider, Collection<String> modelIds, boolean requireOne) {
+        var ids = new LinkedHashSet<>(modelIds);
+        ids.forEach(id -> validateModel(provider, id));
+        if (requireOne && ids.isEmpty())
+            throw new IllegalArgumentException("At least one model must be selected");
+        repository.replaceSelectedModelIds(provider, ids);
     }
 
-    private ModelDefinition resolveKnownModel(String id) {
-        try {
-            return catalog.getRequired(id);
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
+    private void validateProvider(String provider) {
+        if (provider == null || provider.isBlank() || !catalog.hasProviderModel(provider))
+            throw new IllegalArgumentException("Unsupported model provider: " + provider);
+    }
+
+    private void validateModel(String provider, String modelId) {
+        if (modelId == null || !provider.equals(catalog.getRequired(modelId).provider()))
+            throw new IllegalArgumentException("Model does not belong to provider: " + modelId);
     }
 }

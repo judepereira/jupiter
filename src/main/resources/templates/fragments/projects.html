@@ -1436,14 +1436,6 @@
                         >
                             <section class="settings-section settings-app-section">
                                 <h5>Model Providers</h5>
-                                <div class="settings-openai-section">
-                                    <h6>OpenAI subscription</h6>
-                                    <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
-                                </div>
-                                <div class="settings-anthropic-section">
-                                    <h6>Anthropic</h6>
-                                    <div th:replace="~{fragments/projects :: anthropicOAuthSection}"></div>
-                                </div>
                                 <div id="settings-models" th:replace="~{fragments/projects :: settingsModels}"></div>
                             </section>
                         </div>
@@ -1591,56 +1583,87 @@
     <section
         id="settings-models"
         class="settings-section"
-        th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, favourites=${favouriteModelIds == null ? T(java.util.List).of() : favouriteModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}"
-    >
-        <th:block th:replace="~{fragments/projects :: settingsModelsContent}"></th:block>
-    </section>
+        th:replace="~{fragments/projects :: settingsModelsContent}"
+    ></section>
 </th:block>
 
-<th:block th:fragment="settingsModelsWithChatControls">
-    <th:block th:replace="~{fragments/projects :: settingsModels}"></th:block>
-    <th:block th:replace="~{fragments/chat :: chatControls}"></th:block>
+<th:block th:fragment="settingsModelsOobResponse">
+    <th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
+    <th:block th:if="${chatControlsOob ?: false}" th:replace="~{fragments/chat :: chatControls}"></th:block>
 </th:block>
 
 <th:block th:fragment="settingsModelsOob">
-    <section
-        id="settings-models"
-        class="settings-section"
-        hx-swap-oob="outerHTML:#settings-models"
-        th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, favourites=${favouriteModelIds == null ? T(java.util.List).of() : favouriteModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}"
-    >
+    <section id="settings-models" class="settings-section" hx-swap-oob="outerHTML:#settings-models">
         <th:block th:replace="~{fragments/projects :: settingsModelsContent}"></th:block>
     </section>
 </th:block>
 
 <th:block
     th:fragment="settingsModelsContent"
-    th:with="groups=${groups == null ? T(java.util.Map).of() : groups}, favourites=${favourites == null ? T(java.util.List).of() : favourites}, availability=${availability == null ? T(java.util.Map).of() : availability}"
+    th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, selected=${selectedModelIds == null ? T(java.util.Map).of() : selectedModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}"
 >
-    <h6>Models</h6>
-    <div th:each="group : ${groups.entrySet()}">
-        <strong th:text="${group.key}"></strong>
-        <span
-            class="settings-provider-status"
-            th:text="${availability[group.key] == true ? 'Connected' : 'Not connected'}"
-        ></span>
-        <div th:each="modelDef : ${group.value}" class="settings-model-row">
-            <button
-                type="button"
-                class="btn btn-link"
-                hx-post="/ui/settings/models/favourite"
-                th:attr="hx-vals=|{&quot;modelId&quot;:&quot;${modelDef.id}&quot;,&quot;favourite&quot;:${!favourites.contains(modelDef.id)}}|, hx-target='#settings-models', hx-swap='outerHTML'"
-                th:text="${favourites.contains(modelDef.id) ? '★' : '☆'}"
-                aria-label="Toggle favourite"
-            ></button>
-            <span class="settings-model-provider" th:text="${modelDef.provider}"></span>
-            <span
-                class="settings-model-status"
-                th:text="${availability[modelDef.provider] == true ? 'Connected' : 'Not connected'}"
-            ></span>
-            <span th:text="${modelDef.displayName}"></span>
-            <small th:text="${modelDef.contextTokens() > 0 ? modelDef.contextTokens() + ' context' : ''}"></small>
-        </div>
+    <h6>Model Providers</h6>
+    <div
+        th:if="${modelSelectionError != null}"
+        class="alert alert-danger"
+        role="alert"
+        th:text="${modelSelectionError}"
+    ></div>
+    <div class="settings-provider-subsection">
+        <h6>OpenAI subscription</h6>
+        <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
+        <th:block th:if="${availability['openai'] == true}">
+            <form
+                class="settings-model-selections"
+                method="post"
+                action="/ui/settings/models"
+                hx-post="/ui/settings/models"
+                hx-swap="none"
+            >
+                <h6>openai <span class="settings-provider-status">Connected</span></h6>
+                <input type="hidden" name="provider" value="openai">
+                <label
+                    ><span class="sr-only">OpenAI model selections</span
+                    ><select name="modelId" multiple size="6" class="form-select">
+                        <option
+                            th:each="modelDef : ${groups['openai']}"
+                            th:value="${modelDef.id}"
+                            th:selected="${selected['openai'] != null and selected['openai'].contains(modelDef.id)}"
+                            th:text="${modelDef.displayName}"
+                        ></option>
+                    </select></label
+                >
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </th:block>
+    </div>
+    <div class="settings-provider-subsection">
+        <h6>Anthropic</h6>
+        <div th:replace="~{fragments/projects :: anthropicOAuthSection}"></div>
+        <th:block th:if="${availability['anthropic'] == true}">
+            <form
+                class="settings-model-selections"
+                method="post"
+                action="/ui/settings/models"
+                hx-post="/ui/settings/models"
+                hx-swap="none"
+            >
+                <h6>anthropic <span class="settings-provider-status">Connected</span></h6>
+                <input type="hidden" name="provider" value="anthropic">
+                <label
+                    ><span class="sr-only">Anthropic model selections</span
+                    ><select name="modelId" multiple size="6" class="form-select">
+                        <option
+                            th:each="modelDef : ${groups['anthropic']}"
+                            th:value="${modelDef.id}"
+                            th:selected="${selected['anthropic'] != null and selected['anthropic'].contains(modelDef.id)}"
+                            th:text="${modelDef.displayName}"
+                        ></option>
+                    </select></label
+                >
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </th:block>
     </div>
 </th:block>
 

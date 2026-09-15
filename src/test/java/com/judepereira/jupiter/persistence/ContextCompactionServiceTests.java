@@ -45,7 +45,7 @@ class ContextCompactionServiceTests {
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model",
                 ThinkingLevel.LOW, null, true, true, List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 50000, 32, null,
-                null, null);
+                null, null, null, null, List.of("text"), List.of("text"));
 
         var summary = compactionService.compactIfNeeded(sessionId, agent, model, agent.defaultThinkingLevel(),
                 projectPath.toString(), "next user " + "x".repeat(250)).orElseThrow();
@@ -79,7 +79,7 @@ class ContextCompactionServiceTests {
         AgentDefinition agent = new AgentDefinition("plan", "Plan", "", "Summarize", AgentMode.AGENT, "test-model",
                 ThinkingLevel.LOW, null, true, true, List.of("write_file"));
         ModelDefinition model = new ModelDefinition("test-model", "Test", "test", "test", false, true, 1200, 32, null,
-                null, null);
+                null, null, null, null, List.of("text"), List.of("text"));
 
         assertThatThrownBy(() -> compactionService.compactIfNeeded(sessionId, agent, model,
                 agent.defaultThinkingLevel(), projectPath.toString(), null)).isInstanceOf(IllegalStateException.class)

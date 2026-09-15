@@ -42,5 +42,7 @@ One subtle point: Plan has no direct write or command tools, but it **can** dele
 
 Subagents never receive `task`, so native delegation cannot recurse forever.
 
-The composer lets you pick agent, model, and thinking level per turn, and Jupiter persists those choices with the
-assistant message.
+The composer lets you pick agent, model, and thinking level per turn. The selected agent's frontmatter is authoritative
+for the initial and reset model and Thinking defaults; historical per-turn metadata does not control composer defaults.
+A model named in connected agent frontmatter remains available even when it is absent from that provider's Settings
+selection, while provider selection still filters additional chat choices.

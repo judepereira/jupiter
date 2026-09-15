@@ -23,13 +23,16 @@ credentials; the refresh can be attempted again, although a request requiring a 
 succeeds.
 
 **Disconnect** clears the persisted Anthropic OAuth state and removes the connection. It does not delete model catalogue
-entries or favourites.
+entries or saved model selections.
 
 ## Models and routing
 
-Claude models are loaded alongside OpenAI GPT-5.6-series models from models.dev. Favourites are one global ordered list.
-The chat picker shows only favourited models whose provider is currently connected, in that order. If none qualify, it
-shows an empty picker and cannot send a chat turn.
+Eligible text/tool OpenAI models, including GPT-6, and Claude models are loaded from models.dev. When connected,
+Settings provides an Anthropic model multi-select. When Anthropic has no saved selection, typically on first connection
+or startup, it initializes to the latest five eligible distinct families. Explicit saves require at least one model, and
+selections persist through disconnect/reconnect. The chat picker uses selected models for additional choices, but every
+model named by connected agent frontmatter remains available. models.dev compatibility does not guarantee account
+entitlement.
 
 A model's catalogue ID determines its provider and therefore the model client used for the turn. A model retained in
 historical session metadata can remain unavailable after it disappears from the catalogue or its provider is

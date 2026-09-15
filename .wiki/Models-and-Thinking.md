@@ -7,21 +7,27 @@ runs the turn.
 
 ## Model catalogue
 
-Jupiter loads model metadata from the configured models.dev catalogue and keeps OpenAI GPT-5.6-series entries plus
-Anthropic Claude entries. Where available, it keeps the display name, context limit, output limit, reasoning support,
-tool-call support, and release date.
+Jupiter loads model metadata from the configured models.dev catalogue and keeps eligible text/tool OpenAI models,
+including GPT-6, plus Anthropic Claude entries. Where available, it keeps the display name, context limit, output limit,
+reasoning support, tool-call support, and release date.
 
 The hardcoded fallback model ID is `openai/gpt-5.6-sol`.
 
-## Favourites and the chat picker
+## Provider selections and the chat picker
 
-Model favourites are one global, ordered list across providers. Settings lets you add or remove catalogue models and
-preserves their order. The chat picker filters that list to models whose provider is currently connected. Thus
-disconnecting a provider can remove its models from the picker without removing the favourites.
+Settings exposes a native multi-select for each connected provider. When a provider has no saved selection, typically on
+first connection or startup, Jupiter initializes the latest five eligible, distinct model families from models.dev.
+Explicit saves require at least one model. Selections persist through disconnect/reconnect; disconnecting only hides
+that provider's models while it is unavailable.
 
-If no favourited model belongs to a connected provider, the picker is empty and chat sending is disabled. A model
-selected in historical session metadata can also be unavailable if it is no longer in the catalogue or its provider is
-disconnected; Jupiter does not silently treat it as connected.
+Selected provider models filter additional chat choices. Every model named in connected agent frontmatter remains
+available even if it is not selected. The catalogue keeps compatible tool-capable text models and filters by provider;
+models.dev compatibility describes supported protocols and capabilities, not account entitlement, so a model may still
+be unavailable to a particular account. If no usable model is available, the picker is empty and chat sending is
+disabled.
+
+A model selected in historical session metadata can be unavailable if it is no longer in the catalogue or its provider
+is disconnected; Jupiter does not silently treat it as connected.
 
 ## Provider routing
 
@@ -55,7 +61,9 @@ not rendered as assistant text.
 Anthropic tool requests disable parallel tool use. Jupiter does not yet support safely executing multiple tool calls
 from one Anthropic response.
 
-When you return to a session, Jupiter tries to restore the most recent assistant selection. If that model has
-disappeared from the catalogue, it falls back instead of leaving the UI in a broken state.
+When you return to a session, the selected agent's frontmatter controls the initial model and Thinking defaults; it is
+not derived from historical per-turn metadata. Changing or resetting the agent uses that frontmatter again. An explicit
+composer model or Thinking choice applies to that turn. If an agent's model has disappeared from the catalogue, the
+selection cannot be resolved rather than being silently treated as connected.
 
 Provider tests use fixtures and mocks rather than live credentials.

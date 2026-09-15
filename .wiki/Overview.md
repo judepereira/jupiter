@@ -20,8 +20,8 @@ Chat and UI events use Server-Sent Events; terminals use WebSockets.
 
 ## Models
 
-v1 discovers OpenAI GPT-5.6-series models from the configured model catalogue. The harness has provider abstractions,
-but the current user-facing implementation is OpenAI-only.
+The configured model catalogue provides eligible text/tool OpenAI models, including GPT-6, and Anthropic Claude models.
+The user-facing implementation exposes provider-specific model selections and routes requests to the selected provider.
 
 ## One important security point
 

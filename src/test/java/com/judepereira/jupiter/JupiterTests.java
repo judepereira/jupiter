@@ -31,6 +31,8 @@ class JupiterTests {
             when(fake.list()).thenReturn(delegate.list());
             when(fake.defaultModelId()).thenReturn(delegate.defaultModelId());
             when(fake.getRequired(any())).thenAnswer(invocation -> delegate.getRequired(invocation.getArgument(0)));
+            when(fake.hasProviderModel(any()))
+                    .thenAnswer(invocation -> delegate.hasProviderModel(invocation.getArgument(0)));
             when(fake.resolveOrDefault(any()))
                     .thenAnswer(invocation -> delegate.resolveOrDefault(invocation.getArgument(0)));
             return fake;

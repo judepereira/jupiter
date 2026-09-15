@@ -31,8 +31,9 @@ If a connected device-flow access token is present, Jupiter uses it with the Cha
 
 OpenAI is available when either the subscription OAuth connection or a configured API key is usable. Disconnecting the
 subscription therefore does not make OpenAI unavailable when an API key is configured; the API-key path remains
-available. OpenAI models appear in the chat picker only when they are favourited and OpenAI is available. See
-[Models and Thinking](Models-and-Thinking) for ordered preferences and strict explicit selections.
+available. When connected, Settings provides an OpenAI model multi-select; its selections persist across disconnect and
+reconnect and filter additional chat choices. Models named by connected agent frontmatter remain available regardless of
+that selection. See [Models and Thinking](Models-and-Thinking) for initialization, eligibility, and strict selections.
 
 ## Treat both as secrets
 

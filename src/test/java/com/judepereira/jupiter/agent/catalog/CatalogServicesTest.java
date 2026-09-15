@@ -144,9 +144,10 @@ public class CatalogServicesTest {
 
         assertThat(service.defaultModelId()).isEqualTo("openai/gpt-5.6-sol");
         assertThat(service.list()).extracting(ModelDefinition::id).containsExactly("openai/gpt-5.6-sol",
-                "anthropic/claude-opus-5", "anthropic/claude-sonnet-5", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
-        assertThat(service.list()).extracting(ModelDefinition::id).doesNotContain("openai/gpt-4.1", "openai/gpt-5.5",
-                "openai/gpt-5.5-pro", "openai/gpt-5.60-preview");
+                "openai/gpt-4.1", "openai/gpt-5.60-preview", "anthropic/claude-opus-5", "anthropic/claude-sonnet-5",
+                "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
+        assertThat(service.list()).extracting(ModelDefinition::id).doesNotContain("openai/gpt-5.5",
+                "openai/gpt-5.5-pro");
         assertThat(service.list()).extracting(ModelDefinition::provider).contains("openai", "anthropic");
 
         ModelDefinition anthropic = service.getRequired("anthropic/claude-opus-5");
