@@ -14,11 +14,13 @@ The equivalent Spring property is `openai.api-key`.
 
 ## Browser authorisation
 
-Open **Settings → Model Providers** and start the OpenAI connection flow.
+Open **Settings → Model Providers** to view the initially disconnected OpenAI connection panel.
 
-![OpenAI device authorisation](images/openai-authentication.png)
+![Initial disconnected OpenAI connection panel](images/openai-authentication.png "Initial disconnected OpenAI connection
+panel")
 
-Jupiter shows a user code and verification URL, then polls until the authorisation finishes.
+Click **Connect** to start the browser/device authorisation flow; Jupiter then shows a user code and verification URL
+and polls until the authorisation finishes.
 
 The resulting access, refresh, and ID tokens are stored in encrypted database fields. **Disconnect** clears that
 persisted OAuth state. The encrypted connection is restored after a restart; an expired access token is refreshed when

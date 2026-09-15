@@ -114,6 +114,7 @@ implementation details.
 
 ### Documentation and wiki policy
 
+- Documentation screenshot image files must not be regenerated locally; CI handles regeneration for consistency.
 - Before completing changes, review `README.md`, `.wiki/Feature-Inventory.md`, `.wiki/_Sidebar.md`, and relevant
   task-oriented `.wiki/` pages for required updates.
 - Keep documentation accurate for behavior changes. Record clearly user-facing feature additions in

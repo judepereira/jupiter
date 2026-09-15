@@ -330,11 +330,6 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             openSettings(page);
             page.locator("#settings-model-providers-tab").click();
             page.locator("#openai-oauth-section").waitFor();
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))
-                    .click();
-            page.locator(".settings-openai-user-code").waitFor();
-            page.waitForFunction(
-                    "() => document.querySelector('.settings-openai-user-code')?.textContent.trim() === 'JUPI-TER7'");
             settlePage(page);
         });
     }
