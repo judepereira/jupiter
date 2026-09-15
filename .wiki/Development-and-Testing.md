@@ -8,7 +8,10 @@ Jupiter targets Java 25 and uses Maven.
 ./mvnw package
 ```
 
-The current Spring Boot version is 4.1.1.
+When Maven runs inside a Git checkout, it configures the repository-wide shared
+`core.hooksPath` to `.githooks`, including linked worktrees. This is one Git
+setting for the repository, so it applies to all of its worktrees. Builds outside
+a Git checkout skip this step. The current Spring Boot version is 4.1.1.
 
 ## Tests
 
