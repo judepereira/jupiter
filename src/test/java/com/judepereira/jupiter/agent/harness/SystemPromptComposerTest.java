@@ -27,8 +27,10 @@ public class SystemPromptComposerTest {
                 workspaceRoot.toString(), new SkillCatalog(List.of(), List.of()));
 
         String normalizedPrompt = normalizeWhitespace(prompt);
-        assertThat(normalizedPrompt).isEqualTo(normalizeWhitespace(SystemPromptTestSupport.composeExpected(null, workspaceRoot)))
-                .contains(normalizeWhitespace("## Skills\n" + "Skills are reusable task instructions stored in SKILL.md files.\n"
+        assertThat(normalizedPrompt)
+                .isEqualTo(normalizeWhitespace(SystemPromptTestSupport.composeExpected(null, workspaceRoot)))
+                .contains(normalizeWhitespace("## Skills\n"
+                        + "Skills are reusable task instructions stored in SKILL.md files.\n"
                         + "Available skills are provided separately for each workspace.\n" + "Use a skill when:\n"
                         + "- Its name is explicitly mentioned.\n" + "- Its description clearly matches the task.\n"
                         + "Before following a skill, read the complete SKILL.md file.\n"
