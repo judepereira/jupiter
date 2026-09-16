@@ -419,9 +419,10 @@ public class UiControllerTerminalTests {
                     new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                             mock(AppStateRepository.class), null),
                     TestAppStateSupport.contextCompactionService(appStateService), null,
-                    mock(CommandStreamService.class), new CommandCatalogService(""), null,
-                    new ChatPresentationService(), null, null, new HttpAuthProperties(),
-                    mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+                    mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                    null, new ChatPresentationService(), null, null, new HttpAuthProperties(),
+                    mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT",
+                    System.getProperty("user.home"));
         }
     }
 }

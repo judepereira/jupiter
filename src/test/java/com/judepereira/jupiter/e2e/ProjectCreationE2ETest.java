@@ -33,58 +33,47 @@ class ProjectCreationE2ETest extends E2ETestSupport {
         Path screenshotsDir = Files
                 .createDirectories(Path.of("target", "playwright-screenshots", "ProjectPersistencePlaywrightTest"));
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
+        try (RunningApp first = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
 
-        try {
-            try (RunningApp first = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-                    BrowserContext context = newBrowserContext()) {
-                Page page = context.newPage();
+            page.navigate(first.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            captureScreenshot(page, screenshotsDir, "01-initial-load.png");
 
-                page.navigate(first.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
-                captureScreenshot(page, screenshotsDir, "01-initial-load.png");
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).click();
+            assertThat(page.locator("#project-modal")).isVisible();
+            captureScreenshot(page, screenshotsDir, "02-project-modal-open.png");
 
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).click();
-                assertThat(page.locator("#project-modal")).isVisible();
-                captureScreenshot(page, screenshotsDir, "02-project-modal-open.png");
+            openProjectThroughModal(page, "Alpha", projectDir,
+                    () -> captureScreenshot(page, screenshotsDir, "03-directory-selected.png"));
+            captureScreenshot(page, screenshotsDir, "04-project-opened.png");
 
-                openProjectThroughModal(page, "Alpha", projectDir,
-                        () -> captureScreenshot(page, screenshotsDir, "03-directory-selected.png"));
-                captureScreenshot(page, screenshotsDir, "04-project-opened.png");
+            String userMessage = "hello there";
+            page.locator("#chat-input").fill(userMessage);
+            page.locator("#chat-send-btn").click();
 
-                String userMessage = "hello there";
-                page.locator("#chat-input").fill(userMessage);
-                page.locator("#chat-send-btn").click();
+            assertThat(page.locator("#chat-messages-list li:not([data-role='info'])")).hasCount(3);
+            assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text"))
+                    .hasText(userMessage);
+            assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text"))
+                    .hasText(ASSISTANT_REPLY);
+            captureScreenshot(page, screenshotsDir, "05-chat-response.png");
+        }
 
-                assertThat(page.locator("#chat-messages-list li:not([data-role='info'])")).hasCount(3);
-                assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text"))
-                        .hasText(userMessage);
-                assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text"))
-                        .hasText(ASSISTANT_REPLY);
-                captureScreenshot(page, screenshotsDir, "05-chat-response.png");
-            }
+        try (RunningApp second = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
 
-            try (RunningApp second = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-                    BrowserContext context = newBrowserContext()) {
-                Page page = context.newPage();
+            page.navigate(second.baseUrl());
 
-                page.navigate(second.baseUrl());
-
-                assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText("Alpha");
-                assertThat(page.locator("#chat-messages-list li:not([data-role='info'])")).hasCount(3);
-                assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text"))
-                        .hasText("hello there");
-                assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text"))
-                        .hasText(ASSISTANT_REPLY);
-                captureScreenshot(page, screenshotsDir, "06-after-restart.png");
-            }
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
+            assertThat(page.locator(".project-tab-group.active .project-tab-label")).hasText("Alpha");
+            assertThat(page.locator("#chat-messages-list li:not([data-role='info'])")).hasCount(3);
+            assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text"))
+                    .hasText("hello there");
+            assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text"))
+                    .hasText(ASSISTANT_REPLY);
+            captureScreenshot(page, screenshotsDir, "06-after-restart.png");
         }
     }
 

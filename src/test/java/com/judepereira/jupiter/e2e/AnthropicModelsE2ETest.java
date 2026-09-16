@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Locator;
-import com.microsoft.playwright.Locator.FilterOptions;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
 import com.sun.net.httpserver.HttpExchange;
@@ -22,8 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Browser coverage for provider availability and the favourites-only model
- * picker.
+ * Browser coverage for provider availability and the selected-model picker.
  */
 class AnthropicModelsE2ETest extends E2ETestSupport {
 
@@ -33,9 +31,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
         Path project = Files.createDirectories(home.resolve("child-project"));
         Path db = tempDir.resolve("db/jupiter.db");
         Files.createDirectories(db.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", home.toString());
         try (FixtureServer fixture = FixtureServer.start();
                 RunningApp app = startApp(home, db,
                         Map.of("models.dev.catalog-url", fixture.url("/catalog.json"), "openai.api-key", "",
@@ -79,8 +74,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                             .getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Complete authentication"))
                             .click());
             assertThat(page.locator("#anthropic-oauth-section")).containsText("Connected");
-            assertThat(modelRow(page, "Claude Sonnet Test").filter(new Locator.FilterOptions().setHasText("Connected"))
-                    .locator(".settings-model-status")).hasText("Connected");
             assertThat(fixture.anthropicTokenCalls.get()).isEqualTo(1);
 
             page.locator("#settings-modal .btn-close").click();
@@ -88,33 +81,42 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     response -> response.url().contains("/ui/projects/") && response.url().contains("/activate")
                             && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Alpha")).click());
-            assertPicker(page, "OpenAI Test", "Claude Sonnet Test");
-            page.locator("#chat-model-select option")
-                    .evaluateAll("options => options.map(o => o.textContent).join('|')");
+            assertPicker(page, "openai/gpt-5.6-sol|OpenAI Test", "openai/gpt-5.6-terra|Terra",
+                    "openai/gpt-5.6-luna|Luna", "anthropic/claude-sonnet-5|Claude Sonnet Test",
+                    "anthropic/claude-opus-5|Claude Opus Test");
 
             openSettings(page);
-            var claudeFavourite = page.locator(".settings-model-row")
-                    .filter(new FilterOptions().setHasText("Claude Sonnet Test"))
-                    .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Toggle favourite"));
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings/models/favourite") && response.status() == 200,
-                    claudeFavourite::click);
-            var claudeRow = page.locator(".settings-model-row")
-                    .filter(new FilterOptions().setHasText("Claude Sonnet Test"));
-            assertThat(claudeRow.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Toggle favourite")))
-                    .hasText("☆");
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings/models/favourite") && response.status() == 200,
-                    () -> claudeRow
-                            .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Toggle favourite"))
+            Locator anthropicSelections = page.locator("form.settings-model-selections").filter(
+                    new Locator.FilterOptions().setHas(page.locator("input[name='provider'][value='anthropic']")));
+            anthropicSelections.locator("select[name='modelId']").selectOption("anthropic/claude-sonnet-5");
+            page.waitForResponse(response -> response.url().contains("/ui/settings/models") && response.status() == 200,
+                    () -> anthropicSelections.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save"))
                             .click());
-            assertThat(claudeRow.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Toggle favourite")))
-                    .hasText("★");
+            assertThat(page.locator("#settings-models")).hasCount(1);
+            assertThat(page.locator("#settings-models form.settings-model-selections")
+                    .filter(new Locator.FilterOptions()
+                            .setHas(page.locator("input[name='provider'][value='anthropic']")))
+                    .locator("select[name='modelId']")).hasValues(new String[]{"anthropic/claude-sonnet-5"});
+
+            // The first OOB replacement replaced the form, so reacquire it before the
+            // second save.
+            Locator secondAnthropicSelections = page.locator("form.settings-model-selections").filter(
+                    new Locator.FilterOptions().setHas(page.locator("input[name='provider'][value='anthropic']")));
+            secondAnthropicSelections.locator("select[name='modelId']").selectOption("anthropic/claude-opus-5");
+            page.waitForResponse(response -> response.url().contains("/ui/settings/models") && response.status() == 200,
+                    () -> secondAnthropicSelections
+                            .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save")).click());
+            assertThat(page.locator("#settings-models")).hasCount(1);
+            assertThat(page.locator("#settings-models form.settings-model-selections")
+                    .filter(new Locator.FilterOptions()
+                            .setHas(page.locator("input[name='provider'][value='anthropic']")))
+                    .locator("select[name='modelId']")).hasValues(new String[]{"anthropic/claude-opus-5"});
             page.locator("#settings-modal .btn-close").click();
-            assertPicker(page, "OpenAI Test", "Claude Sonnet Test");
+            assertPicker(page, "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna",
+                    "anthropic/claude-sonnet-5", "anthropic/claude-opus-5");
 
             // Disconnecting removes only that provider's model; reconnecting preserves the
-            // favourite.
+            // selection.
             openSettings(page);
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/openai/logout") && response.status() == 200,
@@ -123,9 +125,9 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                                     new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))
                             .click());
             assertThat(page.locator("#openai-oauth-section")).containsText("not connected");
-            assertThat(modelRow(page, "OpenAI Test").locator(".settings-model-status")).hasText("Not connected");
             page.locator("#settings-modal .btn-close").click();
-            assertPicker(page, "Claude Sonnet Test");
+            assertPicker(page, "anthropic/claude-sonnet-5|Claude Sonnet Test",
+                    "anthropic/claude-opus-5|Claude Opus Test");
 
             openSettings(page);
             page.waitForResponse(
@@ -134,7 +136,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     () -> page.getByRole(AriaRole.BUTTON,
                             new Page.GetByRoleOptions().setName("Disconnect").setExact(true)).click());
             assertThat(page.locator("#anthropic-oauth-section")).containsText("not connected");
-            assertThat(modelRow(page, "Claude Sonnet Test").locator(".settings-model-status")).hasText("Not connected");
             page.locator("#settings-modal .btn-close").click();
             assertPicker(page);
             openSettings(page);
@@ -150,12 +151,14 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                             .click());
             assertThat(page.locator("#anthropic-oauth-section")).containsText("Connected");
             page.locator("#settings-modal .btn-close").click();
-            assertPicker(page, "Claude Sonnet Test");
-        } finally {
-            if (previousHome == null)
-                System.clearProperty("user.home");
-            else
-                System.setProperty("user.home", previousHome);
+            assertPicker(page, "anthropic/claude-sonnet-5|Claude Sonnet Test",
+                    "anthropic/claude-opus-5|Claude Opus Test");
+
+            openSettings(page);
+            Locator reconnectedAnthropicSelections = page.locator("form.settings-model-selections").filter(
+                    new Locator.FilterOptions().setHas(page.locator("input[name='provider'][value='anthropic']")));
+            assertThat(reconnectedAnthropicSelections.locator("select[name='modelId']"))
+                    .hasValue("anthropic/claude-opus-5");
         }
     }
 
@@ -167,11 +170,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
         page.locator("#settings-model-providers.show.active").waitFor();
     }
 
-    private static Locator modelRow(Page page, String modelName) {
-        return page.locator("#settings-models").first().locator(".settings-model-row")
-                .filter(new Locator.FilterOptions().setHasText(modelName));
-    }
-
     private static void assertPicker(Page page, String... expected) {
         var options = page.locator("#chat-model-select option");
         if (expected.length == 0) {
@@ -179,8 +177,12 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
             assertThat(options).hasText("No models available");
         } else {
             assertThat(options).hasCount(expected.length);
-            for (int i = 0; i < expected.length; i++)
-                assertThat(options.nth(i)).containsText(expected[i]);
+            for (String expectedOption : expected) {
+                String[] parts = expectedOption.split("\\|", 2);
+                assertThat(options.evaluateAll("options => options.map(o => o.value)").toString()).contains(parts[0]);
+                if (parts.length == 2)
+                    assertThat(options.allTextContents().toString()).contains(parts[1]);
+            }
         }
     }
 

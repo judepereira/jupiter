@@ -217,16 +217,20 @@ public class ProjectsTemplateRenderTest {
         String emptyHtml = engine.process(new TemplateSpec("fragments/projects",
                 Set.of("anthropicOAuthSection", "settingsModels"), TemplateMode.HTML, null), empty);
         assertThat(emptyHtml).contains("Anthropic is not connected").doesNotContain("${view.message}");
+        assertThat(emptyHtml).contains("id=\"settings-models\"", "class=\"settings-section\"");
 
         String oobHtml = engine.process(
                 new TemplateSpec("fragments/projects", Set.of("settingsModelsOob"), TemplateMode.HTML, null), empty);
         assertThat(oobHtml).contains("id=\"settings-models\"").contains("hx-swap-oob=\"outerHTML:#settings-models\"");
 
         WebContext populated = webContext();
-        populated.setVariable("modelGroups", Map.of("anthropic", List.of(new ModelDefinition("anthropic/claude-test",
-                "Claude Test", "anthropic", "claude-test", false, true, 1000, 100, null, null, null))));
+        populated.setVariable("modelGroups",
+                Map.of("anthropic",
+                        List.of(new ModelDefinition("anthropic/claude-test", "Claude Test", "anthropic", "claude-test",
+                                false, true, 1000, 100, null, null, null, null, null, List.of("text"),
+                                List.of("text")))));
         populated.setVariable("providerAvailability", Map.of("anthropic", true));
-        populated.setVariable("favouriteModelIds", List.of());
+        populated.setVariable("selectedModelIds", Map.of("anthropic", List.of()));
         String populatedHtml = engine.process(
                 new TemplateSpec("fragments/projects", Set.of("settingsModels"), TemplateMode.HTML, null), populated);
         assertThat(populatedHtml).contains("anthropic", "Claude Test", "Connected");

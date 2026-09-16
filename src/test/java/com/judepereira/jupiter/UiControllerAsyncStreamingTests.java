@@ -319,9 +319,10 @@ public class UiControllerAsyncStreamingTests {
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                contextCompactionService, null, mock(CommandStreamService.class), new CommandCatalogService(""), null,
-                new ChatPresentationService(), null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+                contextCompactionService, null, mock(CommandStreamService.class),
+                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
+                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
 
         for (int i = 1; i <= 7; i++) {
             Model model = new ConcurrentModel();
@@ -395,6 +396,14 @@ public class UiControllerAsyncStreamingTests {
                         "context": 5000,
                         "output": 128
                       }
+                    },
+                    "openai/gpt-5.6-terra": {
+                      "id": "openai/gpt-5.6-terra",
+                      "name": "GPT-5.6 Terra",
+                      "reasoning": true,
+                      "tool_call": true,
+                      "release_date": "2026-05-10",
+                      "limit": {"context": 5000, "output": 128}
                     }
                   }
                 }
@@ -487,9 +496,10 @@ public class UiControllerAsyncStreamingTests {
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                contextCompactionService, null, mock(CommandStreamService.class), new CommandCatalogService(""), null,
-                new ChatPresentationService(), null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+                contextCompactionService, null, mock(CommandStreamService.class),
+                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
+                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
 
         Model sendModel = new ConcurrentModel();
         ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);

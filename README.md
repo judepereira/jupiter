@@ -21,12 +21,16 @@ There’s no desktop app or CLI to keep in sync. The browser is the client.
 - **It’s extendable.** MCP servers and Markdown-based slash commands plug into the harness without changing the core
   application.
 
-Jupiter discovers OpenAI GPT-5.6-series and Anthropic Claude models from models.dev. Connect a provider in **Settings**,
-then choose its favourited models in the chat picker. Bundled agents use OpenAI first with Anthropic fallbacks: Plan and
-Engineer use Claude Opus 5, while Explore, Apprentice, and Test use Claude Sonnet 5. Agent-default and subagent runs use
-the first available provider before the request, while an explicit model choice is strict and never silently falls back.
-An implicit browser model choice is resolved again when the turn executes, and any fallback is attributed in the
-message/session; usage is recorded against the actual model. See
+Jupiter discovers eligible text/tool OpenAI models (including GPT-6) and Anthropic Claude models from models.dev.
+Connected providers expose provider-specific native model multi-selects in **Settings**; when a provider has no saved
+selection, typically on first connection or startup, Jupiter initializes the latest five distinct model families.
+Explicit saves require at least one model, and selections survive disconnect/reconnect. Selected models filter
+additional chat choices, while every model named by connected agents remains available. Bundled agents use OpenAI first
+with Anthropic fallbacks: Plan and Engineer use Claude Opus 5, while Explore, Apprentice, and Test use Claude Sonnet 5.
+Agent-default and subagent runs use the first available provider before the request, while an explicit model choice is
+strict and never silently falls back. An implicit browser model choice is resolved again when the turn executes, and any
+fallback is attributed in the message/session; usage is recorded against the actual model. models.dev compatibility does
+not guarantee that an account is entitled to use a model. See
 [Models and Thinking](https://github.com/judepereira/jupiter/wiki/Models-and-Thinking),
 [OpenAI Authentication](https://github.com/judepereira/jupiter/wiki/OpenAI-Authentication), and
 [Anthropic Authentication](https://github.com/judepereira/jupiter/wiki/Anthropic-Authentication).

@@ -14,7 +14,7 @@ class CommandCatalogServiceTest {
 
     @Test
     void createWritesFileAndIsImmediatelyAvailable() throws Exception {
-        CommandCatalogService service = new CommandCatalogService(root.toString());
+        CommandCatalogService service = new CommandCatalogService(root.toString(), System.getProperty("user.home"));
         CommandCatalogService.CommandDefinition definition = command("custom", "echo custom");
 
         service.create(definition);
@@ -28,7 +28,7 @@ class CommandCatalogServiceTest {
     void updateRenamesDefinitionEvenWhenSourceFilenameDoesNotMatchId() throws Exception {
         Files.createDirectories(root);
         Files.writeString(root.resolve("source-name.md"), document("renamed", "old"));
-        CommandCatalogService service = new CommandCatalogService(root.toString());
+        CommandCatalogService service = new CommandCatalogService(root.toString(), System.getProperty("user.home"));
 
         CommandCatalogService.CommandDefinition updated = command("new-id", "new body");
         service.update("renamed", updated);
@@ -40,7 +40,7 @@ class CommandCatalogServiceTest {
 
     @Test
     void deleteRemovesCustomCommand() throws Exception {
-        CommandCatalogService service = new CommandCatalogService(root.toString());
+        CommandCatalogService service = new CommandCatalogService(root.toString(), System.getProperty("user.home"));
         service.create(command("remove-me", "body"));
 
         service.delete("remove-me");
@@ -51,7 +51,7 @@ class CommandCatalogServiceTest {
 
     @Test
     void rejectsBundledCollisionAndUnsafeIds() {
-        CommandCatalogService service = new CommandCatalogService(root.toString());
+        CommandCatalogService service = new CommandCatalogService(root.toString(), System.getProperty("user.home"));
 
         assertThatThrownBy(() -> service.create(command("status", "body")))
                 .isInstanceOf(CommandCatalogService.CommandMutationException.class);
@@ -61,7 +61,7 @@ class CommandCatalogServiceTest {
 
     @Test
     void failedReloadRestoresUpdatedFileAndSnapshot() throws Exception {
-        CommandCatalogService service = new CommandCatalogService(root.toString());
+        CommandCatalogService service = new CommandCatalogService(root.toString(), System.getProperty("user.home"));
         CommandCatalogService.CommandDefinition original = service.create(command("stable", "original"));
         Files.writeString(root.resolve("invalid.md"), "not frontmatter");
 
@@ -74,7 +74,7 @@ class CommandCatalogServiceTest {
 
     @Test
     void failedDeleteRestoresExactFileAndSnapshot() throws Exception {
-        CommandCatalogService service = new CommandCatalogService(root.toString());
+        CommandCatalogService service = new CommandCatalogService(root.toString(), System.getProperty("user.home"));
         service.create(command("stable", "original"));
         byte[] original = Files.readAllBytes(root.resolve("stable.md"));
         Files.writeString(root.resolve("invalid.md"), "not frontmatter");

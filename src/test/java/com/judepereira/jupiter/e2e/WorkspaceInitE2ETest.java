@@ -34,58 +34,44 @@ class WorkspaceInitE2ETest extends E2ETestSupport {
 
         initGitRepoWithInitialCommit(projectDir);
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         String branchName = "feature-init-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String commands = "echo init-one\npwd\ntouch init-ran.txt";
         Path worktreeDir = fakeHome.resolve(".trees").resolve(projectDir.getFileName().toString()).resolve(branchName);
 
-        try {
-            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                    BrowserContext context = newBrowserContext()) {
-                Page page = context.newPage();
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
 
-                page.navigate(app.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
 
-                openProject(page, "Alpha", projectDir);
+            openProject(page, "Alpha", projectDir);
 
-                page.waitForResponse(response -> response.url().contains("/ui/settings") && response.status() == 200,
-                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
-                assertThat(page.locator("#settings-modal")).isVisible();
+            page.waitForResponse(response -> response.url().contains("/ui/settings") && response.status() == 200,
+                    () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
+            assertThat(page.locator("#settings-modal")).isVisible();
 
-                page.locator("textarea[name='workspaceInitCommands']").fill(commands);
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/settings/apply") && response.status() == 200,
-                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Save")).click());
-                assertThat(page.locator("#settings-modal")).hasCount(0);
+            page.locator("textarea[name='workspaceInitCommands']").fill(commands);
+            page.waitForResponse(response -> response.url().contains("/ui/settings/apply") && response.status() == 200,
+                    () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Save")).click());
+            assertThat(page.locator("#settings-modal")).hasCount(0);
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/workspaces/new") && response.status() == 200,
-                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New Workspace"))
-                                .click());
-                assertThat(page.locator("#workspace-modal")).isVisible();
+            page.waitForResponse(response -> response.url().contains("/ui/workspaces/new") && response.status() == 200,
+                    () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New Workspace"))
+                            .click());
+            assertThat(page.locator("#workspace-modal")).isVisible();
 
-                page.locator("input[name='branchName']").fill(branchName);
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/workspaces/add") && response.status() == 200,
-                        () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create workspace"))
-                                .click());
+            page.locator("input[name='branchName']").fill(branchName);
+            page.waitForResponse(response -> response.url().contains("/ui/workspaces/add") && response.status() == 200,
+                    () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create workspace"))
+                            .click());
 
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Workspace Init")))
-                        .isVisible();
-                assertThat(page.locator("#bottom-panel")).containsText("Workspace Init");
+            assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Workspace Init")))
+                    .isVisible();
+            assertThat(page.locator("#bottom-panel")).containsText("Workspace Init");
 
-                awaitPathExists(worktreeDir.resolve("init-ran.txt"));
-                assertTrue(Files.exists(worktreeDir.resolve("init-ran.txt")));
-            }
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
+            awaitPathExists(worktreeDir.resolve("init-ran.txt"));
+            assertTrue(Files.exists(worktreeDir.resolve("init-ran.txt")));
         }
     }
 

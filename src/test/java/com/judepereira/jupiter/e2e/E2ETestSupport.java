@@ -23,7 +23,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -46,7 +45,6 @@ abstract class E2ETestSupport {
             .create(E2ETestSupport.class);
     private static final String SHARED_BROWSER_RESOURCE = "shared-browser";
     private static volatile SharedBrowser sharedBrowser;
-
     protected static Browser sharedBrowser() {
         SharedBrowser resource = sharedBrowser;
         if (resource == null) {
@@ -194,8 +192,7 @@ abstract class E2ETestSupport {
             AppStateRepository repository = bootstrap.context().getBean(AppStateRepository.class);
             repository.updateOpenAiOAuthState("e2e-access-token", "e2e-refresh-token", "e2e-id-token", "e2e-account",
                     Instant.now().plusSeconds(3600));
-            repository.updateProviderInitialized("openai", true);
-            repository.updateFavouriteModelIds(List.of("openai/gpt-5.6-sol"));
+            repository.replaceSelectedModelIds("openai", List.of("openai/gpt-5.6-sol"));
         } finally {
             bootstrap.close();
         }
@@ -206,9 +203,6 @@ abstract class E2ETestSupport {
             Class<?>... testConfigClasses) {
         String jdbcUrl = "jdbc:sqlite:file:" + dbFile.toAbsolutePath().normalize()
                 + "?journal_mode=WAL&foreign_keys=on&busy_timeout=30000";
-        Map<String, String> previousProperties = new HashMap<>();
-        overrideSystemProperty(previousProperties, "spring.datasource.url", jdbcUrl);
-        additionalProperties.forEach((key, value) -> overrideSystemProperty(previousProperties, key, value));
         Class<?>[] sources = Stream
                 .concat(Stream.of(Jupiter.class, TestEncryptionConfiguration.class), Arrays.stream(testConfigClasses))
                 .toArray(Class<?>[]::new);
@@ -218,6 +212,7 @@ abstract class E2ETestSupport {
         properties.put("spring.datasource.driver-class-name", "org.sqlite.JDBC");
         properties.put("spring.flyway.enabled", "true");
         properties.put("agent.workspace-root", fakeHome.toAbsolutePath().normalize().toString());
+        properties.put("user.home", fakeHome.toAbsolutePath().normalize().toString());
         properties.put("openai.api-key", "test");
         HttpServer catalogServer = null;
         if (!additionalProperties.containsKey("models.dev.catalog-url")) {
@@ -239,38 +234,42 @@ abstract class E2ETestSupport {
                     "http://127.0.0.1:" + catalogServer.getAddress().getPort() + "/catalog.json");
         }
         properties.putAll(additionalProperties);
-        ConfigurableApplicationContext context = new SpringApplicationBuilder(sources).web(WebApplicationType.SERVLET)
-                .properties(properties.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue())
-                        .toArray(String[]::new))
-                .run();
-
-        Integer port = context.getEnvironment().getProperty("local.server.port", Integer.class);
-        if (port == null) {
-            throw new IllegalStateException("Missing local.server.port");
+        String[] applicationArguments = properties.entrySet().stream()
+                .map(entry -> "--" + entry.getKey() + "=" + entry.getValue()).toArray(String[]::new);
+        ConfigurableApplicationContext context;
+        try {
+            context = new SpringApplicationBuilder(sources).web(WebApplicationType.SERVLET).run(applicationArguments);
+        } catch (Throwable throwable) {
+            if (catalogServer != null) {
+                catalogServer.stop(0);
+            }
+            throw throwable;
         }
-        SQLiteTestSupport.assertWalAndForeignKeysEnabled(context.getBean(DataSource.class));
-        HttpServer finalCatalogServer = catalogServer;
-        return new RunningApp(context, "http://localhost:" + port, () -> {
-            if (finalCatalogServer != null) {
-                finalCatalogServer.stop(0);
-            }
-            restoreSystemProperties(previousProperties);
-        });
-    }
 
-    private static void overrideSystemProperty(Map<String, String> previousProperties, String key, String value) {
-        previousProperties.put(key, System.getProperty(key));
-        System.setProperty(key, value);
-    }
-
-    private static void restoreSystemProperties(Map<String, String> previousProperties) {
-        previousProperties.forEach((key, value) -> {
-            if (value == null) {
-                System.clearProperty(key);
-            } else {
-                System.setProperty(key, value);
+        try {
+            Integer port = context.getEnvironment().getProperty("local.server.port", Integer.class);
+            if (port == null) {
+                throw new IllegalStateException("Missing local.server.port");
             }
-        });
+            SQLiteTestSupport.assertWalAndForeignKeysEnabled(context.getBean(DataSource.class));
+            HttpServer ownedCatalogServer = catalogServer;
+            RunningApp app = new RunningApp(context, "http://localhost:" + port, () -> {
+                if (ownedCatalogServer != null) {
+                    ownedCatalogServer.stop(0);
+                }
+            });
+            catalogServer = null;
+            return app;
+        } catch (Throwable throwable) {
+            try {
+                context.close();
+            } finally {
+                if (catalogServer != null) {
+                    catalogServer.stop(0);
+                }
+            }
+            throw throwable;
+        }
     }
 
     protected static void captureScreenshot(Page page, Path screenshotsDir, String fileName) {

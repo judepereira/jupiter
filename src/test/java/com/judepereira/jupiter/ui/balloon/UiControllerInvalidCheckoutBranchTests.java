@@ -139,9 +139,9 @@ class UiControllerInvalidCheckoutBranchTests {
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
                 TestAppStateSupport.contextCompactionService(appStateService), null, mock(CommandStreamService.class),
-                new CommandCatalogService(""), null, new ChatPresentationService(), null, null,
-                new HttpAuthProperties(), mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class),
-                "0.0.1-SNAPSHOT");
+                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
+                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
     }
 
     private static AgentProperties agentProperties(Path workspaceRoot) {

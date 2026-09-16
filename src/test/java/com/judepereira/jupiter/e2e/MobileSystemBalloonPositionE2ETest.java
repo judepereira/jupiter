@@ -24,9 +24,6 @@ class MobileSystemBalloonPositionE2ETest extends E2ETestSupport {
         Path screenshotsDir = Files
                 .createDirectories(Path.of("target", "playwright-screenshots", "MobileSystemBalloonPositionE2ETest"));
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (RunningApp app = startApp(fakeHome, sqliteDbFile);
                 BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
                         .setViewportSize(new ViewportSize(390, 844)).setIsMobile(true).setHasTouch(true))) {
@@ -90,12 +87,6 @@ class MobileSystemBalloonPositionE2ETest extends E2ETestSupport {
             assertThat(((Number) geometry.get("balloonRectHeight")).doubleValue()).isGreaterThan(0.0);
 
             captureScreenshot(page, screenshotsDir, "mobile-system-balloon.png");
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 }

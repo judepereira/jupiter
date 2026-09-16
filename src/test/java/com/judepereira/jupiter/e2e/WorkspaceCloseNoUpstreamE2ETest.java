@@ -31,48 +31,36 @@ class WorkspaceCloseNoUpstreamE2ETest extends E2ETestSupport {
 
         initGitRepoWithInitialCommit(projectDir);
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
 
-        try {
-            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                    BrowserContext context = newBrowserContext()) {
-                Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
 
-                page.navigate(app.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
 
-                openProject(page, "Alpha", projectDir);
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New Workspace")).click();
+            assertThat(page.locator("#workspace-modal")).isVisible();
+            page.locator("input[name='branchName']").fill("feature-clean-close");
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create workspace")).click();
 
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New Workspace")).click();
-                assertThat(page.locator("#workspace-modal")).isVisible();
-                page.locator("input[name='branchName']").fill("feature-clean-close");
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create workspace")).click();
+            assertThat(page.locator(".workspace-group")).hasCount(2);
+            assertThat(page.locator(".workspace-group").nth(1).locator(".workspace-label"))
+                    .hasText("feature-clean-close");
 
-                assertThat(page.locator(".workspace-group")).hasCount(2);
-                assertThat(page.locator(".workspace-group").nth(1).locator(".workspace-label"))
-                        .hasText("feature-clean-close");
+            var branchRow = page.locator(".workspace-group").nth(1).locator(".workspace-row");
+            branchRow.hover();
+            var closeButton = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Close workspace"));
+            assertThat(closeButton).isVisible();
+            closeButton.click();
 
-                var branchRow = page.locator(".workspace-group").nth(1).locator(".workspace-row");
-                branchRow.hover();
-                var closeButton = page.getByRole(AriaRole.BUTTON,
-                        new Page.GetByRoleOptions().setName("Close workspace"));
-                assertThat(closeButton).isVisible();
-                closeButton.click();
-
-                assertThat(page.locator("#workspace-close-modal")).isVisible();
-                assertThat(page.locator("#workspace-close-modal"))
-                        .containsText("Local commits detected, that haven't been pushed");
-                assertThat(page.locator(".workspace-group")).hasCount(2);
-                assertThat(page.locator(".workspace-group .workspace-label"))
-                        .containsText(new String[]{"Default Workspace", "feature-clean-close"});
-            }
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
+            assertThat(page.locator("#workspace-close-modal")).isVisible();
+            assertThat(page.locator("#workspace-close-modal"))
+                    .containsText("Local commits detected, that haven't been pushed");
+            assertThat(page.locator(".workspace-group")).hasCount(2);
+            assertThat(page.locator(".workspace-group .workspace-label"))
+                    .containsText(new String[]{"Default Workspace", "feature-clean-close"});
         }
     }
 

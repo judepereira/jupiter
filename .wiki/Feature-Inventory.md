@@ -32,13 +32,15 @@ task-oriented page — otherwise documentation drift is almost guaranteed.
   re-resolved at execution
 - strict explicit model selection (no silent fallback), with preferred/actual attribution and actual-model usage
   accounting
-- dynamic models.dev catalogue for OpenAI GPT-5.6-series and Anthropic Claude models
+- dynamic models.dev catalogue for eligible text/tool OpenAI models (including GPT-6) and Anthropic Claude models
 - Anthropic adaptive thinking mapped from LOW, MEDIUM, and HIGH effort
 - private Anthropic thinking, signature, and redacted-thinking blocks retained for tool continuation without rendering
   as assistant text
 - Anthropic parallel tool use disabled until multiple tool calls are supported safely
-- global ordered model favourites
-- provider-aware chat picker with empty state
+- provider-specific native model multi-selects, initialized when a provider has no saved selection (typically on first
+  connection or startup) to the latest five eligible distinct families
+- persisted provider model selections across disconnect/reconnect, with non-empty explicit saves
+- provider-aware chat picker with empty state and connected-agent frontmatter models available
 - model-derived provider routing
 - historical unavailable-model handling
 - native tool allowlists
@@ -56,7 +58,7 @@ task-oriented page — otherwise documentation drift is almost guaranteed.
 - OpenAI API-key and device authorisation flows
 - Claude Code hosted OAuth copy/paste-code flow
 - encrypted OAuth restart persistence, refresh, and disconnect semantics
-- provider connection filtering for model favourites
+- provider connection filtering for saved model selections
 - provider tests without live credentials
 
 ## Extensibility and automation

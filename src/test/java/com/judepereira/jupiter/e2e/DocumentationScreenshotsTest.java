@@ -141,9 +141,6 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         GitFixture git = createGitFixture(fakeHome);
         Path dbFile = fixtureRoot.resolve("jupiter.sqlite");
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (FixtureServer fixtureServer = FixtureServer.start();
                 RunningApp app = startApp(fakeHome, dbFile,
                         Map.of("models.dev.catalog-url", fixtureServer.catalogUrl(), "openai.oauth.issuer",
@@ -153,7 +150,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             Fixture fixture = DocumentationScreenshotFixture.seed(repository, new FixturePaths(git.jupiterProject(),
                     git.docsWorkspace(), git.mcpWorkspace(), git.blueCaveProject(), git.websiteProject()));
 
-            // The model picker only exposes catalog favourites for connected providers.
+            // The model picker only exposes selected catalog models for connected
+            // providers.
             // Establish
             // that state through the same mocked device flow used by the OAuth E2E
             // coverage.
@@ -177,12 +175,6 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             captureTerminal(app, fixture, outputDir);
 
             verifyCatalog(outputDir);
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

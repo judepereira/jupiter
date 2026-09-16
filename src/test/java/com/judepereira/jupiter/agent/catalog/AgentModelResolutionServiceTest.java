@@ -67,6 +67,6 @@ class AgentModelResolutionServiceTest {
 
     private static ModelDefinition model(String id, String provider) {
         return new ModelDefinition(id, id, provider, id.substring(id.indexOf('/') + 1), true, true, 100, 20, null, null,
-                null);
+                null, null, null, List.of("text"), List.of("text"));
     }
 }

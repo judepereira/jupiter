@@ -300,6 +300,32 @@
     gap: 8px;
 }
 
+.settings-provider-subsection {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid #dbeafe;
+    border-radius: 10px;
+    background: #f8fbff;
+}
+
+.settings-provider-subsection > h6 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.settings-model-selections {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-model-selections select {
+    width: 100%;
+}
+
 .settings-openai-section {
     display: flex;
     flex-direction: column;

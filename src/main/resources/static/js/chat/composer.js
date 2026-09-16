@@ -12,7 +12,6 @@ import { isCommandPickerOpen, openCommandPicker } from "./commands.js";
 let chatDraftFlushBound = false;
 let htmxAfterOnLoadBound = false;
 let htmxControlSwapHooksBound = false;
-let pendingChatControlState = null;
 let chatComposerConfig = {
     activePrimaryPendingAssistantRow: () => null,
     requestStopActiveChat: () => {},
@@ -38,61 +37,17 @@ export function configureChatComposer(config) {
     }
 }
 
-function captureChatControlState(form) {
-    const controls = form?.querySelector("#chat-controls");
-    if (!controls) return null;
-    const value = (id) => controls.querySelector(id)?.value;
-    return {
-        agentId: value("#chat-agent-select"),
-        modelId: value("#chat-model-select"),
-        thinkingLevel: value("#chat-thinking-select"),
-        modelExplicit: form.dataset.modelExplicit === "1",
-    };
-}
-
-function restoreChatControlState(form, state) {
-    if (!form || !state) return;
-    const controls = form.querySelector("#chat-controls");
-    if (!controls) return;
-    const select = (id) => controls.querySelector(id);
-    const agentSelect = select("#chat-agent-select");
-    const modelSelect = select("#chat-model-select");
-    const thinkingSelect = select("#chat-thinking-select");
-    const hasValue = (element, value) =>
-        element && Array.from(element.options).some((option) => option.value === value);
-
-    if (hasValue(agentSelect, state.agentId)) agentSelect.value = state.agentId;
-    if (hasValue(modelSelect, state.modelId)) modelSelect.value = state.modelId;
-    if (hasValue(thinkingSelect, state.thinkingLevel)) thinkingSelect.value = state.thinkingLevel;
-
-    const serverExplicit = controls.dataset.modelExplicit;
-    form.dataset.modelExplicit =
-        serverExplicit === "0" || serverExplicit === "1" ? serverExplicit : state.modelExplicit ? "1" : "0";
-    if (hasValue(agentSelect, state.agentId) && hasValue(modelSelect, state.modelId)) {
-        form.dataset.modelExplicit = state.modelExplicit ? "1" : "0";
-    }
-}
-
 function bindChatControlSwapHooks() {
     if (htmxControlSwapHooksBound) return;
     htmxControlSwapHooksBound = true;
-    const beforeSwap = (event) => {
-        const target = event.detail?.target;
-        if (target?.id !== "chat-controls") return;
-        pendingChatControlState = captureChatControlState(document.getElementById("chat-send-form"));
-    };
     const afterSwap = (event) => {
         const target = event.detail?.target;
         if (target?.id !== "chat-controls") return;
         const form = document.getElementById("chat-send-form");
-        restoreChatControlState(form, pendingChatControlState);
-        pendingChatControlState = null;
         if (form) bindChatControlListeners(form);
     };
     // OOB swaps have their own lifecycle; keep this generic so settings and other refreshes share it.
-    document.body.addEventListener("htmx:beforeSwap", beforeSwap, true);
     document.body.addEventListener("htmx:afterSwap", afterSwap, true);
-    document.body.addEventListener("htmx:oobBeforeSwap", beforeSwap, true);
     document.body.addEventListener("htmx:oobAfterSwap", afterSwap, true);
 }
 
@@ -134,24 +89,21 @@ function syncChatDefaults(form) {
     const resolvedModel = agentOption.dataset.defaultModel;
     if (resolvedModel && Array.from(modelSelect.options).some((option) => option.value === resolvedModel)) {
         modelSelect.value = resolvedModel;
-        form.dataset.modelExplicit = "0";
-    } else if (modelSelect.options.length > 0) {
-        // No compatible preference is available: keep the picker fallback explicit.
-        modelSelect.selectedIndex = 0;
-        form.dataset.modelExplicit = "1";
+    } else {
+        modelSelect.selectedIndex = -1;
     }
     thinkingSelect.value = agentOption.dataset.defaultThinking;
+    form.dataset.modelExplicit = "0";
 }
 
 function bindChatControlListeners(form) {
     if (!form) return;
     const controls = form.querySelector("#chat-controls");
     if (!controls) return;
+    const initialExplicit = controls.dataset.modelExplicit;
+    form.dataset.modelExplicit = initialExplicit === "true" ? "1" : initialExplicit || "0";
     if (form.dataset.chatControlsBound !== "1") {
         form.dataset.chatControlsBound = "1";
-        const initialExplicit = controls.dataset.modelExplicit;
-        form.dataset.modelExplicit =
-            initialExplicit === "true" ? "1" : initialExplicit || form.dataset.modelExplicit || "0";
         form.addEventListener("htmx:configRequest", (event) => {
             const agentOption = getChatSelectOption(form.querySelector("#chat-agent-select"));
             const modelSelect = form.querySelector("#chat-model-select");

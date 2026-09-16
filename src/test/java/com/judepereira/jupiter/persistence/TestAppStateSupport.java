@@ -158,16 +158,33 @@ public final class TestAppStateSupport {
                         context.repository(), null),
                 contextCompactionService(appStateService),
                 new TokenUsageService(context.repository(), new ObjectMapper()), mock(CommandStreamService.class),
-                new CommandCatalogService(""), mock(McpProjectMcpServerRuntimeManager.class),
-                new ChatPresentationService(),
+                new CommandCatalogService("", System.getProperty("user.home")),
+                mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
                 new ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
                 lifecycleHookService, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller,
             String assistantId) {
-        return awaitChatMessage(controller, assistantId, message -> !message.pending());
+        ChatPresentationService.ChatMessage completed = awaitChatMessage(controller, assistantId,
+                message -> !message.pending());
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            ConcurrentModel model = new ConcurrentModel();
+            controller.index(model);
+            UiController.Session activeSession = (UiController.Session) model.getAttribute("activeSession");
+            if (activeSession == null || !activeSession.inProgress()) {
+                return completed;
+            }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while waiting for stream cleanup " + assistantId, e);
+            }
+        }
+        throw new IllegalStateException("Timed out waiting for stream cleanup " + assistantId);
     }
 
     public static ConcurrentModel awaitChangedFilesAndSelection(UiController controller) {
