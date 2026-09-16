@@ -24,7 +24,8 @@ URLs and header values can contain placeholders like this:
 ${env.VARIABLE_NAME}
 ```
 
-Jupiter checks project environment variables first, then the Jupiter process environment.
+Jupiter checks project environment variables first, then the JVM environment, then runtime variables supplied through
+the native `JUPITER_BOOTSTRAP_V1\0NAME\0VALUE\0` envelope. The encryption key is never available to `${env.NAME}`.
 
 Missing values fail resolution. Resolved URLs and headers are also rejected if they contain line breaks.
 

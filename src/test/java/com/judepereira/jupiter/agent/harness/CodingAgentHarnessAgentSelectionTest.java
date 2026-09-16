@@ -28,6 +28,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.security.RuntimeEnvironment;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
@@ -305,7 +306,7 @@ public class CodingAgentHarnessAgentSelectionTest {
         private int executions;
 
         private FakeMcpManager(String toolName, String text) {
-            super(null, null, null);
+            super(null, null, null, new RuntimeEnvironment(Map.of()));
             this.toolName = toolName;
             this.text = text;
         }

@@ -11,8 +11,8 @@ openssl rand -base64 32
 
 The input must be standard Base64 that decodes to exactly 32 bytes.
 
-Jupiter’s stdin reader rejects missing input, invalid Base64, interior whitespace, excessive input, and keys that decode
-to the wrong size.
+Jupiter’s bootstrap reader rejects a missing or malformed versioned envelope, invalid Base64, interior whitespace,
+excessive input, and keys that decode to the wrong size.
 
 ## What happens to the key?
 
@@ -40,5 +40,7 @@ still contain plaintext written before that migration.
 
 ## Docker
 
-The Docker entrypoint accepts `JUPITER_ENCRYPTION_KEY` as bootstrap input, removes it before init scripts, then sends it
-to Java over stdin.
+The Docker entrypoint accepts `JUPITER_ENCRYPTION_KEY` from the original environment. Trusted root and user init scripts
+receive that complete environment, including the key. After initialization, runtime-added variables and the key are
+removed before Java starts; the key is sent in the versioned bootstrap envelope. Image-defined variables remain in the
+JVM environment.

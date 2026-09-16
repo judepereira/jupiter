@@ -89,7 +89,8 @@ task-oriented page — otherwise documentation drift is almost guaranteed.
 ## Security and deployment
 
 - mandatory 32-byte Base64 database encryption key
-- stdin-based normal key bootstrap
+- versioned NUL-delimited native bootstrap envelope over an anonymous file descriptor
+- runtime-variable bootstrap with JVM `/proc` environment removal
 - AES-256-GCM persisted sensitive values
 - HMAC blind indexes
 - encrypted OAuth state

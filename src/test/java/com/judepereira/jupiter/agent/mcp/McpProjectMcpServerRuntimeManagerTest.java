@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
+import com.judepereira.jupiter.security.RuntimeEnvironment;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
@@ -27,7 +28,7 @@ class McpProjectMcpServerRuntimeManagerTest {
         when(factory.create(anyString(), anyString(), anyMap(), any())).thenThrow(new IllegalStateException("boom"));
 
         McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(appStateService, publisher,
-                factory);
+                factory, new RuntimeEnvironment(Map.of()));
         manager.reloadProject(1L);
 
         Map<Long, McpRuntimeEvents.ConnectionStatus> statuses = manager.connectionStatuses(1L);
@@ -57,7 +58,7 @@ class McpProjectMcpServerRuntimeManagerTest {
         when(appStateService.loadProjectEnvironmentVariables(1L)).thenReturn(Map.of());
 
         McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(appStateService, publisher,
-                (clientKey, url, headers, listener) -> firstClient);
+                (clientKey, url, headers, listener) -> firstClient, new RuntimeEnvironment(Map.of()));
         manager.reloadProject(1L);
         McpProjectToolSnapshot firstSnapshot = manager.snapshot(1L);
         assertEquals(1, firstSnapshot.toolDefinitions().size());
@@ -74,7 +75,7 @@ class McpProjectMcpServerRuntimeManagerTest {
                         return firstClient;
                     }
                     return secondClient;
-                });
+                }, new RuntimeEnvironment(Map.of()));
         managerWithSecond.reloadProject(1L);
         McpProjectToolSnapshot secondSnapshot = managerWithSecond.snapshot(1L);
         assertEquals(List.of("mcp__first__alpha", "mcp__second__beta"),
@@ -99,7 +100,7 @@ class McpProjectMcpServerRuntimeManagerTest {
         when(appStateService.loadProjectEnvironmentVariables(1L)).thenReturn(Map.of());
 
         McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(appStateService, publisher,
-                factory);
+                factory, new RuntimeEnvironment(Map.of()));
         assertThrows(McpToolCollisionException.class, () -> manager.reloadProject(1L));
     }
 }

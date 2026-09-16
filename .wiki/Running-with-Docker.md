@@ -24,8 +24,10 @@ docker run --rm \
 
 Keep that encryption key. Replacing it on the next run will not unlock the existing database.
 
-The entrypoint accepts the key from the container environment, removes it before init scripts run, and then pipes it
-once to Java over stdin.
+The entrypoint accepts the key from the original container environment. Trusted root and user init scripts receive the
+complete original environment, including the key. After they finish, runtime-added variables and the key are removed
+before Java starts; the key is sent in the versioned bootstrap envelope. Image-defined variables remain in the JVM
+environment.
 
 ## User and group IDs
 
@@ -42,7 +44,7 @@ Override UID/GID if your mounted source or state directories need host-compatibl
 
 If `/init.sh` exists, it runs as root. If `/init-user.sh` exists, it runs as the configured Jupiter user.
 
-Neither script receives `JUPITER_ENCRYPTION_KEY` in its environment.
+Both scripts are trusted and receive `JUPITER_ENCRYPTION_KEY` in their environment.
 
 ## Source code
 

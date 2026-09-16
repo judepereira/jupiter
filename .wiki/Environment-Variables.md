@@ -3,6 +3,14 @@
 There are a few different environment boundaries in Jupiter, and mixing them up can either break tools or leak far more
 than you intended.
 
+## Bootstrap runtime variables
+
+Native launchers may send runtime variables in the versioned `JUPITER_BOOTSTRAP_V1\0NAME\0VALUE\0` envelope.
+Image-defined environment remains in the JVM environment; runtime-added variables are captured before Java starts,
+removed from the JVM `/proc` environment, and exposed to Spring and trusted terminals (but never the encryption key).
+Both container init scripts are trusted and receive the original environment, including the key. Agent `run_command`
+does not inherit bootstrap variables.
+
 ## Project variables
 
 Project environment variables are configured in project settings and persisted by Jupiter.
@@ -21,7 +29,8 @@ variable added to the allowlist.
 
 ## Integrated terminal
 
-The interactive terminal starts from the broader Jupiter process environment, then overlays project variables.
+The interactive terminal starts from the broader Jupiter process environment, restores bootstrap runtime variables, then
+overlays project variables. The encryption key is never restored.
 
 Jupiter still removes its encryption and HTTP-authentication credentials first. `OPENAI_API_KEY` is not one of the
 variables removed by that sanitizer, so it remains visible here if it exists in the Jupiter process environment.
@@ -43,4 +52,5 @@ Jupiter credentials are stripped here as well.
 
 ## MCP placeholders
 
-MCP URLs and headers can use `${env.NAME}`. Project variables win over host variables when both exist.
+MCP URLs and headers can use `${env.NAME}`. Resolution order is project variables, then JVM environment variables, then
+bootstrap runtime variables. The encryption key is not a source for placeholders.

@@ -6,13 +6,27 @@ it’s important not to confuse those protections with a sandbox.
 ## What Jupiter does protect
 
 - Sensitive persisted text is encrypted with authenticated encryption at the repository boundary.
-- Normal native startup reads the master key from stdin rather than Java environment variables or arguments.
+- Normal native startup reads a versioned NUL-delimited bootstrap envelope from an anonymous file descriptor rather than
+  Java environment variables or arguments. Runtime-added variables in that envelope are removed from the JVM `/proc`
+  environment after being captured for Spring.
 - Linux startup applies `PR_SET_DUMPABLE=0`; the recommended Java launch also disables JVM attach.
 - Jupiter’s encryption and HTTP-auth credentials are removed before managed child processes start. This specific
   sanitizer does not include `OPENAI_API_KEY`.
 - Agent `run_command` only receives allowlisted host variables plus project variables.
 - Optional Basic auth protects every route except `GET /health`.
 - Agent-displayed images disable MIME sniffing and caching.
+
+## Runtime bootstrap trust boundary
+
+The container entrypoint treats both root and user initialization scripts as trusted: each receives the complete
+original environment, including `JUPITER_ENCRYPTION_KEY`. After those scripts finish, the entrypoint captures
+runtime-added variables and unsets them before Java starts. Image-defined variables remain ordinary JVM environment
+variables.
+
+The encryption key is then available only to trusted initialization scripts and Jupiter's bootstrap `EncryptionKey`
+bean. It is not exposed to the terminal, MCP templates, agent commands, or Spring's property environment. Trusted
+terminals restore bootstrap runtime variables except the key. MCP `${env.NAME}` resolves project variables first, then
+JVM variables, then bootstrap runtime variables. Agent `run_command` does not inherit bootstrap runtime variables.
 
 ## A few extra guardrails
 

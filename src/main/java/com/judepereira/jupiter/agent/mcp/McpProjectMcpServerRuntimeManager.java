@@ -3,25 +3,33 @@ package com.judepereira.jupiter.agent.mcp;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
+import com.judepereira.jupiter.security.RuntimeEnvironment;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Log4j2
 @Service
-@RequiredArgsConstructor
 public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRuntime.McpRuntimeListener {
     private final AppStateService appStateService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final McpClientFactory clientFactory;
-    private final McpTemplateResolver templateResolver = new McpTemplateResolver(System::getenv);
+    private final McpTemplateResolver templateResolver;
+
+    public McpProjectMcpServerRuntimeManager(AppStateService appStateService,
+            ApplicationEventPublisher applicationEventPublisher, McpClientFactory clientFactory,
+            RuntimeEnvironment runtimeEnvironment) {
+        this.appStateService = appStateService;
+        this.applicationEventPublisher = applicationEventPublisher;
+        this.clientFactory = clientFactory;
+        this.templateResolver = new McpTemplateResolver(System::getenv, runtimeEnvironment::get);
+    }
     private final Map<Long, ProjectRuntime> runtimes = new ConcurrentHashMap<>();
     private final Map<Long, String> projectToolFingerprints = new ConcurrentHashMap<>();
     private final Set<Long> reloadingProjects = ConcurrentHashMap.newKeySet();

@@ -15,8 +15,17 @@ public final class ProcessEnvironmentSanitizer {
     private ProcessEnvironmentSanitizer() {
     }
 
+    /** Sanitizes environments for untrusted child processes. */
     public static void sanitize(Map<String, String> environment) {
         environment.keySet().removeAll(SENSITIVE_VARIABLES);
+    }
+
+    /**
+     * Sanitizes a trusted terminal environment; bootstrap auth variables are
+     * intentional there.
+     */
+    public static void sanitizeTrustedTerminal(Map<String, String> environment) {
+        environment.remove(ENCRYPTION_KEY);
     }
 
     public static void sanitize(ProcessBuilder builder) {

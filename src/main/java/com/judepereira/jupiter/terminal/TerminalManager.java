@@ -2,6 +2,7 @@ package com.judepereira.jupiter.terminal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
+import com.judepereira.jupiter.security.RuntimeEnvironment;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import com.pty4j.WinSize;
@@ -34,12 +35,15 @@ public class TerminalManager {
 
     private final ObjectMapper objectMapper;
     private final List<TerminalLifecycleListener> lifecycleListeners;
+    private final RuntimeEnvironment runtimeEnvironment;
     private final ConcurrentMap<String, TerminalRuntime> terminals = new ConcurrentHashMap<>();
     private final AtomicInteger terminalSequence = new AtomicInteger(1);
 
-    public TerminalManager(ObjectMapper objectMapper, List<TerminalLifecycleListener> lifecycleListeners) {
+    public TerminalManager(ObjectMapper objectMapper, List<TerminalLifecycleListener> lifecycleListeners,
+            RuntimeEnvironment runtimeEnvironment) {
         this.objectMapper = objectMapper;
         this.lifecycleListeners = lifecycleListeners;
+        this.runtimeEnvironment = runtimeEnvironment;
     }
 
     public TerminalHandle createTerminal(String workspaceRoot, Map<String, String> environmentVariables) {
@@ -98,7 +102,7 @@ public class TerminalManager {
         try {
             String shell = Optional.ofNullable(System.getenv("SHELL")).filter(value -> !value.isBlank())
                     .orElse("/bin/bash");
-            Map<String, String> env = terminalEnvironment(environmentVariables);
+            Map<String, String> env = terminalEnvironment(environmentVariables, runtimeEnvironment);
             env.put("TERM", "xterm-256color");
             return startProcess(workspaceRoot, new String[]{shell, "-l"}, env);
         } catch (IOException e) {
@@ -108,16 +112,18 @@ public class TerminalManager {
 
     static PtyProcess startProcess(String workspaceRoot, String[] command, Map<String, String> environment)
             throws IOException {
-        ProcessEnvironmentSanitizer.sanitize(environment);
+        ProcessEnvironmentSanitizer.sanitizeTrustedTerminal(environment);
         return new PtyProcessBuilder(command).setEnvironment(environment)
                 .setDirectory(Path.of(workspaceRoot).toAbsolutePath().normalize().toString()).setConsole(false)
                 .setRedirectErrorStream(true).setInitialColumns(120).setInitialRows(32).start();
     }
 
-    static Map<String, String> terminalEnvironment(Map<String, String> projectEnvironmentVariables) {
+    static Map<String, String> terminalEnvironment(Map<String, String> projectEnvironmentVariables,
+            RuntimeEnvironment runtimeEnvironment) {
         Map<String, String> environment = new HashMap<>(System.getenv());
+        environment.putAll(runtimeEnvironment.asMap());
         environment.putAll(projectEnvironmentVariables);
-        ProcessEnvironmentSanitizer.sanitize(environment);
+        ProcessEnvironmentSanitizer.sanitizeTrustedTerminal(environment);
         return environment;
     }
 
