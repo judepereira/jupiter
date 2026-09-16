@@ -25,7 +25,8 @@ terminal.
 
 The terminal inherits the Jupiter process environment, then overlays project environment variables.
 
-Before launch, Jupiter strips its own encryption and HTTP-authentication credentials.
+Before launch, Jupiter restores bootstrap runtime variables, including HTTP-authentication credentials, but never the
+encryption key.
 
 This is intentionally broader than the environment given to agent `run_command`, because the terminal is directly
 controlled by the authenticated user. See [Environment Variables](Environment-Variables).

@@ -310,14 +310,12 @@ class JupiterStartupIntegrationTests {
     public static final class EnvironmentProbe {
         public static void main(String[] args) throws Exception {
             boolean keyPresent = System.getenv().containsKey("JUPITER_ENCRYPTION_KEY");
-            boolean arbitraryPresent = System.getenv().containsKey("JUPITER_TEST_SENTINEL");
             String procEnvironment = Files.readString(Path.of("/proc/self/environ"), StandardCharsets.ISO_8859_1);
-            boolean procLeaks = procEnvironment.contains("JUPITER_ENCRYPTION_KEY")
-                    || procEnvironment.contains("JUPITER_TEST_SENTINEL");
-            Files.writeString(Path.of(args[1]), keyPresent || arbitraryPresent || procLeaks ? "present" : "absent",
+            boolean procLeaks = procEnvironment.contains("JUPITER_ENCRYPTION_KEY");
+            Files.writeString(Path.of(args[1]), keyPresent || procLeaks ? "present" : "absent",
                     StandardCharsets.US_ASCII);
-            if (keyPresent || arbitraryPresent || procLeaks) {
-                throw new AssertionError("sanitized bootstrap variables were present in the launched JVM");
+            if (keyPresent || procLeaks) {
+                throw new AssertionError("sanitized bootstrap key was present in the launched JVM");
             }
             Jupiter.main(Arrays.copyOfRange(args, 2, args.length));
         }

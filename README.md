@@ -16,8 +16,8 @@ There’s no desktop app or CLI to keep in sync. The browser is the client.
 - **Sessions survive the browser.** Chat history, drafts, tool traces, review state, and settings live on the server.
 - **Delegation is inspectable.** Subagents have their own persisted sessions; you can open them and see what actually
   happened.
-- **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are
-  stripped from managed child processes.
+- **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are kept
+  out of untrusted managed child processes.
 - **It’s extendable.** MCP servers and Markdown-based slash commands plug into the harness without changing the core
   application.
 

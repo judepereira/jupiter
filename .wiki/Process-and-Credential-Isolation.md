@@ -19,9 +19,9 @@ The recommended Java launch also uses:
 -XX:+DisableAttachMechanism
 ```
 
-## Variables Jupiter strips
+## Variables stripped from untrusted processes
 
-Before managed child processes launch, Jupiter removes:
+Before untrusted managed processes launch, Jupiter removes:
 
 ```text
 JUPITER_ENCRYPTION_KEY
@@ -29,8 +29,9 @@ JUPITER_HTTP_AUTH_PASSWORD
 JUPITER_HTTP_AUTH_USERNAME
 ```
 
-This applies across agent commands, terminals, Git operations, lifecycle hooks, and the other managed launch paths that
-use the sanitizer.
+This applies across agent commands, Git operations, lifecycle hooks, and other untrusted launch paths that use the
+sanitizer. Trusted initialization scripts receive the original environment, and trusted interactive terminals restore
+bootstrap runtime variables including HTTP-auth credentials, but never the encryption key.
 
 ## Agent commands are stricter
 
@@ -39,8 +40,8 @@ variables are added.
 
 ## The terminal is broader
 
-The user-controlled terminal intentionally inherits the wider host environment, after Jupiter’s own sensitive variables
-are removed.
+The user-controlled terminal intentionally inherits the wider host environment and restores bootstrap runtime variables,
+including HTTP-auth credentials, but not the encryption key.
 
 ## The boundary
 

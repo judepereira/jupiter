@@ -36,4 +36,5 @@ for that workspace.
 Repeated failures are tracked as one failure episode, so the first failure can be treated differently from the tenth
 identical one.
 
-Git child processes do not inherit Jupiter’s sensitive application credentials.
+Git processes are untrusted managed children and do not automatically inherit Jupiter’s HTTP-authentication credentials
+or encryption key.

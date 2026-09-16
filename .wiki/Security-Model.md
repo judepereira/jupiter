@@ -10,8 +10,9 @@ it’s important not to confuse those protections with a sandbox.
   Java environment variables or arguments. Runtime-added variables in that envelope are removed from the JVM `/proc`
   environment after being captured for Spring.
 - Linux startup applies `PR_SET_DUMPABLE=0`; the recommended Java launch also disables JVM attach.
-- Jupiter’s encryption and HTTP-auth credentials are removed before managed child processes start. This specific
-  sanitizer does not include `OPENAI_API_KEY`.
+- Untrusted managed processes, including agent commands, do not automatically inherit Jupiter’s HTTP-auth credentials or
+  encryption key. Trusted interactive terminals deliberately restore bootstrap runtime variables, except the key;
+  initialization scripts receive the original environment. This specific sanitizer does not include `OPENAI_API_KEY`.
 - Agent `run_command` only receives allowlisted host variables plus project variables.
 - Optional Basic auth protects every route except `GET /health`.
 - Agent-displayed images disable MIME sniffing and caching.

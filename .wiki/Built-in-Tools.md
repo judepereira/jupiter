@@ -25,7 +25,7 @@ Commands run through `/bin/sh -c`, with a timeout and cancellation support. Ther
 obviously destructive command strings.
 
 The environment starts empty. Jupiter then copies explicitly allowlisted host variables, overlays project variables, and
-strips its own sensitive credentials.
+does not automatically inherit its own sensitive credentials.
 
 Large stdout/stderr is shortened inline; the full output is kept in a temporary file for the agent.
 

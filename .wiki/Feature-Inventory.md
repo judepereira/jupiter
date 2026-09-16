@@ -96,7 +96,7 @@ task-oriented page — otherwise documentation drift is almost guaranteed.
 - encrypted OAuth state
 - Linux `PR_SET_DUMPABLE=0`
 - JVM attach disabled in supported launch paths
-- sensitive Jupiter environment stripping for child processes
+- sensitive Jupiter environment stripping for untrusted child processes
 - restricted host environment for agent commands
 - optional HTTP Basic authentication
 - public HTTPS detection warning

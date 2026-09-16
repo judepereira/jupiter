@@ -32,8 +32,9 @@ variable added to the allowlist.
 The interactive terminal starts from the broader Jupiter process environment, restores bootstrap runtime variables, then
 overlays project variables. The encryption key is never restored.
 
-Jupiter still removes its encryption and HTTP-authentication credentials first. `OPENAI_API_KEY` is not one of the
-variables removed by that sanitizer, so it remains visible here if it exists in the Jupiter process environment.
+The terminal deliberately restores bootstrap runtime variables, including `JUPITER_HTTP_AUTH_PASSWORD` and
+`JUPITER_HTTP_AUTH_USERNAME`, but never `JUPITER_ENCRYPTION_KEY`. `OPENAI_API_KEY` is not removed by this boundary, so
+it remains visible here if it exists in the Jupiter process environment.
 
 This difference is deliberate: the terminal is directly controlled by the authenticated user; `run_command` is
 model-generated execution.
@@ -48,7 +49,8 @@ JUPITER_WORKSPACE_NAME
 JUPITER_SESSION_NAME
 ```
 
-Jupiter credentials are stripped here as well.
+Lifecycle hooks are untrusted managed processes, so they do not automatically inherit Jupiter’s HTTP-authentication
+credentials or encryption key.
 
 ## MCP placeholders
 
