@@ -1580,11 +1580,9 @@
 </th:block>
 
 <th:block th:fragment="settingsModels">
-    <section
-        id="settings-models"
-        class="settings-section"
-        th:replace="~{fragments/projects :: settingsModelsContent}"
-    ></section>
+    <section id="settings-models" class="settings-section">
+        <th:block th:replace="~{fragments/projects :: settingsModelsContent}"></th:block>
+    </section>
 </th:block>
 
 <th:block th:fragment="settingsModelsOobResponse">

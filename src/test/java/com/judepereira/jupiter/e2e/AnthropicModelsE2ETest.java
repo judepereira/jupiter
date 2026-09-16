@@ -92,6 +92,25 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
             page.waitForResponse(response -> response.url().contains("/ui/settings/models") && response.status() == 200,
                     () -> anthropicSelections.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save"))
                             .click());
+            assertThat(page.locator("#settings-models")).hasCount(1);
+            assertThat(page.locator("#settings-models form.settings-model-selections")
+                    .filter(new Locator.FilterOptions()
+                            .setHas(page.locator("input[name='provider'][value='anthropic']")))
+                    .locator("select[name='modelId']")).hasValues(new String[]{"anthropic/claude-sonnet-5"});
+
+            // The first OOB replacement replaced the form, so reacquire it before the
+            // second save.
+            Locator secondAnthropicSelections = page.locator("form.settings-model-selections").filter(
+                    new Locator.FilterOptions().setHas(page.locator("input[name='provider'][value='anthropic']")));
+            secondAnthropicSelections.locator("select[name='modelId']").selectOption("anthropic/claude-opus-5");
+            page.waitForResponse(response -> response.url().contains("/ui/settings/models") && response.status() == 200,
+                    () -> secondAnthropicSelections
+                            .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save")).click());
+            assertThat(page.locator("#settings-models")).hasCount(1);
+            assertThat(page.locator("#settings-models form.settings-model-selections")
+                    .filter(new Locator.FilterOptions()
+                            .setHas(page.locator("input[name='provider'][value='anthropic']")))
+                    .locator("select[name='modelId']")).hasValues(new String[]{"anthropic/claude-opus-5"});
             page.locator("#settings-modal .btn-close").click();
             assertPicker(page, "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna",
                     "anthropic/claude-sonnet-5", "anthropic/claude-opus-5");
@@ -139,7 +158,7 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
             Locator reconnectedAnthropicSelections = page.locator("form.settings-model-selections").filter(
                     new Locator.FilterOptions().setHas(page.locator("input[name='provider'][value='anthropic']")));
             assertThat(reconnectedAnthropicSelections.locator("select[name='modelId']"))
-                    .hasValue("anthropic/claude-sonnet-5");
+                    .hasValue("anthropic/claude-opus-5");
         }
     }
 

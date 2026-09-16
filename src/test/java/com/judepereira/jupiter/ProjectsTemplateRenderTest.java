@@ -217,6 +217,7 @@ public class ProjectsTemplateRenderTest {
         String emptyHtml = engine.process(new TemplateSpec("fragments/projects",
                 Set.of("anthropicOAuthSection", "settingsModels"), TemplateMode.HTML, null), empty);
         assertThat(emptyHtml).contains("Anthropic is not connected").doesNotContain("${view.message}");
+        assertThat(emptyHtml).contains("id=\"settings-models\"", "class=\"settings-section\"");
 
         String oobHtml = engine.process(
                 new TemplateSpec("fragments/projects", Set.of("settingsModelsOob"), TemplateMode.HTML, null), empty);
