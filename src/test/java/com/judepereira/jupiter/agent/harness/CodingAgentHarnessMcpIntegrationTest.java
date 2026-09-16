@@ -29,6 +29,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.security.RuntimeEnvironment;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -286,7 +287,7 @@ class CodingAgentHarnessMcpIntegrationTest {
         private final AtomicInteger version = new AtomicInteger(1);
 
         private FakeMcpManager(String toolName, String v1, String v2) {
-            super(null, null, null);
+            super(null, null, null, new RuntimeEnvironment(Map.of()));
             this.toolName = toolName;
             this.v1 = v1;
             this.v2 = v2;

@@ -21,8 +21,8 @@ Jupiter writes the script to a temporary file under `/tmp` and runs it with `/bi
 
 Where POSIX permissions are available, Jupiter attempts to make that temporary file owner-readable/writable only.
 
-The hook receives project environment variables plus project, workspace, and session names. Jupiter’s own sensitive
-credentials are removed before launch.
+The hook receives project environment variables plus project, workspace, and session names. As an untrusted managed
+process, it does not automatically inherit Jupiter’s HTTP-authentication credentials or encryption key.
 
 ## Timeouts
 

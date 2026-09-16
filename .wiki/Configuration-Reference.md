@@ -51,5 +51,5 @@ User slash commands live under:
 
 ## Encryption key note
 
-For normal native startup, don’t put the encryption key into the Java environment. Use the stdin bootstrap in
-[Running Natively](Running-Natively).
+For normal native startup, don’t put the encryption key into the Java environment. Use the versioned NUL-delimited stdin
+bootstrap envelope described in [Running Natively](Running-Natively).

@@ -4,36 +4,46 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.tools.impl.RipgrepToolSupport;
-import com.judepereira.jupiter.security.EncryptionKey;
-import com.judepereira.jupiter.security.EncryptionKeyBootstrapReader;
+import com.judepereira.jupiter.security.BootstrapConfiguration;
+import com.judepereira.jupiter.security.BootstrapConfigurationReader;
 import com.judepereira.jupiter.security.LinuxProcessHardening;
-import java.io.ByteArrayInputStream;
+import com.judepereira.jupiter.security.RuntimeEnvironment;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
 public class Jupiter {
-
     private static final String ENCRYPTION_KEY_BEAN_NAME = "jupiterEncryptionKey";
+    private static final String RUNTIME_ENVIRONMENT_BEAN_NAME = "runtimeEnvironment";
+    private static final String BOOTSTRAP_PROPERTY_SOURCE_NAME = "jupiterBootstrapEnvironment";
 
-    @Bean
+    @org.springframework.context.annotation.Bean
+    @ConditionalOnMissingBean(RuntimeEnvironment.class)
+    RuntimeEnvironment runtimeEnvironment() {
+        return new RuntimeEnvironment(Map.of());
+    }
+
+    @org.springframework.context.annotation.Bean
     ObjectMapper objectMapper() {
         JsonFactory jsonFactory = JsonFactory.builder()
                 .streamReadConstraints(StreamReadConstraints.builder().maxStringLength(100_000_000).build()).build();
-
         return new ObjectMapper(jsonFactory);
     }
 
-    @Bean
+    @org.springframework.context.annotation.Bean
     RipgrepToolSupport ripgrepToolSupport() {
         RipgrepToolSupport support = new RipgrepToolSupport();
         support.assertAvailable();
@@ -41,31 +51,41 @@ public class Jupiter {
     }
 
     public static void main(String[] args) {
-        InputStream in;
-        if ("1".equals(System.getenv("INSECURE_ACCEPT_KEY_FROM_ENV"))) {
-            in = new ByteArrayInputStream(
-                    System.getenv("JUPITER_INSECURE_ENCRYPTION_KEY").getBytes(StandardCharsets.UTF_8));
-        } else {
-            in = System.in;
-        }
-
-        bootstrap(in, LinuxProcessHardening::enforce, EncryptionKeyBootstrapReader::read,
-                key -> application(key).run(args));
+        bootstrapConfiguration(System.in, LinuxProcessHardening::enforce, BootstrapConfigurationReader::read,
+                configuration -> application(configuration).run(args));
     }
 
-    static void bootstrap(InputStream input, Runnable harden, Function<InputStream, EncryptionKey> keyReader,
-            Consumer<EncryptionKey> startApplication) {
+    static void bootstrapConfiguration(InputStream input, Runnable harden,
+            Function<InputStream, BootstrapConfiguration> reader, Consumer<BootstrapConfiguration> startApplication) {
         harden.run();
-        EncryptionKey key = keyReader.apply(input);
-        startApplication.accept(key);
+        startApplication.accept(reader.apply(input));
     }
 
-    static SpringApplication application(EncryptionKey key) {
-        SpringApplication application = new SpringApplication(Jupiter.class);
-        ApplicationContextInitializer<ConfigurableApplicationContext> initializer = context -> context.getBeanFactory()
-                .registerSingleton(ENCRYPTION_KEY_BEAN_NAME, key);
+    static SpringApplication application(BootstrapConfiguration configuration) {
+        return application(configuration, Jupiter.class);
+    }
+
+    static SpringApplication application(BootstrapConfiguration configuration, Class<?>... sources) {
+        SpringApplication application = new SpringApplication(sources);
+        application.setEnvironment(environment(configuration));
+        ApplicationContextInitializer<ConfigurableApplicationContext> initializer = context -> {
+            context.getBeanFactory().registerSingleton(ENCRYPTION_KEY_BEAN_NAME, configuration.encryptionKey());
+            context.getBeanFactory().registerSingleton(RUNTIME_ENVIRONMENT_BEAN_NAME,
+                    configuration.runtimeEnvironment());
+        };
         application.addInitializers(initializer);
         return application;
+    }
+
+    static ConfigurableEnvironment environment(BootstrapConfiguration configuration) {
+        ConfigurableEnvironment environment = new StandardEnvironment();
+        Map<String, Object> bootstrapValues = new HashMap<>();
+        bootstrapValues.putAll(configuration.runtimeEnvironment().asMap());
+        SystemEnvironmentPropertySource bootstrapSource = new SystemEnvironmentPropertySource(
+                BOOTSTRAP_PROPERTY_SOURCE_NAME, bootstrapValues);
+        var propertySources = environment.getPropertySources();
+        propertySources.addAfter(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, bootstrapSource);
+        return environment;
     }
 
 }

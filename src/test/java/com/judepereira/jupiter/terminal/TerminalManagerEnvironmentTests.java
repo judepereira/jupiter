@@ -3,6 +3,7 @@ package com.judepereira.jupiter.terminal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.judepereira.jupiter.security.RuntimeEnvironment;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,10 +30,13 @@ class TerminalManagerEnvironmentTests {
     @Test
     void removesHttpAuthCredentialsButPreservesProjectEnvironment() {
         Map<String, String> environment = TerminalManager.terminalEnvironment(
-                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "secret-password", "JUPITER_HTTP_AUTH_USERNAME", "secret-user",
-                        "JUPITER_ENCRYPTION_KEY", "secret-key", "PROJECT_ENV_VAR", "project-value"));
+                Map.of("JUPITER_ENCRYPTION_KEY", "secret-key", "PROJECT_ENV_VAR", "project-value"),
+                new RuntimeEnvironment(Map.of("JUPITER_HTTP_AUTH_PASSWORD", "secret-password",
+                        "JUPITER_HTTP_AUTH_USERNAME", "secret-user")));
 
-        assertThat(environment).doesNotContainKeys("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME",
-                "JUPITER_ENCRYPTION_KEY").containsEntry("PROJECT_ENV_VAR", "project-value");
+        assertThat(environment).doesNotContainKey("JUPITER_ENCRYPTION_KEY")
+                .containsEntry("JUPITER_HTTP_AUTH_PASSWORD", "secret-password")
+                .containsEntry("JUPITER_HTTP_AUTH_USERNAME", "secret-user")
+                .containsEntry("PROJECT_ENV_VAR", "project-value");
     }
 }

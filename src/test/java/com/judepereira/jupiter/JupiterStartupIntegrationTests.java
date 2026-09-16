@@ -7,6 +7,7 @@ import com.judepereira.jupiter.security.EncryptionKey;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.security.TextEncryptor;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
@@ -77,6 +78,7 @@ class JupiterStartupIntegrationTests {
         try (RunningJupiter app = start(KEY, tempDir.resolve("startup"))) {
             assertThat(app.responseBody()).contains("UP");
             assertThat(app.process.isAlive()).isTrue();
+            assertThat(app.environmentMarker).exists();
             assertThat(Files.readString(app.environmentMarker)).isEqualTo("absent");
         }
     }
@@ -85,15 +87,15 @@ class JupiterStartupIntegrationTests {
     void closedOrEmptyStdinFailsClearly() throws Exception {
         StartupResult result = runAndCapture("", tempDir.resolve("empty"));
         assertThat(result.exitCode()).isNotZero();
-        assertThat(result.output()).contains("stdin encryption key is missing");
+        assertThat(result.output()).contains("encryption key is missing");
     }
 
     @Test
     void malformedAndWrongSizedStdinFailClearly() throws Exception {
         for (String input : new String[]{"not-base64", "AQ=="}) {
-            StartupResult result = runAndCapture(input, tempDir.resolve("invalid-" + input.hashCode()));
+            StartupResult result = runAndCaptureRaw(input, tempDir.resolve("invalid-" + input.hashCode()));
             assertThat(result.exitCode()).isNotZero();
-            assertThat(result.output()).contains("stdin encryption key");
+            assertThat(result.output()).contains("invalid bootstrap envelope");
             assertThat(result.output()).doesNotContain(KEY);
         }
     }
@@ -174,6 +176,7 @@ class JupiterStartupIntegrationTests {
         Files.createDirectories(home.resolve(".jupiter"));
         String database = home.resolve(".jupiter/jupiter.sqlite").toAbsolutePath().normalize().toString();
         Path environmentMarker = home.resolve("environment-marker");
+        Files.createDirectories(home);
         ProcessBuilder builder = new ProcessBuilder(javaExecutable(), "-Dspring.devtools.restart.enabled=false",
                 "--enable-native-access=ALL-UNNAMED", "-XX:+DisableAttachMechanism", "-cp",
                 System.getProperty("java.class.path"), EnvironmentProbe.class.getName(), Jupiter.class.getName(),
@@ -184,7 +187,6 @@ class JupiterStartupIntegrationTests {
                 "--spring.devtools.restart.enabled=false", "--agent.workspace-root=" + home,
                 "--models.dev.catalog-url=" + catalogUrl());
         Map<String, String> environment = new HashMap<>(builder.environment());
-        environment.put("JUPITER_TEST_SENTINEL", "present");
         environment.put("JUPITER_ENCRYPTION_KEY", "fake-test-key");
         environment.put("INSECURE_ACCEPT_KEY_FROM_ENV", "0");
         ProcessEnvironmentSanitizer.sanitize(environment);
@@ -193,7 +195,54 @@ class JupiterStartupIntegrationTests {
         builder.environment().put("HOME", home.toString());
         builder.redirectErrorStream(true).redirectOutput(log.toFile());
         Process process = builder.start();
-        process.getOutputStream().write((key + "\n").getBytes(StandardCharsets.US_ASCII));
+        process.getOutputStream().write(envelope(key, Map.of("BOOTSTRAP_ONLY", "present")));
+        process.getOutputStream().close();
+        return process;
+    }
+
+    private static byte[] envelope(String key, Map<String, String> variables) {
+        var output = new ByteArrayOutputStream();
+        try {
+            output.write("JUPITER_BOOTSTRAP_V1\0".getBytes(StandardCharsets.US_ASCII));
+            output.write("JUPITER_ENCRYPTION_KEY\0".getBytes(StandardCharsets.US_ASCII));
+            output.write(key.getBytes(StandardCharsets.UTF_8));
+            output.write(0);
+            for (var entry : variables.entrySet()) {
+                output.write(entry.getKey().getBytes(StandardCharsets.UTF_8));
+                output.write(0);
+                output.write(entry.getValue().getBytes(StandardCharsets.UTF_8));
+                output.write(0);
+            }
+            return output.toByteArray();
+        } catch (IOException exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    private static StartupResult runAndCaptureRaw(String input, Path home) throws Exception {
+        int port = freePort();
+        Path log = home.resolve("startup.log");
+        Process process = null;
+        try {
+            process = launchWithoutWaitingRaw(input, home, port, log);
+            if (!process.waitFor(STARTUP_TIMEOUT.toSeconds(), TimeUnit.SECONDS))
+                fail("Jupiter did not fail within timeout");
+            return new StartupResult(process.exitValue(), readLog(log));
+        } finally {
+            if (process != null)
+                destroy(process);
+        }
+    }
+
+    private static Process launchWithoutWaitingRaw(String input, Path home, int port, Path log) throws IOException {
+        Files.createDirectories(home);
+        ProcessBuilder builder = new ProcessBuilder(javaExecutable(), "-Dspring.devtools.restart.enabled=false",
+                "--enable-native-access=ALL-UNNAMED", "-XX:+DisableAttachMechanism", "-cp",
+                System.getProperty("java.class.path"), EnvironmentProbe.class.getName(), Jupiter.class.getName(),
+                home.resolve("environment-marker").toString(), "--server.port=" + port);
+        builder.redirectErrorStream(true).redirectOutput(log.toFile());
+        Process process = builder.start();
+        process.getOutputStream().write(input.getBytes(StandardCharsets.US_ASCII));
         process.getOutputStream().close();
         return process;
     }
@@ -260,10 +309,13 @@ class JupiterStartupIntegrationTests {
 
     public static final class EnvironmentProbe {
         public static void main(String[] args) throws Exception {
-            boolean present = System.getenv().containsKey("JUPITER_ENCRYPTION_KEY");
-            Files.writeString(Path.of(args[1]), present ? "present" : "absent", StandardCharsets.US_ASCII);
-            if (present) {
-                throw new AssertionError("JUPITER_ENCRYPTION_KEY was present in the launched JVM");
+            boolean keyPresent = System.getenv().containsKey("JUPITER_ENCRYPTION_KEY");
+            String procEnvironment = Files.readString(Path.of("/proc/self/environ"), StandardCharsets.ISO_8859_1);
+            boolean procLeaks = procEnvironment.contains("JUPITER_ENCRYPTION_KEY");
+            Files.writeString(Path.of(args[1]), keyPresent || procLeaks ? "present" : "absent",
+                    StandardCharsets.US_ASCII);
+            if (keyPresent || procLeaks) {
+                throw new AssertionError("sanitized bootstrap key was present in the launched JVM");
             }
             Jupiter.main(Arrays.copyOfRange(args, 2, args.length));
         }

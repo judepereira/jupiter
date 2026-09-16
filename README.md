@@ -16,8 +16,8 @@ There’s no desktop app or CLI to keep in sync. The browser is the client.
 - **Sessions survive the browser.** Chat history, drafts, tool traces, review state, and settings live on the server.
 - **Delegation is inspectable.** Subagents have their own persisted sessions; you can open them and see what actually
   happened.
-- **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are
-  stripped from managed child processes.
+- **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are kept
+  out of untrusted managed child processes.
 - **It’s extendable.** MCP servers and Markdown-based slash commands plug into the harness without changing the core
   application.
 
@@ -73,20 +73,30 @@ You’ll need Java 25, Git, and ripgrep.
 ```bash
 ./mvnw package
 entered_key="$(openssl rand -base64 32)"
-exec {key_fd}< <(printf '%s\n' "$entered_key")
+bootstrap_envelope() {
+  printf 'JUPITER_BOOTSTRAP_V1\0'
+  printf 'JUPITER_ENCRYPTION_KEY\0%s\0' "$entered_key"
+  # Add desired runtime variables as NAME\0VALUE\0 records here.
+  # printf 'NAME\0%s\0' "$VALUE"
+}
+exec {bootstrap_fd}< <(bootstrap_envelope)
 unset entered_key
 
 env -u JUPITER_ENCRYPTION_KEY java \
   -XX:+DisableAttachMechanism \
   --enable-native-access=ALL-UNNAMED \
   -Dserver.port=7272 \
-  -jar target/jupiter-0.0.1-SNAPSHOT.jar <&${key_fd}-
+  -jar target/jupiter-0.0.1-SNAPSHOT.jar <&${bootstrap_fd}-
 ```
 
-The key must be standard Base64 encoding of exactly 32 bytes.
+The key must be standard Base64 encoding of exactly 32 bytes. The bootstrap stream is a versioned NUL-delimited
+`JUPITER_BOOTSTRAP_V1\0NAME\0VALUE\0` envelope sent over an anonymous file descriptor; it is not a raw key or a
+newline-delimited stream. Add any runtime variables the launcher wants Spring to receive as additional records. Do not
+put the key in Java arguments, environment variables, or temporary files. Docker, Compose, and Kubernetes launchers keep
+their existing configuration paths.
 
-The slightly unusual stdin dance is intentional: the normal native startup path keeps `JUPITER_ENCRYPTION_KEY` out of
-the JVM environment, arguments, and system properties.
+The slightly unusual file-descriptor dance is intentional: the normal native startup path keeps the key out of the JVM
+environment, arguments, and system properties.
 
 ## Connecting model providers
 

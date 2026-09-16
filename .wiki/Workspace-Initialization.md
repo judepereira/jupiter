@@ -21,8 +21,8 @@ into it.
 
 The terminal starts inside the new workspace directory.
 
-Project environment variables are available. Jupiter’s encryption and HTTP-authentication credentials are removed before
-the terminal process starts.
+Project environment variables are available. As a trusted terminal, Workspace Init receives bootstrap runtime variables,
+including HTTP-authentication credentials, but never `JUPITER_ENCRYPTION_KEY`.
 
 ## Why make it visible?
 

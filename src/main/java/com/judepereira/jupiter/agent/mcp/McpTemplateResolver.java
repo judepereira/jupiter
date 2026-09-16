@@ -14,9 +14,12 @@ final class McpTemplateResolver {
     private static final Pattern TEMPLATE_PATTERN = Pattern.compile("\\$\\{env\\.([A-Za-z_][A-Za-z0-9_]*)}");
 
     private final Function<String, String> systemEnvironmentLookup;
+    private final Function<String, String> bootstrapEnvironmentLookup;
 
-    McpTemplateResolver(Function<String, String> systemEnvironmentLookup) {
+    McpTemplateResolver(Function<String, String> systemEnvironmentLookup,
+            Function<String, String> bootstrapEnvironmentLookup) {
         this.systemEnvironmentLookup = systemEnvironmentLookup;
+        this.bootstrapEnvironmentLookup = bootstrapEnvironmentLookup;
     }
 
     String resolve(String fieldName, String value, Map<String, String> projectEnvironmentVariables) {
@@ -72,7 +75,8 @@ final class McpTemplateResolver {
                 return value;
             }
         }
-        return systemEnvironmentLookup.apply(name);
+        String systemValue = systemEnvironmentLookup.apply(name);
+        return systemValue != null ? systemValue : bootstrapEnvironmentLookup.apply(name);
     }
 
     private static void rejectLineBreaks(String fieldName, String value) {

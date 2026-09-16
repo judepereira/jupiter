@@ -91,13 +91,14 @@ task-oriented page — otherwise documentation drift is almost guaranteed.
 ## Security and deployment
 
 - mandatory 32-byte Base64 database encryption key
-- stdin-based normal key bootstrap
+- versioned NUL-delimited native bootstrap envelope over an anonymous file descriptor
+- runtime-variable bootstrap with JVM `/proc` environment removal
 - AES-256-GCM persisted sensitive values
 - HMAC blind indexes
 - encrypted OAuth state
 - Linux `PR_SET_DUMPABLE=0`
 - JVM attach disabled in supported launch paths
-- sensitive Jupiter environment stripping for child processes
+- sensitive Jupiter environment stripping for untrusted child processes
 - restricted host environment for agent commands
 - optional HTTP Basic authentication
 - public HTTPS detection warning

@@ -11,7 +11,7 @@ class McpTemplateResolverTest {
 
     @Test
     void resolves_project_env_before_system_env() {
-        McpTemplateResolver resolver = new McpTemplateResolver(name -> "system-" + name);
+        McpTemplateResolver resolver = new McpTemplateResolver(name -> "system-" + name, name -> null);
 
         String resolved = resolver.resolve("MCP server URL", "https://${env.FOO}/api", Map.of("FOO", "project"));
 
@@ -20,7 +20,7 @@ class McpTemplateResolverTest {
 
     @Test
     void falls_back_to_system_env_lookup() {
-        McpTemplateResolver resolver = new McpTemplateResolver(name -> "system-" + name);
+        McpTemplateResolver resolver = new McpTemplateResolver(name -> "system-" + name, name -> null);
 
         String resolved = resolver.resolve("MCP server URL", "https://${env.BAR}/api", Map.of());
 
@@ -28,8 +28,25 @@ class McpTemplateResolverTest {
     }
 
     @Test
+    void falls_back_to_bootstrap_after_system_environment() {
+        McpTemplateResolver resolver = new McpTemplateResolver(name -> null, name -> "bootstrap-" + name);
+
+        assertEquals("bootstrap-BOOT", resolver.resolve("MCP server URL", "${env.BOOT}", Map.of()));
+    }
+
+    @Test
+    void rejects_unresolved_placeholders_without_echoing_the_name_or_value() {
+        McpTemplateResolver resolver = new McpTemplateResolver(name -> null, name -> null);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> resolver.resolve("MCP server URL", "${env.MISSING}", Map.of()));
+
+        assertEquals("Unable to resolve MCP environment placeholder", exception.getMessage());
+    }
+
+    @Test
     void rejects_line_breaks_without_echoing_the_value() {
-        McpTemplateResolver resolver = new McpTemplateResolver(name -> null);
+        McpTemplateResolver resolver = new McpTemplateResolver(name -> null, name -> null);
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                 () -> resolver.resolve("MCP header Authorization", "token\r\nsecret", Map.of()));
@@ -39,7 +56,7 @@ class McpTemplateResolverTest {
 
     @Test
     void resolves_headers_in_order_and_copies_result() {
-        McpTemplateResolver resolver = new McpTemplateResolver(name -> null);
+        McpTemplateResolver resolver = new McpTemplateResolver(name -> null, name -> null);
 
         Map<String, String> headers = resolver.resolveHeaders(
                 List.of(new McpServerHeader("Authorization", "Bearer abc"), new McpServerHeader("X-Test", "value")),

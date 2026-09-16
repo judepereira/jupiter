@@ -32,6 +32,14 @@ class RunCommandEnvironmentTest {
     }
 
     @Test
+    void bootstrapOnlyVariablesAreNotImplicitlyPassedToCommands() {
+        Map<String, String> environment = RunCommandTool
+                .buildCommandEnvironment(Map.of("BOOTSTRAP_ONLY_SECRET", "bootstrap-value"), Set.of(), Map.of());
+
+        assertThat(environment).doesNotContainKey("BOOTSTRAP_ONLY_SECRET");
+    }
+
+    @Test
     void encryptionKeyIsBlockedEvenWhenProjectEnvironmentReintroducesIt() {
         Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
                 Map.of("JUPITER_ENCRYPTION_KEY", "host-key"), Set.of("JUPITER_ENCRYPTION_KEY"),

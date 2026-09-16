@@ -6,9 +6,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.security.RuntimeEnvironment;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.web.socket.TextMessage;
@@ -18,7 +20,7 @@ public class TerminalManagerReplayBufferTests {
 
     @Test
     public void attachReplaysBufferedOutputToNewSession() throws Exception {
-        TerminalManager manager = new TerminalManager(new ObjectMapper(), List.of());
+        TerminalManager manager = new TerminalManager(new ObjectMapper(), List.of(), new RuntimeEnvironment(Map.of()));
         Object runtime = newRuntime(manager);
 
         invoke(runtime, "appendOutput", "hello from replay");

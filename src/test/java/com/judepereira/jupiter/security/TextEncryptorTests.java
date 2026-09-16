@@ -3,6 +3,8 @@ package com.judepereira.jupiter.security;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class TextEncryptorTests {
@@ -16,6 +18,15 @@ class TextEncryptorTests {
         assertNotEquals(first, second);
         assertEquals("secret", crypto.decrypt(first, "projects.name"));
         assertThrows(TextEncryptor.EncryptionException.class, () -> crypto.decrypt(first, "projects.other"));
+    }
+
+    @Test
+    void parsesBase64KeysDirectlyFromAsciiBytes() {
+        byte[] encoded = TestEncryptionSupport.KEY.getBytes(StandardCharsets.US_ASCII);
+        EncryptionKey parsed = EncryptionKey.fromBase64(encoded);
+        Arrays.fill(encoded, (byte) 0);
+
+        assertArrayEquals(KEY.bytes(), parsed.bytes());
     }
 
     @Test
