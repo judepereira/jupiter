@@ -18,6 +18,7 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
       -Dexec.args="install --with-deps chromium"
 
 COPY src/ src/
+COPY entrypoint.sh ./
 
 RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
     --mount=type=cache,id=root-cache,target=/root/.cache \
