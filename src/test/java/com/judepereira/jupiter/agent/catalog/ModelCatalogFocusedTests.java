@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.agent.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,43 @@ class ModelCatalogFocusedTests {
         assertThat(kept.lastUpdated()).isEqualTo("2026-02-03");
         assertThat(kept.inputModalities()).containsExactly("text");
         assertThat(kept.outputModalities()).containsExactly("text");
+    }
+
+    @Test
+    void ignoresMalformedUnsupportedProviderEntriesBeforeValidation() {
+        ModelCatalogService catalog = ModelCatalogTestSupport.modelCatalogService("http://example.test/models.json", """
+                {"models": {
+                  "openai/gpt-5.6-sol": %s,
+                  "google/missing-id": {"name":"bad"},
+                  "google/duplicate-a": {"id":"google/same"},
+                  "google/duplicate-b": {"id":"google/same"}
+                }}
+                """.formatted(model("openai/gpt-5.6-sol", "Sol", "2026-01-01", "sol", true, "text", "text")));
+
+        assertThat(catalog.list()).extracting(ModelDefinition::id).containsExactly("openai/gpt-5.6-sol");
+    }
+
+    @Test
+    void validatesMalformedSupportedProviderEntries() {
+        assertThatThrownBy(() -> ModelCatalogTestSupport.modelCatalogService("http://example.test/missing.json", """
+                {"models":{"openai/gpt-5.6-sol":{"name":"bad"}}}
+                """)).hasRootCauseMessage("Model id is required");
+    }
+
+    @Test
+    void rejectsSupportedKeyWithUnsupportedEmbeddedProvider() {
+        assertThatThrownBy(() -> ModelCatalogTestSupport.modelCatalogService("http://example.test/mismatch.json", """
+                {"models":{"openai/gpt-5.6-sol":{"id":"google/gpt-5.6-sol"}}}
+                """)).hasRootCauseMessage(
+                "Model catalog key does not match model id: openai/gpt-5.6-sol != google/gpt-5.6-sol");
+    }
+
+    @Test
+    void rejectsSupportedKeyAndEmbeddedIdMismatch() {
+        assertThatThrownBy(() -> ModelCatalogTestSupport.modelCatalogService("http://example.test/mismatch.json", """
+                {"models":{"openai/gpt-5.6-sol":{"id":"openai/other"}}}
+                """))
+                .hasRootCauseMessage("Model catalog key does not match model id: openai/gpt-5.6-sol != openai/other");
     }
 
     @Test

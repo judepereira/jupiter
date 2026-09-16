@@ -112,7 +112,10 @@ public class ModelCatalogService {
                     : client.get().uri(url).retrieve().body(String.class);
             var fields = mapper.readTree(body).path("models");
             var allModels = StreamSupport.stream(Spliterators.spliteratorUnknownSize(fields.fields(), 0), false)
-                    .map(Map.Entry::getValue).map(ModelCatalogService::toModelDefinition).toList();
+                    .filter(entry -> supportedProvider(entry.getKey())).map(entry -> {
+                        validateCatalogEntry(entry.getKey(), entry.getValue());
+                        return toModelDefinition(entry.getValue());
+                    }).toList();
             validateModels(allModels);
             var eligible = allModels.stream().filter(ModelCatalogService::eligible).toList();
             if (eligible.isEmpty())
@@ -121,6 +124,23 @@ public class ModelCatalogService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load model catalog from models.dev: " + url, e);
         }
+    }
+
+    private static boolean supportedProvider(String modelKey) {
+        int separator = modelKey.indexOf('/');
+        if (separator <= 0)
+            return false;
+        String provider = modelKey.substring(0, separator);
+        return provider.equals("openai") || provider.equals("anthropic");
+    }
+
+    private static void validateCatalogEntry(String key, JsonNode node) {
+        JsonNode idNode = node.get("id");
+        if (idNode == null || !idNode.isTextual() || idNode.asText().isBlank())
+            throw new IllegalStateException("Model id is required");
+        if (!key.equals(idNode.asText()))
+            throw new IllegalStateException(
+                    "Model catalog key does not match model id: " + key + " != " + idNode.asText());
     }
 
     private static ModelDefinition toModelDefinition(JsonNode node) {
