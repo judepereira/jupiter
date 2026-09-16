@@ -1,6 +1,5 @@
 package com.judepereira.jupiter.security;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -22,57 +21,68 @@ public final class BootstrapConfigurationReader {
     }
 
     public static BootstrapConfiguration read(InputStream input) {
-        byte[] payload = readAll(input);
+        WipeableByteAccumulator payload = readAll(input);
+        byte[] keyBytes = null;
         try {
-            if (payload.length < PREFIX.length || !Arrays.equals(PREFIX, Arrays.copyOf(payload, PREFIX.length))) {
+            byte[] bytes = payload.bytes();
+            if (payload.size() < PREFIX.length || !startsWith(bytes, PREFIX)) {
                 throw failure("invalid bootstrap envelope");
             }
             Map<String, String> values = new HashMap<>();
             int position = PREFIX.length;
-            while (position < payload.length) {
-                int nameEnd = nul(payload, position);
+            while (position < payload.size()) {
+                int nameEnd = nul(bytes, position, payload.size());
                 if (nameEnd < 0)
                     throw failure("truncated bootstrap envelope");
-                String name = decodeUtf8(payload, position, nameEnd - position);
+                String name = decodeUtf8(bytes, position, nameEnd - position);
                 if (!NAME.matcher(name).matches())
                     throw failure("invalid bootstrap variable name");
                 int valueStart = nameEnd + 1;
-                int valueEnd = nul(payload, valueStart);
+                int valueEnd = nul(bytes, valueStart, payload.size());
                 if (valueEnd < 0)
                     throw failure("truncated bootstrap envelope");
-                if (values.put(name, decodeUtf8(payload, valueStart, valueEnd - valueStart)) != null) {
+                if (name.equals(KEY_NAME)) {
+                    if (keyBytes != null)
+                        throw failure("duplicate bootstrap variable");
+                    keyBytes = Arrays.copyOfRange(bytes, valueStart, valueEnd);
+                } else if (values.put(name, decodeUtf8(bytes, valueStart, valueEnd - valueStart)) != null) {
                     throw failure("duplicate bootstrap variable");
                 }
                 position = valueEnd + 1;
             }
-            String encodedKey = values.remove(KEY_NAME);
-            if (encodedKey == null || encodedKey.isBlank())
+            if (keyBytes == null || isBlank(keyBytes))
                 throw failure("encryption key is missing");
-            EncryptionKey key;
             try {
-                key = EncryptionKey.fromBase64(encodedKey);
+                return new BootstrapConfiguration(EncryptionKey.fromBase64(keyBytes), new RuntimeEnvironment(values));
             } catch (RuntimeException exception) {
                 throw failure("encryption key is invalid");
             }
-            return new BootstrapConfiguration(key, new RuntimeEnvironment(values));
         } finally {
-            Arrays.fill(payload, (byte) 0);
+            if (keyBytes != null)
+                Arrays.fill(keyBytes, (byte) 0);
+            payload.wipe();
         }
     }
 
-    private static byte[] readAll(InputStream input) {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
+    private static WipeableByteAccumulator readAll(InputStream input) {
+        WipeableByteAccumulator output = new WipeableByteAccumulator();
+        byte[] buffer = new byte[8192];
         try {
-            byte[] buffer = new byte[8192];
             int count;
             while ((count = input.read(buffer)) != -1) {
-                if (output.size() > MAX_PAYLOAD - count)
-                    throw failure("bootstrap envelope is excessive");
-                output.write(buffer, 0, count);
+                if (count == 0)
+                    continue;
+                output.append(buffer, count);
             }
-            return output.toByteArray();
+            return output;
         } catch (IOException exception) {
+            output.wipe();
             throw new IllegalStateException("could not read bootstrap envelope", exception);
+        } catch (RuntimeException exception) {
+            output.wipe();
+            throw exception;
+        } finally {
+            Arrays.fill(buffer, (byte) 0);
         }
     }
 
@@ -87,14 +97,66 @@ public final class BootstrapConfigurationReader {
         }
     }
 
-    private static int nul(byte[] bytes, int start) {
-        for (int i = start; i < bytes.length; i++)
+    private static boolean startsWith(byte[] bytes, byte[] prefix) {
+        for (int i = 0; i < prefix.length; i++)
+            if (bytes[i] != prefix[i])
+                return false;
+        return true;
+    }
+
+    private static int nul(byte[] bytes, int start, int limit) {
+        for (int i = start; i < limit; i++)
             if (bytes[i] == 0)
                 return i;
         return -1;
     }
 
+    private static boolean isBlank(byte[] bytes) {
+        if (bytes.length == 0)
+            return true;
+        for (byte value : bytes) {
+            if (value != ' ' && value != '\t' && value != '\n' && value != '\r' && value != '\f')
+                return false;
+        }
+        return true;
+    }
+
     private static IllegalStateException failure(String message) {
         return new IllegalStateException(message);
+    }
+
+    private static final class WipeableByteAccumulator {
+        private byte[] bytes = new byte[8192];
+        private int size;
+
+        void append(byte[] source, int length) {
+            if (length > MAX_PAYLOAD - size)
+                throw failure("bootstrap envelope is excessive");
+            ensureCapacity(size + length);
+            System.arraycopy(source, 0, bytes, size, length);
+            size += length;
+        }
+
+        private void ensureCapacity(int required) {
+            if (required <= bytes.length)
+                return;
+            int capacity = Math.min(MAX_PAYLOAD, Math.max(required, bytes.length * 2));
+            byte[] replacement = Arrays.copyOf(bytes, capacity);
+            Arrays.fill(bytes, (byte) 0);
+            bytes = replacement;
+        }
+
+        byte[] bytes() {
+            return bytes;
+        }
+
+        int size() {
+            return size;
+        }
+
+        void wipe() {
+            Arrays.fill(bytes, (byte) 0);
+            size = 0;
+        }
     }
 }

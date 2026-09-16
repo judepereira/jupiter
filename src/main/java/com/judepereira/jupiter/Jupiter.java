@@ -18,6 +18,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -60,24 +62,30 @@ public class Jupiter {
     }
 
     static SpringApplication application(BootstrapConfiguration configuration) {
-        SpringApplication application = new SpringApplication(Jupiter.class);
+        return application(configuration, Jupiter.class);
+    }
+
+    static SpringApplication application(BootstrapConfiguration configuration, Class<?>... sources) {
+        SpringApplication application = new SpringApplication(sources);
+        application.setEnvironment(environment(configuration));
         ApplicationContextInitializer<ConfigurableApplicationContext> initializer = context -> {
             context.getBeanFactory().registerSingleton(ENCRYPTION_KEY_BEAN_NAME, configuration.encryptionKey());
             context.getBeanFactory().registerSingleton(RUNTIME_ENVIRONMENT_BEAN_NAME,
                     configuration.runtimeEnvironment());
-            Map<String, Object> environment = new HashMap<>();
-            environment.putAll(configuration.runtimeEnvironment().asMap());
-            var propertySources = context.getEnvironment().getPropertySources();
-            SystemEnvironmentPropertySource source = new SystemEnvironmentPropertySource(BOOTSTRAP_PROPERTY_SOURCE_NAME,
-                    environment);
-            if (propertySources.contains("systemEnvironment")) {
-                propertySources.addAfter("systemEnvironment", source);
-            } else {
-                propertySources.addLast(source);
-            }
         };
         application.addInitializers(initializer);
         return application;
+    }
+
+    static ConfigurableEnvironment environment(BootstrapConfiguration configuration) {
+        ConfigurableEnvironment environment = new StandardEnvironment();
+        Map<String, Object> bootstrapValues = new HashMap<>();
+        bootstrapValues.putAll(configuration.runtimeEnvironment().asMap());
+        SystemEnvironmentPropertySource bootstrapSource = new SystemEnvironmentPropertySource(
+                BOOTSTRAP_PROPERTY_SOURCE_NAME, bootstrapValues);
+        var propertySources = environment.getPropertySources();
+        propertySources.addAfter(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, bootstrapSource);
+        return environment;
     }
 
 }

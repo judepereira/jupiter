@@ -22,7 +22,28 @@ declare -A image_env_names=()
 while IFS= read -r -d '' env_name; do image_env_names["$env_name"]=1; done < /etc/jupiter-image-env-names
 
 if [[ -f "$INIT_SCRIPT" ]]; then echo "Init script found. Running as root..."; bash "$INIT_SCRIPT"; fi
-if [[ -f "$INIT_USER_SCRIPT" ]]; then echo "User init script found. Running as $USERNAME..."; su -m "$USERNAME" -c "bash $INIT_USER_SCRIPT"; fi
+
+# Login su resets root identity variables while retaining runtime variables for user init.
+declare -a runtime_env_names=()
+declare -A runtime_env_seen=()
+while IFS= read -r -d '' env_entry; do
+  env_name=${env_entry%%=*}
+  if [[ "$env_name" != HOME && "$env_name" != USER && "$env_name" != LOGNAME \
+      && ( "$env_name" == JUPITER_ENCRYPTION_KEY || ( "$env_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && -z ${image_env_names[$env_name]+present} ) ) ]]; then
+    if [[ -z ${runtime_env_seen[$env_name]+present} ]]; then
+      runtime_env_names+=("$env_name")
+      runtime_env_seen["$env_name"]=1
+    fi
+  fi
+done < <(env -0)
+runtime_env_list=""
+if ((${#runtime_env_names[@]})); then
+  runtime_env_list=$(IFS=,; printf '%s' "${runtime_env_names[*]}")
+fi
+user_init_su_args=()
+[[ -n "$runtime_env_list" ]] && user_init_su_args=(-w "$runtime_env_list")
+
+if [[ -f "$INIT_USER_SCRIPT" ]]; then echo "User init script found. Running as $USERNAME..."; su "${user_init_su_args[@]}" - "$USERNAME" -c "bash $INIT_USER_SCRIPT"; fi
 
 declare -a captured_names=()
 declare -A captured_seen=()
