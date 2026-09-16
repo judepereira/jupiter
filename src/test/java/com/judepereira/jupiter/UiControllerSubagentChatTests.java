@@ -183,8 +183,8 @@ public class UiControllerSubagentChatTests {
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
                 openAiOAuthService, contextCompactionService, null, mock(CommandStreamService.class),
-                new CommandCatalogService(""), null, new ChatPresentationService(), null, null,
-                new HttpAuthProperties(), mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class),
-                "test");
+                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
+                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class), "test", System.getProperty("user.home"));
     }
 }

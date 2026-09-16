@@ -38,9 +38,10 @@ public class CommandCatalogService {
     private final AtomicReference<CatalogSnapshot> snapshot;
     private final Object mutationLock = new Object();
 
-    public CommandCatalogService(@Value("${jupiter.commands-root:}") String configuredRoot) {
+    public CommandCatalogService(@Value("${jupiter.commands-root:}") String configuredRoot,
+            @Value("${user.home}") String userHome) {
         userCommandsRoot = configuredRoot == null || configuredRoot.isBlank()
-                ? Path.of(System.getProperty("user.home"), ".jupiter", "commands").toAbsolutePath().normalize()
+                ? Path.of(userHome, ".jupiter", "commands").toAbsolutePath().normalize()
                 : Path.of(configuredRoot).toAbsolutePath().normalize();
         snapshot = new AtomicReference<>(loadSnapshot());
         if (snapshot.get().commands().isEmpty()) {

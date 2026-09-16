@@ -34,66 +34,55 @@ class PanelsE2ETest extends E2ETestSupport {
         Files.createDirectories(sqliteDbFile.getParent());
         Path screenshotsDir = Files.createDirectories(Path.of("target", "playwright-screenshots", "PanelsE2ETest"));
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
 
-        try {
-            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                    BrowserContext context = newBrowserContext()) {
-                Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
 
-                page.navigate(app.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
+            captureScreenshot(page, screenshotsDir, "01-project-opened.png");
 
-                openProject(page, "Alpha", projectDir);
-                captureScreenshot(page, screenshotsDir, "01-project-opened.png");
+            assertThat(page.locator("#review")).hasCount(1);
+            assertThat(page.locator("#review")).not().isVisible();
+            assertThat(page.locator("#bottom-panel")).hasCount(1);
+            assertThat(page.locator("#bottom-panel")).not().isVisible();
 
-                assertThat(page.locator("#review")).hasCount(1);
-                assertThat(page.locator("#review")).not().isVisible();
-                assertThat(page.locator("#bottom-panel")).hasCount(1);
-                assertThat(page.locator("#bottom-panel")).not().isVisible();
+            page.locator("#toggle-terminal-rail-btn").click();
 
-                page.locator("#toggle-terminal-rail-btn").click();
+            assertTerminalPanelVisible(page);
+            assertThat(page.locator("#terminal-panel-divider")).isVisible();
+            assertThat(page.locator("#review")).not().isVisible();
+            runTerminalCommandAndAssertOutput(page);
 
-                assertTerminalPanelVisible(page);
-                assertThat(page.locator("#terminal-panel-divider")).isVisible();
-                assertThat(page.locator("#review")).not().isVisible();
-                runTerminalCommandAndAssertOutput(page);
+            double initialBottomPanelHeight = page.locator("#bottom-panel").boundingBox().height;
+            dragTerminalPanelDivider(page, 40);
+            double resizedBottomPanelHeight = page.locator("#bottom-panel").boundingBox().height;
+            assertNotEquals(initialBottomPanelHeight, resizedBottomPanelHeight);
 
-                double initialBottomPanelHeight = page.locator("#bottom-panel").boundingBox().height;
-                dragTerminalPanelDivider(page, 40);
-                double resizedBottomPanelHeight = page.locator("#bottom-panel").boundingBox().height;
-                assertNotEquals(initialBottomPanelHeight, resizedBottomPanelHeight);
+            captureScreenshot(page, screenshotsDir, "02-terminal-open.png");
 
-                captureScreenshot(page, screenshotsDir, "02-terminal-open.png");
+            page.locator("#toggle-review-rail-btn").click();
 
-                page.locator("#toggle-review-rail-btn").click();
+            assertThat(page.locator("#review")).isVisible();
+            assertThat(page.locator("#review .review-header")).isVisible();
+            assertTerminalPanelVisible(page);
+            assertThat(page.locator("#review")).hasCount(1);
+            assertThat(page.locator("#bottom-panel")).hasCount(1);
+            captureScreenshot(page, screenshotsDir, "03-review-open.png");
 
-                assertThat(page.locator("#review")).isVisible();
-                assertThat(page.locator("#review .review-header")).isVisible();
-                assertTerminalPanelVisible(page);
-                assertThat(page.locator("#review")).hasCount(1);
-                assertThat(page.locator("#bottom-panel")).hasCount(1);
-                captureScreenshot(page, screenshotsDir, "03-review-open.png");
+            page.locator("#toggle-review-rail-btn").click();
 
-                page.locator("#toggle-review-rail-btn").click();
+            assertThat(page.locator("#review")).not().isVisible();
+            assertTerminalPanelVisible(page);
+            assertThat(page.locator("#review")).hasCount(1);
+            assertThat(page.locator("#bottom-panel")).hasCount(1);
+            captureScreenshot(page, screenshotsDir, "04-review-closed.png");
 
-                assertThat(page.locator("#review")).not().isVisible();
-                assertTerminalPanelVisible(page);
-                assertThat(page.locator("#review")).hasCount(1);
-                assertThat(page.locator("#bottom-panel")).hasCount(1);
-                captureScreenshot(page, screenshotsDir, "04-review-closed.png");
+            page.locator("#toggle-terminal-rail-btn").click();
 
-                page.locator("#toggle-terminal-rail-btn").click();
-
-                assertThat(page.locator("#bottom-panel")).not().isVisible();
-            }
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
+            assertThat(page.locator("#bottom-panel")).not().isVisible();
         }
     }
 
@@ -104,38 +93,25 @@ class PanelsE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
 
-        try {
-            try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
-                    BrowserContext context = newBrowserContext()) {
-                Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
 
-                page.navigate(app.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
 
-                openProject(page, "Alpha", projectDir);
+            assertThat(page.locator("#bottom-panel")).not().isVisible();
+            page.waitForResponse(response -> response.url().contains("/ui/panel/terminal") && response.status() == 200,
+                    () -> page.keyboard().press("Control+`"));
+            assertTerminalPanelVisible(page);
+            page.waitForResponse(response -> response.url().contains("/ui/panel/terminal") && response.status() == 200,
+                    () -> page.keyboard().press("Control+`"));
+            assertThat(page.locator("#bottom-panel")).not().isVisible();
 
-                assertThat(page.locator("#bottom-panel")).not().isVisible();
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/panel/terminal") && response.status() == 200,
-                        () -> page.keyboard().press("Control+`"));
-                assertTerminalPanelVisible(page);
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/panel/terminal") && response.status() == 200,
-                        () -> page.keyboard().press("Control+`"));
-                assertThat(page.locator("#bottom-panel")).not().isVisible();
-
-                assertShortcutCyclesSelect(page, "#chat-agent-select", "Meta+.");
-                assertShortcutCyclesSelect(page, "#chat-thinking-select", "Meta+Shift+D");
-            }
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
+            assertShortcutCyclesSelect(page, "#chat-agent-select", "Meta+.");
+            assertShortcutCyclesSelect(page, "#chat-thinking-select", "Meta+Shift+D");
         }
     }
 

@@ -43,9 +43,6 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                 BrowserContext context = newBrowserContext()) {
 
@@ -110,11 +107,6 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-16x16.png");
         } finally {
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -127,9 +119,6 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                 BrowserContext context = newBrowserContext()) {
@@ -234,11 +223,6 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         } finally {
             TestAppConfig.releasePrimaryTurn();
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -260,9 +244,6 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try {
             long sessionId;
@@ -293,11 +274,6 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             }
         } finally {
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -310,9 +286,6 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                 BrowserContext context = newBrowserContext()) {
@@ -336,11 +309,6 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
                     "[Error: no_job]");
         } finally {
             TestAppConfig.reset();
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

@@ -27,9 +27,6 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
         Path screenshotsDir = Files
                 .createDirectories(Path.of("target", "playwright-screenshots", "SlashCommandPickerE2ETest"));
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (RunningApp app = startApp(fakeHome, sqliteDbFile); BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
 
@@ -58,12 +55,6 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
             assertThat(dialogBox.height).isLessThanOrEqualTo(404.0);
 
             captureScreenshot(page, screenshotsDir, "slash-command-picker.png");
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -74,9 +65,6 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile);
                 BrowserContext context = newBrowserContext(new Browser.NewContextOptions()
@@ -143,12 +131,6 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
                     .evaluate("() => window.__commandPickerVisualViewportListenerCounts");
             assertThat(listenerCounts.get("resize")).isEqualTo(0);
             assertThat(listenerCounts.get("scroll")).isEqualTo(0);
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -158,9 +140,6 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile); BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
@@ -185,12 +164,6 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
             page.getByRole(AriaRole.DIALOG).waitFor();
             assertThat(page.locator(".command-modal-item")).containsText("/second-command");
             assertThat(catalogRequests[0]).isEqualTo(2);
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -200,9 +173,6 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (RunningApp app = startApp(fakeHome, sqliteDbFile); BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
@@ -218,12 +188,6 @@ class SlashCommandPickerE2ETest extends E2ETestSupport {
 
             assertThat(page.getByRole(AriaRole.DIALOG)).hasCount(0);
             assertThat(page.locator("#chat-input")).isFocused();
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 }

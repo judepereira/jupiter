@@ -43,9 +43,6 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (TestServer server = TestServer.start();
                 RunningApp app = startApp(fakeHome, sqliteDbFile,
                         Map.of("openai.oauth.issuer", server.baseUrl(), "openai.oauth.client-id", "e2e-client"),
@@ -112,12 +109,6 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                     .containsText("OpenAI is not connected.");
             PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON,
                     new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))).isVisible();
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 
@@ -127,9 +118,6 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
 
         try (TestServer server = TestServer.start()) {
 
@@ -195,12 +183,6 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                         .assertThat(page.getByRole(AriaRole.BUTTON,
                                 new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription")))
                         .isVisible();
-            }
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
             }
         }
     }

@@ -40,9 +40,6 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (Playwright playwright = Playwright.create();
                 Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
                 RunningApp app = startApp(fakeHome, sqliteDbFile);
@@ -122,12 +119,6 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
             page.waitForLoadState();
             assertMixedHistoryAtBottom(page, "Workspace mixed-content final entry");
 
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 

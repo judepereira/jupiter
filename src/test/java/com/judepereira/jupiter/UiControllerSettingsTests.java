@@ -422,7 +422,8 @@ public class UiControllerSettingsTests {
         ManualGitPullCoordinator coordinator = new ManualGitPullCoordinator(appStateService, gitAutoUpdateService,
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)), executor);
 
-        CommandCatalogService commandCatalogService = new CommandCatalogService(commandRoot.toString());
+        CommandCatalogService commandCatalogService = new CommandCatalogService(commandRoot.toString(),
+                System.getProperty("user.home"));
         ModelPreferencesService modelPreferencesService = Mockito.mock(ModelPreferencesService.class);
         ProviderAvailabilityService providerAvailabilityService = Mockito.mock(ProviderAvailabilityService.class);
         return new TestContext(appStateService, tokenUsageService, openAiOAuthService, mcpRuntimeManager,
@@ -440,7 +441,7 @@ public class UiControllerSettingsTests {
                         openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService),
                         tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager,
                         new ChatPresentationService(), null, null, new HttpAuthProperties(), gitAutoUpdateService,
-                        coordinator, "test"),
+                        coordinator, "test", System.getProperty("user.home")),
                 commandCatalogService);
     }
 

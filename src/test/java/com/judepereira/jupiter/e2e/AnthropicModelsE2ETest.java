@@ -31,9 +31,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
         Path project = Files.createDirectories(home.resolve("child-project"));
         Path db = tempDir.resolve("db/jupiter.db");
         Files.createDirectories(db.getParent());
-
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", home.toString());
         try (FixtureServer fixture = FixtureServer.start();
                 RunningApp app = startApp(home, db,
                         Map.of("models.dev.catalog-url", fixture.url("/catalog.json"), "openai.api-key", "",
@@ -143,11 +140,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     new Locator.FilterOptions().setHas(page.locator("input[name='provider'][value='anthropic']")));
             assertThat(reconnectedAnthropicSelections.locator("select[name='modelId']"))
                     .hasValue("anthropic/claude-sonnet-5");
-        } finally {
-            if (previousHome == null)
-                System.clearProperty("user.home");
-            else
-                System.setProperty("user.home", previousHome);
         }
     }
 

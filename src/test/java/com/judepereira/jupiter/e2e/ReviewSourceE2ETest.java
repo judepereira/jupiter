@@ -43,64 +43,51 @@ class ReviewSourceE2ETest extends E2ETestSupport {
         initGitRepoWithInitialCommit(projectDir);
         Files.writeString(projectDir.resolve("outside-git-only.txt"), "outside git change\n");
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
 
-        try {
-            try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-                    BrowserContext context = newBrowserContext()) {
-                Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
 
-                page.navigate(app.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
 
-                openProject(page, "Alpha", projectDir);
+            page.waitForResponse(response -> response.url().contains("/ui/review/toggle") && response.status() == 200,
+                    () -> page.locator("#toggle-review-rail-btn").click());
+            assertThat(page.locator("#review .review-source-select")).isVisible();
+            captureScreenshot(page, screenshotsDir, "01-review-open.png");
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/review/toggle") && response.status() == 200,
-                        () -> page.locator("#toggle-review-rail-btn").click());
-                assertThat(page.locator("#review .review-source-select")).isVisible();
-                captureScreenshot(page, screenshotsDir, "01-review-open.png");
+            page.locator("#chat-input").fill("please edit the session file");
+            page.locator("#chat-send-btn").click();
+            assertThat(page.locator("#chat-messages-list li")).hasCount(3);
+            assertThat(page.locator("#chat-messages-list > li.pending")).hasCount(0);
 
-                page.locator("#chat-input").fill("please edit the session file");
-                page.locator("#chat-send-btn").click();
-                assertThat(page.locator("#chat-messages-list li")).hasCount(3);
-                assertThat(page.locator("#chat-messages-list > li.pending")).hasCount(0);
+            page.reload();
+            assertThat(page.locator("#review .review-source-select")).isVisible();
 
-                page.reload();
-                assertThat(page.locator("#review .review-source-select")).isVisible();
+            assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt")))
+                    .hasCount(1);
+            assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt")))
+                    .hasCount(0);
 
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt")))
-                        .hasCount(1);
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt")))
-                        .hasCount(0);
+            page.waitForResponse(response -> response.url().contains("/ui/review/source") && response.status() == 200,
+                    () -> page.locator("#review .review-source-select").selectOption("GIT"));
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/review/source") && response.status() == 200,
-                        () -> page.locator("#review .review-source-select").selectOption("GIT"));
+            assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt")))
+                    .hasCount(1);
+            assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt")))
+                    .hasCount(1);
+            captureScreenshot(page, screenshotsDir, "02-git-source.png");
 
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("session-edit.txt")))
-                        .hasCount(1);
-                assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("outside-git-only.txt")))
-                        .hasCount(1);
-                captureScreenshot(page, screenshotsDir, "02-git-source.png");
+            var outsideFileButton = page.getByRole(AriaRole.BUTTON,
+                    new Page.GetByRoleOptions().setName("outside-git-only.txt"));
+            assertThat(outsideFileButton).hasCount(1);
+            page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                    outsideFileButton::click);
 
-                var outsideFileButton = page.getByRole(AriaRole.BUTTON,
-                        new Page.GetByRoleOptions().setName("outside-git-only.txt"));
-                assertThat(outsideFileButton).hasCount(1);
-                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
-                        outsideFileButton::click);
-
-                assertThat(outsideFileButton).containsClass("active");
-                assertThat(page.locator("#diff-content")).containsText("outside git change");
-                captureScreenshot(page, screenshotsDir, "03-git-file-selected.png");
-            }
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
+            assertThat(outsideFileButton).containsClass("active");
+            assertThat(page.locator("#diff-content")).containsText("outside git change");
+            captureScreenshot(page, screenshotsDir, "03-git-file-selected.png");
         }
     }
 
@@ -113,78 +100,66 @@ class ReviewSourceE2ETest extends E2ETestSupport {
 
         initGitRepoWithInitialCommit(projectDir);
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
+            List<String> consoleErrors = new CopyOnWriteArrayList<>();
+            page.onConsoleMessage(message -> {
+                if (message.type().equals("error")) {
+                    consoleErrors.add(formatConsoleMessage(message));
+                }
+            });
 
-        try {
-            try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
-                    BrowserContext context = newBrowserContext()) {
-                Page page = context.newPage();
-                List<String> consoleErrors = new CopyOnWriteArrayList<>();
-                page.onConsoleMessage(message -> {
-                    if (message.type().equals("error")) {
-                        consoleErrors.add(formatConsoleMessage(message));
-                    }
-                });
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
 
-                page.navigate(app.baseUrl());
-                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
 
-                openProject(page, "Alpha", projectDir);
+            AppStateService appStateService = app.context().getBean(AppStateService.class);
+            AppStateView view = appStateService.loadViewData();
+            long sessionId = view.activeSession().id();
+            appStateService.addChangedFilesToSession(sessionId,
+                    List.of(new ChangedFileDraft("first-review-file.txt", "first file diff\n"),
+                            new ChangedFileDraft("second-review-file.txt", "second file diff\n")));
 
-                AppStateService appStateService = app.context().getBean(AppStateService.class);
-                AppStateView view = appStateService.loadViewData();
-                long sessionId = view.activeSession().id();
-                appStateService.addChangedFilesToSession(sessionId,
-                        List.of(new ChangedFileDraft("first-review-file.txt", "first file diff\n"),
-                                new ChangedFileDraft("second-review-file.txt", "second file diff\n")));
+            page.reload();
 
-                page.reload();
+            page.waitForResponse(response -> response.url().contains("/ui/review/toggle") && response.status() == 200,
+                    () -> page.locator("#toggle-review-rail-btn").click());
+            assertThat(page.locator("#review .review-source-select")).isVisible();
 
-                page.waitForResponse(
-                        response -> response.url().contains("/ui/review/toggle") && response.status() == 200,
-                        () -> page.locator("#toggle-review-rail-btn").click());
-                assertThat(page.locator("#review .review-source-select")).isVisible();
+            var firstFileButton = page.getByRole(AriaRole.BUTTON,
+                    new Page.GetByRoleOptions().setName("first-review-file.txt"));
+            var secondFileButton = page.getByRole(AriaRole.BUTTON,
+                    new Page.GetByRoleOptions().setName("second-review-file.txt"));
 
-                var firstFileButton = page.getByRole(AriaRole.BUTTON,
-                        new Page.GetByRoleOptions().setName("first-review-file.txt"));
-                var secondFileButton = page.getByRole(AriaRole.BUTTON,
-                        new Page.GetByRoleOptions().setName("second-review-file.txt"));
+            firstFileButton.waitFor();
+            secondFileButton.waitFor();
 
-                firstFileButton.waitFor();
-                secondFileButton.waitFor();
+            page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                    firstFileButton::click);
+            assertReviewFileButtonActiveState(firstFileButton, true);
+            assertDiffViewer(page, "first file diff\n");
 
-                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
-                        firstFileButton::click);
-                assertReviewFileButtonActiveState(firstFileButton, true);
-                assertDiffViewer(page, "first file diff\n");
+            page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                    firstFileButton::click);
+            assertReviewFileButtonActiveState(firstFileButton, false);
+            assertThat(page.locator("#diff-content")).hasCount(0);
+            assertThat(page.locator(".diff-viewer")).hasCount(0);
 
-                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
-                        firstFileButton::click);
-                assertReviewFileButtonActiveState(firstFileButton, false);
-                assertThat(page.locator("#diff-content")).hasCount(0);
-                assertThat(page.locator(".diff-viewer")).hasCount(0);
+            consoleErrors.clear();
 
-                consoleErrors.clear();
+            page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                    secondFileButton::click);
+            assertReviewFileButtonActiveState(secondFileButton, true);
+            assertDiffViewer(page, "second file diff\n");
+            assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
 
-                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
-                        secondFileButton::click);
-                assertReviewFileButtonActiveState(secondFileButton, true);
-                assertDiffViewer(page, "second file diff\n");
-                assertTrue(consoleErrors.isEmpty(), () -> "Console errors: " + consoleErrors);
-
-                page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
-                        secondFileButton::click);
-                assertReviewFileButtonActiveState(secondFileButton, false);
-                assertThat(page.locator("#diff-content")).hasCount(0);
-                assertThat(page.locator(".diff-viewer")).hasCount(0);
-            }
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
+            page.waitForResponse(response -> response.url().contains("/ui/review/file") && response.status() == 200,
+                    secondFileButton::click);
+            assertReviewFileButtonActiveState(secondFileButton, false);
+            assertThat(page.locator("#diff-content")).hasCount(0);
+            assertThat(page.locator(".diff-viewer")).hasCount(0);
         }
     }
 

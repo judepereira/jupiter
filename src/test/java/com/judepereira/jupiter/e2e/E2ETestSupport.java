@@ -34,13 +34,11 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
 @ExtendWith(E2ETestSupport.SharedBrowserExtension.class)
-@ResourceLock("e2e-app-lifecycle")
 abstract class E2ETestSupport {
 
     private static final ExtensionContext.Namespace PLAYWRIGHT_NAMESPACE = ExtensionContext.Namespace
@@ -214,6 +212,7 @@ abstract class E2ETestSupport {
         properties.put("spring.datasource.driver-class-name", "org.sqlite.JDBC");
         properties.put("spring.flyway.enabled", "true");
         properties.put("agent.workspace-root", fakeHome.toAbsolutePath().normalize().toString());
+        properties.put("user.home", fakeHome.toAbsolutePath().normalize().toString());
         properties.put("openai.api-key", "test");
         HttpServer catalogServer = null;
         if (!additionalProperties.containsKey("models.dev.catalog-url")) {
@@ -237,20 +236,40 @@ abstract class E2ETestSupport {
         properties.putAll(additionalProperties);
         String[] applicationArguments = properties.entrySet().stream()
                 .map(entry -> "--" + entry.getKey() + "=" + entry.getValue()).toArray(String[]::new);
-        ConfigurableApplicationContext context = new SpringApplicationBuilder(sources).web(WebApplicationType.SERVLET)
-                .run(applicationArguments);
-
-        Integer port = context.getEnvironment().getProperty("local.server.port", Integer.class);
-        if (port == null) {
-            throw new IllegalStateException("Missing local.server.port");
-        }
-        SQLiteTestSupport.assertWalAndForeignKeysEnabled(context.getBean(DataSource.class));
-        HttpServer finalCatalogServer = catalogServer;
-        return new RunningApp(context, "http://localhost:" + port, () -> {
-            if (finalCatalogServer != null) {
-                finalCatalogServer.stop(0);
+        ConfigurableApplicationContext context;
+        try {
+            context = new SpringApplicationBuilder(sources).web(WebApplicationType.SERVLET).run(applicationArguments);
+        } catch (Throwable throwable) {
+            if (catalogServer != null) {
+                catalogServer.stop(0);
             }
-        });
+            throw throwable;
+        }
+
+        try {
+            Integer port = context.getEnvironment().getProperty("local.server.port", Integer.class);
+            if (port == null) {
+                throw new IllegalStateException("Missing local.server.port");
+            }
+            SQLiteTestSupport.assertWalAndForeignKeysEnabled(context.getBean(DataSource.class));
+            HttpServer ownedCatalogServer = catalogServer;
+            RunningApp app = new RunningApp(context, "http://localhost:" + port, () -> {
+                if (ownedCatalogServer != null) {
+                    ownedCatalogServer.stop(0);
+                }
+            });
+            catalogServer = null;
+            return app;
+        } catch (Throwable throwable) {
+            try {
+                context.close();
+            } finally {
+                if (catalogServer != null) {
+                    catalogServer.stop(0);
+                }
+            }
+            throw throwable;
+        }
     }
 
     protected static void captureScreenshot(Page page, Path screenshotsDir, String fileName) {

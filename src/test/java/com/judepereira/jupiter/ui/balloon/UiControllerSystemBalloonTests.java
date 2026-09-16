@@ -79,8 +79,9 @@ class UiControllerSystemBalloonTests {
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(),
                 openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), null,
-                mock(CommandStreamService.class), new CommandCatalogService(""), runtimeManager,
-                new ChatPresentationService(), null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "test");
+                mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                runtimeManager, new ChatPresentationService(), null, null, new HttpAuthProperties(),
+                mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "test",
+                System.getProperty("user.home"));
     }
 }

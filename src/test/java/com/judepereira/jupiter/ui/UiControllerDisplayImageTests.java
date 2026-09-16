@@ -75,9 +75,10 @@ class UiControllerDisplayImageTests {
                         mock(AppStateRepository.class), null),
                 new ContextCompactionService(appStateService, mock(AgentModelClientFactory.class), null, promptComposer,
                         skillComponents.discovery()),
-                null, mock(CommandStreamService.class), new CommandCatalogService(""), null,
-                new ChatPresentationService(), null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT");
+                null, mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                null, new ChatPresentationService(), null, null, new HttpAuthProperties(),
+                mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT",
+                System.getProperty("user.home"));
 
         var response = controller.streamDisplayImage(sessionId, "image-1");
 

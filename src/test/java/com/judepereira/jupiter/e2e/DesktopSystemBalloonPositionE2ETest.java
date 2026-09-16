@@ -22,9 +22,6 @@ class DesktopSystemBalloonPositionE2ETest extends E2ETestSupport {
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
         Files.createDirectories(sqliteDbFile.getParent());
 
-        String previousHome = System.getProperty("user.home");
-        System.setProperty("user.home", fakeHome.toString());
-
         try (RunningApp app = startApp(fakeHome, sqliteDbFile);
                 BrowserContext context = newBrowserContext(
                         new Browser.NewContextOptions().setViewportSize(new ViewportSize(1280, 720)))) {
@@ -65,12 +62,6 @@ class DesktopSystemBalloonPositionE2ETest extends E2ETestSupport {
             assertThat(rootBottom).isLessThan(bottomRailTop);
             assertThat(balloonTop).isGreaterThanOrEqualTo(rootTop);
             assertThat(balloonBottom).isLessThanOrEqualTo(rootBottom);
-        } finally {
-            if (previousHome == null) {
-                System.clearProperty("user.home");
-            } else {
-                System.setProperty("user.home", previousHome);
-            }
         }
     }
 }
