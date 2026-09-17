@@ -14,12 +14,10 @@ It starts in the active workspace directory and sets `TERM=xterm-256color`.
 
 Each workspace can have multiple terminal tabs. You can create, switch, and close them independently.
 
-## WebSocket transport
+## Reconnecting
 
-Input, output, and resize events use WebSockets.
-
-The server keeps up to 200,000 characters of recent output so a newly attached browser can replay the tail of a running
-terminal.
+A running terminal stays on the server when the browser disconnects. Reconnecting reattaches to it and replays recent
+output so you can continue where you left off.
 
 ## Environment
 

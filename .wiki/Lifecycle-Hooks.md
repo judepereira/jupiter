@@ -1,13 +1,13 @@
 # Lifecycle Hooks
 
-Lifecycle hooks are small shell scripts Jupiter runs after selected agent events. They’re useful for glue:
-notifications, local automation, cleanup, and similar jobs.
+Lifecycle hooks are small shell scripts Jupiter runs after selected agent events. They’re useful for notifications,
+local automation, cleanup, and similar jobs.
 
 ![Lifecycle hook settings](images/lifecycle-hooks.png)
 
 ## Available events
 
-v1 has hooks for:
+Jupiter has hooks for:
 
 - assistant completed
 - assistant errored
@@ -15,25 +15,20 @@ v1 has hooks for:
 
 Each event has its own script.
 
-## How scripts run
+## Environment
 
-Jupiter writes the script to a temporary file under `/tmp` and runs it with `/bin/bash`.
+Hooks receive project environment variables plus:
 
-Where POSIX permissions are available, Jupiter attempts to make that temporary file owner-readable/writable only.
+```text
+JUPITER_PROJECT_NAME
+JUPITER_WORKSPACE_NAME
+JUPITER_SESSION_NAME
+```
 
-The hook receives project environment variables plus project, workspace, and session names. As an untrusted managed
-process, it does not automatically inherit Jupiter’s HTTP-authentication credentials or encryption key.
+They do not automatically inherit Jupiter’s HTTP-authentication credentials or encryption key.
 
-## Timeouts
+## Timeouts and failures
 
-Hooks have a configurable timeout.
+Hooks have a configurable timeout. A non-zero exit, timeout, or launch failure produces a system error balloon.
 
-On timeout or application shutdown, Jupiter terminates the process group and descendants, escalating from TERM to KILL
-when needed. The temporary script file is deleted afterwards.
-
-## Failures
-
-A non-zero exit, timeout, or launch failure produces a system error balloon.
-
-One thing to keep in mind: a completion hook is **after** the agent turn. If the hook fails, the already-completed turn
-doesn’t magically become transactional and roll back.
+A completion hook runs after the agent turn has already completed, so a hook failure does not roll back that turn.

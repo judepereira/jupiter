@@ -1,13 +1,13 @@
-# Configuration Reference
+# Advanced Configuration
 
-This is the operator-facing configuration most likely to be useful in v1.
+These settings are mainly useful when operating or tuning a Jupiter instance beyond the normal UI.
 
 ## Environment variables
 
 |           Variable           |                 Purpose                  |     Default     |
 |------------------------------|------------------------------------------|-----------------|
 | `PORT`                       | Docker entrypoint HTTP port              | `7272`          |
-| `JUPITER_ENCRYPTION_KEY`     | Required Docker bootstrap encryption key | none            |
+| `JUPITER_ENCRYPTION_KEY`     | Required Docker startup encryption key   | none            |
 | `JUPITER_HTTP_AUTH_PASSWORD` | Enables HTTP Basic auth when nonblank    | blank           |
 | `JUPITER_HTTP_AUTH_USERNAME` | Basic auth username                      | `jupiter`       |
 | `OPENAI_API_KEY`             | OpenAI API credential                    | blank           |
@@ -32,7 +32,6 @@ agent.max-iterations=1000
 ```
 
 The model catalogue defaults to `https://models.dev/catalog.json` and can be changed with `models.dev.catalog-url`.
-
 OpenAI OAuth issuer and endpoint settings are Spring-configurable too.
 
 ## State paths
@@ -51,5 +50,5 @@ User slash commands live under:
 
 ## Encryption key note
 
-For normal native startup, don’t put the encryption key into the Java environment. Use the versioned NUL-delimited stdin
-bootstrap envelope described in [Running Natively](Running-Natively).
+For native startup, follow [Running Natively](Running-Natively) rather than putting the encryption key directly in the
+Java process environment.

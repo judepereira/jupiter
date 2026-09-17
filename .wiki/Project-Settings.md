@@ -4,10 +4,21 @@ Project settings define how a repository should behave once a workspace is creat
 
 ![Project settings](images/project-settings.png)
 
-## Workspace init commands
+## Workspace initialization
 
-Use these for setup that should happen on every fresh worktree, such as dependency warm-up or generated files.
-Jupiter runs them in a visible terminal named **Workspace Init**.
+Use workspace-init commands for setup that should happen on every fresh worktree, such as warming dependencies or
+generating files.
+
+For example:
+
+```bash
+./mvnw -q dependency:go-offline
+npm install
+```
+
+After creating a workspace, Jupiter opens a visible terminal named **Workspace Init** and runs the configured commands
+inside the new worktree. Project environment variables are available there, and the output remains visible in the
+terminal tab for debugging.
 
 ## Project environment variables
 

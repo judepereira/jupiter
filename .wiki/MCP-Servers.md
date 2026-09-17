@@ -24,23 +24,18 @@ URLs and header values can contain placeholders like this:
 ${env.VARIABLE_NAME}
 ```
 
-Jupiter checks project environment variables first, then the JVM environment, then runtime variables supplied through
-the native `JUPITER_BOOTSTRAP_V1\0NAME\0VALUE\0` envelope. The encryption key is never available to `${env.NAME}`.
+Project environment variables are checked first, with host/runtime environment values available as fallbacks. The
+Jupiter encryption key is never available to `${env.NAME}`.
 
-Missing values fail resolution. Resolved URLs and headers are also rejected if they contain line breaks.
+Missing values fail resolution. For secrets, prefer project environment variables rather than hard-coding tokens into
+URLs or headers.
 
 ## Runtime behaviour
 
-Enabled servers connect for exposed projects. Changing the configuration reloads affected project runtimes.
-
-Connection failures surface as system balloons, and Jupiter refreshes tools when a server announces that its tool set
-changed.
+Enabled servers connect for exposed projects. Configuration changes reconnect the affected project integrations.
+Connection failures surface as system balloons, and tool-list changes are picked up automatically.
 
 ## Tool-name collisions
 
-MCP tools join the agent registry dynamically when `mcp:*` is allowed.
-
-If two connected servers produce the same effective tool name, Jupiter fails the collision instead of silently picking
-whichever happened to connect first.
-
-For secrets, use project environment variables with `${env.*}` placeholders rather than hard-coding tokens into URLs.
+Tool names must be unique across connected MCP servers. If two servers expose the same effective tool name, Jupiter
+reports the collision instead of choosing one silently.

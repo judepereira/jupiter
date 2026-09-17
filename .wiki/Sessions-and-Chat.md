@@ -11,14 +11,12 @@ drafts, and review state all live on the server.
 
 ## Streaming and reconnects
 
-Assistant text and tool activity stream over Server-Sent Events.
-
-Jupiter persists partial assistant output while a turn is running. If the browser connection drops, the UI can attach
-again to the active server-side stream instead of pretending the turn never happened.
+Assistant text and tool activity stream while a turn is running. If the browser connection drops, reconnecting can
+reattach to the active server-side turn instead of losing the work in progress.
 
 ## Stopping a turn
 
-The stop button cancels the active assistant turn. Managed command execution observes the same cancellation path.
+The stop button cancels the active assistant turn and any managed command execution attached to it.
 
 ## Drafts
 
@@ -26,8 +24,7 @@ Unsent composer text is saved per session, which means you can navigate elsewher
 
 ## Message details
 
-Completed assistant messages record the agent, model, thinking level, duration, and completion time. Markdown is
-rendered with Marked and sanitized with DOMPurify.
+Completed assistant messages record the agent, model, thinking level, duration, and completion time.
 
 ## Forking
 
@@ -35,13 +32,19 @@ A completed primary assistant message can be forked into a new primary session f
 
 Subagent conversations are inspectable too, but they don’t expose the primary-session fork action.
 
+## Tool activity and images
+
+Tool starts, progress, and results remain visible in chat and are persisted with the session.
+
+![Tool calls and inline images](images/tool-calls-and-images.png)
+
+A `task` call links to its subagent session so you can inspect delegated work directly. Agents can also display PNG,
+JPEG, GIF, and WebP workspace images inline in chat.
+
 ## Context compaction
 
 Long-running sessions can eventually approach a model’s context limit. Jupiter automatically summarizes older completed
-turns before the next request becomes too large.
+turns while keeping recent work intact. The summary appears as a visible system message.
 
-The two most recent completed turns remain verbatim. Older eligible turns are summarized while preserving decisions,
-paths, tool results, constraints, and open work. The summary appears as a visible system message.
-
-Compaction requests are recorded separately in token usage. If the resulting request still cannot fit the model’s
-context window, Jupiter fails explicitly instead of sending an oversized request.
+If the resulting request still cannot fit the model’s context window, Jupiter fails explicitly instead of sending an
+oversized request.

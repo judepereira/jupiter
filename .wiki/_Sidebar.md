@@ -27,16 +27,14 @@
 - [Built-in Tools](Built-in-Tools)
 - [Subagents](Subagents)
 - [MCP Servers](MCP-Servers)
-- [Tool Calls and Images](Tool-Calls-and-Images)
 
 ## Configuration and automation
 
 - [Project Settings](Project-Settings)
-- [Workspace Initialization](Workspace-Initialization)
 - [Lifecycle Hooks](Lifecycle-Hooks)
 - [Git Updates](Git-Updates)
 - [Usage and Token Tracking](Usage-and-Token-Tracking)
-- [Configuration Reference](Configuration-Reference)
+- [Advanced Configuration](Advanced-Configuration)
 
 ## Deployment and security
 
