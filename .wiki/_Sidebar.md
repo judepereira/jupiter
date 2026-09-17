@@ -1,11 +1,9 @@
 # Jupiter
 
 - [Home](Home)
-- [Feature Inventory](Feature-Inventory)
 
 ## Start here
 
-- [Overview](Overview)
 - [Getting Started](Getting-Started)
 - [Interface Tour](Interface-Tour)
 - [Running Natively](Running-Natively)
@@ -30,7 +28,6 @@
 - [Built-in Tools](Built-in-Tools)
 - [Subagents](Subagents)
 - [MCP Servers](MCP-Servers)
-- [Context Compaction](Context-Compaction)
 - [Tool Calls and Images](Tool-Calls-and-Images)
 
 ## Configuration and automation
@@ -52,14 +49,7 @@
 - [Encryption and Key Management](Encryption-and-Key-Management)
 - [Process and Credential Isolation](Process-and-Credential-Isolation)
 
-## Operations and internals
+## Operations
 
 - [Storage and Backups](Storage-and-Backups)
-- [Health Checks](Health-Checks)
 - [Troubleshooting](Troubleshooting)
-- [Architecture](Architecture)
-- [Real-Time Transport](Real-Time-Transport)
-- [Persistence and Migrations](Persistence-and-Migrations)
-- [Development and Testing](Development-and-Testing)
-- [Wiki Maintenance](Wiki-Maintenance)
-

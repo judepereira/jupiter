@@ -31,6 +31,23 @@ Basic auth is an access gate. It is **not** per-user authorisation, repository A
 
 So, don’t share one Jupiter instance between mutually untrusted users.
 
+## Health checks
+
+Jupiter exposes an unauthenticated health endpoint for reverse proxies and orchestration probes:
+
+```http
+GET /health
+```
+
+A healthy response is:
+
+```json
+{"status":"UP"}
+```
+
+The response is not cached. `UP` only means the web application handled the request; it does not test Git, model
+providers, repositories, or configured MCP servers.
+
 ## Backups
 
 Back up `~/.jupiter/jupiter.sqlite` and the matching encryption key separately. See

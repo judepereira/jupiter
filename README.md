@@ -143,6 +143,7 @@ Run the test suite with:
 
 There are unit, integration, template-rendering, and Playwright browser tests. Provider tests use fixtures and mocks;
 they do not use live OpenAI or Anthropic credentials. Normal Maven test and package runs also generate disposable
-documentation screenshots under `target/documentation-screenshots`; see
-[Development and Testing](https://github.com/judepereira/jupiter/wiki/Development-and-Testing) for how to refresh the
-tracked wiki image catalog.
+documentation screenshots under `target/documentation-screenshots`.
+
+Contributor architecture, testing, and documentation-maintenance conventions live in `AGENTS.md` rather than the
+user-facing wiki.
