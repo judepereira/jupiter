@@ -115,11 +115,12 @@ implementation details.
 ### Documentation and wiki policy
 
 - Documentation screenshot image files must not be regenerated locally; CI handles regeneration for consistency.
-- Before completing changes, review `README.md`, `.wiki/Feature-Inventory.md`, `.wiki/_Sidebar.md`, and relevant
-  task-oriented `.wiki/` pages for required updates.
-- Keep documentation accurate for behavior changes. Record clearly user-facing feature additions in
-  `.wiki/Feature-Inventory.md` and the nearest relevant task-oriented page; update `.wiki/_Sidebar.md` when adding wiki
-  pages.
+- Before completing changes, review `README.md`, `.wiki/_Sidebar.md`, and relevant task-oriented `.wiki/` pages for
+  required updates.
+- Keep documentation accurate for behavior changes. Record user-facing changes on the nearest relevant task-oriented
+  page; update `.wiki/_Sidebar.md` when adding or removing wiki pages.
+- Keep maintainer-only architecture, testing, publishing, and implementation guidance in `AGENTS.md` or other repository
+  contributor documentation rather than the user-facing wiki.
 - Treat `.wiki/` as the source of truth for wiki content. Do not directly edit the published GitHub wiki.
 
 ## Principles
@@ -145,4 +146,3 @@ implementation details.
    use a named static factory for genuinely distinct construction semantics; use a parameter object or builder when
    direct construction becomes unclear. An overload is allowed only when required by a framework or external
    compatibility contract, and its exception must be documented.
-

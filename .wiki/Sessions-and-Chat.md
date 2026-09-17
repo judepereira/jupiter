@@ -35,4 +35,13 @@ A completed primary assistant message can be forked into a new primary session f
 
 Subagent conversations are inspectable too, but they don’t expose the primary-session fork action.
 
-Long session? Jupiter can compact older context automatically; see [Context Compaction](Context-Compaction).
+## Context compaction
+
+Long-running sessions can eventually approach a model’s context limit. Jupiter automatically summarizes older completed
+turns before the next request becomes too large.
+
+The two most recent completed turns remain verbatim. Older eligible turns are summarized while preserving decisions,
+paths, tool results, constraints, and open work. The summary appears as a visible system message.
+
+Compaction requests are recorded separately in token usage. If the resulting request still cannot fit the model’s
+context window, Jupiter fails explicitly instead of sending an oversized request.

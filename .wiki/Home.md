@@ -17,11 +17,17 @@ matter most:
 
 ## The basic model
 
-A **project** points at an existing source repository. A **workspace** is a Git worktree on a branch. A **session** is a
-persisted coding conversation inside that workspace.
+Jupiter is easiest to understand in three layers:
 
-The server owns the state, so reloading the browser doesn’t wipe your chat, drafts, tool traces, review state, or
-project settings.
+- A **project** points at an existing source repository.
+- A **workspace** is a Git worktree on a branch inside that project.
+- A **session** is a persisted coding conversation inside one workspace.
+
+Agents sit on top of those layers. Primary agents can use tools directly or delegate work to persisted subagent
+sessions that you can inspect separately.
+
+The browser is only the client. Jupiter keeps application state on the server, so reloading, disconnecting, or moving
+between devices does not wipe chat history, drafts, tool traces, review state, or project settings.
 
 The UI gives you streaming chat, a real PTY terminal, diff review, MCP tools, slash commands, and system notifications
 on one screen.
@@ -33,4 +39,7 @@ Ideally, on the machine that already has your source code: a workstation, home s
 For remote access, a private VPN is recommended. If you need public access, use HTTPS and enable Jupiter’s Basic-auth
 gate.
 
-The sidebar has the full topic list. [Feature Inventory](Feature-Inventory) is the complete v1 checklist.
+Jupiter runs against real source trees and shell processes; it is not an operating-system sandbox. Read
+[Security Model](Security-Model) before exposing it remotely.
+
+The sidebar has the full topic list.
