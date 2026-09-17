@@ -25,10 +25,10 @@ particular model. See [Models and Providers](https://github.com/judepereira/jupi
 
 ## Docker: the recommended way to run Jupiter
 
-Build the image:
+Pull the latest published image:
 
 ```bash
-docker build -t jupiter .
+docker pull judepereira/jupiter:latest
 ```
 
 Generate an encryption key, choose the directory containing your source repositories, and keep the key safe:
@@ -36,7 +36,7 @@ Generate an encryption key, choose the directory containing your source reposito
 ```bash
 export JUPITER_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 export JUPITER_REPOS="$HOME/src"
-mkdir -p .jupiter
+mkdir -p "$HOME/.jupiter"
 ```
 
 Then start Jupiter with persistent state and your source tree mounted:
@@ -45,15 +45,22 @@ Then start Jupiter with persistent state and your source tree mounted:
 docker run --rm \
   -p 7272:7272 \
   -e JUPITER_ENCRYPTION_KEY="$JUPITER_ENCRYPTION_KEY" \
-  -v "$(pwd)/.jupiter:/home/jupiter/.jupiter" \
+  -v "$HOME/.jupiter:/home/jupiter/.jupiter" \
   -v "$JUPITER_REPOS:/workspace" \
-  jupiter
+  judepereira/jupiter:latest
 ```
 
 Open `http://localhost:7272`, choose **New project**, and select a repository under `/workspace`.
 
 One important bit: **do not generate a new encryption key on every restart.** The database is tied to that key; lose it
 and the encrypted data is gone.
+
+To update Jupiter, pull the latest image and restart the container with the same encryption key, state mount, and source
+mount:
+
+```bash
+docker pull judepereira/jupiter:latest
+```
 
 ## Connecting model providers
 
