@@ -1,7 +1,7 @@
 # Encryption and Key Management
 
-Jupiter needs one stable 256-bit master key for each database. The “stable” part matters just as much as the “256-bit”
-part.
+Jupiter needs one stable 256-bit master key for each database. Keep the same key whenever you start Jupiter against that
+database.
 
 ## Generate a key
 
@@ -9,38 +9,30 @@ part.
 openssl rand -base64 32
 ```
 
-The input must be standard Base64 that decodes to exactly 32 bytes.
+The value must be standard Base64 decoding to exactly 32 bytes.
 
-Jupiter’s bootstrap reader rejects a missing or malformed versioned envelope, invalid Base64, interior whitespace,
-excessive input, and keys that decode to the wrong size.
+## What the key protects
 
-## What happens to the key?
+Jupiter encrypts sensitive persisted values before storing them in SQLite. The key itself is kept out of normal agent,
+terminal, and MCP environments.
 
-Jupiter derives separate keys for encryption and blind indexes.
+## Keep it stable and backed up
 
-Sensitive text uses AES-256-GCM with a random 12-byte nonce, a 128-bit authentication tag, and associated data tied to
-the persisted field context.
+A wrong key causes startup failure. Losing the key makes encrypted data unrecoverable.
 
-Where deterministic equality lookup is needed without keeping plaintext, blind indexes use HMAC-SHA-256.
-
-## Don’t rotate it by accident
-
-Use the same key every time you start Jupiter against the same database.
-
-The wrong key causes startup failure. Losing the key makes encrypted data unrecoverable.
-
-Back it up separately from the SQLite database.
+Back up the key separately from the SQLite database.
 
 ## Upgrading older databases
 
-Jupiter includes a one-way migration for earlier plaintext persisted values.
+Jupiter migrates earlier plaintext persisted values to encrypted storage.
 
-Back up both database and key before upgrading. Historical WAL files, backups, deleted pages, or other old copies can
-still contain plaintext written before that migration.
+Back up both database and key before upgrading. Older backups, WAL files, or deleted database pages may still contain
+plaintext written before migration.
 
-## Docker
+## Docker and native startup
 
-The Docker entrypoint accepts `JUPITER_ENCRYPTION_KEY` from the original environment. Trusted root and user init scripts
-receive that complete environment, including the key. After initialization, runtime-added variables and the key are
-removed before Java starts; the key is sent in the versioned bootstrap envelope. Image-defined variables remain in the
-JVM environment.
+Docker accepts `JUPITER_ENCRYPTION_KEY` during startup and passes the key into Jupiter after trusted initialization
+scripts run.
+
+For normal native startup, use the bootstrap mechanism described in [Running Natively](Running-Natively) rather than
+placing the key directly in the Java process environment.

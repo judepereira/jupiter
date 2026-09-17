@@ -31,7 +31,17 @@ The bottom panel contains one or more real PTY terminals for the active workspac
 
 ## Settings and notifications
 
-Project environment, MCP servers, lifecycle hooks, Git updates, usage, and OpenAI connection settings all live in
+Project environment, MCP servers, lifecycle hooks, Git updates, usage, and provider connection settings live in
 **Settings**.
 
-Warnings and errors appear as system balloons, so failures don’t disappear into server logs unless they really have to.
+Warnings and errors appear as system balloons, so failures stay visible in the interface.
+
+## Keyboard shortcuts
+
+|        Shortcut        |          Action           |
+|------------------------|---------------------------|
+| `Ctrl` + `` ` ``       | Toggle the terminal panel |
+| `Meta` + `.`           | Cycle the selected agent  |
+| `Meta` + `Shift` + `D` | Cycle the thinking level  |
+
+On macOS, `Meta` is the Command key.

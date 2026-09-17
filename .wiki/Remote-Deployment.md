@@ -1,39 +1,49 @@
 # Remote Deployment
 
-Remote access is a primary use case for Jupiter, but there’s an important distinction between “remote” and “publicly
-exposed to the internet”.
+Remote access is a primary use case for Jupiter, but remote does not have to mean publicly exposed to the internet.
 
-## Recommended setup: a private network
+## Recommended setup: private network
 
 Run Jupiter on the machine containing your repositories, then expose port `7272` only over a trusted network or VPN.
+Tailscale is one option, but Jupiter does not depend on it.
 
-Tailscale is an obvious example, but Jupiter doesn’t depend on it.
+## Public deployment
 
-## If it must be public
+If Jupiter must be internet-accessible, enable HTTP authentication and put it behind HTTPS.
 
-Do all of these:
+Set a non-empty password:
 
-1. Enable [HTTP Authentication](HTTP-Authentication).
-2. Put Jupiter behind a trusted TLS-terminating reverse proxy.
-3. Forward the original HTTPS scheme correctly.
-4. Keep Server-Sent Events alive.
-5. Support WebSocket upgrades for the terminal.
-6. Secure the host as if it were a development workstation — because effectively, it is.
+```bash
+JUPITER_HTTP_AUTH_PASSWORD='use-a-strong-secret'
+```
 
-See [Reverse Proxy and HTTPS](Reverse-Proxy-and-HTTPS).
+The default username is `jupiter`; change it with `JUPITER_HTTP_AUTH_USERNAME`.
 
-## The trust model
+Authentication protects everything except `GET /health`. It is one shared access gate, not per-user authorization.
 
-A user who can successfully access Jupiter can run coding agents and use an interactive shell against your source
-environment.
+## Reverse proxy requirements
 
-Basic auth is an access gate. It is **not** per-user authorisation, repository ACLs, or sandboxing.
+A TLS-terminating reverse proxy must support:
 
-So, don’t share one Jupiter instance between mutually untrusted users.
+- normal HTTP requests
+- long-lived Server-Sent Events
+- WebSocket upgrades for terminals
+
+Avoid aggressive buffering and short idle timeouts on streaming routes.
+
+Forward the original HTTPS scheme using `Forwarded` or `X-Forwarded-Proto`. Jupiter uses that information when checking
+whether authenticated traffic is publicly using HTTPS.
+
+Basic authentication does not encrypt traffic, so use HTTPS outside a trusted local network.
+
+## Trust model
+
+Anyone who can access Jupiter can run coding agents and use an interactive shell against your source environment.
+Do not share one instance between mutually untrusted users.
 
 ## Health checks
 
-Jupiter exposes an unauthenticated health endpoint for reverse proxies and orchestration probes:
+Jupiter exposes an unauthenticated probe endpoint:
 
 ```http
 GET /health
@@ -45,10 +55,8 @@ A healthy response is:
 {"status":"UP"}
 ```
 
-The response is not cached. `UP` only means the web application handled the request; it does not test Git, model
-providers, repositories, or configured MCP servers.
+`UP` means the web application handled the request. It does not verify Git, model providers, repositories, or MCP servers.
 
 ## Backups
 
-Back up `~/.jupiter/jupiter.sqlite` and the matching encryption key separately. See
-[Storage and Backups](Storage-and-Backups).
+Back up `~/.jupiter/jupiter.sqlite` and its matching encryption key separately. See [Storage and Backups](Storage-and-Backups).
