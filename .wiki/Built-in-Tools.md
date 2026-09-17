@@ -1,6 +1,6 @@
 # Built-in Tools
 
-These are the native tools Jupiter v1 registers for agents.
+These are the native tools Jupiter registers for agents.
 
 |      Tool       |              What it does               |
 |-----------------|-----------------------------------------|

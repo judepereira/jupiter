@@ -21,19 +21,11 @@ There’s no desktop app or CLI to keep in sync. The browser is the client.
 - **It’s extendable.** MCP servers and Markdown-based slash commands plug into the harness without changing the core
   application.
 
-Jupiter discovers eligible text/tool OpenAI models (including GPT-6) and Anthropic Claude models from models.dev.
-Connected providers expose provider-specific native model multi-selects in **Settings**; when a provider has no saved
-selection, typically on first connection or startup, Jupiter initializes the latest five distinct model families.
-Explicit saves require at least one model, and selections survive disconnect/reconnect. Selected models filter
-additional chat choices, while every model named by connected agents remains available. Bundled agents use OpenAI first
-with Anthropic fallbacks: Plan and Engineer use Claude Opus 5, while Explore, Apprentice, and Test use Claude Sonnet 5.
-Agent-default and subagent runs use the first available provider before the request, while an explicit model choice is
-strict and never silently falls back. An implicit browser model choice is resolved again when the turn executes, and any
-fallback is attributed in the message/session; usage is recorded against the actual model. models.dev compatibility does
-not guarantee that an account is entitled to use a model. See
-[Models and Thinking](https://github.com/judepereira/jupiter/wiki/Models-and-Thinking),
-[OpenAI Authentication](https://github.com/judepereira/jupiter/wiki/OpenAI-Authentication), and
-[Anthropic Authentication](https://github.com/judepereira/jupiter/wiki/Anthropic-Authentication).
+Jupiter supports OpenAI and Anthropic Claude and loads eligible model metadata from models.dev. Connected providers let
+you choose additional models in **Settings → Model Providers**, while agents can define their own ordered model defaults.
+Agent-default turns use the first configured preference whose provider is available; an explicit model choice is strict
+and never silently switches providers. Catalogue compatibility does not guarantee that an account is entitled to use a
+particular model. See [Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers).
 
 ## Docker: the quickest way to run it
 
@@ -100,10 +92,10 @@ environment, arguments, and system properties.
 
 ## Connecting model providers
 
-Open **Settings → Model Providers** to connect an OpenAI subscription or Claude Code. OpenAI can also use
-`OPENAI_API_KEY`; Claude uses the hosted OAuth copy/paste-code flow described in
-[Anthropic Authentication](https://github.com/judepereira/jupiter/wiki/Anthropic-Authentication). Provider credentials
-and OAuth state are stored in encrypted database fields.
+Open **Settings → Model Providers** to connect an OpenAI subscription or Claude. OpenAI can also use
+`OPENAI_API_KEY`; Claude uses the hosted OAuth copy/paste-code flow. See
+[Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers) for connection and model-selection
+details. Provider credentials and OAuth state are stored in encrypted database fields.
 
 ## Running Jupiter remotely
 

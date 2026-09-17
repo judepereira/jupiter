@@ -1,21 +1,20 @@
 # Agents
 
-Jupiter agents are just Markdown files with YAML frontmatter. This keeps the prompt, model, and tool permissions
+Jupiter agents are Markdown files with YAML frontmatter. This keeps the prompt, model preferences, and tool permissions
 readable in one place instead of hiding agent behaviour in Java configuration.
 
 ![Agent, model, and thinking controls](images/agents-models-thinking.png)
 
 ## Primary agents
 
-v1 ships with two primary agents:
+Jupiter ships with two primary agents:
 
-- **Plan** — exposes read/search/image tools plus `task`; prefers GPT-5.6 Sol, then Claude Opus 5, with high reasoning.
-- **Engineer** — the coding agent; gets wildcard native/MCP access and delegation; prefers GPT-5.6 Terra, then Claude
-  Opus 5, with medium reasoning.
+- **Plan** — focused on planning and exploration, with read/search/image tools plus delegation through `task`.
+- **Engineer** — the coding agent, with native/MCP tool access and delegation.
 
-The model list is ordered. Agent-default runs choose the first model whose provider is available before sending a
-request; an explicit user model remains strict. See [Models and Thinking](Models-and-Thinking) for fallback and
-attribution details.
+Their current model preferences live in the bundled agent definitions and may change independently of this documentation.
+Agent-default runs use the first configured preference whose provider is available. See
+[Models and Providers](Models-and-Providers) for model selection and fallback behaviour.
 
 There are also Explore, Apprentice, and Test subagents. See [Subagents](Subagents).
 
@@ -42,7 +41,5 @@ One subtle point: Plan has no direct write or command tools, but it **can** dele
 
 Subagents never receive `task`, so native delegation cannot recurse forever.
 
-The composer lets you pick agent, model, and thinking level per turn. The selected agent's frontmatter is authoritative
-for the initial and reset model and Thinking defaults; historical per-turn metadata does not control composer defaults.
-A model named in connected agent frontmatter remains available even when it is absent from that provider's Settings
-selection, while provider selection still filters additional chat choices.
+The composer lets you pick the agent, model, and thinking level for a turn. Without an explicit model or thinking
+override, the selected agent's configured defaults apply.

@@ -4,15 +4,16 @@ Subagents are how Jupiter delegates focused work without turning that work into 
 
 ![Inspecting a subagent session](images/subagent-session.png)
 
-## What ships with v1?
+## Bundled subagents
 
-- **Explore** — read-only codebase exploration; prefers GPT-5.6 Luna, then Claude Sonnet 5.
-- **Apprentice** — implementation work; prefers GPT-5.6 Luna, then Claude Sonnet 5.
-- **Test** — testing-focused work; prefers GPT-5.6 Luna, then Claude Sonnet 5.
+Jupiter ships with:
 
-These ordered preferences use the first available provider before the request. A failed model/API request is not retried
-with the next preference. Explicit user model selections remain strict; when a default falls back, the child session and
-generated message retain the preferred model and show the actual model used.
+- **Explore** — read-only codebase exploration.
+- **Apprentice** — implementation work.
+- **Test** — testing-focused work.
+
+Their current model preferences live in the bundled agent definitions and may change independently of this documentation.
+Model selection follows the same rules as primary agents; see [Models and Providers](Models-and-Providers).
 
 ## A task is a real child session
 

@@ -37,7 +37,7 @@ git status --short
 
 ## Bundled commands
 
-v1 includes:
+Bundled commands include:
 
 - `/status` — runs `git status --short`.
 - `/commit-push` — inserts a prompt asking the agent to commit and push the current changes.

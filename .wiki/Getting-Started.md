@@ -27,7 +27,7 @@ The default port is `7272`.
 Either set `OPENAI_API_KEY`, use the OpenAI device authorisation flow, or connect Claude through the hosted OAuth
 copy/paste-code flow in **Settings → Model Providers**.
 
-See [OpenAI Authentication](OpenAI-Authentication) and [Anthropic Authentication](Anthropic-Authentication).
+See [Models and Providers](Models-and-Providers).
 
 ## 5. Add a project
 
