@@ -1,6 +1,9 @@
 # Running Natively
 
-If you’d rather run the JAR directly, Jupiter needs Java 25, Git, and ripgrep. It checks for `rg` during startup.
+Docker is the preferred way to run Jupiter. Native startup is available when you want Jupiter to run directly on the
+host instead.
+
+Jupiter needs Java 25, Git, and ripgrep. It checks for `rg` during startup.
 
 ## Build
 
