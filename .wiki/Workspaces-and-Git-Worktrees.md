@@ -25,7 +25,7 @@ shares that worktree’s filesystem state.
 If the project has workspace-init commands, Jupiter opens a terminal named **Workspace Init** and runs them after
 creating the worktree.
 
-See [Workspace Initialization](Workspace-Initialization).
+See [Project Settings](Project-Settings) for configuration and examples.
 
 ## Closing a workspace
 

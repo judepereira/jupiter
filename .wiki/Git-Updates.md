@@ -10,10 +10,7 @@ other.
 
 ## Automatic updates
 
-When enabled, Jupiter runs one pass after the application becomes ready, then another every ten minutes after the
-previous scheduled pass finishes.
-
-Passes don’t overlap.
+When enabled, Jupiter checks workspaces after startup and then periodically for new commits. Update passes do not overlap.
 
 ## What exactly gets run?
 
@@ -31,10 +28,4 @@ No remote, several ambiguous remotes, or no matching branch? Jupiter skips the w
 ## Notifications and failures
 
 When new commits arrive, Jupiter writes an informational message into the most recently opened visible primary session
-for that workspace.
-
-Repeated failures are tracked as one failure episode, so the first failure can be treated differently from the tenth
-identical one.
-
-Git processes are untrusted managed children and do not automatically inherit Jupiter’s HTTP-authentication credentials
-or encryption key.
+for that workspace. Pull failures are surfaced rather than silently changing strategy.

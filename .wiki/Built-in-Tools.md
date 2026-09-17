@@ -21,13 +21,14 @@ An agent only sees tools allowed by its definition. Write and command capability
 
 ## `run_command`
 
-Commands run through `/bin/sh -c`, with a timeout and cancellation support. There is also a small denylist for a few
-obviously destructive command strings.
+Commands run with timeout and cancellation support. The environment starts empty; Jupiter then copies explicitly
+allowlisted host variables, overlays project variables, and does not automatically inherit its own sensitive credentials.
 
-The environment starts empty. Jupiter then copies explicitly allowlisted host variables, overlays project variables, and
-does not automatically inherit its own sensitive credentials.
+Large command output is shortened in chat while remaining available to the agent.
 
-Large stdout/stderr is shortened inline; the full output is kept in a temporary file for the agent.
+## `display_image`
+
+Agents can display PNG, JPEG, GIF, and WebP workspace images inline in chat.
 
 ## Is this a filesystem sandbox?
 

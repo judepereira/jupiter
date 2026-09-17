@@ -21,18 +21,14 @@ Hourly usage is grouped by project and model.
 When the provider returns the data, Jupiter stores input, output, total, cached-input, cache-write, and reasoning token
 counts.
 
-It also keeps the operation type, model identifiers, finish information, and selected provider metadata. If an agent
-preference falls back before a request, usage is recorded against the actual model that handled the request; message
-attribution retains the preferred model separately.
+It also keeps the operation type and model information. If an agent preference falls back before a request, usage is
+recorded against the model that actually handled the request.
 
-Normal agent turns and context-compaction requests have different operation values, which makes compaction overhead
-visible rather than burying it in everything else.
+Context-compaction usage is tracked separately so its overhead remains visible.
 
 ## Retention
 
-Usage facts and hourly rows older than 60 days are purged at startup and every six hours.
-
-The cutoff hour is rebuilt so the still-valid part of that hour isn’t thrown away.
+Local usage history is retained for 60 days.
 
 ## Is this billing data?
 
