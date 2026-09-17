@@ -8,8 +8,6 @@
 - [Interface Tour](Interface-Tour)
 - [Running Natively](Running-Natively)
 - [Running with Docker](Running-with-Docker)
-- [OpenAI Authentication](OpenAI-Authentication)
-- [Anthropic Authentication](Anthropic-Authentication)
 
 ## Core workflow
 
@@ -20,10 +18,10 @@
 - [Terminal](Terminal)
 - [Slash Commands](Slash-Commands)
 
-## Agent harness
+## Agents and tools
 
 - [Agents](Agents)
-- [Models and Thinking](Models-and-Thinking)
+- [Models and Providers](Models-and-Providers)
 - [Built-in Tools](Built-in-Tools)
 - [Subagents](Subagents)
 - [MCP Servers](MCP-Servers)
