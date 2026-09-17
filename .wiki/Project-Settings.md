@@ -1,34 +1,40 @@
 # Project Settings
 
-Project settings are where you tell Jupiter how a repository should behave once a workspace is created.
+Project settings define how a repository should behave once a workspace is created.
 
 ![Project settings](images/project-settings.png)
 
 ## Workspace init commands
 
-Use these for setup that should happen on every fresh worktree — dependency warm-up, generated files, whatever your
-project needs.
-
+Use these for setup that should happen on every fresh worktree, such as dependency warm-up or generated files.
 Jupiter runs them in a visible terminal named **Workspace Init**.
 
 ## Project environment variables
 
-Add environment names and values that should be available to project processes.
+Add environment names and values that should be available to project processes. Sensitive persisted values are encrypted.
 
-Sensitive persisted values are encrypted at the repository boundary.
+Project variables are available to terminals, agent commands, MCP configuration, and lifecycle hooks where applicable.
 
 ## Host variables available to agents
 
-`run_command` does **not** inherit the entire Jupiter host environment.
+Agent `run_command` does not inherit the entire Jupiter host environment.
 
-Instead, list the host variables an agent is allowed to receive — `PATH`, for example — and Jupiter copies only those
-before adding the project variables.
+List the host variables an agent may receive, such as `PATH`. Jupiter copies only those variables before overlaying the
+project variables.
 
-That is separate from the interactive terminal, which intentionally gets a broader environment. See
-[Environment Variables](Environment-Variables).
+The integrated terminal intentionally receives the broader Jupiter process environment before project variables are
+overlaid. Jupiter's encryption key is never restored into the terminal.
 
-## MCP and the rest
+## Lifecycle hooks
 
-MCP servers are configured globally, then exposed to selected projects.
+Hooks receive project variables plus `JUPITER_PROJECT_NAME`, `JUPITER_WORKSPACE_NAME`, and `JUPITER_SESSION_NAME`.
+They do not automatically inherit Jupiter's HTTP-authentication credentials or encryption key.
 
-The Settings UI also contains the OpenAI connection, lifecycle hooks, automatic Git updates, and usage views.
+## MCP placeholders
+
+MCP URLs and headers can use `${env.NAME}` placeholders. Project variables take precedence over host/runtime values.
+The encryption key is never available as an MCP placeholder.
+
+## Other settings
+
+The Settings UI also contains MCP servers, provider connections, lifecycle hooks, automatic Git updates, and usage views.

@@ -1,6 +1,6 @@
 # Storage and Backups
 
-Jupiter keeps its persistent state under:
+Jupiter keeps persistent state under:
 
 ```text
 ~/.jupiter
@@ -12,35 +12,28 @@ The main database is:
 ~/.jupiter/jupiter.sqlite
 ```
 
-## SQLite setup
+## What is stored
 
-Jupiter enables WAL journaling, foreign keys, and a busy timeout. The application uses a single-connection Hikari pool.
+The database contains projects, workspaces, sessions, messages, tool traces, review state, project settings, MCP
+configuration, provider authentication state, Git-update state, lifecycle-hook settings, and token usage.
 
-Flyway handles schema migrations at startup.
+Sensitive values are encrypted before persistence.
 
-## What’s actually in the database?
+## Backup requirements
 
-Projects, workspaces, sessions, messages, tool traces, review state, project settings, MCP configuration, OAuth state,
-Git-update state, lifecycle-hook settings, and token usage.
-
-Sensitive text fields are encrypted at the persistence boundary.
-
-## The backup rule
-
-You need two things:
+A complete recovery requires both:
 
 1. the SQLite database state
 2. the matching Jupiter encryption key
 
-A database backup without the key is not a useful recovery plan for encrypted values.
+Keep the encryption key separately from the database backup.
 
-## Backing up a live database
+## Backing up a running instance
 
 Use a SQLite-aware backup method, or stop Jupiter before copying the database files.
 
-With WAL enabled, copying only `jupiter.sqlite` while the application is active may miss data that is still in the WAL.
+Copying only `jupiter.sqlite` while Jupiter is running can miss recently written state.
 
 ## Restore
 
-Restore the database state and start Jupiter with the original key. A mismatched key is rejected during encrypted-state
-validation.
+Restore the database and start Jupiter with its original encryption key. A mismatched key is rejected during startup.

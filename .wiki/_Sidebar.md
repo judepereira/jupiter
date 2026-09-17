@@ -19,7 +19,6 @@
 - [Review and Diffs](Review-and-Diffs)
 - [Terminal](Terminal)
 - [Slash Commands](Slash-Commands)
-- [Keyboard Shortcuts](Keyboard-Shortcuts)
 
 ## Agent harness
 
@@ -34,7 +33,6 @@
 
 - [Project Settings](Project-Settings)
 - [Workspace Initialization](Workspace-Initialization)
-- [Environment Variables](Environment-Variables)
 - [Lifecycle Hooks](Lifecycle-Hooks)
 - [Git Updates](Git-Updates)
 - [Usage and Token Tracking](Usage-and-Token-Tracking)
@@ -43,11 +41,8 @@
 ## Deployment and security
 
 - [Remote Deployment](Remote-Deployment)
-- [Reverse Proxy and HTTPS](Reverse-Proxy-and-HTTPS)
-- [HTTP Authentication](HTTP-Authentication)
 - [Security Model](Security-Model)
 - [Encryption and Key Management](Encryption-and-Key-Management)
-- [Process and Credential Isolation](Process-and-Credential-Isolation)
 
 ## Operations
 

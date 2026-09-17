@@ -1,69 +1,38 @@
 # Models and Thinking
 
-Agent and model are deliberately separate choices in Jupiter. An agent defines behaviour and tools; the model is what
-runs the turn.
+Agent and model are separate choices in Jupiter. An agent defines behaviour and tools; the model runs the turn.
 
 ![Agent, model, and thinking controls](images/agents-models-thinking.png)
 
 ## Model catalogue
 
-Jupiter loads model metadata from the configured models.dev catalogue and keeps eligible text/tool OpenAI models,
-including GPT-6, plus Anthropic Claude entries. Where available, it keeps the display name, context limit, output limit,
-reasoning support, tool-call support, and release date.
+Jupiter loads supported model metadata from the configured models.dev catalogue for connected providers.
+The catalogue supplies names and capabilities used by the model picker.
 
-The hardcoded fallback model ID is `openai/gpt-5.6-sol`.
+## Provider selections
 
-## Provider selections and the chat picker
+Settings lets you choose which models from each connected provider appear as additional chat choices.
 
-Settings exposes a native multi-select for each connected provider. When a provider has no saved selection, typically on
-first connection or startup, Jupiter initializes the latest five eligible, distinct model families from models.dev.
-Explicit saves require at least one model. Selections persist through disconnect/reconnect; disconnecting only hides
-that provider's models while it is unavailable.
+On first connection, Jupiter selects a small set of recent eligible models automatically. Your selections persist when
+a provider disconnects and reappear when it reconnects.
 
-Selected provider models filter additional chat choices. Every model named in connected agent frontmatter remains
-available even if it is not selected. The catalogue keeps compatible tool-capable text models and filters by provider;
-models.dev compatibility describes supported protocols and capabilities, not account entitlement, so a model may still
-be unavailable to a particular account. If no usable model is available, the picker is empty and chat sending is
-disabled.
-
-A model selected in historical session metadata can be unavailable if it is no longer in the catalogue or its provider
-is disconnected; Jupiter does not silently treat it as connected.
-
-## Provider routing
-
-A catalogue model ID includes its provider, such as `openai/...` or `anthropic/...`. Jupiter derives the provider from
-the selected model and routes the request to that provider's client; the active agent's default does not override this
-routing.
+Models referenced by configured agents remain available when their provider is connected, even if they are not part of
+the provider's additional selection.
 
 ## Agent defaults and fallback
 
-An agent Markdown file's `model:` value may be one model ID or a comma-separated, ordered preference list. Bundled
-agents use OpenAI first and Anthropic second: Plan and Engineer fall back to Claude Opus 5; Explore, Apprentice, and
-Test fall back to Claude Sonnet 5. For agent-default and subagent runs, Jupiter selects the first model in that order
-whose provider is available. Availability is checked before sending the request; Jupiter does not retry a failed model
-or API request with another model.
+An agent can define one default model or an ordered preference list.
 
-An implicit model choice from the browser is resolved again when the turn executes, so it reflects provider availability
-at execution time. An explicit model selected by the user is strict: if its provider is unavailable, the turn fails
-rather than silently falling back. When an implicit, agent-default, or subagent preference falls back, generated
-message/session attribution retains the preferred model and records the actual model used. Token usage is attributed to
-the actual model.
+For an agent-default turn, Jupiter uses the first preference whose provider is currently available. It does not retry a
+failed model request using the next preference.
 
-The composer lets you override the agent default and reasoning level for a primary turn.
+An explicit model selection is strict: if its provider is unavailable, the turn fails instead of silently switching
+models.
 
 ## Thinking level
 
-The selected thinking level is stored with the assistant message and passed into model requests that support it. For
-Claude models, LOW, MEDIUM, and HIGH map to Anthropic adaptive thinking effort at the corresponding level. Thinking,
-signature, and redacted-thinking blocks from Claude are retained privately when needed to continue tool use; they are
-not rendered as assistant text.
+The composer lets you choose the thinking level for a primary turn. Supported models receive the selected level when the
+request is sent.
 
-Anthropic tool requests disable parallel tool use. Jupiter does not yet support safely executing multiple tool calls
-from one Anthropic response.
-
-When you return to a session, the selected agent's frontmatter controls the initial model and Thinking defaults; it is
-not derived from historical per-turn metadata. Changing or resetting the agent uses that frontmatter again. An explicit
-composer model or Thinking choice applies to that turn. If an agent's model has disappeared from the catalogue, the
-selection cannot be resolved rather than being silently treated as connected.
-
-Provider tests use fixtures and mocks rather than live credentials.
+Returning to a session uses the selected agent's configured model and thinking defaults. An explicit composer override
+applies to that turn.
