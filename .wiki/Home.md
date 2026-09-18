@@ -1,6 +1,6 @@
 # Jupiter Documentation
 
-Jupiter is a coding harness for remote development: run it where the code lives, then work from any browser.
+Jupiter is a remote coding environment: run it where the code lives, then work from any browser.
 
 ![Jupiter interface](images/interface-desktop.png)
 
