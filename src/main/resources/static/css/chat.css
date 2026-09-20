@@ -526,15 +526,11 @@
 }
 
 .tool-call-status-success {
-    background: rgba(34, 197, 94, 0.12);
     color: #16a34a;
-    border: 1px solid rgba(34, 197, 94, 0.12);
 }
 
 .tool-call-status-failure {
-    background: rgba(239, 68, 68, 0.08);
     color: #dc2626;
-    border: 1px solid rgba(239, 68, 68, 0.08);
 }
 
 .tool-call-detail {
