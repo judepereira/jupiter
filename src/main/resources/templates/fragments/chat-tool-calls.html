@@ -85,7 +85,7 @@
 
 <th:block
     th:fragment="statusIcon(status, success)"
-    th:with="effectiveStatus=${status ?: (success ? 'success' : 'failure')}, iconClass=${effectiveStatus == 'running' ? 'bi-arrow-repeat' : (effectiveStatus == 'success' ? 'bi-check-circle-fill' : (effectiveStatus == 'failure' ? 'bi-x-circle-fill' : 'bi-question-circle'))}, statusText=${effectiveStatus == 'running' ? 'running' : (effectiveStatus == 'success' ? 'success' : (effectiveStatus == 'failure' ? 'failure' : effectiveStatus))}"
+    th:with="effectiveStatus=${status ?: (success ? 'success' : 'failure')}, iconClass=${effectiveStatus == 'running' ? 'bi-hourglass-split' : (effectiveStatus == 'success' ? 'bi-check-circle-fill' : (effectiveStatus == 'failure' ? 'bi-x-circle-fill' : 'bi-question-circle'))}, statusText=${effectiveStatus == 'running' ? 'running' : (effectiveStatus == 'success' ? 'success' : (effectiveStatus == 'failure' ? 'failure' : effectiveStatus))}"
 >
     <span
         class="tool-call-status"
