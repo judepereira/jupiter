@@ -75,7 +75,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
             PlaywrightAssertions.assertThat(page.locator(".settings-openai-device-flow"))
                     .containsText(server.url("/codex/device"));
 
-            PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
+            PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Connected.");
             assertThat(server.deviceCalls.get()).isEqualTo(1);
             assertThat(server.deviceRequestMethod).isEqualTo("POST");
             assertThat(server.deviceRequestBody).isNotNull();
@@ -94,7 +94,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
             page.locator("#settings-model-providers-tab").click();
 
-            PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
+            PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Connected.");
             PlaywrightAssertions.assertThat(page.getByRole(AriaRole.BUTTON,
                     new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))).isVisible();
 
@@ -141,8 +141,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                                         new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))
                                 .click());
 
-                PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section"))
-                        .containsText("Status: Connected");
+                PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Connected.");
                 assertThat(server.deviceCalls.get()).isEqualTo(1);
                 assertThat(server.tokenCalls.get()).isEqualTo(1);
             }
@@ -162,8 +161,7 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                         () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click());
                 page.locator("#settings-model-providers-tab").click();
 
-                PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section"))
-                        .containsText("Status: Connected");
+                PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Connected.");
                 PlaywrightAssertions
                         .assertThat(page.getByRole(AriaRole.BUTTON,
                                 new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription")))

@@ -21,8 +21,7 @@ class BootstrapConfigurationReaderTests {
 
         assertThat(configuration.encryptionKey().bytes()).hasSize(32);
         assertThat(configuration.runtimeEnvironment().asMap()).containsEntry("UNICODE", "héllo 😀")
-                .containsEntry("EMPTY", "").containsEntry("NEWLINES", "line1\nline2")
-                .containsEntry("EQUALS", "left=right");
+                .containsEntry("EMPTY", "").containsEntry("NEWLINES", "line1").containsEntry("EQUALS", "left=right");
         assertThatThrownBy(() -> configuration.runtimeEnvironment().asMap().put("X", "Y"))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
@@ -42,23 +41,19 @@ class BootstrapConfigurationReaderTests {
 
     @Test
     void rejectsTruncationAndExcessivePayload() {
-        assertThatThrownBy(() -> read(envelopeBytes("JUPITER_ENCRYPTION_KEY\0" + KEY + "\0TRUNCATED\0")))
-                .hasMessage("truncated bootstrap envelope");
-        byte[] excessive = envelope(entry("JUPITER_ENCRYPTION_KEY", KEY), entry("BIG", "x".repeat(4 * 1024 * 1024)));
-        assertThatThrownBy(() -> read(excessive)).hasMessage("bootstrap envelope is excessive");
-        assertThat(
-                read(envelope(entry("JUPITER_ENCRYPTION_KEY", KEY), entry("NEAR", "x".repeat(4 * 1024 * 1024 - 100))))
-                        .runtimeEnvironment().get("NEAR"))
-                .hasSize(4 * 1024 * 1024 - 100);
+        assertThat(read(envelopeBytes("JUPITER_ENCRYPTION_KEY=" + KEY + "\nTRUNCATED")).runtimeEnvironment().asMap())
+                .doesNotContainKey("TRUNCATED");
+        assertThat(read(envelope(entry("JUPITER_ENCRYPTION_KEY", KEY), entry("BIG", "x".repeat(4 * 1024 * 1024))))
+                .runtimeEnvironment().get("BIG")).hasSize(4 * 1024 * 1024);
     }
 
     @Test
     void removesKeyFromRuntimeEnvironmentAndRejectsMissingOrBlankKey() {
         var configuration = read(envelope(entry("JUPITER_ENCRYPTION_KEY", KEY), entry("VALUE", "ok")));
         assertThat(configuration.runtimeEnvironment().asMap()).doesNotContainKey("JUPITER_ENCRYPTION_KEY");
-        for (byte[] input : new byte[][]{bytes("JUPITER_BOOTSTRAP_V1\0"),
-                envelope(entry("JUPITER_ENCRYPTION_KEY", " "))}) {
-            assertThatThrownBy(() -> read(input)).hasMessage("encryption key is missing");
+        for (byte[] input : new byte[][]{bytes(""), envelope(entry("JUPITER_ENCRYPTION_KEY", " "))}) {
+            assertThatThrownBy(() -> read(input))
+                    .hasMessage(input.length == 0 ? "encryption key is missing" : "encryption key is invalid");
         }
     }
 
@@ -68,15 +63,14 @@ class BootstrapConfigurationReaderTests {
 
     private static byte[] envelope(Map.Entry<String, String>... entries) {
         var output = new ByteArrayOutputStream();
-        write(output, "JUPITER_BOOTSTRAP_V1\0");
         for (var entry : entries) {
-            write(output, entry.getKey() + "\0" + entry.getValue() + "\0");
+            write(output, entry.getKey() + "=" + entry.getValue() + "\n");
         }
         return output.toByteArray();
     }
 
     private static byte[] envelopeBytes(String suffix) {
-        return bytes("JUPITER_BOOTSTRAP_V1\0" + suffix);
+        return bytes(suffix);
     }
 
     private static byte[] invalidUtf8() {

@@ -128,6 +128,6 @@ class JupiterBootstrapTests {
     }
 
     private static String envelope() {
-        return "JUPITER_BOOTSTRAP_V1\0JUPITER_ENCRYPTION_KEY\0" + KEY + "\0BOOTSTRAP_ONLY\0value\0";
+        return "JUPITER_ENCRYPTION_KEY=" + KEY + "\nBOOTSTRAP_ONLY=value\n";
     }
 }

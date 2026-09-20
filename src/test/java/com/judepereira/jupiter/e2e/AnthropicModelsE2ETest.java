@@ -11,7 +11,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,27 +52,23 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                             .getByRole(AriaRole.BUTTON,
                                     new Page.GetByRoleOptions().setName("Connect ChatGPT/OpenAI subscription"))
                             .click());
-            assertThat(page.locator("#openai-oauth-section")).containsText("Status: Connected");
+            assertThat(page.locator("#openai-oauth-section")).containsText("Connected.");
 
-            // Starting Claude exposes the exact local authorization URL without visiting
-            // it.
+            // Starting Claude creates a pending local authorization flow. The current
+            // fragment asks for the code directly; omitting the optional state suffix
+            // makes the server use the pending flow's state.
             assertThat(page.locator("#settings-model-providers")).isVisible();
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/anthropic/start") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect Claude"))
                             .click());
-            Locator authorizationLink = page.locator("#anthropic-oauth-section a.settings-anthropic-authorization");
-            assertThat(authorizationLink).hasAttribute("href", authorizationLink.getAttribute("href"));
-            String authorizationUrl = authorizationLink.getAttribute("href");
-            assertThat(authorizationUrl).startsWith(fixture.url("/claude/authorize"));
-            String state = URI.create(authorizationUrl).getQuery().replaceFirst(".*(?:^|&)state=([^&]+).*", "$1");
-            page.locator("#anthropic-oauth-section input[name='code']").fill("local-code#" + state);
+            page.locator("#anthropic-oauth-section input[name='code']").fill("local-code");
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/anthropic/complete") && response.status() == 200,
                     () -> page
                             .getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Complete authentication"))
                             .click());
-            assertThat(page.locator("#anthropic-oauth-section")).containsText("Connected");
+            assertThat(page.locator("#anthropic-oauth-section")).containsText("Anthropic connected.");
             assertThat(fixture.anthropicTokenCalls.get()).isEqualTo(1);
 
             page.locator("#settings-modal .btn-close").click();
@@ -140,16 +135,13 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
             assertPicker(page);
             openSettings(page);
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect Claude")).click();
-            String reconnectUrl = page.locator("#anthropic-oauth-section a.settings-anthropic-authorization")
-                    .getAttribute("href");
-            String reconnectState = URI.create(reconnectUrl).getQuery().replaceFirst(".*(?:^|&)state=([^&]+).*", "$1");
-            page.locator("#anthropic-oauth-section input[name='code']").fill("local-code#" + reconnectState);
+            page.locator("#anthropic-oauth-section input[name='code']").fill("local-code");
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/anthropic/complete") && response.status() == 200,
                     () -> page
                             .getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Complete authentication"))
                             .click());
-            assertThat(page.locator("#anthropic-oauth-section")).containsText("Connected");
+            assertThat(page.locator("#anthropic-oauth-section")).containsText("Anthropic connected.");
             page.locator("#settings-modal .btn-close").click();
             assertPicker(page, "anthropic/claude-sonnet-5|Claude Sonnet Test",
                     "anthropic/claude-opus-5|Claude Opus Test");

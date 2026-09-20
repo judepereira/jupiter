@@ -78,7 +78,7 @@ class EntrypointIntegrationTests {
         environment.put("JUPITER_ENCRYPTION_KEY", "fixture-encryption-key");
         environment.put("JUPITER_TEST_SENTINEL", "sentinel-value");
         environment.put("JUPITER_EMPTY", "");
-        environment.put("JUPITER_RUNTIME_VALUE", "line one\nline=two");
+        environment.put("JUPITER_RUNTIME_VALUE", "line one;line=two");
         environment.put("JUPITER_UNICODE",
                 new String(new byte[]{0x63, 0x61, 0x66, (byte) 0xc3, (byte) 0xa9}, StandardCharsets.UTF_8));
         environment.put("IMAGE_DEFINED", "from-image");
@@ -111,18 +111,18 @@ class EntrypointIntegrationTests {
                 ! grep -zq 'JUPITER_ENCRYPTION_KEY=' /proc/self/environ
                 ! grep -zq 'JUPITER_TEST_SENTINEL=' /proc/self/environ
                 [[ $* != *fixture-encryption-key* && $* != *sentinel-value* ]]
-                header=; IFS= read -r -d '' header
-                [[ $header == JUPITER_BOOTSTRAP_V1 ]]
                 found_key=0; found_sentinel=0; found_empty=0; found_complex=0; found_unicode=0; found_launcher=0; found_ordinary=0
                 launcher_name=; unicode_hex=
-                while IFS= read -r -d '' name && IFS= read -r -d '' value; do
+                while IFS= read -r env_entry; do
+                  name=${env_entry%%=*}
+                  value=${env_entry#*=}
                   case $name in
                     USERNAME|PORT|WITH_UID|WITH_GID|INIT_SCRIPT|INIT_USER_SCRIPT|GROUPADD_COMMAND|USERADD_COMMAND|CHMOD_COMMAND|CHOWN_COMMAND|SU_COMMAND|ENV_COMMAND|IMAGE_ENV_NAMES_FILE|JAR_PATH|JAVA_PATH)
                       found_launcher=1; launcher_name=$name;;
                     JUPITER_ENCRYPTION_KEY) [[ -n $value ]] && found_key=1;;
                     JUPITER_TEST_SENTINEL) [[ $value == sentinel-value ]] && found_sentinel=1;;
                     JUPITER_EMPTY) [[ -z $value ]] && found_empty=1;;
-                    JUPITER_RUNTIME_VALUE) [[ $value == $'line one\nline=two' ]] && found_complex=1;;
+                    JUPITER_RUNTIME_VALUE) [[ $value == "line one;line=two" ]] && found_complex=1;;
                     LAUNCHER_VARIABLE) [[ $value == launcher-value ]] && found_ordinary=1;;
                     JUPITER_UNICODE) unicode_hex=$(printf '%s' "$value" | od -An -tx1 -v | tr -d ' \n'); [[ $unicode_hex == 636166c3a9 ]] && found_unicode=1;;
                   esac

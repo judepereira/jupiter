@@ -95,7 +95,7 @@ class JupiterStartupIntegrationTests {
         for (String input : new String[]{"not-base64", "AQ=="}) {
             StartupResult result = runAndCaptureRaw(input, tempDir.resolve("invalid-" + input.hashCode()));
             assertThat(result.exitCode()).isNotZero();
-            assertThat(result.output()).contains("invalid bootstrap envelope");
+            assertThat(result.output()).contains("encryption key is missing");
             assertThat(result.output()).doesNotContain(KEY);
         }
     }
@@ -203,15 +203,9 @@ class JupiterStartupIntegrationTests {
     private static byte[] envelope(String key, Map<String, String> variables) {
         var output = new ByteArrayOutputStream();
         try {
-            output.write("JUPITER_BOOTSTRAP_V1\0".getBytes(StandardCharsets.US_ASCII));
-            output.write("JUPITER_ENCRYPTION_KEY\0".getBytes(StandardCharsets.US_ASCII));
-            output.write(key.getBytes(StandardCharsets.UTF_8));
-            output.write(0);
+            output.write(("JUPITER_ENCRYPTION_KEY=" + key + "\n").getBytes(StandardCharsets.UTF_8));
             for (var entry : variables.entrySet()) {
-                output.write(entry.getKey().getBytes(StandardCharsets.UTF_8));
-                output.write(0);
-                output.write(entry.getValue().getBytes(StandardCharsets.UTF_8));
-                output.write(0);
+                output.write((entry.getKey() + "=" + entry.getValue() + "\n").getBytes(StandardCharsets.UTF_8));
             }
             return output.toByteArray();
         } catch (IOException exception) {
