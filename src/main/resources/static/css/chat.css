@@ -380,7 +380,7 @@
     max-width: min(100%, 720px);
     height: auto;
     border-radius: 10px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--outline-colour);
     background: #fff;
 }
 

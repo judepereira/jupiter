@@ -32,7 +32,7 @@ URLs or headers.
 
 ## Runtime behaviour
 
-Enabled servers connect for exposed projects. Configuration changes reconnect the affected project integrations.
+Enabled servers connect for projects with access. Configuration changes reconnect the affected project integrations.
 Connection failures surface as system balloons, and tool-list changes are picked up automatically.
 
 ## Tool-name collisions

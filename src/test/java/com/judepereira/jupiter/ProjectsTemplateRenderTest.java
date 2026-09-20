@@ -1,7 +1,5 @@
 package com.judepereira.jupiter;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.command.CommandCatalogService;
@@ -15,11 +13,6 @@ import com.judepereira.jupiter.ui.UiController.Project;
 import com.judepereira.jupiter.ui.UiController.Session;
 import com.judepereira.jupiter.ui.UiController.UsagePoint;
 import com.judepereira.jupiter.ui.UiController.Workspace;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -31,6 +24,14 @@ import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.web.servlet.JakartaServletWebApplication;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class ProjectsTemplateRenderTest {
 
@@ -185,7 +186,7 @@ public class ProjectsTemplateRenderTest {
                 "https://example.test", "FEATURE_FLAG", "true", "Add Variable", "name=\"commandEnvironmentAllowlist\"",
                 "HOME, PATH", "run command tool", "Terminal sessions retain the normal system environment");
         assertThat(html).contains("MCP servers", "Local MCP", "http://localhost:3000/mcp", "Header name",
-                "Authorization", "Bearer token", "Exposed projects");
+                "Authorization", "Bearer token", "Projects with access");
         assertThat(html).contains("Hooks", "Agent completion script", "Agent error script",
                 "Subagent completion script", "name=\"assistantCompletedScript\"", "name=\"assistantErroredScript\"",
                 "name=\"subagentCompletedScript\"", "Runs after the agent response completes.",
