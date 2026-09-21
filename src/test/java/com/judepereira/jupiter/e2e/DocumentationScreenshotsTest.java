@@ -193,8 +193,8 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                             .click());
             page.locator("#openai-oauth-section").waitFor();
             page.waitForFunction(
-                    "() => document.querySelector('#openai-oauth-section')?.textContent.includes('Status: Connected')",
-                    null, new Page.WaitForFunctionOptions().setTimeout(120000));
+                    "() => document.querySelector('#openai-oauth-section')?.textContent.includes('Connected.')", null,
+                    new Page.WaitForFunctionOptions().setTimeout(120000));
         } finally {
             page.context().close();
         }

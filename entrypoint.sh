@@ -84,9 +84,8 @@ fi
 su_args=(); [[ -n "$image_env_list" ]] && su_args=(-w "$image_env_list")
 
 envelope() {
-  printf 'JUPITER_BOOTSTRAP_V1\0'
   for env_name in "${captured_names[@]}"; do
-    printf '%s\0%s\0' "$env_name" "${captured_values[$env_name]}"
+    printf '%s=%s\n' "$env_name" "${captured_values[$env_name]}"
   done
 }
 launch_username=$USERNAME

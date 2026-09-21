@@ -184,8 +184,8 @@ public class ProjectsTemplateRenderTest {
         assertThat(normalizeWhitespace(html)).contains("id=\"settings-modal\"", "Environment variables", "API_URL",
                 "https://example.test", "FEATURE_FLAG", "true", "Add Variable", "name=\"commandEnvironmentAllowlist\"",
                 "HOME, PATH", "run command tool", "Terminal sessions retain the normal system environment");
-        assertThat(html).contains("MCP servers", "Local MCP", "http://localhost:3000/mcp", "Header name",
-                "Authorization", "Bearer token", "Exposed projects");
+        assertThat(html).contains("MCP Servers", "Local MCP", "http://localhost:3000/mcp", "Header name",
+                "Authorization", "Bearer token", "Projects with access");
         assertThat(html).contains("Hooks", "Agent completion script", "Agent error script",
                 "Subagent completion script", "name=\"assistantCompletedScript\"", "name=\"assistantErroredScript\"",
                 "name=\"subagentCompletedScript\"", "Runs after the agent response completes.",
@@ -193,12 +193,11 @@ public class ProjectsTemplateRenderTest {
                 "Runs when a subagent completes, using the parent session's context.", "name=\"timeoutSeconds\"",
                 "min=\"1\"", "max=\"3600\"", "Hooks run asynchronously", "/bin/bash", "/tmp", "JUPITER_PROJECT_NAME",
                 "JUPITER_WORKSPACE_NAME", "JUPITER_SESSION_NAME", "Project-configured environment variables",
-                "JUPITER_*", "\"$WEBHOOK_URL\"", "A hook failure does not change", "timeout applies to each hook",
                 "/tmp/jupiter-hooks.log");
         assertThat(html).contains("echo &lt;done&gt;\nline 2").doesNotContain("echo <done>");
         assertThat(html).contains("class=\"nav nav-pills flex-md-column settings-nav\"",
                 "id=\"settings-current-project\"", "id=\"settings-application\"", "id=\"settings-mcp-servers\"",
-                "id=\"settings-model-providers\"", "id=\"settings-usage\"", "id=\"settings-help\"", "<h5>Help</h5>");
+                "id=\"settings-model-providers\"", "id=\"settings-usage\"", "id=\"settings-help\"");
         assertThat(html.indexOf("id=\"settings-current-project-tab\""))
                 .isLessThan(html.indexOf("id=\"settings-mcp-servers-tab\""));
         assertThat(html.indexOf("id=\"settings-mcp-servers-tab\""))
@@ -233,7 +232,7 @@ public class ProjectsTemplateRenderTest {
         populated.setVariable("selectedModelIds", Map.of("anthropic", List.of()));
         String populatedHtml = engine.process(
                 new TemplateSpec("fragments/projects", Set.of("settingsModels"), TemplateMode.HTML, null), populated);
-        assertThat(populatedHtml).contains("anthropic", "Claude Test", "Connected");
+        assertThat(populatedHtml).contains("anthropic", "Claude Test");
     }
 
     @Test
@@ -271,15 +270,15 @@ public class ProjectsTemplateRenderTest {
         String html = engine.process(
                 new TemplateSpec("fragments/projects", Set.of("settingsCommands"), TemplateMode.HTML, null), context);
 
-        assertThat(html).contains("Custom commands", "unsafe-command", "second-command", "name=\"id\"",
-                "name=\"description\"", "name=\"body\"", "hx-post=\"/ui/settings/commands/create\"",
-                "/ui/settings/commands/unsafe-command/update", "/ui/settings/commands/unsafe-command/delete",
-                "/ui/settings/commands/second-command/update", "/ui/settings/commands/second-command/delete",
-                "class=\"form-control\"", "class=\"form-select\"", "class=\"row g-3\"", "class=\"collapse\"",
-                "data-bs-toggle=\"collapse\"", "aria-expanded=\"false\"", "aria-controls=\"settings-command-edit-0\"",
-                "data-bs-target=\"#settings-command-edit-0\"", "id=\"settings-command-edit-0\"",
-                "aria-controls=\"settings-command-edit-1\"", "data-bs-target=\"#settings-command-edit-1\"",
-                "id=\"settings-command-edit-1\"");
+        assertThat(html).contains("Commands discovered in your custom command folder", "unsafe-command",
+                "second-command", "name=\"id\"", "name=\"description\"", "name=\"body\"",
+                "hx-post=\"/ui/settings/commands/create\"", "/ui/settings/commands/unsafe-command/update",
+                "/ui/settings/commands/unsafe-command/delete", "/ui/settings/commands/second-command/update",
+                "/ui/settings/commands/second-command/delete", "class=\"form-control\"", "class=\"form-select\"",
+                "class=\"row g-3\"", "class=\"collapse\"", "data-bs-toggle=\"collapse\"", "aria-expanded=\"false\"",
+                "aria-controls=\"settings-command-edit-0\"", "data-bs-target=\"#settings-command-edit-0\"",
+                "id=\"settings-command-edit-0\"", "aria-controls=\"settings-command-edit-1\"",
+                "data-bs-target=\"#settings-command-edit-1\"", "id=\"settings-command-edit-1\"");
         assertThat(html).contains("&lt;Unsafe name&gt;", "&lt;unsafe description&gt;",
                 "Body &lt;script&gt;alert(1)&lt;/script&gt; &amp; text");
         assertThat(html).doesNotContain("<Unsafe name>", "<unsafe description>", "<script>alert(1)</script>");

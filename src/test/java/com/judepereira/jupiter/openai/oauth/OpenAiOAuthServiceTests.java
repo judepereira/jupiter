@@ -57,7 +57,7 @@ public class OpenAiOAuthServiceTests {
             OpenAiOAuthService.OpenAiOAuthView connected = service.pollCurrentDeviceAuthorization();
             assertThat(connected.connected()).isTrue();
             assertThat(connected.pending()).isFalse();
-            assertThat(connected.message()).isEqualTo("OpenAI connected.");
+            assertThat(connected.message()).isEqualTo("Connected.");
             assertThat(service.currentView().connected()).isTrue();
             assertThat(service.currentAccessToken()).contains("access-123");
             assertThat(service.currentAccountId()).contains("acct-123");

@@ -279,7 +279,7 @@ public class ChatTemplateRenderTest {
 
         String html = engine.process("fragments/chat-rows", context);
 
-        assertThat(html).contains("data-tool-call-state=\"running\"", "bi-arrow-repeat", "aria-label=\"running\"",
+        assertThat(html).contains("data-tool-call-state=\"running\"", "bi-hourglass-split", "aria-label=\"running\"",
                 "visually-hidden");
         assertThat(html).doesNotMatch("(?s).*<span class=\\\"tool-call-status[^>]*>\\s*running\\s*</span>.*")
                 .doesNotContain("tool-call-status-failure");

@@ -288,7 +288,6 @@
 
 <th:block th:fragment="usageEmpty">
     <section class="settings-section">
-        <h5>Usage</h5>
         <p class="text-muted">No active project is selected.</p>
     </section>
 </th:block>
@@ -297,8 +296,7 @@
     <section class="settings-section settings-usage" data-settings-usage-chart th:attr="data-range=${usageRange}">
         <div class="settings-section-header">
             <div>
-                <h5>Usage</h5>
-                <p class="settings-usage-note">Reported token metrics, hourly, UTC</p>
+                <span>Reported token metrics, hourly, UTC</span>
             </div>
             <div class="btn-group btn-group-sm" role="group" aria-label="Usage range">
                 <button
@@ -340,7 +338,6 @@
         <section class="settings-section settings-command-section">
             <div class="settings-section-header">
                 <div>
-                    <h5>Custom commands</h5>
                     <p class="settings-help-text">
                         Commands discovered in your custom command folder. IDs use lower-case letters, numbers, hyphens,
                         and underscores.
@@ -556,7 +553,7 @@
             </div>
 
             <div class="settings-modal-grid row g-4">
-                <div class="col-12 col-md-3">
+                <div class="col-12 col-md-3 h-100 overflow-scroll">
                     <nav class="nav nav-pills flex-md-column settings-nav" aria-label="Settings tabs" role="tablist">
                         <button
                             th:if="${activeProject != null}"
@@ -581,7 +578,7 @@
                             aria-controls="settings-application"
                             aria-selected="false"
                         >
-                            Application
+                            Git
                         </button>
                         <button
                             class="nav-link"
@@ -660,7 +657,7 @@
                     </nav>
                 </div>
 
-                <div class="col-12 col-md-9">
+                <div class="col-12 col-md-9 overflow-scroll h-100">
                     <div class="tab-content settings-tab-content">
                         <div
                             th:if="${activeProject != null}"
@@ -677,7 +674,6 @@
                                 hx-swap="innerHTML"
                             >
                                 <section class="settings-section">
-                                    <h5>Current Project</h5>
                                     <div class="settings-project-meta">
                                         <div>
                                             <strong>Name:</strong>
@@ -690,7 +686,7 @@
                                     </div>
 
                                     <div class="project-form-field settings-env-field" data-settings-env-field>
-                                        <span>Environment variables</span>
+                                        <h6>Environment variables</h6>
                                         <div class="settings-env-list" data-settings-env-vars>
                                             <div
                                                 th:if="${#lists.isEmpty(environmentVariablesValue)}"
@@ -784,7 +780,7 @@
                                     </div>
 
                                     <label class="project-form-field">
-                                        <span>Command environment allowlist</span>
+                                        <h6>Command environment whitelist</h6>
                                         <input
                                             type="text"
                                             name="commandEnvironmentAllowlist"
@@ -796,13 +792,12 @@
                                         <small id="command-environment-allowlist-help"
                                             >Comma-separated system environment variable names. This controls only the
                                             run command tool; leave blank for no system variables. Terminal sessions
-                                            retain the normal system environment. Project environment variables remain
-                                            separate.</small
+                                            retain the normal system environment.</small
                                         >
                                     </label>
 
                                     <label class="project-form-field settings-commands-field">
-                                        <span>Workspace init commands</span>
+                                        <h6>Workspace init commands</h6>
                                         <textarea
                                             class="settings-commands"
                                             name="workspaceInitCommands"
@@ -813,15 +808,6 @@
                                     </label>
 
                                     <div class="project-form-actions">
-                                        <button
-                                            type="button"
-                                            class="btn btn-outline-secondary"
-                                            hx-get="/ui/projects/modal/close"
-                                            hx-target="#modal-root"
-                                            hx-swap="innerHTML"
-                                        >
-                                            Cancel
-                                        </button>
                                         <button type="submit" class="btn btn-primary">Save</button>
                                     </div>
                                 </section>
@@ -842,7 +828,6 @@
                                 hx-swap="innerHTML"
                             >
                                 <section class="settings-section settings-app-section">
-                                    <h5>Git updates</h5>
                                     <label class="settings-toggle">
                                         <input
                                             type="checkbox"
@@ -853,20 +838,11 @@
                                         <span>Automatically pull Git updates</span>
                                     </label>
                                     <p class="settings-help-text">
-                                        When enabled, Jupiter checks Git workspaces periodically. Manual pulls remain
-                                        available from the top navigation.
+                                        When enabled, Git worktrees are kept in sync if a no merge conflicts arise when pulling
+                                        from their corresponding remote tracking branch.
                                     </p>
                                     <div class="project-form-actions">
-                                        <button
-                                            type="button"
-                                            class="btn btn-outline-secondary"
-                                            hx-get="/ui/projects/modal/close"
-                                            hx-target="#modal-root"
-                                            hx-swap="innerHTML"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button type="submit" class="btn btn-primary">Save Git settings</button>
+                                        <button type="submit" class="btn btn-primary">Save Git Settings</button>
                                     </div>
                                 </section>
                             </form>
@@ -897,7 +873,6 @@
                                 hx-swap="innerHTML"
                             >
                                 <section class="settings-section">
-                                    <h5>Usage</h5>
                                     <p class="text-muted">Select Usage to load token activity for this project.</p>
                                 </section>
                             </div>
@@ -920,7 +895,6 @@
                                 <input type="hidden" name="mcpCatalogJson" value="">
                                 <section class="settings-section settings-mcp-section" data-settings-mcp-field>
                                     <div class="settings-section-header">
-                                        <h5>MCP servers</h5>
                                         <button
                                             type="button"
                                             class="btn btn-outline-primary btn-sm"
@@ -967,7 +941,7 @@
                                                 >
                                             </label>
                                             <div class="project-form-field settings-mcp-projects-field">
-                                                <span>Exposed projects</span>
+                                                <span>Projects with access</span>
                                                 <select
                                                     class="settings-mcp-projects"
                                                     data-mcp-server-projects
@@ -1089,7 +1063,7 @@
                                                 >
                                             </label>
                                             <div class="project-form-field settings-mcp-projects-field">
-                                                <span>Exposed projects</span>
+                                                <span>Projects with access</span>
                                                 <select
                                                     class="settings-mcp-projects"
                                                     data-mcp-server-projects
@@ -1236,7 +1210,7 @@
                                                 >
                                             </label>
                                             <div class="project-form-field settings-mcp-projects-field">
-                                                <span>Exposed projects</span>
+                                                <span>Projects with access</span>
                                                 <select
                                                     class="settings-mcp-projects"
                                                     data-mcp-server-projects
@@ -1338,25 +1312,19 @@
                                 hx-swap="innerHTML"
                             >
                                 <section class="settings-section settings-app-section">
-                                    <h5>Lifecycle hooks</h5>
                                     <div class="settings-hooks-docs">
                                         <p class="settings-help-text">
-                                            Hooks run asynchronously in Bash using <code>/bin/bash</code>, with
+                                            Hooks run asynchronously using <code>/bin/bash</code>, with
                                             <code>/tmp</code>
-                                            as the working directory. A hook failure does not change the agent or
-                                            subagent lifecycle result; the timeout applies to each hook.
+                                            as the working directory.
                                         </p>
                                         <p class="settings-help-text">
                                             These runtime variables are always available:
-                                            <code>JUPITER_PROJECT_NAME</code>
-                                            (project name),
-                                            <code>JUPITER_WORKSPACE_NAME</code>
-                                            (workspace name), and
-                                            <code>JUPITER_SESSION_NAME</code>
-                                            (session name). Project-configured environment variables are also passed and
+                                            <code>JUPITER_PROJECT_NAME</code>,
+                                            <code>JUPITER_WORKSPACE_NAME</code>, and
+                                            <code>JUPITER_SESSION_NAME</code>. Project-configured environment variables are also passed and
                                             can be expanded normally, such as
-                                            <code>"$WEBHOOK_URL"</code>. The three <code>JUPITER_*</code> values take
-                                            precedence over project variables with matching names.
+                                            <code>"$WEBHOOK_URL"</code>.
                                         </p>
                                         <p class="settings-help-text">Example:</p>
                                         <pre
@@ -1364,7 +1332,7 @@
                                         ><code>printf '%s | %s | %s\n' "$JUPITER_PROJECT_NAME" "$JUPITER_WORKSPACE_NAME" "$JUPITER_SESSION_NAME" &gt;&gt; /tmp/jupiter-hooks.log</code></pre>
                                     </div>
                                     <label class="project-form-field">
-                                        <span>Agent completion script</span>
+                                        <h6>Agent completion script</h6>
                                         <small id="agent-completion-help"
                                             >Runs after the agent response completes.</small
                                         >
@@ -1377,7 +1345,7 @@
                                         ></textarea>
                                     </label>
                                     <label class="project-form-field">
-                                        <span>Agent error script</span>
+                                        <h6>Agent error script</h6>
                                         <small id="agent-error-help">Runs when the agent execution fails.</small>
                                         <textarea
                                             name="assistantErroredScript"
@@ -1388,7 +1356,7 @@
                                         ></textarea>
                                     </label>
                                     <label class="project-form-field">
-                                        <span>Subagent completion script</span>
+                                        <h6>Subagent completion script</h6>
                                         <small id="subagent-completion-help"
                                             >Runs when a subagent completes, using the parent session's context.</small
                                         >
@@ -1401,7 +1369,7 @@
                                         ></textarea>
                                     </label>
                                     <label class="project-form-field">
-                                        <span>Timeout (seconds)</span>
+                                        <h6>Timeout (seconds)</h6>
                                         <input
                                             type="number"
                                             name="timeoutSeconds"
@@ -1412,15 +1380,6 @@
                                         >
                                     </label>
                                     <div class="project-form-actions">
-                                        <button
-                                            type="button"
-                                            class="btn btn-outline-secondary"
-                                            hx-get="/ui/projects/modal/close"
-                                            hx-target="#modal-root"
-                                            hx-swap="innerHTML"
-                                        >
-                                            Cancel
-                                        </button>
                                         <button type="submit" class="btn btn-primary">Save Hooks</button>
                                     </div>
                                 </section>
@@ -1435,7 +1394,6 @@
                             tabindex="0"
                         >
                             <section class="settings-section settings-app-section">
-                                <h5>Model Providers</h5>
                                 <div id="settings-models" th:replace="~{fragments/projects :: settingsModels}"></div>
                             </section>
                         </div>
@@ -1448,8 +1406,10 @@
                             tabindex="0"
                         >
                             <section class="settings-section settings-app-section">
-                                <h5>Help</h5>
-                                <p>Made with &lt;3 in Amsterdam</p>
+                                <p>Found a bug? Usability issue? Create an issue on GitHub <a href="https://github.com/judepereira/jupiter/issues" target="_blank">here</a>.
+                                    If you'd like to add a new feature,
+                                    please create an issue first, outlining your feature, and it's proposed implementation plan.</p>
+                                <p>Made with ❤️ in Amsterdam</p>
                                 <p>Version <strong th:text="${appVersion}"></strong></p>
                             </section>
                         </div>
@@ -1482,8 +1442,6 @@
             </p>
         </div>
 
-        <p th:if="${connected}"><strong>Status:</strong> Connected</p>
-
         <div class="project-form-actions">
             <button
                 type="button"
@@ -1493,7 +1451,7 @@
                 hx-target="#openai-oauth-section"
                 hx-swap="outerHTML"
             >
-                Disconnect ChatGPT/OpenAI subscription
+                Disconnect ChatGPT/OpenAI Subscription
             </button>
             <button
                 type="button"
@@ -1503,7 +1461,7 @@
                 hx-target="#openai-oauth-section"
                 hx-swap="outerHTML"
             >
-                Connect ChatGPT/OpenAI subscription
+                Connect ChatGPT/OpenAI Subscription
             </button>
         </div>
     </div>
@@ -1517,19 +1475,6 @@
         th:with="view=${anthropicOAuthView}"
     >
         <p th:text="${view.message}"></p>
-        <p th:if="${view.status.name() == 'NOT_CONNECTED'}">Not connected</p>
-        <p th:if="${view.status.name() == 'AUTHENTICATION_PENDING'}">Authentication pending</p>
-        <p th:if="${view.status.name() == 'CONNECTED'}">Connected</p>
-        <p th:if="${view.status.name() == 'REFRESH_FAILED'}">Refresh failed</p>
-        <p th:if="${view.pending}">
-            <a
-                class="settings-anthropic-authorization"
-                target="_blank"
-                rel="noreferrer"
-                th:href="${view.authorizationUrl}"
-                >Open Claude authentication</a
-            >
-        </p>
         <form
             th:if="${view.pending}"
             hx-post="/ui/settings/anthropic/complete"
@@ -1600,7 +1545,6 @@
     th:fragment="settingsModelsContent"
     th:with="groups=${modelGroups == null ? T(java.util.Map).of() : modelGroups}, selected=${selectedModelIds == null ? T(java.util.Map).of() : selectedModelIds}, availability=${providerAvailability == null ? T(java.util.Map).of() : providerAvailability}"
 >
-    <h6>Model Providers</h6>
     <div
         th:if="${modelSelectionError != null}"
         class="alert alert-danger"
@@ -1608,7 +1552,7 @@
         th:text="${modelSelectionError}"
     ></div>
     <div class="settings-provider-subsection">
-        <h6>OpenAI subscription</h6>
+        <h5>ChatGPT/OpenAI</h5>
         <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
         <th:block th:if="${availability['openai'] == true}">
             <form
@@ -1618,10 +1562,9 @@
                 hx-post="/ui/settings/models"
                 hx-swap="none"
             >
-                <h6>openai <span class="settings-provider-status">Connected</span></h6>
                 <input type="hidden" name="provider" value="openai">
                 <label
-                    ><span class="sr-only">OpenAI model selections</span
+                    ><span>Favourite Models</span
                     ><select name="modelId" multiple size="6" class="form-select">
                         <option
                             th:each="modelDef : ${groups['openai']}"
@@ -1636,7 +1579,7 @@
         </th:block>
     </div>
     <div class="settings-provider-subsection">
-        <h6>Anthropic</h6>
+        <h5>Anthropic</h5>
         <div th:replace="~{fragments/projects :: anthropicOAuthSection}"></div>
         <th:block th:if="${availability['anthropic'] == true}">
             <form
@@ -1646,10 +1589,9 @@
                 hx-post="/ui/settings/models"
                 hx-swap="none"
             >
-                <h6>anthropic <span class="settings-provider-status">Connected</span></h6>
                 <input type="hidden" name="provider" value="anthropic">
                 <label
-                    ><span class="sr-only">Anthropic model selections</span
+                    ><span>Favourite Models</span
                     ><select name="modelId" multiple size="6" class="form-select">
                         <option
                             th:each="modelDef : ${groups['anthropic']}"
@@ -1706,15 +1648,6 @@
                 </section>
 
                 <div class="project-form-actions">
-                    <button
-                        type="button"
-                        class="btn btn-outline-secondary"
-                        hx-get="/ui/projects/modal/close"
-                        hx-target="#modal-root"
-                        hx-swap="innerHTML"
-                    >
-                        Cancel
-                    </button>
                     <button type="submit" class="btn btn-primary">Open</button>
                 </div>
             </form>
@@ -1801,15 +1734,6 @@
                 </label>
 
                 <div class="project-form-actions">
-                    <button
-                        type="button"
-                        class="btn btn-outline-secondary"
-                        hx-get="/ui/projects/modal/close"
-                        hx-target="#modal-root"
-                        hx-swap="innerHTML"
-                    >
-                        Cancel
-                    </button>
                     <button type="submit" class="btn btn-primary">Create workspace</button>
                 </div>
             </form>
@@ -1852,15 +1776,6 @@
             </div>
 
             <div class="project-form-actions">
-                <button
-                    type="button"
-                    class="btn btn-outline-secondary"
-                    hx-get="/ui/projects/modal/close"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML"
-                >
-                    Cancel
-                </button>
                 <button
                     type="button"
                     class="btn btn-danger"
