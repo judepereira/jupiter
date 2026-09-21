@@ -142,17 +142,9 @@
                         <i class="bi bi-folder workspace-icon" aria-hidden="true"></i>
                         <span class="rail-label-wrap">
                             <span class="workspace-label" th:text="${workspace.name}"></span>
-                            <span th:if="${workspace.failed}" class="failed-dot" aria-label="Failed"></span>
-                            <span
-                                th:if="${!workspace.failed and workspace.unread}"
-                                class="unread-dot"
-                                aria-label="Unread"
-                            ></span>
-                            <span
-                                th:if="${!workspace.failed and !workspace.unread and workspace.inProgress}"
-                                class="pending-dot"
-                                aria-label="In progress"
-                            ></span>
+                            <th:block
+                                th:replace="~{fragments/project-components :: railStatusIndicator(${workspace.failed}, ${workspace.unread}, ${workspace.inProgress})}"
+                            ></th:block>
                         </span>
                     </button>
 
@@ -185,13 +177,9 @@
                             <i class="bi bi-chat-square session-icon" aria-hidden="true"></i>
                             <span class="rail-label-wrap">
                                 <span class="session-label" th:text="${s.name}"></span>
-                                <span th:if="${s.failed}" class="failed-dot" aria-label="Failed"></span>
-                                <span th:if="${!s.failed and s.unread}" class="unread-dot" aria-label="Unread"></span>
-                                <span
-                                    th:if="${!s.failed and !s.unread and s.inProgress}"
-                                    class="pending-dot"
-                                    aria-label="In progress"
-                                ></span>
+                                <th:block
+                                    th:replace="~{fragments/project-components :: railStatusIndicator(${s.failed}, ${s.unread}, ${s.inProgress})}"
+                                ></th:block>
                             </span>
                         </button>
 
@@ -352,71 +340,9 @@
             >
                 <h6>Add command</h6>
                 <div class="row g-3">
-                    <label class="col-md-6 form-label"
-                        >ID<input
-                            class="form-control"
-                            name="id"
-                            required
-                            pattern="[a-z0-9][a-z0-9_-]*"
-                            th:value="${submittedForAdd == null ? '' : submittedForAdd.id}"
-                        ></label
-                    >
-                    <label class="col-md-6 form-label"
-                        >Name<input
-                            class="form-control"
-                            name="name"
-                            required
-                            th:value="${submittedForAdd == null ? '' : submittedForAdd.name}"
-                        ></label
-                    >
-                    <label class="col-md-6 form-label"
-                        >Type<select class="form-select" name="type" required>
-                            <option
-                                value="prompt"
-                                th:selected="${submittedForAdd != null and submittedForAdd.type != null and submittedForAdd.type.name() == 'PROMPT'}"
-                            >
-                                Prompt
-                            </option>
-                            <option
-                                value="script"
-                                th:selected="${submittedForAdd != null and submittedForAdd.type != null and submittedForAdd.type.name() == 'SCRIPT'}"
-                            >
-                                Script
-                            </option>
-                        </select></label
-                    >
-                    <label class="col-md-6 form-label"
-                        >Description<input
-                            class="form-control"
-                            name="description"
-                            th:value="${submittedForAdd == null ? '' : submittedForAdd.description}"
-                        ></label
-                    >
-                    <label class="col-md-6 form-label"
-                        >Working directory<input
-                            class="form-control"
-                            name="workingDir"
-                            th:value="${submittedForAdd == null ? '' : submittedForAdd.workingDir}"
-                        ></label
-                    >
-                    <label class="col-md-6 form-label"
-                        >Timeout (seconds)<input
-                            class="form-control"
-                            name="timeoutSeconds"
-                            type="number"
-                            min="1"
-                            th:value="${submittedForAdd == null or submittedForAdd.timeoutSeconds == null ? '' : submittedForAdd.timeoutSeconds}"
-                        ></label
-                    >
-                    <label class="col-12 form-label"
-                        >Body<textarea
-                            class="form-control"
-                            name="body"
-                            rows="5"
-                            required
-                            th:text="${submittedForAdd == null ? '' : submittedForAdd.body}"
-                        ></textarea></label
-                    >
+                    <th:block
+                        th:replace="~{fragments/project-components :: customCommandFields(${submittedForAdd}, true)}"
+                    ></th:block>
                 </div>
                 <button class="btn btn-primary" type="submit">Add command</button>
             </form>
@@ -445,65 +371,9 @@
                         >
                             <input type="hidden" name="originalId" th:value="${command.id}">
                             <div class="row g-3">
-                                <label class="col-md-6 form-label"
-                                    >ID<input
-                                        class="form-control"
-                                        name="id"
-                                        required
-                                        pattern="[a-z0-9][a-z0-9_-]*"
-                                        th:value="${editCommand.id}"
-                                    ></label
-                                ><label class="col-md-6 form-label"
-                                    >Name<input
-                                        class="form-control"
-                                        name="name"
-                                        required
-                                        th:value="${editCommand.name}"
-                                    ></label
-                                ><label class="col-md-6 form-label"
-                                    >Type<select class="form-select" name="type">
-                                        <option
-                                            value="prompt"
-                                            th:selected="${editCommand.type != null and editCommand.type.name() == 'PROMPT'}"
-                                        >
-                                            Prompt
-                                        </option>
-                                        <option
-                                            value="script"
-                                            th:selected="${editCommand.type != null and editCommand.type.name() == 'SCRIPT'}"
-                                        >
-                                            Script
-                                        </option>
-                                    </select></label
-                                ><label class="col-md-6 form-label"
-                                    >Description<input
-                                        class="form-control"
-                                        name="description"
-                                        th:value="${editCommand.description}"
-                                    ></label
-                                ><label class="col-md-6 form-label"
-                                    >Working directory<input
-                                        class="form-control"
-                                        name="workingDir"
-                                        th:value="${editCommand.workingDir}"
-                                    ></label
-                                ><label class="col-md-6 form-label"
-                                    >Timeout (seconds)<input
-                                        class="form-control"
-                                        name="timeoutSeconds"
-                                        type="number"
-                                        min="1"
-                                        th:value="${editCommand.timeoutSeconds}"
-                                    ></label
-                                ><label class="col-12 form-label"
-                                    >Body<textarea
-                                        class="form-control"
-                                        name="body"
-                                        rows="5"
-                                        required
-                                        th:text="${editCommand.body}"
-                                    ></textarea></label
-                                >
+                                <th:block
+                                    th:replace="~{fragments/project-components :: customCommandFields(${editCommand}, false)}"
+                                ></th:block>
                             </div>
                             <div class="settings-command-actions">
                                 <button class="btn btn-primary btn-sm" type="submit">Save changes</button
@@ -528,12 +398,7 @@
     th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, commandEnvironmentAllowlistValue=${activeProject == null or activeProject.commandEnvironmentAllowlist == null ? '' : activeProject.commandEnvironmentAllowlist}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}"
 >
     <div id="settings-modal" class="project-modal settings-modal">
-        <div
-            class="project-modal-backdrop"
-            hx-get="/ui/projects/modal/close"
-            hx-target="#modal-root"
-            hx-swap="innerHTML"
-        ></div>
+        <th:block th:replace="~{fragments/project-components :: modalBackdrop}"></th:block>
 
         <div
             class="project-modal-card settings-modal-card"
@@ -541,16 +406,9 @@
             aria-modal="true"
             aria-labelledby="settings-modal-title"
         >
-            <div class="project-modal-header">
-                <h4 id="settings-modal-title">Settings</h4>
-                <button
-                    type="button"
-                    class="btn-close"
-                    hx-get="/ui/projects/modal/close"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML"
-                ></button>
-            </div>
+            <th:block
+                th:replace="~{fragments/project-components :: modalHeader('settings-modal-title', 'Settings')}"
+            ></th:block>
 
             <div class="settings-modal-grid row g-4">
                 <div class="col-12 col-md-3 h-100 overflow-scroll">
@@ -688,87 +546,21 @@
                                     <div class="project-form-field settings-env-field" data-settings-env-field>
                                         <h6>Environment variables</h6>
                                         <div class="settings-env-list" data-settings-env-vars>
-                                            <div
-                                                th:if="${#lists.isEmpty(environmentVariablesValue)}"
-                                                class="settings-env-row"
-                                                data-settings-env-row
-                                            >
-                                                <input
-                                                    type="text"
-                                                    class="settings-env-name"
-                                                    name="environmentVariableNames"
-                                                    placeholder="Name"
-                                                    autocomplete="off"
-                                                >
-                                                <input
-                                                    type="text"
-                                                    class="settings-env-value"
-                                                    name="environmentVariableValues"
-                                                    placeholder="Value"
-                                                    autocomplete="off"
-                                                >
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-danger btn-sm"
-                                                    data-settings-env-remove
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                            <div
-                                                th:each="environmentVariable : ${environmentVariablesValue}"
-                                                class="settings-env-row"
-                                                data-settings-env-row
-                                            >
-                                                <input
-                                                    type="text"
-                                                    class="settings-env-name"
-                                                    name="environmentVariableNames"
-                                                    placeholder="Name"
-                                                    autocomplete="off"
-                                                    th:value="${environmentVariable.name}"
-                                                >
-                                                <input
-                                                    type="text"
-                                                    class="settings-env-value"
-                                                    name="environmentVariableValues"
-                                                    placeholder="Value"
-                                                    autocomplete="off"
-                                                    th:value="${environmentVariable.value}"
-                                                >
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-danger btn-sm"
-                                                    data-settings-env-remove
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
+                                            <th:block th:if="${#lists.isEmpty(environmentVariablesValue)}">
+                                                <div
+                                                    th:replace="~{fragments/project-components :: environmentVariableRow(null, 'danger')}"
+                                                ></div>
+                                            </th:block>
+                                            <th:block th:each="environmentVariable : ${environmentVariablesValue}">
+                                                <div
+                                                    th:replace="~{fragments/project-components :: environmentVariableRow(${environmentVariable}, 'danger')}"
+                                                ></div>
+                                            </th:block>
                                         </div>
                                         <template data-settings-env-template>
-                                            <div class="settings-env-row" data-settings-env-row>
-                                                <input
-                                                    type="text"
-                                                    class="settings-env-name"
-                                                    name="environmentVariableNames"
-                                                    placeholder="Name"
-                                                    autocomplete="off"
-                                                >
-                                                <input
-                                                    type="text"
-                                                    class="settings-env-value"
-                                                    name="environmentVariableValues"
-                                                    placeholder="Value"
-                                                    autocomplete="off"
-                                                >
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-secondary btn-sm"
-                                                    data-settings-env-remove
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
+                                            <th:block
+                                                th:replace="~{fragments/project-components :: environmentVariableRow(null, 'secondary')}"
+                                            ></th:block>
                                         </template>
                                         <button
                                             type="button"
@@ -905,389 +697,22 @@
                                     </div>
 
                                     <div class="settings-mcp-list" data-settings-mcp-list>
-                                        <div
-                                            th:if="${#lists.isEmpty(mcpServersValue)}"
-                                            class="settings-mcp-card"
-                                            data-settings-mcp-server
-                                        >
-                                            <div class="settings-mcp-card-header">
-                                                <input
-                                                    type="text"
-                                                    class="settings-mcp-name"
-                                                    data-mcp-server-name
-                                                    placeholder="Server name"
-                                                    autocomplete="off"
-                                                >
-                                                <label class="settings-mcp-enabled"
-                                                    ><input type="checkbox" data-mcp-server-enabled checked>
-                                                    Enabled</label
-                                                >
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-danger btn-sm"
-                                                    data-settings-mcp-remove-server
-                                                >
-                                                    Remove Server
-                                                </button>
-                                            </div>
-                                            <label class="project-form-field">
-                                                <span>URL</span>
-                                                <input
-                                                    type="url"
-                                                    class="settings-mcp-url"
-                                                    data-mcp-server-url
-                                                    placeholder="https://example.test/mcp"
-                                                    autocomplete="off"
-                                                >
-                                            </label>
-                                            <div class="project-form-field settings-mcp-projects-field">
-                                                <span>Projects with access</span>
-                                                <select
-                                                    class="settings-mcp-projects"
-                                                    data-mcp-server-projects
-                                                    multiple
-                                                    size="4"
-                                                >
-                                                    <option
-                                                        th:each="project : ${visibleProjectsValue}"
-                                                        th:value="${project.id}"
-                                                        th:text="${project.name}"
-                                                    ></option>
-                                                </select>
-                                            </div>
-                                            <div
-                                                class="project-form-field settings-mcp-headers-field"
-                                                data-settings-mcp-headers
-                                            >
-                                                <span>Headers</span>
-                                                <div class="settings-mcp-header-list" data-settings-mcp-header-list>
-                                                    <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-name"
-                                                            data-mcp-server-header-name
-                                                            placeholder="Header name"
-                                                            autocomplete="off"
-                                                        >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-value"
-                                                            data-mcp-server-header-value
-                                                            placeholder="Header value"
-                                                            autocomplete="off"
-                                                        >
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-outline-danger btn-sm"
-                                                            data-settings-mcp-remove-header
-                                                        >
-                                                            Remove Header
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <template data-settings-mcp-header-template>
-                                                    <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-name"
-                                                            data-mcp-server-header-name
-                                                            placeholder="Header name"
-                                                            autocomplete="off"
-                                                        >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-value"
-                                                            data-mcp-server-header-value
-                                                            placeholder="Header value"
-                                                            autocomplete="off"
-                                                        >
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-outline-secondary btn-sm"
-                                                            data-settings-mcp-remove-header
-                                                        >
-                                                            Remove Header
-                                                        </button>
-                                                    </div>
-                                                </template>
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-primary btn-sm"
-                                                    data-settings-mcp-add-header
-                                                >
-                                                    Add Header
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div
-                                            th:each="server : ${mcpServersValue}"
-                                            class="settings-mcp-card"
-                                            data-settings-mcp-server
-                                            th:attr="data-mcp-server-id=${server.id}"
-                                        >
-                                            <div class="settings-mcp-card-header">
-                                                <input
-                                                    type="text"
-                                                    class="settings-mcp-name"
-                                                    data-mcp-server-name
-                                                    placeholder="Server name"
-                                                    autocomplete="off"
-                                                    th:value="${server.name}"
-                                                >
-                                                <label class="settings-mcp-enabled"
-                                                    ><input
-                                                        type="checkbox"
-                                                        data-mcp-server-enabled
-                                                        th:checked="${server.enabled}"
-                                                    >
-                                                    Enabled</label
-                                                >
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-danger btn-sm"
-                                                    data-settings-mcp-remove-server
-                                                >
-                                                    Remove Server
-                                                </button>
-                                            </div>
-                                            <label class="project-form-field">
-                                                <span>URL</span>
-                                                <input
-                                                    type="url"
-                                                    class="settings-mcp-url"
-                                                    data-mcp-server-url
-                                                    placeholder="https://example.test/mcp"
-                                                    autocomplete="off"
-                                                    th:value="${server.url}"
-                                                >
-                                            </label>
-                                            <div class="project-form-field settings-mcp-projects-field">
-                                                <span>Projects with access</span>
-                                                <select
-                                                    class="settings-mcp-projects"
-                                                    data-mcp-server-projects
-                                                    multiple
-                                                    size="4"
-                                                >
-                                                    <option
-                                                        th:each="project : ${visibleProjectsValue}"
-                                                        th:value="${project.id}"
-                                                        th:text="${project.name}"
-                                                        th:selected="${server.exposedProjectIds.contains(project.id)}"
-                                                    ></option>
-                                                </select>
-                                            </div>
-                                            <div
-                                                class="project-form-field settings-mcp-headers-field"
-                                                data-settings-mcp-headers
-                                            >
-                                                <span>Headers</span>
-                                                <div class="settings-mcp-header-list" data-settings-mcp-header-list>
-                                                    <div
-                                                        th:if="${#lists.isEmpty(server.headers)}"
-                                                        class="settings-mcp-header-row"
-                                                        data-mcp-server-header-row
-                                                    >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-name"
-                                                            data-mcp-server-header-name
-                                                            placeholder="Header name"
-                                                            autocomplete="off"
-                                                        >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-value"
-                                                            data-mcp-server-header-value
-                                                            placeholder="Header value"
-                                                            autocomplete="off"
-                                                        >
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-outline-danger btn-sm"
-                                                            data-settings-mcp-remove-header
-                                                        >
-                                                            Remove Header
-                                                        </button>
-                                                    </div>
-                                                    <div
-                                                        th:each="header : ${server.headers}"
-                                                        class="settings-mcp-header-row"
-                                                        data-mcp-server-header-row
-                                                    >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-name"
-                                                            data-mcp-server-header-name
-                                                            placeholder="Header name"
-                                                            autocomplete="off"
-                                                            th:value="${header.name}"
-                                                        >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-value"
-                                                            data-mcp-server-header-value
-                                                            placeholder="Header value"
-                                                            autocomplete="off"
-                                                            th:value="${header.value}"
-                                                        >
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-outline-danger btn-sm"
-                                                            data-settings-mcp-remove-header
-                                                        >
-                                                            Remove Header
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <template data-settings-mcp-header-template>
-                                                    <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-name"
-                                                            data-mcp-server-header-name
-                                                            placeholder="Header name"
-                                                            autocomplete="off"
-                                                        >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-value"
-                                                            data-mcp-server-header-value
-                                                            placeholder="Header value"
-                                                            autocomplete="off"
-                                                        >
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-outline-secondary btn-sm"
-                                                            data-settings-mcp-remove-header
-                                                        >
-                                                            Remove Header
-                                                        </button>
-                                                    </div>
-                                                </template>
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-primary btn-sm"
-                                                    data-settings-mcp-add-header
-                                                >
-                                                    Add Header
-                                                </button>
-                                            </div>
-                                        </div>
+                                        <th:block th:if="${#lists.isEmpty(mcpServersValue)}">
+                                            <th:block
+                                                th:replace="~{fragments/project-components :: mcpServerCard(null, ${visibleProjectsValue})}"
+                                            ></th:block>
+                                        </th:block>
+                                        <th:block th:each="server : ${mcpServersValue}">
+                                            <th:block
+                                                th:replace="~{fragments/project-components :: mcpServerCard(${server}, ${visibleProjectsValue})}"
+                                            ></th:block>
+                                        </th:block>
                                     </div>
 
                                     <template data-settings-mcp-server-template>
-                                        <div class="settings-mcp-card" data-settings-mcp-server>
-                                            <div class="settings-mcp-card-header">
-                                                <input
-                                                    type="text"
-                                                    class="settings-mcp-name"
-                                                    data-mcp-server-name
-                                                    placeholder="Server name"
-                                                    autocomplete="off"
-                                                >
-                                                <label class="settings-mcp-enabled"
-                                                    ><input type="checkbox" data-mcp-server-enabled checked>
-                                                    Enabled</label
-                                                >
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-danger btn-sm"
-                                                    data-settings-mcp-remove-server
-                                                >
-                                                    Remove Server
-                                                </button>
-                                            </div>
-                                            <label class="project-form-field">
-                                                <span>URL</span>
-                                                <input
-                                                    type="url"
-                                                    class="settings-mcp-url"
-                                                    data-mcp-server-url
-                                                    placeholder="https://example.test/mcp"
-                                                    autocomplete="off"
-                                                >
-                                            </label>
-                                            <div class="project-form-field settings-mcp-projects-field">
-                                                <span>Projects with access</span>
-                                                <select
-                                                    class="settings-mcp-projects"
-                                                    data-mcp-server-projects
-                                                    multiple
-                                                    size="4"
-                                                >
-                                                    <option
-                                                        th:each="project : ${visibleProjectsValue}"
-                                                        th:value="${project.id}"
-                                                        th:text="${project.name}"
-                                                    ></option>
-                                                </select>
-                                            </div>
-                                            <div
-                                                class="project-form-field settings-mcp-headers-field"
-                                                data-settings-mcp-headers
-                                            >
-                                                <span>Headers</span>
-                                                <div class="settings-mcp-header-list" data-settings-mcp-header-list>
-                                                    <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-name"
-                                                            data-mcp-server-header-name
-                                                            placeholder="Header name"
-                                                            autocomplete="off"
-                                                        >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-value"
-                                                            data-mcp-server-header-value
-                                                            placeholder="Header value"
-                                                            autocomplete="off"
-                                                        >
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-outline-danger btn-sm"
-                                                            data-settings-mcp-remove-header
-                                                        >
-                                                            Remove Header
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <template data-settings-mcp-header-template>
-                                                    <div class="settings-mcp-header-row" data-mcp-server-header-row>
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-name"
-                                                            data-mcp-server-header-name
-                                                            placeholder="Header name"
-                                                            autocomplete="off"
-                                                        >
-                                                        <input
-                                                            type="text"
-                                                            class="settings-mcp-header-value"
-                                                            data-mcp-server-header-value
-                                                            placeholder="Header value"
-                                                            autocomplete="off"
-                                                        >
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-outline-secondary btn-sm"
-                                                            data-settings-mcp-remove-header
-                                                        >
-                                                            Remove Header
-                                                        </button>
-                                                    </div>
-                                                </template>
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-primary btn-sm"
-                                                    data-settings-mcp-add-header
-                                                >
-                                                    Add Header
-                                                </button>
-                                            </div>
-                                        </div>
+                                        <th:block
+                                            th:replace="~{fragments/project-components :: mcpServerCard(null, ${visibleProjectsValue})}"
+                                        ></th:block>
                                     </template>
                                 </section>
 
@@ -1517,14 +942,19 @@
 
 <th:block th:fragment="openaiOAuthResponse">
     <th:block th:replace="~{fragments/projects :: openaiOAuthSection}"></th:block>
-    <th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
-    <th:block th:if="${chatControlsOob ?: false}" th:replace="~{fragments/chat :: chatControls}"></th:block>
+    <th:block th:replace="~{fragments/projects :: oauthResponseTail(${chatControlsOob ?: false})}"></th:block>
 </th:block>
 
 <th:block th:fragment="anthropicOAuthResponse">
     <th:block th:replace="~{fragments/projects :: anthropicOAuthSection}"></th:block>
+    <th:block th:replace="~{fragments/projects :: oauthResponseTail(${chatControlsOob ?: false})}"></th:block>
+</th:block>
+
+<th:block th:fragment="oauthResponseTail(chatControlsOob)" th:with="includeChatControls=${chatControlsOob == true}">
     <th:block th:replace="~{fragments/projects :: settingsModelsOob}"></th:block>
-    <th:block th:if="${chatControlsOob ?: false}" th:replace="~{fragments/chat :: chatControls}"></th:block>
+    <th:block th:if="${includeChatControls}">
+        <th:block th:replace="~{fragments/chat :: chatControls}"></th:block>
+    </th:block>
 </th:block>
 
 <th:block th:fragment="settingsModels">
@@ -1558,54 +988,18 @@
         <h5>ChatGPT/OpenAI</h5>
         <div th:replace="~{fragments/projects :: openaiOAuthSection}"></div>
         <th:block th:if="${availability['openai'] == true}">
-            <form
-                class="settings-model-selections"
-                method="post"
-                action="/ui/settings/models"
-                hx-post="/ui/settings/models"
-                hx-swap="none"
-            >
-                <input type="hidden" name="provider" value="openai">
-                <label
-                    ><span>Favourite Models</span
-                    ><select name="modelId" multiple size="6" class="form-select">
-                        <option
-                            th:each="modelDef : ${groups['openai']}"
-                            th:value="${modelDef.id}"
-                            th:selected="${selected['openai'] != null and selected['openai'].contains(modelDef.id)}"
-                            th:text="${modelDef.displayName}"
-                        ></option>
-                    </select></label
-                >
-                <button type="submit" class="btn btn-primary">Save</button>
-            </form>
+            <th:block
+                th:replace="~{fragments/project-components :: modelSelection('openai', ${groups['openai']}, ${selected['openai']})}"
+            ></th:block>
         </th:block>
     </div>
     <div class="settings-provider-subsection">
         <h5>Anthropic</h5>
         <div th:replace="~{fragments/projects :: anthropicOAuthSection}"></div>
         <th:block th:if="${availability['anthropic'] == true}">
-            <form
-                class="settings-model-selections"
-                method="post"
-                action="/ui/settings/models"
-                hx-post="/ui/settings/models"
-                hx-swap="none"
-            >
-                <input type="hidden" name="provider" value="anthropic">
-                <label
-                    ><span>Favourite Models</span
-                    ><select name="modelId" multiple size="6" class="form-select">
-                        <option
-                            th:each="modelDef : ${groups['anthropic']}"
-                            th:value="${modelDef.id}"
-                            th:selected="${selected['anthropic'] != null and selected['anthropic'].contains(modelDef.id)}"
-                            th:text="${modelDef.displayName}"
-                        ></option>
-                    </select></label
-                >
-                <button type="submit" class="btn btn-primary">Save</button>
-            </form>
+            <th:block
+                th:replace="~{fragments/project-components :: modelSelection('anthropic', ${groups['anthropic']}, ${selected['anthropic']})}"
+            ></th:block>
         </th:block>
     </div>
 </th:block>
@@ -1615,24 +1009,12 @@
     th:with="selectedPathValue=${selectedPath ?: ''}, currentPathValue=${currentPath ?: ''}, directoryEntries=${directoryEntries ?: T(java.util.List).of()}"
 >
     <div id="project-modal" class="project-modal">
-        <div
-            class="project-modal-backdrop"
-            hx-get="/ui/projects/modal/close"
-            hx-target="#modal-root"
-            hx-swap="innerHTML"
-        ></div>
+        <th:block th:replace="~{fragments/project-components :: modalBackdrop}"></th:block>
 
         <div class="project-modal-card" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
-            <div class="project-modal-header">
-                <h4 id="project-modal-title">Open Project</h4>
-                <button
-                    type="button"
-                    class="btn-close"
-                    hx-get="/ui/projects/modal/close"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML"
-                ></button>
-            </div>
+            <th:block
+                th:replace="~{fragments/project-components :: modalHeader('project-modal-title', 'Open Project')}"
+            ></th:block>
 
             <form class="project-form" hx-post="/ui/projects/add" hx-target="#shell" hx-swap="none">
                 <label class="project-form-field">
@@ -1670,12 +1052,7 @@
 
 <th:block th:fragment="workspaceModalContent">
     <div id="workspace-modal" class="project-modal workspace-modal">
-        <div
-            class="project-modal-backdrop"
-            hx-get="/ui/projects/modal/close"
-            hx-target="#modal-root"
-            hx-swap="innerHTML"
-        ></div>
+        <th:block th:replace="~{fragments/project-components :: modalBackdrop}"></th:block>
 
         <div
             class="project-modal-card workspace-modal-card"
@@ -1683,16 +1060,9 @@
             aria-modal="true"
             aria-labelledby="workspace-modal-title"
         >
-            <div class="project-modal-header">
-                <h4 id="workspace-modal-title">New Workspace</h4>
-                <button
-                    type="button"
-                    class="btn-close"
-                    hx-get="/ui/projects/modal/close"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML"
-                ></button>
-            </div>
+            <th:block
+                th:replace="~{fragments/project-components :: modalHeader('workspace-modal-title', 'New Workspace')}"
+            ></th:block>
             Create a new Git worktree under that will reference a new or an existing branch.
             <br>
             <br>
@@ -1746,12 +1116,7 @@
 
 <th:block th:fragment="workspaceCloseModal" th:with="status=${workspaceCloseStatus}">
     <div id="workspace-close-modal" class="project-modal workspace-close-modal">
-        <div
-            class="project-modal-backdrop"
-            hx-get="/ui/projects/modal/close"
-            hx-target="#modal-root"
-            hx-swap="innerHTML"
-        ></div>
+        <th:block th:replace="~{fragments/project-components :: modalBackdrop}"></th:block>
 
         <div
             class="project-modal-card workspace-close-modal-card"
@@ -1759,16 +1124,9 @@
             aria-modal="true"
             aria-labelledby="workspace-close-modal-title"
         >
-            <div class="project-modal-header">
-                <h4 id="workspace-close-modal-title">Close Workspace</h4>
-                <button
-                    type="button"
-                    class="btn-close"
-                    hx-get="/ui/projects/modal/close"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML"
-                ></button>
-            </div>
+            <th:block
+                th:replace="~{fragments/project-components :: modalHeader('workspace-close-modal-title', 'Close Workspace')}"
+            ></th:block>
 
             <div>Are you sure you want to delete the workspace <code th:text="${workspaceName}"></code>?</div>
 
@@ -1797,5 +1155,5 @@
     <th:block th:if="${includeChatContainer}" th:replace="~{fragments/chat :: chat}"></th:block>
     <th:block th:replace="~{fragments/review :: panel}"></th:block>
     <th:block th:replace="~{fragments/terminal :: panel}"></th:block>
-    <div id="modal-root" hx-swap-oob="innerHTML"></div>
+    <th:block th:replace="~{fragments/projects :: modalClose}"></th:block>
 </th:block>

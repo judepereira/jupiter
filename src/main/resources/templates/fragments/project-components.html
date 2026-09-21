@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+    <th:block th:fragment="modalBackdrop">
+        <div
+            class="project-modal-backdrop"
+            hx-get="/ui/projects/modal/close"
+            hx-target="#modal-root"
+            hx-swap="innerHTML"
+        ></div>
+    </th:block>
+
+    <th:block th:fragment="modalHeader(titleId, title)">
+        <div class="project-modal-header">
+            <h4 th:id="${titleId}" th:text="${title}"></h4>
+            <button
+                type="button"
+                class="btn-close"
+                hx-get="/ui/projects/modal/close"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+            ></button>
+        </div>
+    </th:block>
+
+    <th:block th:fragment="environmentVariableRow(environmentVariable, removeButtonClass)">
+        <div class="settings-env-row" data-settings-env-row>
+            <input
+                type="text"
+                class="settings-env-name"
+                name="environmentVariableNames"
+                placeholder="Name"
+                autocomplete="off"
+                th:value="${environmentVariable == null ? '' : environmentVariable.name}"
+            >
+            <input
+                type="text"
+                class="settings-env-value"
+                name="environmentVariableValues"
+                placeholder="Value"
+                autocomplete="off"
+                th:value="${environmentVariable == null ? '' : environmentVariable.value}"
+            >
+            <button
+                type="button"
+                th:class="${'btn btn-outline-' + (removeButtonClass ?: 'danger') + ' btn-sm'}"
+                data-settings-env-remove
+            >
+                Remove
+            </button>
+        </div>
+    </th:block>
+
+    <th:block th:fragment="customCommandFields(command, typeRequired)">
+        <label class="col-md-6 form-label"
+            >ID<input
+                class="form-control"
+                name="id"
+                required
+                pattern="[a-z0-9][a-z0-9_-]*"
+                th:value="${command == null or command.id == null ? '' : command.id}"
+            ></label
+        >
+        <label class="col-md-6 form-label"
+            >Name<input
+                class="form-control"
+                name="name"
+                required
+                th:value="${command == null or command.name == null ? '' : command.name}"
+            ></label
+        >
+        <label class="col-md-6 form-label"
+            >Type<select class="form-select" name="type" th:required="${typeRequired}">
+                <option
+                    value="prompt"
+                    th:selected="${command != null and command.type != null and command.type.name() == 'PROMPT'}"
+                >
+                    Prompt
+                </option>
+                <option
+                    value="script"
+                    th:selected="${command != null and command.type != null and command.type.name() == 'SCRIPT'}"
+                >
+                    Script
+                </option>
+            </select></label
+        >
+        <label class="col-md-6 form-label"
+            >Description<input
+                class="form-control"
+                name="description"
+                th:value="${command == null or command.description == null ? '' : command.description}"
+            ></label
+        >
+        <label class="col-md-6 form-label"
+            >Working directory<input
+                class="form-control"
+                name="workingDir"
+                th:value="${command == null or command.workingDir == null ? '' : command.workingDir}"
+            ></label
+        >
+        <label class="col-md-6 form-label"
+            >Timeout (seconds)<input
+                class="form-control"
+                name="timeoutSeconds"
+                type="number"
+                min="1"
+                th:value="${command == null or command.timeoutSeconds == null ? '' : command.timeoutSeconds}"
+            ></label
+        >
+        <label class="col-12 form-label"
+            >Body<textarea
+                class="form-control"
+                name="body"
+                rows="5"
+                required
+                th:text="${command == null or command.body == null ? '' : command.body}"
+            ></textarea></label
+        >
+    </th:block>
+
+    <th:block
+        th:fragment="railStatusIndicator(failed, unread, inProgress)"
+        th:with="statusFailed=${failed ?: false}, statusUnread=${unread ?: false}, statusInProgress=${inProgress ?: false}"
+    >
+        <span th:if="${statusFailed}" class="failed-dot" aria-label="Failed"></span>
+        <span th:if="${!statusFailed and statusUnread}" class="unread-dot" aria-label="Unread"></span>
+        <span
+            th:if="${!statusFailed and !statusUnread and statusInProgress}"
+            class="pending-dot"
+            aria-label="In progress"
+        ></span>
+    </th:block>
+
+    <th:block th:fragment="modelSelection(provider, models, selectedModels)">
+        <form
+            class="settings-model-selections"
+            method="post"
+            action="/ui/settings/models"
+            hx-post="/ui/settings/models"
+            hx-swap="none"
+        >
+            <input type="hidden" name="provider" th:value="${provider}">
+            <label
+                ><span>Favourite Models</span
+                ><select name="modelId" multiple size="6" class="form-select">
+                    <option
+                        th:each="modelDef : ${models ?: T(java.util.List).of()}"
+                        th:value="${modelDef.id}"
+                        th:selected="${selectedModels != null and selectedModels.contains(modelDef.id)}"
+                        th:text="${modelDef.displayName}"
+                    ></option>
+                </select></label
+            >
+            <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+    </th:block>
+
+    <div
+        th:fragment="mcpHeaderRow(header, removeButtonClass)"
+        class="settings-mcp-header-row"
+        data-mcp-server-header-row
+    >
+        <input
+            type="text"
+            class="settings-mcp-header-name"
+            data-mcp-server-header-name
+            placeholder="Header name"
+            autocomplete="off"
+            th:value="${header == null or header.name == null ? '' : header.name}"
+        >
+        <input
+            type="text"
+            class="settings-mcp-header-value"
+            data-mcp-server-header-value
+            placeholder="Header value"
+            autocomplete="off"
+            th:value="${header == null or header.value == null ? '' : header.value}"
+        >
+        <button
+            type="button"
+            th:class="${'btn btn-outline-' + (removeButtonClass ?: 'danger') + ' btn-sm'}"
+            data-settings-mcp-remove-header
+        >
+            Remove Header
+        </button>
+    </div>
+
+    <div
+        th:fragment="mcpServerCard(server, visibleProjects)"
+        class="settings-mcp-card"
+        data-settings-mcp-server
+        th:attr="data-mcp-server-id=${server == null ? null : server.id}"
+    >
+        <div class="settings-mcp-card-header">
+            <input
+                type="text"
+                class="settings-mcp-name"
+                data-mcp-server-name
+                placeholder="Server name"
+                autocomplete="off"
+                th:value="${server == null or server.name == null ? '' : server.name}"
+            >
+            <label class="settings-mcp-enabled"
+                ><input type="checkbox" data-mcp-server-enabled th:checked="${server == null or server.enabled}">
+                Enabled</label
+            >
+            <button type="button" class="btn btn-outline-danger btn-sm" data-settings-mcp-remove-server>
+                Remove Server
+            </button>
+        </div>
+        <label class="project-form-field"
+            ><span>URL</span>
+            <input
+                type="url"
+                class="settings-mcp-url"
+                data-mcp-server-url
+                placeholder="https://example.test/mcp"
+                autocomplete="off"
+                th:value="${server == null or server.url == null ? '' : server.url}"
+            ></label
+        >
+        <div class="project-form-field settings-mcp-projects-field">
+            <span>Projects with access</span>
+            <select class="settings-mcp-projects" data-mcp-server-projects multiple size="4">
+                <option
+                    th:each="project : ${visibleProjects ?: T(java.util.List).of()}"
+                    th:value="${project.id}"
+                    th:text="${project.name}"
+                    th:selected="${server != null and server.exposedProjectIds != null and server.exposedProjectIds.contains(project.id)}"
+                ></option>
+            </select>
+        </div>
+        <div class="project-form-field settings-mcp-headers-field" data-settings-mcp-headers>
+            <span>Headers</span>
+            <div class="settings-mcp-header-list" data-settings-mcp-header-list>
+                <th:block th:if="${server == null or server.headers == null or #lists.isEmpty(server.headers)}">
+                    <th:block th:replace="~{fragments/project-components :: mcpHeaderRow(null, 'danger')}"></th:block>
+                </th:block>
+                <th:block
+                    th:each="header : ${server == null or server.headers == null ? T(java.util.List).of() : server.headers}"
+                >
+                    <th:block
+                        th:replace="~{fragments/project-components :: mcpHeaderRow(${header}, 'danger')}"
+                    ></th:block>
+                </th:block>
+            </div>
+            <template data-settings-mcp-header-template
+                ><th:block
+                    th:replace="~{fragments/project-components :: mcpHeaderRow(null, 'secondary')}"
+                ></th:block></template
+            >
+            <button type="button" class="btn btn-outline-primary btn-sm" data-settings-mcp-add-header>
+                Add Header
+            </button>
+        </div>
+    </div>
+</html>

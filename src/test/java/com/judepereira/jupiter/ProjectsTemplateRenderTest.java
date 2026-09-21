@@ -210,6 +210,137 @@ public class ProjectsTemplateRenderTest {
     }
 
     @Test
+    public void environmentRowsPreserveEmptyPopulatedAndClientTemplateContracts() {
+        SpringTemplateEngine engine = engine();
+
+        WebContext empty = webContext();
+        Project emptyProject = new Project(1L, "Alpha", "/repo", "", List.of(), null);
+        empty.setVariable("activeProject", emptyProject);
+        empty.setVariable("projects", List.of(emptyProject));
+        empty.setVariable("mcpServers", List.of());
+        String emptyHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("settingsModal"), TemplateMode.HTML, null), empty);
+        assertThat(emptyHtml.split("data-settings-env-row", -1)).hasSize(3);
+        assertThat(emptyHtml)
+                .contains("data-settings-env-template", "data-settings-env-add", "name=\"environmentVariableNames\"")
+                .contains("name=\"environmentVariableValues\"");
+
+        Project project = new Project(1L, "Alpha", "/repo", "",
+                List.of(new ProjectEnvironmentVariable("API_URL", "https://example.test"),
+                        new ProjectEnvironmentVariable("FEATURE_FLAG", "true")),
+                null);
+        WebContext populated = webContext();
+        populated.setVariable("activeProject", project);
+        populated.setVariable("projects", List.of(project));
+        populated.setVariable("mcpServers", List.of());
+        String populatedHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("settingsModal"), TemplateMode.HTML, null), populated);
+        assertThat(populatedHtml.split("data-settings-env-row", -1)).hasSize(4);
+        assertThat(populatedHtml).contains("value=\"API_URL\"", "value=\"https://example.test\"",
+                "value=\"FEATURE_FLAG\"", "value=\"true\"");
+        String template = populatedHtml.substring(populatedHtml.indexOf("data-settings-env-template"));
+        assertThat(template).contains("data-settings-env-row", "data-settings-env-remove")
+                .contains("btn-outline-secondary");
+    }
+
+    @Test
+    public void mcpCardsAndHeaderRowsPreserveBlankPersistedAndTemplateHooks() {
+        SpringTemplateEngine engine = engine();
+        Project project = new Project(1L, "Alpha", "/repo", "", List.of(), null);
+        WebContext blank = webContext();
+        blank.setVariable("activeProject", project);
+        blank.setVariable("projects", List.of(project));
+        blank.setVariable("visibleProjects", List.of(project));
+        blank.setVariable("mcpServers", List.of());
+        String blankHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("settingsModal"), TemplateMode.HTML, null), blank);
+        assertThat(blankHtml.split("data-settings-mcp-server", -1)).hasSizeGreaterThanOrEqualTo(4);
+        assertThat(blankHtml).contains("data-settings-mcp-server-template", "data-settings-mcp-header-template",
+                "data-mcp-server-enabled checked", "data-settings-mcp-add-server", "data-settings-mcp-add-header");
+
+        McpServerView server = new McpServerView(9L, "Local MCP", "http://localhost:3000/mcp", false,
+                List.of(new McpServerHeader("Authorization", "Bearer token")), List.of(1L));
+        WebContext persisted = webContext();
+        persisted.setVariable("activeProject", project);
+        persisted.setVariable("projects", List.of(project));
+        persisted.setVariable("visibleProjects", List.of(project));
+        persisted.setVariable("mcpServers", List.of(server));
+        String persistedHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("settingsModal"), TemplateMode.HTML, null), persisted);
+        assertThat(persistedHtml).contains("data-mcp-server-id=\"9\"", "value=\"Local MCP\"",
+                "value=\"http://localhost:3000/mcp\"", "value=\"1\"", "Authorization", "Bearer token");
+        int persistedCardStart = persistedHtml.indexOf("data-mcp-server-id=\"9\"");
+        int persistedCardEnd = persistedHtml.indexOf("</div>", persistedCardStart);
+        String persistedCard = persistedHtml.substring(persistedCardStart, persistedCardEnd);
+        assertThat(persistedCard).contains("data-mcp-server-enabled").doesNotContain("checked");
+        assertThat(persistedHtml).contains("data-mcp-server-header-row", "data-mcp-server-header-name",
+                "data-mcp-server-header-value", "data-settings-mcp-remove-header");
+    }
+
+    @Test
+    public void customCommandAddAndEditFormsShareFieldsButKeepIntentionalDifferences() {
+        SpringTemplateEngine engine = engine();
+        CommandCatalogService.CommandDefinition command = new CommandCatalogService.CommandDefinition("demo", "Demo",
+                "Description", CommandCatalogService.CommandKind.SCRIPT, "echo demo", "/tmp", 20);
+        WebContext context = webContext();
+        context.setVariable("customCommands", List.of(command));
+        String html = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("settingsCommands"), TemplateMode.HTML, null), context);
+
+        assertThat(html).contains("hx-post=\"/ui/settings/commands/create\"",
+                "hx-post=\"/ui/settings/commands/demo/update\"", "name=\"id\"", "name=\"name\"", "name=\"type\"",
+                "name=\"description\"", "name=\"workingDir\"", "name=\"timeoutSeconds\"", "name=\"body\"");
+        assertThat(html.split("name=\"id\"", -1)).hasSize(3);
+        assertThat(html).contains("pattern=\"[a-z0-9][a-z0-9_-]*\"", "name=\"originalId\"",
+                "hx-confirm=\"Delete this custom command?\"");
+        assertThat(html.split("required", -1)).hasSizeGreaterThan(3);
+    }
+
+    @Test
+    public void modalChromeKeepsIdsAriaLinkageAndCloseRequests() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("workspaceId", 7L);
+        context.setVariable("workspaceName", "Feature");
+        context.setVariable("workspaceCloseReasons", List.of("Uncommitted changes"));
+        context.setVariable("branchName", "feature");
+        context.setVariable("branchMode", "create");
+        for (String fragment : List.of("modal", "settingsModal", "workspaceModal", "workspaceCloseModal")) {
+            String html = engine.process(
+                    new TemplateSpec("fragments/projects", Set.of(fragment), TemplateMode.HTML, null), context);
+            String id = fragment.equals("modal")
+                    ? "project-modal"
+                    : fragment.equals("settingsModal")
+                            ? "settings-modal"
+                            : fragment.equals("workspaceModal") ? "workspace-modal" : "workspace-close-modal";
+            String title = id + "-title";
+            assertThat(html).contains("id=\"" + id + "\"", "role=\"dialog\"", "aria-labelledby=\"" + title + "\"",
+                    "id=\"" + title + "\"", "hx-get=\"/ui/projects/modal/close\"", "hx-target=\"#modal-root\"",
+                    "hx-swap=\"innerHTML\"");
+        }
+    }
+
+    @Test
+    public void modelSelectionsUseProviderEndpointsAndPersistedSelection() {
+        SpringTemplateEngine engine = engine();
+        ModelDefinition openAiModel = new ModelDefinition("openai/gpt-test", "GPT Test", "openai", "gpt-test", false,
+                true, 1000, 100, null, null, null, null, null, List.of("text"), List.of("text"));
+        ModelDefinition anthropicModel = new ModelDefinition("anthropic/claude-test", "Claude Test", "anthropic",
+                "claude-test", false, true, 1000, 100, null, null, null, null, null, List.of("text"), List.of("text"));
+        WebContext context = webContext();
+        context.setVariable("modelGroups",
+                Map.of("openai", List.of(openAiModel), "anthropic", List.of(anthropicModel)));
+        context.setVariable("providerAvailability", Map.of("openai", true, "anthropic", true));
+        context.setVariable("selectedModelIds", Map.of("openai", List.of("openai/gpt-test"), "anthropic", List.of()));
+        String html = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("settingsModels"), TemplateMode.HTML, null), context);
+        assertThat(html).contains("action=\"/ui/settings/models\"", "hx-post=\"/ui/settings/models\"",
+                "name=\"provider\" value=\"openai\"", "name=\"provider\" value=\"anthropic\"",
+                "value=\"openai/gpt-test\"", "selected", "value=\"anthropic/claude-test\"");
+        assertThat(html.split("class=\"settings-model-selections\"", -1)).hasSize(3);
+    }
+
+    @Test
     public void anthropicAndModelsFragmentsRenderWithNullAndPopulatedContexts() {
         SpringTemplateEngine engine = engine();
         WebContext empty = webContext();
@@ -379,6 +510,38 @@ public class ProjectsTemplateRenderTest {
         assertThat(html).contains("bi-chevron-down workspace-disclosure", "bi-chevron-right workspace-disclosure");
         assertThat(html).contains("Session #1", "Session #2");
         assertThat(html.split("class=\"unread-dot\" aria-label=\"Unread\"", -1)).hasSizeGreaterThanOrEqualTo(3);
+    }
+
+    @Test
+    public void railStatusIndicatorPreservesFailureUnreadAndProgressPrecedence() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+
+        context.setVariable("failed", true);
+        context.setVariable("unread", true);
+        context.setVariable("inProgress", true);
+        String failedHtml = engine.process(new TemplateSpec("fragments/project-components",
+                Set.of("railStatusIndicator"), TemplateMode.HTML, null), context);
+        assertThat(failedHtml).contains("class=\"failed-dot\" aria-label=\"Failed\"").doesNotContain("unread-dot",
+                "pending-dot");
+
+        context.setVariable("failed", false);
+        String unreadHtml = engine.process(new TemplateSpec("fragments/project-components",
+                Set.of("railStatusIndicator"), TemplateMode.HTML, null), context);
+        assertThat(unreadHtml).contains("class=\"unread-dot\" aria-label=\"Unread\"").doesNotContain("failed-dot",
+                "pending-dot");
+    }
+
+    @Test
+    public void oauthResponsesRenderProviderSectionBeforeSharedOobTail() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        String html = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("openaiOAuthResponse"), TemplateMode.HTML, null),
+                context);
+
+        assertThat(html.indexOf("id=\"openai-oauth-section\"")).isLessThan(html.indexOf("id=\"settings-models\""));
+        assertThat(html).doesNotContain("id=\"chat-controls\"");
     }
 
     @Test
