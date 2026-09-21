@@ -57,6 +57,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -126,6 +128,8 @@ public class UiControllerAsyncStreamingTests {
             throws Exception {
         class RecordingHarness extends CodingAgentHarness {
             final List<AgentTurnRequest> requests = new ArrayList<>();
+            final CountDownLatch firstTurnMayReturn = new CountDownLatch(1);
+            final CountDownLatch secondTurnCompleted = new CountDownLatch(1);
 
             RecordingHarness() {
                 super(null, null, null, null, null, null, null, null, null,
@@ -140,6 +144,11 @@ public class UiControllerAsyncStreamingTests {
                 requests.add(request);
                 AgentTurnResult result = new AgentTurnResult("reply-" + requests.size(), List.of());
                 listener.onComplete(result);
+                if (requests.size() == 1) {
+                    firstTurnMayReturn.countDown();
+                } else {
+                    secondTurnCompleted.countDown();
+                }
                 return result;
             }
         }
@@ -156,6 +165,7 @@ public class UiControllerAsyncStreamingTests {
             String assistantId = assistantId((ConcurrentModel) m1);
             ctrl.streamChat(assistantId);
             TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
+            assertThat(fake.firstTurnMayReturn.await(5, TimeUnit.SECONDS)).isTrue();
         }
 
         {
@@ -164,6 +174,7 @@ public class UiControllerAsyncStreamingTests {
             String assistantId = assistantId((ConcurrentModel) m2);
             ctrl.streamChat(assistantId);
             TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
+            assertThat(fake.secondTurnCompleted.await(5, TimeUnit.SECONDS)).isTrue();
         }
 
         assertThat(fake.requests).hasSize(2);
