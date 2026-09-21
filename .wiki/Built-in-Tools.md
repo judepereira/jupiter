@@ -22,7 +22,8 @@ An agent only sees tools allowed by its definition. Write and command capability
 ## `run_command`
 
 Commands run with timeout and cancellation support. The environment starts empty; Jupiter then copies explicitly
-allowlisted host variables, overlays project variables, and does not automatically inherit its own sensitive credentials.
+allowlisted host variables, overlays project variables, and does not automatically inherit its own sensitive
+credentials.
 
 Large command output is shortened in chat while remaining available to the agent.
 

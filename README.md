@@ -11,17 +11,21 @@ There’s no desktop app or CLI to keep in sync. The browser is the client.
 ## What makes Jupiter useful?
 
 - **It’s remote-first.** Run it where your code lives, and connect from a browser.
-- **Workspaces are Git worktrees.** Each branch gets its own working tree, so parallel work doesn’t turn into a branch-switching juggling act.
+- **Workspaces are Git worktrees.** Each branch gets its own working tree, so parallel work doesn’t turn into a
+  branch-switching juggling act.
 - **Sessions survive the browser.** Chat history, drafts, tool traces, review state, and settings live on the server.
-- **Delegation is inspectable.** Subagents have their own persisted sessions; you can open them and see what actually happened.
-- **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are kept out of untrusted managed child processes.
-- **It’s extendable.** MCP servers and Markdown-based slash commands plug into Jupiter without changing the core application.
+- **Delegation is inspectable.** Subagents have their own persisted sessions; you can open them and see what actually
+  happened.
+- **Credentials get special treatment.** Sensitive persisted values are encrypted, and Jupiter’s own secrets are kept
+  out of untrusted managed child processes.
+- **It’s extendable.** MCP servers and Markdown-based slash commands plug into Jupiter without changing the core
+  application.
 
 Jupiter supports OpenAI and Anthropic Claude and loads eligible model metadata from models.dev. Connected providers let
-you choose additional models in **Settings → Model Providers**, while agents can define their own ordered model defaults.
-Agent-default turns use the first configured preference whose provider is available; an explicit model choice is strict
-and never silently switches providers. Catalogue compatibility does not guarantee that an account is entitled to use a
-particular model. See [Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers).
+you choose additional models in **Settings → Model Providers**, while agents can define their own ordered model
+defaults. Agent-default turns use the first configured preference whose provider is available; an explicit model choice
+is strict and never silently switches providers. Catalogue compatibility does not guarantee that an account is entitled
+to use a particular model. See [Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers).
 
 ## Docker: the recommended way to run Jupiter
 
@@ -64,10 +68,10 @@ docker pull judepereira/jupiter:latest
 
 ## Connecting model providers
 
-Open **Settings → Model Providers** to connect an OpenAI subscription or Claude. OpenAI can also use
-`OPENAI_API_KEY`; Claude uses the hosted OAuth copy/paste-code flow. See
-[Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers) for connection and model-selection
-details. Provider credentials and OAuth state are stored in encrypted database fields.
+Open **Settings → Model Providers** to connect an OpenAI subscription or Claude. OpenAI can also use `OPENAI_API_KEY`;
+Claude uses the hosted OAuth copy/paste-code flow. See
+[Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers) for connection and
+model-selection details. Provider credentials and OAuth state are stored in encrypted database fields.
 
 ## Running Jupiter remotely
 

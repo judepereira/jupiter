@@ -1,14 +1,13 @@
 package com.judepereira.jupiter.security;
 
-import lombok.SneakyThrows;
-import lombok.val;
-
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.SneakyThrows;
+import lombok.val;
 
 public final class BootstrapConfigurationReader {
     private static final String KEY_NAME = "JUPITER_ENCRYPTION_KEY";
@@ -19,7 +18,7 @@ public final class BootstrapConfigurationReader {
     @SneakyThrows
     public static BootstrapConfiguration read(InputStream input) {
         byte[] keyBytes = null;
-        try(BufferedReader br = new BufferedReader(new InputStreamReader(input))) {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(input))) {
             Map<String, String> values = new HashMap<>();
 
             for (String line : br.lines().toList()) {

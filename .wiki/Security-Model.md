@@ -8,7 +8,8 @@ but they do not turn coding agents or the terminal into a general-purpose sandbo
 - Sensitive persisted values are encrypted using the instance encryption key.
 - The encryption key is not exposed to the integrated terminal, MCP templates, or agent commands.
 - Agent `run_command` receives only explicitly allowlisted host variables plus project variables.
-- Managed child processes such as Git commands and lifecycle hooks do not automatically inherit Jupiter's HTTP-authentication credentials or encryption key.
+- Managed child processes such as Git commands and lifecycle hooks do not automatically inherit Jupiter's
+  HTTP-authentication credentials or encryption key.
 - Optional HTTP Basic authentication protects every route except `GET /health`.
 - Agent-displayed images are served with MIME-sniffing and caching protections.
 
@@ -26,7 +27,8 @@ Container initialization scripts are trusted setup code and receive the original
 key. Treat those scripts accordingly.
 
 These boundaries protect Jupiter's own sensitive credentials. They do not discover every unrelated secret already
-present in the host environment. For example, an `OPENAI_API_KEY` in a broadly inherited environment is not automatically removed.
+present in the host environment. For example, an `OPENAI_API_KEY` in a broadly inherited environment is not
+automatically removed.
 
 ## What Jupiter does not guarantee
 

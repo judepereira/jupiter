@@ -8,6 +8,12 @@ import com.judepereira.jupiter.security.BootstrapConfiguration;
 import com.judepereira.jupiter.security.BootstrapConfigurationReader;
 import com.judepereira.jupiter.security.LinuxProcessHardening;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.SpringApplication;
@@ -20,13 +26,6 @@ import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;
-
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 @Log4j2
 @SpringBootApplication
@@ -70,7 +69,7 @@ public class Jupiter {
     }
 
     static void bootstrapConfiguration(InputStream input, Runnable harden,
-                                       Function<InputStream, BootstrapConfiguration> reader, Consumer<BootstrapConfiguration> startApplication) {
+            Function<InputStream, BootstrapConfiguration> reader, Consumer<BootstrapConfiguration> startApplication) {
         harden.run();
         startApplication.accept(reader.apply(input));
     }

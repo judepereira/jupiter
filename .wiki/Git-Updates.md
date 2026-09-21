@@ -10,7 +10,8 @@ other.
 
 ## Automatic updates
 
-When enabled, Jupiter checks workspaces after startup and then periodically for new commits. Update passes do not overlap.
+When enabled, Jupiter checks workspaces after startup and then periodically for new commits. Update passes do not
+overlap.
 
 ## What exactly gets run?
 

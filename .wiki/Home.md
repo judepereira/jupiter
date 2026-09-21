@@ -23,8 +23,8 @@ Jupiter is easiest to understand in three layers:
 - A **workspace** is a Git worktree on a branch inside that project.
 - A **session** is a persisted coding conversation inside one workspace.
 
-Agents sit on top of those layers. Primary agents can use tools directly or delegate work to persisted subagent
-sessions that you can inspect separately.
+Agents sit on top of those layers. Primary agents can use tools directly or delegate work to persisted subagent sessions
+that you can inspect separately.
 
 The browser is only the client. Jupiter keeps application state on the server, so reloading, disconnecting, or moving
 between devices does not wipe chat history, drafts, tool traces, review state, or project settings.
