@@ -13,20 +13,20 @@
         const models = [...new Map(points.map((point) => [point.modelKey, point.modelLabel])).entries()];
         const labels = [...new Set(points.map((point) => point.hour))];
         const palette = ["#2563eb", "#d97706", "#059669", "#dc2626", "#7c3aed", "#db2777"];
-        const datasets = models.flatMap(([key, label], index) => [
-            {
+        const datasets = [
+            ...models.map(([key, label], index) => ({
                 label: label + " reported input tokens",
                 data: labels.map((hour) => value(points, hour, key, "input")),
                 backgroundColor: palette[index % palette.length],
-                stack: "input",
-            },
-            {
+                stack: "tokens",
+            })),
+            ...models.map(([key, label], index) => ({
                 label: label + " reported output tokens",
                 data: labels.map((hour) => value(points, hour, key, "output")),
                 backgroundColor: palette[index % palette.length] + "80",
-                stack: "output",
-            },
-        ]);
+                stack: "tokens",
+            })),
+        ];
         if (chart) chart.destroy();
         chart = new Chart(canvas, {
             type: "bar",
