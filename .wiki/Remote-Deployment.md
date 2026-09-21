@@ -38,8 +38,8 @@ Basic authentication does not encrypt traffic, so use HTTPS outside a trusted lo
 
 ## Trust model
 
-Anyone who can access Jupiter can run coding agents and use an interactive shell against your source environment.
-Do not share one instance between mutually untrusted users.
+Anyone who can access Jupiter can run coding agents and use an interactive shell against your source environment. Do not
+share one instance between mutually untrusted users.
 
 ## Health checks
 
@@ -55,8 +55,10 @@ A healthy response is:
 {"status":"UP"}
 ```
 
-`UP` means the web application handled the request. It does not verify Git, model providers, repositories, or MCP servers.
+`UP` means the web application handled the request. It does not verify Git, model providers, repositories, or MCP
+servers.
 
 ## Backups
 
-Back up `~/.jupiter/jupiter.sqlite` and its matching encryption key separately. See [Storage and Backups](Storage-and-Backups).
+Back up `~/.jupiter/jupiter.sqlite` and its matching encryption key separately. See
+[Storage and Backups](Storage-and-Backups).

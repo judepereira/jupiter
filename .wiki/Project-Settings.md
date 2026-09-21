@@ -22,7 +22,8 @@ terminal tab for debugging.
 
 ## Project environment variables
 
-Add environment names and values that should be available to project processes. Sensitive persisted values are encrypted.
+Add environment names and values that should be available to project processes. Sensitive persisted values are
+encrypted.
 
 Project variables are available to terminals, agent commands, MCP configuration, and lifecycle hooks where applicable.
 
@@ -38,14 +39,15 @@ overlaid. Jupiter's encryption key is never restored into the terminal.
 
 ## Lifecycle hooks
 
-Hooks receive project variables plus `JUPITER_PROJECT_NAME`, `JUPITER_WORKSPACE_NAME`, and `JUPITER_SESSION_NAME`.
-They do not automatically inherit Jupiter's HTTP-authentication credentials or encryption key.
+Hooks receive project variables plus `JUPITER_PROJECT_NAME`, `JUPITER_WORKSPACE_NAME`, and `JUPITER_SESSION_NAME`. They
+do not automatically inherit Jupiter's HTTP-authentication credentials or encryption key.
 
 ## MCP placeholders
 
-MCP URLs and headers can use `${env.NAME}` placeholders. Project variables take precedence over host/runtime values.
-The encryption key is never available as an MCP placeholder.
+MCP URLs and headers can use `${env.NAME}` placeholders. Project variables take precedence over host/runtime values. The
+encryption key is never available as an MCP placeholder.
 
 ## Other settings
 
-The Settings UI also contains MCP servers, provider connections, lifecycle hooks, automatic Git updates, and usage views.
+The Settings UI also contains MCP servers, provider connections, lifecycle hooks, automatic Git updates, and usage
+views.

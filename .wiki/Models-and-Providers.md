@@ -19,10 +19,11 @@ available independently.
 ## Connect Claude
 
 Open **Settings → Model Providers** and choose **Connect Claude**. Jupiter opens Anthropic's hosted authorisation page.
-Complete sign-in there, copy the authentication code, paste it back into Jupiter, and choose **Complete authentication**.
+Complete sign-in there, copy the authentication code, paste it back into Jupiter, and choose **Complete
+authentication**.
 
-Claude OAuth state is stored encrypted and restored across restarts. **Disconnect** removes the saved connection. Jupiter
-does not require an Anthropic API key for this flow.
+Claude OAuth state is stored encrypted and restored across restarts. **Disconnect** removes the saved connection.
+Jupiter does not require an Anthropic API key for this flow.
 
 ## Choose models
 
@@ -30,8 +31,8 @@ Jupiter loads supported model metadata from the configured models.dev catalogue 
 you choose which models appear as additional chat choices, and those selections persist across disconnect and reconnect.
 
 Models referenced by configured agents remain available while their provider is connected, even when they are not part
-of the provider's additional selection. Catalogue compatibility does not guarantee that your provider account is entitled
-to use a particular model.
+of the provider's additional selection. Catalogue compatibility does not guarantee that your provider account is
+entitled to use a particular model.
 
 ## Agent defaults and fallback
 
@@ -45,8 +46,8 @@ switching models.
 
 ## Thinking level
 
-The composer lets you choose a thinking level for a primary turn. Supported models receive that level when the request is
-sent. Without an explicit override, the selected agent's configured defaults apply.
+The composer lets you choose a thinking level for a primary turn. Supported models receive that level when the request
+is sent. Without an explicit override, the selected agent's configured defaults apply.
 
 ## Treat provider credentials as secrets
 

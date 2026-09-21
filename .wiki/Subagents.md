@@ -12,8 +12,9 @@ Jupiter ships with:
 - **Apprentice** — implementation work.
 - **Test** — testing-focused work.
 
-Their current model preferences live in the bundled agent definitions and may change independently of this documentation.
-Model selection follows the same rules as primary agents; see [Models and Providers](Models-and-Providers).
+Their current model preferences live in the bundled agent definitions and may change independently of this
+documentation. Model selection follows the same rules as primary agents; see
+[Models and Providers](Models-and-Providers).
 
 ## A task is a real child session
 

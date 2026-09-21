@@ -146,3 +146,4 @@ implementation details.
    use a named static factory for genuinely distinct construction semantics; use a parameter object or builder when
    direct construction becomes unclear. An overload is allowed only when required by a framework or external
    compatibility contract, and its exception must be documented.
+

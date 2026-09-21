@@ -12,8 +12,8 @@ Jupiter ships with two primary agents:
 - **Plan** — focused on planning and exploration, with read/search/image tools plus delegation through `task`.
 - **Engineer** — the coding agent, with native/MCP tool access and delegation.
 
-Their current model preferences live in the bundled agent definitions and may change independently of this documentation.
-Agent-default runs use the first configured preference whose provider is available. See
+Their current model preferences live in the bundled agent definitions and may change independently of this
+documentation. Agent-default runs use the first configured preference whose provider is available. See
 [Models and Providers](Models-and-Providers) for model selection and fallback behaviour.
 
 There are also Explore, Apprentice, and Test subagents. See [Subagents](Subagents).
