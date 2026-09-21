@@ -251,6 +251,7 @@ public class ProjectsTemplateRenderTest {
         String attribute = html.substring(html.indexOf("data-usage-data=\"") + "data-usage-data=\"".length());
         attribute = attribute.substring(0, attribute.indexOf('"'));
         assertThat(html).doesNotContain("<script", "<historical model>");
+        assertThat(html).contains("aria-label=\"Stacked input and output token usage by hour and model\"");
         assertThat(attribute).contains("&quot;", "&lt;");
         assertThat(new ObjectMapper().readTree(HtmlUtils.htmlUnescape(attribute)).get(0).get("modelKey").asText())
                 .isEqualTo("model\"key");

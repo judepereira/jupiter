@@ -14,7 +14,8 @@ The usage view supports:
 - 30 days
 - 60 days
 
-Hourly usage is grouped by project and model.
+Hourly usage is grouped by project and model. The chart stacks input tokens below output tokens in one combined bar for
+each hour; each model keeps its own color, while translucent segments identify output tokens.
 
 ## What gets recorded?
 
