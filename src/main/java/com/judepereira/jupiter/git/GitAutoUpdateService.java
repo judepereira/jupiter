@@ -2,6 +2,7 @@ package com.judepereira.jupiter.git;
 
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
+import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,12 +25,15 @@ public class GitAutoUpdateService {
 
     private final AppStateService appStateService;
     private final GitCommandRunner commandRunner;
+    private final ActiveStreamRegistryService activeStreamRegistryService;
     private final ConcurrentMap<String, Object> repositoryLocks = new ConcurrentHashMap<>();
     private final AtomicBoolean passRunning = new AtomicBoolean();
 
-    public GitAutoUpdateService(AppStateService appStateService, GitCommandRunner commandRunner) {
+    public GitAutoUpdateService(AppStateService appStateService, GitCommandRunner commandRunner,
+            ActiveStreamRegistryService activeStreamRegistryService) {
         this.appStateService = appStateService;
         this.commandRunner = commandRunner;
+        this.activeStreamRegistryService = activeStreamRegistryService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -55,7 +59,8 @@ public class GitAutoUpdateService {
                 return;
             }
             for (Persistence.WorkspaceView workspace : appStateService.listAutoGitUpdateWorkspaces()) {
-                updateWorkspace(workspace);
+                activeStreamRegistryService.runIfNoActiveStreamForWorkspace(workspace.path(),
+                        () -> updateWorkspace(workspace));
             }
         } finally {
             passRunning.set(false);
