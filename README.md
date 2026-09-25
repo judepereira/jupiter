@@ -3,8 +3,10 @@
 Jupiter is secure, agentic IDE (model agnostic) designed to run on a server and remain available from any browser - laptop,
 phone, whatever happens to be nearby. A perfect handoff enables seamless continuity of work.
 
-
-![Jupiter interface](.wiki/images/interface-desktop.png)
+<div style="display:flex; gap:5px; align-items:flex-start;">
+  <img src=".wiki/images/interface-desktop.png" alt="Desktop view" width="79.3%">
+  <img src=".wiki/images/interface-mobile.png" alt="Mobile view" width="21.6%">
+</div>
 
 ## Highlights
 
