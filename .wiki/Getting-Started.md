@@ -1,5 +1,3 @@
-# Getting Started
-
 Here’s the shortest path from a new install to a useful Jupiter session. Docker is the recommended way to run Jupiter.
 
 ## 1. Choose how to run it
