@@ -1,11 +1,9 @@
-# Remote Deployment
-
 Remote access is a primary use case for Jupiter, but remote does not have to mean publicly exposed to the internet.
 
 ## Recommended setup: private network
 
 Run Jupiter on the machine containing your repositories, then expose port `7272` only over a trusted network or VPN.
-Tailscale is one option, but Jupiter does not depend on it.
+Tailscale is an option, but Jupiter does not depend on it.
 
 ## Public deployment
 
@@ -19,7 +17,7 @@ JUPITER_HTTP_AUTH_PASSWORD='use-a-strong-secret'
 
 The default username is `jupiter`; change it with `JUPITER_HTTP_AUTH_USERNAME`.
 
-Authentication protects everything except `GET /health`. It is one shared access gate, not per-user authorization.
+Authentication protects everything except `GET /health`.
 
 ## Reverse proxy requirements
 
@@ -38,7 +36,7 @@ Basic authentication does not encrypt traffic, so use HTTPS outside a trusted lo
 
 ## Trust model
 
-Anyone who can access Jupiter can run coding agents and use an interactive shell against your source environment. Do not
+Anyone who can access Jupiter can run agents and use an interactive shell against your source environment. Do not
 share one instance between mutually untrusted users.
 
 ## Health checks

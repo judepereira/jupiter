@@ -1,5 +1,3 @@
-# Storage and Backups
-
 Jupiter keeps persistent state under:
 
 ```text
@@ -21,19 +19,17 @@ Sensitive values are encrypted before persistence.
 
 ## Backup requirements
 
-A complete recovery requires both:
+A complete recovery requires:
 
-1. the SQLite database state
+1. everything under `~/.jupiter`
 2. the matching Jupiter encryption key
 
 Keep the encryption key separately from the database backup.
 
 ## Backing up a running instance
 
-Use a SQLite-aware backup method, or stop Jupiter before copying the database files.
-
-Copying only `jupiter.sqlite` while Jupiter is running can miss recently written state.
+Use a SQLite-aware backup method, or stop Jupiter before copying the database files. It's best to backup everything under `~/.jupiter`.
 
 ## Restore
 
-Restore the database and start Jupiter with its original encryption key. A mismatched key is rejected during startup.
+Restore `~/.jupiter`, and start Jupiter with its original encryption key. A mismatched key is rejected during startup.

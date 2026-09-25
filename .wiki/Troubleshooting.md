@@ -1,5 +1,3 @@
-# Troubleshooting
-
 Most Jupiter failures fall into a few predictable buckets. Check these before diving into server logs.
 
 ## “The encryption key is wrong”

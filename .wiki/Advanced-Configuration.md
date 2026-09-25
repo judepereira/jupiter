@@ -1,5 +1,3 @@
-# Advanced Configuration
-
 These settings are mainly useful when operating or tuning a Jupiter instance beyond the normal UI.
 
 ## Environment variables

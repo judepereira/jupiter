@@ -1,5 +1,3 @@
-# Subagents
-
 Subagents are how Jupiter delegates focused work without turning that work into a black box.
 
 ![Inspecting a subagent session](images/subagent-session.png)
@@ -15,14 +13,6 @@ Jupiter ships with:
 Their current model preferences live in the bundled agent definitions and may change independently of this
 documentation. Model selection follows the same rules as primary agents; see
 [Models and Providers](Models-and-Providers).
-
-## A task is a real child session
-
-When a primary agent calls `task`, Jupiter creates a persisted child session linked to the parent session, parent tool
-call, and selected subagent.
-
-That child session stores its own messages and tool traces. You can open it from the parent task call and inspect what
-it actually did.
 
 ## Changed files bubble up
 

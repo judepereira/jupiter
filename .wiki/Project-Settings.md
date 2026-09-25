@@ -1,5 +1,3 @@
-# Project Settings
-
 Project settings define how a repository should behave once a workspace is created.
 
 ![Project settings](images/project-settings.png)
@@ -22,10 +20,11 @@ terminal tab for debugging.
 
 ## Project environment variables
 
-Add environment names and values that should be available to project processes. Sensitive persisted values are
-encrypted.
+Add environment names and values that should be available to project processes.
 
 Project variables are available to terminals, agent commands, MCP configuration, and lifecycle hooks where applicable.
+
+**Important:** Do not add sensitive values here! Set those values as the Docker environment variables, and use `${env.VAR_NAME}` here.
 
 ## Host variables available to agents
 

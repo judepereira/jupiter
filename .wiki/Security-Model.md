@@ -1,5 +1,3 @@
-# Security Model
-
 Jupiter is powerful software running next to real source code. Its protections reduce accidental credential exposure,
 but they do not turn coding agents or the terminal into a general-purpose sandbox.
 

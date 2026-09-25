@@ -1,4 +1,4 @@
-Jupiter needs one stable 256-bit master key for each database. Keep the same key whenever you start Jupiter against that
+Jupiter needs one stable 256-bit master key for its database. Keep the same key whenever you start Jupiter against that
 database.
 
 ## Generate a key
