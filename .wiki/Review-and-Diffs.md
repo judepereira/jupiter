@@ -16,7 +16,7 @@ parent review incomplete.
 
 The **Git** source reads the active workspace’s current Git changes.
 
-This is the broader truth and will also catch edits made outside the agent trace — for example, something you changed
+This is the broader truth and will also catch edits made outside the agent trace - for example, something you changed
 from the terminal.
 
 ## Remembering where you were

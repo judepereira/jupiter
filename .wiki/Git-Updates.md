@@ -22,7 +22,7 @@ git pull --ff-only
 ```
 
 If there is no upstream, Jupiter prefers `origin`. If there is no `origin` but exactly one remote exists, it uses that
-instead — but only when the same branch exists remotely.
+instead - but only when the same branch exists remotely.
 
 No remote, several ambiguous remotes, or no matching branch? Jupiter skips the workspace rather than guessing.
 
