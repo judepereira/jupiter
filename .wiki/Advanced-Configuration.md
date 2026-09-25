@@ -17,22 +17,6 @@ These settings are mainly useful when operating or tuning a Jupiter instance bey
 | `INIT_SCRIPT`                | Root container initialisation script   | `/init.sh`      |
 | `INIT_USER_SCRIPT`           | User container initialisation script   | `/init-user.sh` |
 
-## Spring properties
-
-Common ones include:
-
-```properties
-server.port=7272
-openai.api-key=...
-openai.retry.max-retries=10
-openai.retry.initial-backoff=1s
-openai.retry.max-backoff=120s
-agent.command-timeout-seconds=600
-agent.max-iterations=1000
-```
-
-The model catalogue defaults to `https://models.dev/catalog.json` and can be changed with `models.dev.catalog-url`.
-OpenAI OAuth issuer and endpoint settings are Spring-configurable too.
 
 ## State paths
 
@@ -47,8 +31,3 @@ User slash commands live under:
 ```text
 ~/.jupiter/commands/*.md
 ```
-
-## Encryption key note
-
-For native startup, follow [Running Natively](Running-Natively) rather than putting the encryption key directly in the
-Java process environment.

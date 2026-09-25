@@ -6,7 +6,6 @@
 
 - [Getting Started](Getting-Started)
 - [Interface Tour](Interface-Tour)
-- [Running Natively](Running-Natively)
 - [Running with Docker](Running-with-Docker)
 
 ## Core workflow

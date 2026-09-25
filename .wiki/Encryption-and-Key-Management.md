@@ -1,5 +1,3 @@
-# Encryption and Key Management
-
 Jupiter needs one stable 256-bit master key for each database. Keep the same key whenever you start Jupiter against that
 database.
 
@@ -22,17 +20,7 @@ A wrong key causes startup failure. Losing the key makes encrypted data unrecove
 
 Back up the key separately from the SQLite database.
 
-## Upgrading older databases
+## Docker startup
 
-Jupiter migrates earlier plaintext persisted values to encrypted storage.
-
-Back up both database and key before upgrading. Older backups, WAL files, or deleted database pages may still contain
-plaintext written before migration.
-
-## Docker and native startup
-
-Docker accepts `JUPITER_ENCRYPTION_KEY` during startup and passes the key into Jupiter after trusted initialization
+Docker accepts `JUPITER_ENCRYPTION_KEY` during startup, and passes the key into Jupiter after trusted initialization
 scripts run.
-
-For normal native startup, use the bootstrap mechanism described in [Running Natively](Running-Natively) rather than
-placing the key directly in the Java process environment.
