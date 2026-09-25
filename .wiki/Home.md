@@ -9,11 +9,11 @@ Jupiter is a remote coding environment: run it where the code lives, then work f
 If this is your first run, go straight to [Getting Started](Getting-Started). After that, these are the pages that
 matter most:
 
-- [Interface Tour](Interface-Tour) — what lives where in the UI.
-- [Workspaces and Git Worktrees](Workspaces-and-Git-Worktrees) — the Git model Jupiter is built around.
-- [Agents](Agents) — primary agents, subagents, tools, and permissions.
-- [Remote Deployment](Remote-Deployment) — how to expose Jupiter beyond localhost.
-- [Security Model](Security-Model) — what Jupiter protects, and just as importantly, what it doesn’t.
+- [Interface Tour](Interface-Tour) - what lives where in the UI.
+- [Workspaces and Git Worktrees](Workspaces-and-Git-Worktrees) - the Git model Jupiter is built around.
+- [Agents](Agents) - primary agents, subagents, tools, and permissions.
+- [Remote Deployment](Remote-Deployment) - how to expose Jupiter beyond localhost.
+- [Security Model](Security-Model) - what Jupiter protects, and just as importantly, what it doesn’t.
 
 ## The basic model
 

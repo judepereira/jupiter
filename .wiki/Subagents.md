@@ -8,9 +8,9 @@ Subagents are how Jupiter delegates focused work without turning that work into 
 
 Jupiter ships with:
 
-- **Explore** — read-only codebase exploration.
-- **Apprentice** — implementation work.
-- **Test** — testing-focused work.
+- **Explore** - read-only codebase exploration.
+- **Apprentice** - implementation work.
+- **Test** - testing-focused work.
 
 Their current model preferences live in the bundled agent definitions and may change independently of this
 documentation. Model selection follows the same rules as primary agents; see

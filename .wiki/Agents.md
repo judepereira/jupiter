@@ -9,8 +9,8 @@ readable in one place instead of hiding agent behaviour in Java configuration.
 
 Jupiter ships with two primary agents:
 
-- **Plan** — focused on planning and exploration, with read/search/image tools plus delegation through `task`.
-- **Engineer** — the coding agent, with native/MCP tool access and delegation.
+- **Plan** - focused on planning and exploration, with read/search/image tools plus delegation through `task`.
+- **Engineer** - the coding agent, with native/MCP tool access and delegation.
 
 Their current model preferences live in the bundled agent definitions and may change independently of this
 documentation. Agent-default runs use the first configured preference whose provider is available. See

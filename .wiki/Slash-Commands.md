@@ -39,7 +39,7 @@ git status --short
 
 Bundled commands include:
 
-- `/status` — runs `git status --short`.
-- `/commit-push` — inserts a prompt asking the agent to commit and push the current changes.
+- `/status` - runs `git status --short`.
+- `/commit-push` - inserts a prompt asking the agent to commit and push the current changes.
 
 Command IDs must be unique across bundled and user commands.

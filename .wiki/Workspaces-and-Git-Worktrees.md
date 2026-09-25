@@ -8,8 +8,8 @@ A Jupiter workspace is a Git worktree backed by a branch. This is one of the cor
 
 You get two modes:
 
-- **Create branch** — make a new branch and worktree.
-- **Checkout existing branch** — create a worktree for a branch that already exists.
+- **Create branch** - make a new branch and worktree.
+- **Checkout existing branch** - create a worktree for a branch that already exists.
 
 Git does the real validation underneath; branch and checkout failures are surfaced in the UI.
 
