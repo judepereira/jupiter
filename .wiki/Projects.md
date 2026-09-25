@@ -1,7 +1,4 @@
-# Projects
-
-A project simply points Jupiter at an existing source directory. Jupiter doesn’t clone or invent a repository for you
-here.
+A project points Jupiter at an existing source directory. Jupiter doesn’t clone a repository for you yet.
 
 ![Opening a project in Jupiter](images/projects.png)
 

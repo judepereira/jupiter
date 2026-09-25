@@ -1,18 +1,12 @@
-# Sessions and Chat
-
-A session is a persisted coding conversation inside one workspace.
+A session is a conversation inside one workspace.
 
 ![Jupiter sessions and chat](images/sessions-and-chat.png)
 
 ## More than one session
 
-You can create several sessions for the same workspace and switch between them from the rail. Messages, tool traces,
-drafts, and review state all live on the server.
-
-## Streaming and reconnects
-
-Assistant text and tool activity stream while a turn is running. If the browser connection drops, reconnecting can
-reattach to the active server-side turn instead of losing the work in progress.
+You can create several sessions for the same workspace and switch between them from the left navigation. It's important
+to note that they share the same filesystem view of the workspace. Typical usages involve using different sessions to
+plan, but one session to manage all active agent work.
 
 ## Stopping a turn
 
@@ -21,10 +15,6 @@ The stop button cancels the active assistant turn and any managed command execut
 ## Drafts
 
 Unsent composer text is saved per session, which means you can navigate elsewhere without losing half-written prompts.
-
-## Message details
-
-Completed assistant messages record the agent, model, thinking level, duration, and completion time.
 
 ## Forking
 
@@ -45,6 +35,3 @@ JPEG, GIF, and WebP workspace images inline in chat.
 
 Long-running sessions can eventually approach a model’s context limit. Jupiter automatically summarizes older completed
 turns while keeping recent work intact. The summary appears as a visible system message.
-
-If the resulting request still cannot fit the model’s context window, Jupiter fails explicitly instead of sending an
-oversized request.

@@ -1,5 +1,3 @@
-# Review and Diffs
-
 There are two useful questions when reviewing agent work: “what did this session change?” and “what is actually
 different in Git?” Jupiter keeps both views.
 

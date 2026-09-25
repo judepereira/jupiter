@@ -1,5 +1,3 @@
-# Terminal
-
 The terminal in Jupiter is a real PTY, not a textarea pretending to be one.
 
 ![Jupiter terminal](images/terminal.png)
@@ -8,7 +6,7 @@ The terminal in Jupiter is a real PTY, not a textarea pretending to be one.
 
 Jupiter starts `$SHELL`, falling back to `/bin/bash`, as a login shell.
 
-It starts in the active workspace directory and sets `TERM=xterm-256color`.
+It starts in the active workspace directory.
 
 ## Tabs
 
@@ -18,6 +16,8 @@ Each workspace can have multiple terminal tabs. You can create, switch, and clos
 
 A running terminal stays on the server when the browser disconnects. Reconnecting reattaches to it and replays recent
 output so you can continue where you left off.
+
+This is handy when switching between two devices :)
 
 ## Environment
 

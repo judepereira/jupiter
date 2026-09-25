@@ -1,13 +1,11 @@
-# Slash Commands
-
-Slash commands are Markdown files with YAML frontmatter. They’re deliberately simple enough that adding one doesn’t
-require touching Java.
+Slash commands are Markdown files with YAML frontmatter. Some interoperability between Claude Code and Codex is
+available. If there's a feature that you'd like to add, please create an issue for it.
 
 ![Slash command picker](images/slash-commands.png)
 
 ## Where commands come from
 
-Jupiter loads bundled commands from the application and user commands from:
+Jupiter loads self-bundled commands, along with user commands from:
 
 ```text
 ~/.jupiter/commands/*.md
@@ -19,7 +17,7 @@ Jupiter loads bundled commands from the application and user commands from:
 
 **Script** commands run immediately and stream the result into chat.
 
-## Example
+### Example
 
 ```markdown
 ---
@@ -34,6 +32,10 @@ git status --short
 ```
 
 `type` is required and must be `prompt` or `script`. `workingDir` and `timeoutSeconds` are script-only options.
+
+## UI
+
+Slash commands may also be added from the Settings. Go to **Settings → Commands** to view, edit, and add new commands.
 
 ## Bundled commands
 
