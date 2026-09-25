@@ -17,7 +17,6 @@ These settings are mainly useful when operating or tuning a Jupiter instance bey
 | `INIT_SCRIPT`                | Root container initialisation script   | `/init.sh`      |
 | `INIT_USER_SCRIPT`           | User container initialisation script   | `/init-user.sh` |
 
-
 ## State paths
 
 The default database is:
@@ -31,3 +30,4 @@ User slash commands live under:
 ```text
 ~/.jupiter/commands/*.md
 ```
+

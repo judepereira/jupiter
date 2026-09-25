@@ -1,5 +1,5 @@
-Jupiter is secure, agentic IDE (model agnostic) designed to run on a server and remain available from any browser - laptop,
-phone, whatever happens to be nearby. A perfect handoff enables seamless continuity of work.
+Jupiter is secure, agentic IDE (model agnostic) designed to run on a server and remain available from any browser -
+laptop, phone, whatever happens to be nearby. A perfect handoff enables seamless continuity of work.
 
 ![Jupiter interface](images/interface-desktop.png)
 
@@ -22,8 +22,8 @@ Jupiter is easiest to understand in three layers:
 - A **workspace** is a Git worktree on a branch inside that project.
 - A **session** is a conversation within a workspace.
 
-Agents sit on top of those layers. Primary agents can use tools directly or delegate work to subagents
-that you can inspect separately.
+Agents sit on top of those layers. Primary agents can use tools directly or delegate work to subagents that you can
+inspect separately.
 
 The browser is only the client. Jupiter keeps application state on the server, so reloading, disconnecting, or moving
 between devices does not wipe chat history, drafts, tool traces, review state, or project settings.

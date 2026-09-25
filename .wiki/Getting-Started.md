@@ -6,7 +6,8 @@ See [Running with Docker](Running-with-Docker).
 
 ## Connect a model provider
 
-Either set `OPENAI_API_KEY`, use the OpenAI device authorisation flow, or connect Claude in **Settings → Model Providers**.
+Either set `OPENAI_API_KEY`, use the OpenAI device authorisation flow, or connect Claude in **Settings → Model
+Providers**.
 
 See [Models and Providers](Models-and-Providers).
 
@@ -29,8 +30,7 @@ Next, read [Interface Tour](Interface-Tour) and [Workspaces and Git Worktrees](W
 Before updating, make sure you still have the encryption key and back up `~/.jupiter` (or the persistent Docker state
 directory).
 
-Pull the latest published image, and restart Jupiter with the same state mount, source mounts, and encryption
-key:
+Pull the latest published image, and restart Jupiter with the same state mount, source mounts, and encryption key:
 
 ```bash
 docker pull judepereira/jupiter:latest

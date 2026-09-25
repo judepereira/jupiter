@@ -1,7 +1,7 @@
 # Jupiter
 
-Jupiter is secure, agentic IDE (model agnostic) designed to run on a server and remain available from any browser - laptop,
-phone, whatever happens to be nearby. A perfect handoff enables seamless continuity of work.
+Jupiter is secure, agentic IDE (model agnostic) designed to run on a server and remain available from any browser -
+laptop, phone, whatever happens to be nearby. A perfect handoff enables seamless continuity of work.
 
 ![Jupiter interface](.wiki/images/interface-desktop.png)
 
@@ -10,9 +10,10 @@ PS - the mobile interface looks like [this](https://github.com/judepereira/jupit
 ## Highlights
 
 - **Self-host friendly:** Self host it, and connect from a browser from anywhere, using a VPN like Tailscale.
-- **Model Agnostic:** Not being tied to a specific model provider allows you to mix and match models, 
-  including falling back seamlessly when a model provider experiences outages.
-- **Secure:** A rogue agent cannot access your env, and any other credentials from your env (network sandbox coming soon!).
+- **Model Agnostic:** Not being tied to a specific model provider allows you to mix and match models, including falling
+  back seamlessly when a model provider experiences outages.
+- **Secure:** A rogue agent cannot access your env, and any other credentials from your env (network sandbox coming
+  soon!).
 
 ## Quick Start
 
@@ -28,8 +29,8 @@ Generate an encryption key:
 export JUPITER_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
 
-**Important:** Don't lose or regenerate your encryption key! All data is encrypted with this key, 
-to prevent a rogue agent from reading the database file and searching for credentials. 
+**Important:** Don't lose or regenerate your encryption key! All data is encrypted with this key, to prevent a rogue
+agent from reading the database file and searching for credentials.
 
 Then, run the docker container:
 
@@ -56,8 +57,8 @@ docker pull judepereira/jupiter:latest
 
 **Important:** Use your own network sandbox for now. A built-in one will be shipped soon!
 
-It is possible to change the username from `jupiter` to your own username (makes it easier to jump into worktrees 
-from an external IDE), and to configure system init and user init scripts (preinstall software required). See 
+It is possible to change the username from `jupiter` to your own username (makes it easier to jump into worktrees from
+an external IDE), and to configure system init and user init scripts (preinstall software required). See
 [Running with Docker](https://github.com/judepereira/jupiter/wiki/Running-with-Docker).
 
 ## Connecting model providers
@@ -67,8 +68,9 @@ See [Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-an
 model-selection details.
 
 ## Protection against rogue agents
-It's strongly recommended to set `JUPITER_HTTP_AUTH_PASSWORD`, in order to prevent a rogue agent from accessing
-Jupiter itself. This is also useful when exposing Jupiter to the public facing internet (although this is NOT recommended).
+
+It's strongly recommended to set `JUPITER_HTTP_AUTH_PASSWORD`, in order to prevent a rogue agent from accessing Jupiter
+itself. This is also useful when exposing Jupiter to the public facing internet (although this is NOT recommended).
 Always use a private VPN such as Tailscale.
 
 ## Documentation
@@ -89,7 +91,8 @@ Jupiter keeps its state under `~/.jupiter`, including `jupiter.sqlite`.
 Back up the database and encryption key separately. You need both to recover encrypted state.
 
 ## Contributing
-Found a bug? Usability issue? Create an [issue](https://github.com/judepereira/jupiter/issues). If you'd like to add a new feature, 
-please create an issue first, outlining your feature, and it's proposed implementation plan.
+
+Found a bug? Usability issue? Create an [issue](https://github.com/judepereira/jupiter/issues). If you'd like to add a
+new feature, please create an issue first, outlining your feature, and it's proposed implementation plan.
 
 Made with ❤️ in Amsterdam
