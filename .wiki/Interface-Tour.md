@@ -1,12 +1,10 @@
-# Interface Tour
-
-The normal development loop stays on one screen: project, workspace, chat, review, terminal.
+The normal development loop stays on one screen: projects, workspaces, sessions, reviews, terminals.
 
 ![Jupiter desktop interface](images/interface-desktop.png)
 
 ## Project bar
 
-Projects sit across the top. Switching projects keeps you inside the same browser shell.
+Projects sit across the top. Agents continue to run in the background in other projects.
 
 ## Workspace and session rail
 
@@ -27,7 +25,7 @@ The review panel can show either files attributed to the current session or the 
 
 ## Terminal
 
-The bottom panel contains one or more real PTY terminals for the active workspace.
+The bottom panel contains one or more terminals for the active workspace.
 
 ## Settings and notifications
 
