@@ -28,7 +28,8 @@ Keep the encryption key separately from the database backup.
 
 ## Backing up a running instance
 
-Use a SQLite-aware backup method, or stop Jupiter before copying the database files. It's best to backup everything under `~/.jupiter`.
+Use a SQLite-aware backup method, or stop Jupiter before copying the database files. It's best to backup everything
+under `~/.jupiter`.
 
 ## Restore
 

@@ -1,5 +1,5 @@
-Lifecycle hooks are shell scripts Jupiter runs after selected agent events. They’re useful for notifications,
-local automation, cleanup, and similar jobs.
+Lifecycle hooks are shell scripts Jupiter runs after selected agent events. They’re useful for notifications, local
+automation, cleanup, and similar jobs.
 
 ![Lifecycle hook settings](images/lifecycle-hooks.png)
 

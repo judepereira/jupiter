@@ -7,7 +7,7 @@ Use the pull control on the active workspace, found in the top navigation bar, o
 
 ## Automatic updates
 
-When enabled, Jupiter checks workspaces after startup and then periodically for new commits. 
+When enabled, Jupiter checks workspaces after startup and then periodically for new commits.
 
 ## What exactly gets run?
 
