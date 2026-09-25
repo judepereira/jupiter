@@ -7,7 +7,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -15,24 +14,13 @@ import org.springframework.stereotype.Service;
 public class ActiveStreamRegistryService {
 
     private final ConcurrentMap<String, StreamRef> streamsByAssistantId = new ConcurrentHashMap<>();
-    private final ConcurrentMap<Path, ReentrantLock> workspaceLocks = new ConcurrentHashMap<>();
 
     public void register(String assistantId, long sessionId, String workspaceRoot) {
         if (assistantId == null || assistantId.isBlank()) {
             return;
         }
         Path workspace = normalize(workspaceRoot);
-        if (workspace == null) {
-            streamsByAssistantId.put(assistantId, new StreamRef(sessionId, workspaceRoot, null));
-            return;
-        }
-        ReentrantLock lock = workspaceLocks.computeIfAbsent(workspace, ignored -> new ReentrantLock());
-        lock.lock();
-        try {
-            streamsByAssistantId.put(assistantId, new StreamRef(sessionId, workspaceRoot, workspace));
-        } finally {
-            lock.unlock();
-        }
+        streamsByAssistantId.put(assistantId, new StreamRef(sessionId, workspaceRoot, workspace));
     }
 
     public void unregister(String assistantId) {
@@ -43,17 +31,7 @@ public class ActiveStreamRegistryService {
         if (current == null) {
             return;
         }
-        if (current.workspace() == null) {
-            streamsByAssistantId.remove(assistantId, current);
-            return;
-        }
-        ReentrantLock lock = workspaceLocks.computeIfAbsent(current.workspace(), ignored -> new ReentrantLock());
-        lock.lock();
-        try {
-            streamsByAssistantId.remove(assistantId, current);
-        } finally {
-            lock.unlock();
-        }
+        streamsByAssistantId.remove(assistantId, current);
     }
 
     public Set<Long> activeSessionIdsSnapshot() {
@@ -85,34 +63,6 @@ public class ActiveStreamRegistryService {
         if (workspace == null) {
             return false;
         }
-        ReentrantLock lock = workspaceLocks.computeIfAbsent(workspace, ignored -> new ReentrantLock());
-        lock.lock();
-        try {
-            return hasActiveStreamForWorkspace(workspace);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    public boolean runIfNoActiveStreamForWorkspace(String workspaceRoot, Runnable operation) {
-        Path workspace = normalize(workspaceRoot);
-        if (workspace == null) {
-            return false;
-        }
-        ReentrantLock lock = workspaceLocks.computeIfAbsent(workspace, ignored -> new ReentrantLock());
-        lock.lock();
-        try {
-            if (hasActiveStreamForWorkspace(workspace)) {
-                return false;
-            }
-            operation.run();
-            return true;
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    private boolean hasActiveStreamForWorkspace(Path workspace) {
         return streamsByAssistantId.values().stream().anyMatch(ref -> workspace.equals(ref.workspace()));
     }
 

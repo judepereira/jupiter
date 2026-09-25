@@ -59,8 +59,9 @@ public class GitAutoUpdateService {
                 return;
             }
             for (Persistence.WorkspaceView workspace : appStateService.listAutoGitUpdateWorkspaces()) {
-                activeStreamRegistryService.runIfNoActiveStreamForWorkspace(workspace.path(),
-                        () -> updateWorkspace(workspace));
+                if (!activeStreamRegistryService.hasActiveStreamForWorkspace(workspace.path())) {
+                    updateWorkspace(workspace);
+                }
             }
         } finally {
             passRunning.set(false);
