@@ -5,7 +5,7 @@ but they do not turn coding agents or the terminal into a general-purpose sandbo
 
 - Sensitive persisted values are encrypted using the instance encryption key.
 - The encryption key is not exposed to the integrated terminal, MCP templates, or agent commands.
-- Agent `run_command` receives only explicitly allowlisted host variables plus project variables.
+- Agent `run_command` receives only explicitly whitelisted host variables plus project variables.
 - Managed child processes such as Git commands and lifecycle hooks do not automatically inherit Jupiter's
   HTTP-authentication credentials or encryption key.
 - Optional HTTP Basic authentication protects every route except `GET /health`.
@@ -15,7 +15,7 @@ but they do not turn coding agents or the terminal into a general-purpose sandbo
 
 Different process types intentionally receive different environments.
 
-Agent commands are the most restricted: they start from an empty environment, receive allowlisted host variables, then
+Agent commands are the most restricted: they start from an empty environment, receive whitelisted host variables, then
 project variables.
 
 The integrated terminal is user-controlled and therefore receives a broader environment. It can receive bootstrap
@@ -24,24 +24,19 @@ runtime variables, including HTTP-authentication credentials, but never the encr
 Container initialization scripts are trusted setup code and receive the original environment, including the encryption
 key. Treat those scripts accordingly.
 
-These boundaries protect Jupiter's own sensitive credentials. They do not discover every unrelated secret already
-present in the host environment. For example, an `OPENAI_API_KEY` in a broadly inherited environment is not
-automatically removed.
-
 ## What Jupiter does not guarantee
 
-There is no OS-level filesystem sandbox around agent tools.
+There is no OS-level filesystem sandbox around agent tools. This is by design, as there are numerous ways in which an
+agent can break out of such imposed limits. Instead, the container provides a global sandbox, while a future network
+firewall will protect access to the internet.
 
 The integrated terminal is a real shell running with the permissions of the Jupiter OS user.
-
-Jupiter does not provide per-user authorization, per-project ACLs, container-per-agent isolation, or network-egress
-controls.
 
 ## Deployment implications
 
 Only give Jupiter access to users you trust with development access on that host.
 
 For stronger isolation, run Jupiter inside a VM, container, or dedicated host designed around the repositories and
-credentials it may reach.
+credentials it may reach. The default approach is to run it via the Docker container.
 
 See [Remote Deployment](Remote-Deployment) and [Encryption and Key Management](Encryption-and-Key-Management).
