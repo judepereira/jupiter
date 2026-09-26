@@ -5,6 +5,7 @@ import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -30,19 +31,23 @@ public class CommandController {
     @GetMapping(value = "/catalog", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public List<CommandCatalogService.CommandDefinition> catalog() {
-        return commandCatalogService.list();
+        AppStateView view = appStateService.loadViewData();
+        return commandCatalogService
+                .list(view.activeSessionDetail() == null ? null : Path.of(view.activeSessionDetail().workspaceRoot()));
     }
 
     @PostMapping(value = "/{commandId}/execute")
     public String execute(@PathVariable String commandId, Model model) {
-        CommandCatalogService.CommandDefinition command = commandCatalogService.getRequired(commandId);
-        if (command.type() != CommandCatalogService.CommandKind.SCRIPT) {
-            throw new IllegalStateException("Command is not executable: " + commandId);
-        }
-
         AppStateView view = appStateService.loadViewData();
         if (view.activeSession() == null || view.activeSessionDetail() == null) {
             throw new IllegalStateException("No active session");
+        }
+        CommandCatalogService.CommandDefinition command = commandCatalogService
+                .list(Path.of(view.activeSessionDetail().workspaceRoot())).stream()
+                .filter(candidate -> candidate.id().equals(commandId)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown command id: " + commandId));
+        if (command.type() != CommandCatalogService.CommandKind.SCRIPT) {
+            throw new IllegalStateException("Command is not executable: " + commandId);
         }
 
         String userId = UUID.randomUUID().toString();
