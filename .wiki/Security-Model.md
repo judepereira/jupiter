@@ -1,12 +1,6 @@
 Jupiter is powerful software running next to real source code. Its protections reduce accidental credential exposure,
 but they do not turn coding agents or the terminal into a general-purpose sandbox.
 
-
-
-
-
-
-
 ## What Jupiter protects
 
 - Sensitive persisted values are encrypted using the instance encryption key.
