@@ -23,6 +23,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -436,10 +437,10 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static void captureViewport(Page page, Path output, int cssWidth, int cssHeight, double dpr)
             throws IOException {
-        page.screenshot(
-                new Page.ScreenshotOptions().setPath(output).setFullPage(false).setScale(ScreenshotScale.DEVICE));
+        byte[] screenshot = page
+                .screenshot(new Page.ScreenshotOptions().setFullPage(false).setScale(ScreenshotScale.DEVICE));
 
-        BufferedImage image = ImageIO.read(output.toFile());
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(screenshot));
         if (image == null) {
             throw new IllegalStateException("Playwright did not produce a readable PNG: " + output);
         }
@@ -449,6 +450,10 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             throw new IllegalStateException(
                     "Unexpected screenshot dimensions for " + output + ": got " + image.getWidth() + "x"
                             + image.getHeight() + ", expected " + expectedWidth + "x" + expectedHeight);
+        }
+        BufferedImage framed = BrowserScreenshot.buildBrowserFramedImage(image, "http://localhost:7272");
+        if (!ImageIO.write(framed, "png", output.toFile())) {
+            throw new IllegalStateException("PNG writer is unavailable");
         }
     }
 
