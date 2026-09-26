@@ -1,4 +1,4 @@
-Here’s the shortest path from a new install to a useful Jupiter session. Docker is the recommended way to run Jupiter.
+The shortest path to your first session is by running the Docker container.
 
 ## Run the Docker container
 
@@ -6,14 +6,14 @@ See [Running with Docker](Running-with-Docker).
 
 ## Connect a model provider
 
-Either set `OPENAI_API_KEY`, use the OpenAI device authorisation flow, or connect Claude in **Settings → Model
+Either set `OPENAI_API_KEY`, connect your ChatGPT/OpenAI subscription, or connect Claude in **Settings → Model
 Providers**.
 
 See [Models and Providers](Models-and-Providers).
 
-## Add a project
+## Open a project
 
-Open **New project** (the plus sign in the top bar), browse to an existing source directory, and add it.
+Click on **Open Project** (the plus sign in the top bar), browse to an existing source directory, and add it.
 
 ![Opening a project in Jupiter](images/projects.png)
 

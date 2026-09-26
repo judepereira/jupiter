@@ -1,9 +1,7 @@
-Jupiter is secure, agentic IDE (model agnostic) designed to run on a server and remain available from any browser -
+Jupiter is a secure, model agnostic agentic IDE designed to run on a server and remain available from any browser -
 laptop, phone, whatever happens to be nearby. A perfect handoff enables seamless continuity of work.
 
 ![Jupiter interface](images/interface-desktop.png)
-
-## Start here
 
 If this is your first run, go straight to [Getting Started](Getting-Started). After that, these are the pages that
 matter most:
@@ -32,8 +30,8 @@ between devices does not wipe chat history, drafts, tool traces, review state, o
 
 Ideally, on the machine that already has your source code: a VM, home server, or an EC2 instance.
 
-For remote access, a private VPN is recommended. If you need public access, use HTTPS and enable Jupiter’s Basic-auth
-gate.
+For remote access, a private VPN is recommended. If you need public access, use HTTPS and enable Jupiter’s HTTP basic
+auth.
 
 Jupiter runs against real source trees and shell processes; it is not an operating-system sandbox. Read
 [Security Model](Security-Model) before exposing it remotely.

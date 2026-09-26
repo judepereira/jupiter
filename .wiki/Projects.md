@@ -4,7 +4,7 @@ A project points Jupiter at an existing source directory. Jupiter doesn’t clon
 
 ## Adding one
 
-Use **New project**, browse the server filesystem, and select the directory you want.
+Use **Open Project**, browse the server filesystem, and select the directory you want.
 
 Jupiter stores the project name and normalized path. Closing a project removes it from the visible project bar; it does
 **not** delete the source directory.

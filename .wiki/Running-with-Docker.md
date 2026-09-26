@@ -1,43 +1,46 @@
-# Running with Docker
+Docker is the preferred way to run Jupiter. The runtime image provides hooks to preinstall software, and permits init
+scripts to run as root or as the user.
 
-Docker is the preferred way to run Jupiter. The runtime image uses Java 25 and already includes Git, Git LFS, and
-ripgrep.
-
-## Pull the image
+Pull the latest published image:
 
 ```bash
 docker pull judepereira/jupiter:latest
 ```
 
-## Run it with persistent state and source code
-
-Choose the parent directory containing the repositories you want Jupiter to access:
+Generate an encryption key:
 
 ```bash
 export JUPITER_ENCRYPTION_KEY="$(openssl rand -base64 32)"
-export JUPITER_REPOS="$HOME/src"
-mkdir -p "$HOME/.jupiter"
+```
 
+**Important:** Don't lose or regenerate your encryption key! All data is encrypted with this key, to prevent a rogue
+agent from reading the database file and searching for credentials.
+
+Then, run the docker container:
+
+```bash
+mkdir -p "$HOME/.jupiter"
 docker run --rm \
   -p 7272:7272 \
   -e JUPITER_ENCRYPTION_KEY="$JUPITER_ENCRYPTION_KEY" \
   -v "$HOME/.jupiter:/home/jupiter/.jupiter" \
-  -v "$JUPITER_REPOS:/workspace" \
+  -v "$HOME/developer:/home/jupiter/developer" \ # Replace developer with the dir where all your projects are checked out
   judepereira/jupiter:latest
 ```
 
-Replace `$HOME/src` with the directory where your repositories live. In Jupiter, use **New project** and select a
-repository under `/workspace`.
+Open `http://localhost:7272`, choose [**Open Project**](Projects), and select a repository under
+`/home/jupiter/developer` to get started.
 
-Keep the encryption key. Replacing it on the next run will not unlock the existing database.
-
-## Updating
-
-Pull the latest image, then restart Jupiter with the same encryption key, state mount, and source mounts:
+To update Jupiter, pull the latest image and restart the container with the same encryption key, state mount, and source
+mount:
 
 ```bash
 docker pull judepereira/jupiter:latest
 ```
+
+**Note:** Versioning will soon be introduced.
+
+**Important:** Use your own network sandbox for now. A built-in one will be shipped soon!
 
 ## User and group IDs
 

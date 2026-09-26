@@ -44,7 +44,7 @@ docker run --rm \
   judepereira/jupiter:latest
 ```
 
-Open `http://localhost:7272`, choose **New project**, and select a repository under `/home/jupiter/developer`.
+Open `http://localhost:7272`, choose **Open Project**, and select a repository under `/home/jupiter/developer`.
 
 To update Jupiter, pull the latest image and restart the container with the same encryption key, state mount, and source
 mount:
