@@ -3,8 +3,28 @@ set -eu
 
 cd "$(git rev-parse --show-toplevel)"
 
-if ! ./mvnw -q spotless:check; then
-    echo >&2
-    echo "Spotless check failed. Run ./mvnw spotless:apply and stage the formatting changes." >&2
-    exit 1
+if ./mvnw -q spotless:check; then
+    exit 0
 fi
+
+# Refuse auto-formatting if any staged file also has unstaged changes.
+git diff --cached --name-only --diff-filter=ACMR |
+while IFS= read -r file; do
+    if ! git diff --quiet -- "$file"; then
+        echo "Spotless check failed, but '$file' is only partially staged." >&2
+        echo "Refusing to auto-format to avoid staging unintended changes." >&2
+        echo "Run ./mvnw spotless:apply, and commit again." >&2
+        exit 1
+    fi
+done
+
+echo "Spotless check failed. Applying formatting..." >&2
+./mvnw -q spotless:apply
+
+# Restage exactly the files that were already staged.
+git diff --cached --name-only --diff-filter=ACMR |
+while IFS= read -r file; do
+    git add -A -- "$file"
+done
+
+echo "Spotless formatting applied successfully!"
