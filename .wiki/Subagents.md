@@ -2,7 +2,7 @@ Subagents are how Jupiter delegates focused work without turning that work into 
 
 ![Inspecting a subagent session](images/subagent-session.png)
 
-## Bundled subagents
+## Bundled Subagents
 
 Jupiter ships with:
 
@@ -14,13 +14,13 @@ Their current model preferences live in the bundled agent definitions and may ch
 documentation. Model selection follows the same rules as primary agents; see
 [Models and Providers](Models-and-Providers).
 
-## Changed files bubble up
+## Changed Files Bubble Up
 
 If a subagent writes or patches files successfully, Jupiter records those changes in both the child and parent session.
 
 This matters: delegating implementation shouldn’t make the parent review panel mysteriously incomplete.
 
-## No recursive delegation
+## No Recursive Delegation
 
 Subagents cannot receive Jupiter’s built-in `task` tool, so one subagent cannot spawn another through the native task
 mechanism.

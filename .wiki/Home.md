@@ -12,7 +12,7 @@ matter most:
 - [Remote Deployment](Remote-Deployment) - how to expose Jupiter beyond localhost.
 - [Security Model](Security-Model) - what Jupiter protects, and just as importantly, what it doesn’t.
 
-## The basic model
+## The Basic Model
 
 Jupiter is easiest to understand in three layers:
 
@@ -26,7 +26,7 @@ inspect separately.
 The browser is only the client. Jupiter keeps application state on the server, so reloading, disconnecting, or moving
 between devices does not wipe chat history, drafts, tool traces, review state, or project settings.
 
-## Where should Jupiter run?
+## Where Should Jupiter Run?
 
 Ideally, on the machine that already has your source code: a VM, home server, or an EC2 instance.
 

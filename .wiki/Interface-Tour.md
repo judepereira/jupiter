@@ -2,11 +2,11 @@ The normal development loop stays on one screen: projects, workspaces, sessions,
 
 ![Jupiter desktop interface](images/interface-desktop.png)
 
-## Project bar
+## Project Bar
 
 Projects sit across the top. Agents continue to run in the background in other projects.
 
-## Workspace and session rail
+## Workspace and Session Rail
 
 The left rail contains Git workspaces and their sessions. It also shows unread, running, and failed activity.
 
@@ -27,14 +27,14 @@ The review panel can show either files attributed to the current session or the 
 
 The bottom panel contains one or more terminals for the active workspace.
 
-## Settings and notifications
+## Settings and Notifications
 
 Project environment, MCP servers, lifecycle hooks, Git updates, usage, and provider connection settings live in
 **Settings**.
 
 Warnings and errors appear as system balloons, so failures stay visible in the interface.
 
-## Keyboard shortcuts
+## Keyboard Shortcuts
 
 |        Shortcut        |          Action           |
 |------------------------|---------------------------|

@@ -2,7 +2,7 @@ Jupiter agents are Markdown files with YAML frontmatter. This is similar to othe
 
 ![Agent, model, and thinking controls](images/agents-models-thinking.png)
 
-## Primary agents
+## Primary Agents
 
 Jupiter ships with two primary agents:
 
@@ -14,7 +14,7 @@ documentation. See [Models and Providers](Models-and-Providers) for model select
 
 There are also Explore, Apprentice, and Test subagents. See [Subagents](Subagents).
 
-## Agent file format
+## Agent File Format
 
 An agent definition can contain:
 
@@ -27,7 +27,7 @@ An agent definition can contain:
 - tool permissions
 - a Markdown prompt body
 
-## Tool permissions
+## Tool Permissions
 
 The tool map decides what an agent can call directly. `*` expands to native tools plus `mcp:*`; primary agents also get
 the `task` tool.

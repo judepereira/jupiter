@@ -1,23 +1,23 @@
 The shortest path to your first session is by running the Docker container.
 
-## Run the Docker container
+## Run the Docker Container
 
 See [Running with Docker](Running-with-Docker).
 
-## Connect a model provider
+## Connect a Model Provider
 
 Either set `OPENAI_API_KEY`, connect your ChatGPT/OpenAI subscription, or connect Claude in **Settings → Model
 Providers**.
 
 See [Models and Providers](Models-and-Providers).
 
-## Open a project
+## Open a Project
 
 Click on **Open Project** (the plus sign in the top bar), browse to an existing source directory, and add it.
 
 ![Opening a project in Jupiter](images/projects.png)
 
-## Create a workspace
+## Create a Workspace
 
 Choose a new branch or an existing one. Jupiter creates a Git worktree for it.
 

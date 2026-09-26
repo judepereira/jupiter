@@ -2,7 +2,7 @@ A Jupiter workspace is a Git worktree backed by a branch. This is one of the cor
 
 ![Creating a Git worktree workspace](images/workspaces.png)
 
-## Creating a workspace
+## Creating a Workspace
 
 You get two modes:
 
@@ -19,12 +19,12 @@ creating the worktree.
 
 See [Project Settings](Project-Settings) for configuration and examples.
 
-## Closing a workspace
+## Closing a Workspace
 
 Before removing a workspace, Jupiter checks for uncommitted changes and unpushed commits. If either exists, you’ll get a
 confirmation before forced worktree removal.
 
-## Pulling changes
+## Pulling Changes
 
 You can pull manually, or enable automatic fast-forward-only updates. See [Git Updates](Git-Updates). This is
 recommended for the main branch checked out in the default workspace, so that new branches begin their life with the

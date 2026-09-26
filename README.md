@@ -61,13 +61,13 @@ It is possible to change the username from `jupiter` to your own username (makes
 an external IDE), and to configure system init and user init scripts (preinstall software required). See
 [Running with Docker](https://github.com/judepereira/jupiter/wiki/Running-with-Docker).
 
-## Connecting model providers
+## Connecting Model Providers
 
 Open **Settings → Model Providers** to connect an OpenAI subscription or Claude. OpenAI can also use `OPENAI_API_KEY`.
 See [Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers) for connection and
 model-selection details.
 
-## Protection against rogue agents
+## Protection against Rogue Agents
 
 It's strongly recommended to set `JUPITER_HTTP_AUTH_PASSWORD`, in order to prevent a rogue agent from accessing Jupiter
 itself. This is also useful when exposing Jupiter to the public facing internet (although this is NOT recommended).
@@ -84,7 +84,7 @@ The full documentation lives in the [GitHub Wiki](https://github.com/judepereira
 
 Jupiter is licensed under the [MIT License](LICENSE).
 
-## Storage and backups
+## Storage and Backups
 
 Jupiter keeps its state under `~/.jupiter`, including `jupiter.sqlite`.
 
