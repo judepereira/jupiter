@@ -12,7 +12,7 @@ The left rail contains Git workspaces and their sessions. It also shows unread, 
 
 On smaller screens this turns into the mobile navigation rail rather than squeezing the desktop layout into oblivion.
 
-![Jupiter mobile interface](images/interface-mobile.png)
+<img src="images/interface-mobile.png" alt="Jupiter mobile interface" width="400">
 
 ## Chat
 
