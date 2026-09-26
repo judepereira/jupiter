@@ -3,7 +3,7 @@ set -eu
 
 cd "$(git rev-parse --show-toplevel)"
 
-if ./mvnw -q spotless:check; then
+if ./mvnw -q spotless:check &> /dev/null; then
     exit 0
 fi
 
@@ -19,7 +19,7 @@ while IFS= read -r file; do
 done
 
 echo "Spotless check failed. Applying formatting..." >&2
-./mvnw -q spotless:apply
+./mvnw -q spotless:apply &> /dev/null
 
 # Restage exactly the files that were already staged.
 git diff --cached --name-only --diff-filter=ACMR |
