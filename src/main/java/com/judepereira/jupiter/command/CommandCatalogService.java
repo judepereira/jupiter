@@ -3,9 +3,14 @@ package com.judepereira.jupiter.command;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -14,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -22,7 +28,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -30,18 +39,23 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class CommandCatalogService {
+    private static final Logger log = LoggerFactory.getLogger(CommandCatalogService.class);
     private static final String RESOURCE_PATTERN = "classpath*:commands/*.md";
     private static final YAMLMapper YAML_MAPPER = new YAMLMapper();
     private static final Pattern SAFE_ID = Pattern.compile("[a-z0-9][a-z0-9_-]*");
+    private static final int MAX_EXTERNAL_BYTES = 256 * 1024;
 
     private final Path userCommandsRoot;
+    private final Path userHome;
+    private final ThreadLocal<Path> activeWorkspace = new ThreadLocal<>();
     private final AtomicReference<CatalogSnapshot> snapshot;
     private final Object mutationLock = new Object();
 
     public CommandCatalogService(@Value("${jupiter.commands-root:}") String configuredRoot,
             @Value("${user.home}") String userHome) {
+        this.userHome = Path.of(userHome).toAbsolutePath().normalize();
         userCommandsRoot = configuredRoot == null || configuredRoot.isBlank()
-                ? Path.of(userHome, ".jupiter", "commands").toAbsolutePath().normalize()
+                ? this.userHome.resolve(".jupiter").resolve("commands")
                 : Path.of(configuredRoot).toAbsolutePath().normalize();
         snapshot = new AtomicReference<>(loadSnapshot());
         if (snapshot.get().commands().isEmpty()) {
@@ -50,7 +64,30 @@ public class CommandCatalogService {
     }
 
     public List<CommandDefinition> list() {
-        return snapshot.get().commands();
+        return catalogFor(activeWorkspace.get()).commands();
+    }
+
+    public List<CommandDefinition> list(Path workspace) {
+        return catalogFor(workspace).commands();
+    }
+
+    public <T> T withWorkspace(Path workspace, Supplier<T> action) {
+        Path previous = activeWorkspace.get();
+        activeWorkspace.set(workspace);
+        try {
+            return action.get();
+        } finally {
+            if (previous == null)
+                activeWorkspace.remove();
+            else
+                activeWorkspace.set(previous);
+        }
+    }
+
+    private CatalogSnapshot catalogFor(Path workspace) {
+        if (workspace == null)
+            return snapshot.get();
+        return loadSnapshot(workspace);
     }
 
     public List<CommandDefinition> listCustom() {
@@ -78,7 +115,7 @@ public class CommandCatalogService {
         synchronized (mutationLock) {
             CommandDefinition definition = normalizeAndValidateInput(input);
             CatalogSnapshot before = snapshot.get();
-            if (before.byId().containsKey(definition.id())) {
+            if (catalogFor(activeWorkspace.get()).byId().containsKey(definition.id())) {
                 throw userError("Command id already exists: " + definition.id());
             }
             Path target = pathForId(definition.id());
@@ -253,11 +290,16 @@ public class CommandCatalogService {
     }
 
     private CatalogSnapshot loadSnapshot() {
+        return loadSnapshot(null);
+    }
+
+    private CatalogSnapshot loadSnapshot(Path workspace) {
         try {
             List<CommandDefinition> bundled = loadClasspathCommands();
             List<CustomEntry> custom = loadUserCommands();
             List<CommandDefinition> all = new ArrayList<>(bundled);
             custom.stream().map(CustomEntry::definition).forEach(all::add);
+            loadExternalCommands(workspace, all);
             validateCommands(all);
             Map<String, CommandDefinition> byId = new LinkedHashMap<>();
             all.forEach(command -> byId.put(command.id(), command));
@@ -276,6 +318,115 @@ public class CommandCatalogService {
                 .sorted(Comparator.comparing(Resource::getFilename, Comparator.nullsLast(String::compareTo))
                         .thenComparing(CommandCatalogService::resourceSortKey))
                 .map(CommandCatalogService::loadCommand).toList();
+    }
+
+    private void loadExternalCommands(Path workspace, List<CommandDefinition> all) {
+        Set<String> ids = new HashSet<>();
+        all.forEach(command -> ids.add(command.id()));
+        for (String provider : List.of("claude", "codex")) {
+            Path project = workspace == null
+                    ? null
+                    : workspace.toAbsolutePath().normalize().resolve("." + provider)
+                            .resolve(provider.equals("claude") ? "commands" : "prompts");
+            Path home = userHome.resolve("." + provider).resolve(provider.equals("claude") ? "commands" : "prompts");
+            scanExternalRoot(project, provider, false, ids, all);
+            scanExternalRoot(home, provider, true, ids, all);
+        }
+    }
+
+    private void scanExternalRoot(Path root, String provider, boolean home, Set<String> ids,
+            List<CommandDefinition> all) {
+        if (root == null || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
+            return;
+        try {
+            Path canonicalRoot = root.toRealPath();
+            if (!canonicalRoot.equals(root.toAbsolutePath().normalize()))
+                return;
+            try (var paths = Files.walk(root)) {
+                paths.filter(path -> path.toString().endsWith(".md")).sorted().forEach(path -> {
+                    try {
+                        if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                            return;
+                        Path real = path.toRealPath();
+                        if (!real.startsWith(canonicalRoot) || real.getParent() == null)
+                            return;
+                        String relative = canonicalRoot.relativize(real).toString().replace('\\', '/');
+                        String relativeKey = relative.substring(0, relative.length() - 3);
+                        String id = externalId(provider, relativeKey);
+                        if (ids.contains(id))
+                            return;
+                        CommandDefinition definition = loadExternal(real, id, provider, home, relativeKey);
+                        if (definition != null) {
+                            all.add(definition);
+                            ids.add(id);
+                        }
+                    } catch (RuntimeException | IOException e) {
+                        log.warn("Could not load external command {}: {}", path, e.getMessage());
+                    }
+                });
+            }
+        } catch (IOException e) {
+            log.warn("Could not scan external command root {}: {}", root, e.getMessage());
+        }
+    }
+
+    private static String externalId(String provider, String relativeKey) {
+        String encoded = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(relativeKey.getBytes(StandardCharsets.UTF_8));
+        return "external-" + provider + "-" + encoded;
+    }
+
+    private static CommandDefinition loadExternal(Path path, String id, String provider, boolean home,
+            String relativeKey) throws IOException {
+        byte[] bytes = Files.readAllBytes(path);
+        if (bytes.length > MAX_EXTERNAL_BYTES)
+            throw new IOException("file exceeds 256 KiB");
+        String content = decodeUtf8(bytes);
+        FrontMatterAndBody parsed = externalFrontMatter(content);
+        JsonNode metadata = parsed.yaml().isBlank()
+                ? YAML_MAPPER.createObjectNode()
+                : YAML_MAPPER.readTree(parsed.yaml());
+        String name = metadata != null && metadata.get("name") != null && metadata.get("name").isTextual()
+                && !metadata.get("name").asText().isBlank()
+                        ? metadata.get("name").asText()
+                        : idToDisplayName(relativeKey);
+        String description = metadata != null && metadata.get("description") != null
+                && metadata.get("description").isTextual() ? metadata.get("description").asText() : null;
+        if (parsed.body().isBlank())
+            return null;
+        return new CommandDefinition(id, name, normalizeOptional(description), CommandKind.PROMPT,
+                parsed.body().stripTrailing(), null, null, provider, home ? "home" : "project", path.toString(), false);
+    }
+
+    private static String decodeUtf8(byte[] bytes) throws CharacterCodingException {
+        CharBuffer chars = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes));
+        return chars.toString();
+    }
+
+    private static FrontMatterAndBody externalFrontMatter(String content) {
+        if (!(content.startsWith("---\n") || content.startsWith("---\r\n")))
+            return new FrontMatterAndBody("", content);
+        int start = content.indexOf('\n') + 1;
+        int end = findClosingDelimiter(content, start);
+        if (end < 0)
+            return new FrontMatterAndBody("", content);
+        int body = end + 4;
+        while (body < content.length() && (content.charAt(body) == '\n' || content.charAt(body) == '\r'))
+            body++;
+        return new FrontMatterAndBody(content.substring(start, end).trim(), content.substring(body));
+    }
+
+    private static int findClosingDelimiter(String content, int start) {
+        int candidate = content.indexOf("\n---", start);
+        while (candidate >= 0) {
+            int afterDelimiter = candidate + 4;
+            if (afterDelimiter == content.length() || content.charAt(afterDelimiter) == '\n'
+                    || content.charAt(afterDelimiter) == '\r')
+                return candidate;
+            candidate = content.indexOf("\n---", afterDelimiter);
+        }
+        return -1;
     }
 
     private List<CustomEntry> loadUserCommands() throws IOException {
@@ -333,7 +484,7 @@ public class CommandCatalogService {
                             ? idToDisplayName(id)
                             : frontMatter.name().trim(),
                     normalizeOptional(frontMatter.description()), frontMatter.type(), parsed.body().stripTrailing(),
-                    normalizeOptional(frontMatter.workingDir()), frontMatter.timeoutSeconds());
+                    normalizeOptional(frontMatter.workingDir()), frontMatter.timeoutSeconds(), null, null, null, true);
         } catch (IOException | RuntimeException e) {
             throw new IllegalStateException("Failed to parse command frontmatter in " + source, e);
         }
@@ -463,7 +614,13 @@ public class CommandCatalogService {
     }
 
     public record CommandDefinition(String id, String name, String description, @JsonProperty("type") CommandKind type,
-            String body, String workingDir, Integer timeoutSeconds) {
+            String body, String workingDir, Integer timeoutSeconds, String provider, String scope, String origin,
+            boolean editable) {
+        public CommandDefinition(String id, String name, String description, CommandKind type, String body,
+                String workingDir, Integer timeoutSeconds) {
+            this(id, name, description, type, body, workingDir, timeoutSeconds, null, null, null, true);
+        }
+
         @JsonProperty("kind")
         public CommandKind kind() {
             return type;

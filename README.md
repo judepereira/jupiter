@@ -14,6 +14,8 @@ PS - the mobile interface looks like [this](https://github.com/judepereira/jupit
   back seamlessly when a model provider experiences outages.
 - **Secure:** A rogue agent cannot access your env, and any other credentials from your env (network sandbox coming
   soon!).
+- **Slash commands:** Use Jupiter commands or discover prompt-only Claude Code and Codex commands from the active
+  workspace and home directory.
 
 ## Quick Start
 
