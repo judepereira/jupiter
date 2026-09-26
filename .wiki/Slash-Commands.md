@@ -35,6 +35,8 @@ git status --short
 
 ## UI
 
+![Settings command editor](images/settings-commands.png)
+
 Slash commands may also be added from the Settings. Go to **Settings → Commands** to view, edit, and add new commands.
 
 ## Bundled Commands
