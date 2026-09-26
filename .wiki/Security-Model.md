@@ -1,7 +1,7 @@
 Jupiter is powerful software running next to real source code. Its protections reduce accidental credential exposure,
 but they do not turn coding agents or the terminal into a general-purpose sandbox.
 
-## What Jupiter protects
+## What Jupiter Protects
 
 - Sensitive persisted values are encrypted using the instance encryption key.
 - The encryption key is not exposed to the integrated terminal, MCP templates, or agent commands.
@@ -11,7 +11,7 @@ but they do not turn coding agents or the terminal into a general-purpose sandbo
 - Optional HTTP Basic authentication protects every route except `GET /health`.
 - Agent-displayed images are served with MIME-sniffing and caching protections.
 
-## Process and credential boundaries
+## Process and Credential Boundaries
 
 Different process types intentionally receive different environments.
 
@@ -24,7 +24,7 @@ runtime variables, including HTTP-authentication credentials, but never the encr
 Container initialization scripts are trusted setup code and receive the original environment, including the encryption
 key. Treat those scripts accordingly.
 
-## What Jupiter does not guarantee
+## What Jupiter Does Not Guarantee
 
 There is no OS-level filesystem sandbox around agent tools. This is by design, as there are numerous ways in which an
 agent can break out of such imposed limits. Instead, the container provides a global sandbox, while a future network
@@ -32,7 +32,7 @@ firewall will protect access to the internet.
 
 The integrated terminal is a real shell running with the permissions of the Jupiter OS user.
 
-## Deployment implications
+## Deployment Implications
 
 Only give Jupiter access to users you trust with development access on that host.
 

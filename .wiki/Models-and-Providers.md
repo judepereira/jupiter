@@ -21,14 +21,14 @@ Open **Settings → Model Providers** and choose **Connect Claude**.
 Claude OAuth state is stored encrypted and restored across restarts. **Disconnect** removes the saved connection. If you
 need support for adding an Anthropic API key, submit a feature request.
 
-## Choose models
+## Choose Models
 
 Jupiter loads supported model metadata from the configured models.dev catalogue for connected providers. Settings lets
 you choose which models appear as additional chat choices.
 
 You can mark models as favourites from Settings, and these will show in the chat composer as model options.
 
-## Agent defaults and fallback
+## Agent Defaults and Fallback
 
 An agent can define one default model or an ordered preference list.
 
@@ -39,12 +39,12 @@ outages.
 An explicit model selection is strict: if that provider or model is unavailable, the turn fails instead of silently
 switching models.
 
-## Thinking level
+## Thinking Level
 
 The composer lets you choose a thinking level for a primary turn. Supported models receive that level when the request
 is sent. Without an explicit override, the selected agent's configured defaults apply.
 
-## Treat provider credentials as secrets
+## Treat Provider Credentials as Secrets
 
 Provider credentials and OAuth state are sensitive even though Jupiter stores persisted provider state encrypted.
 Protect the Jupiter host, database, and encryption key accordingly.

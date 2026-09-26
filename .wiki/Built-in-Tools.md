@@ -29,7 +29,7 @@ Large command output is shortened in chat while remaining available to the agent
 
 Agents can display PNG, JPEG, GIF, and WebP workspace images inline in chat.
 
-## Is this a filesystem sandbox?
+## Is This a Filesystem Sandbox?
 
 No.
 

@@ -1,11 +1,11 @@
 Remote access is a primary use case for Jupiter, but remote does not have to mean publicly exposed to the internet.
 
-## Recommended setup: private network
+## Recommended Setup: Private Network
 
 Run Jupiter on the machine containing your repositories, then expose port `7272` only over a trusted network or VPN.
 Tailscale is an option, but Jupiter does not depend on it.
 
-## Public deployment
+## Public Deployment
 
 If Jupiter must be internet-accessible, enable HTTP authentication and put it behind HTTPS.
 
@@ -19,7 +19,7 @@ The default username is `jupiter`; change it with `JUPITER_HTTP_AUTH_USERNAME`.
 
 Authentication protects everything except `GET /health`.
 
-## Reverse proxy requirements
+## Reverse Proxy Requirements
 
 A TLS-terminating reverse proxy must support:
 
@@ -34,12 +34,12 @@ whether authenticated traffic is publicly using HTTPS.
 
 Basic authentication does not encrypt traffic, so use HTTPS outside a trusted local network.
 
-## Trust model
+## Trust Model
 
 Anyone who can access Jupiter can run agents and use an interactive shell against your source environment. Do not share
 one instance between mutually untrusted users.
 
-## Health checks
+## Health Checks
 
 Jupiter exposes an unauthenticated probe endpoint:
 

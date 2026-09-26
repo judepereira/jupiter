@@ -3,7 +3,7 @@ available. If there's a feature that you'd like to add, please create an issue f
 
 ![Slash command picker](images/slash-commands.png)
 
-## Where commands come from
+## Where Commands Come From
 
 Jupiter loads self-bundled commands, along with user commands from:
 
@@ -11,7 +11,7 @@ Jupiter loads self-bundled commands, along with user commands from:
 ~/.jupiter/commands/*.md
 ```
 
-## Two command types
+## Two Command Types
 
 **Prompt** commands put their body into the composer. You can review or edit it before sending.
 
@@ -37,7 +37,7 @@ git status --short
 
 Slash commands may also be added from the Settings. Go to **Settings → Commands** to view, edit, and add new commands.
 
-## Bundled commands
+## Bundled Commands
 
 Bundled commands include:
 

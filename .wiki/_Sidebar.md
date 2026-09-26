@@ -2,13 +2,13 @@
 
 - [Home](Home)
 
-## Start here
+## Start Here
 
 - [Getting Started](Getting-Started)
 - [Interface Tour](Interface-Tour)
 - [Running with Docker](Running-with-Docker)
 
-## Core workflow
+## Core Workflow
 
 - [Projects](Projects)
 - [Workspaces and Git Worktrees](Workspaces-and-Git-Worktrees)
@@ -17,7 +17,7 @@
 - [Terminal](Terminal)
 - [Slash Commands](Slash-Commands)
 
-## Agents and tools
+## Agents and Tools
 
 - [Agents](Agents)
 - [Models and Providers](Models-and-Providers)
@@ -25,7 +25,7 @@
 - [Subagents](Subagents)
 - [MCP Servers](MCP-Servers)
 
-## Configuration and automation
+## Configuration and Automation
 
 - [Project Settings](Project-Settings)
 - [Lifecycle Hooks](Lifecycle-Hooks)
@@ -33,7 +33,7 @@
 - [Usage and Token Tracking](Usage-and-Token-Tracking)
 - [Advanced Configuration](Advanced-Configuration)
 
-## Deployment and security
+## Deployment and Security
 
 - [Remote Deployment](Remote-Deployment)
 - [Security Model](Security-Model)

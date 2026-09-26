@@ -2,7 +2,7 @@ A project points Jupiter at an existing source directory. Jupiter doesn’t clon
 
 ![Opening a project in Jupiter](images/projects.png)
 
-## Adding one
+## Adding One
 
 Use **Open Project**, browse the server filesystem, and select the directory you want.
 
@@ -11,7 +11,7 @@ Jupiter stores the project name and normalized path. Closing a project removes i
 
 If you later add a path Jupiter has seen before, it can reopen the persisted project state.
 
-## Project-specific settings
+## Project-Specific Settings
 
 Each project can carry:
 
@@ -22,7 +22,7 @@ Each project can carry:
 
 See [Project Settings](Project-Settings).
 
-## Where the actual work happens
+## Where the Actual Work Happens
 
 Jupiter does its branch work in [Git worktrees](Workspaces-and-Git-Worktrees). That keeps separate branches in separate
 directories instead of constantly switching one checkout back and forth.

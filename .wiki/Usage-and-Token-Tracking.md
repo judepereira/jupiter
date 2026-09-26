@@ -3,7 +3,7 @@ actually consuming tokens?
 
 ![Token usage dashboard](images/usage-and-token-tracking.png)
 
-## What gets recorded?
+## What Gets Recorded?
 
 When a model provider returns data, Jupiter stores input, output, total, cached-input, cache-write, and reasoning token
 counts.

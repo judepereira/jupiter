@@ -42,7 +42,7 @@ docker pull judepereira/jupiter:latest
 
 **Important:** Use your own network sandbox for now. A built-in one will be shipped soon!
 
-## User and group IDs
+## User and Group IDs
 
 The defaults are:
 
@@ -53,13 +53,13 @@ The defaults are:
 
 Override UID/GID if your mounted source or state directories need host-compatible ownership.
 
-## Init scripts
+## Init Scripts
 
 If `/init.sh` exists, it runs as root. If `/init-user.sh` exists, it runs as the configured Jupiter user.
 
 Treat both as trusted setup scripts; they can access the startup environment, including the encryption key.
 
-## Source code
+## Source Code
 
 Repositories must be mounted or otherwise made available inside the container. They need to be writable if agents or Git
 worktrees are going to change them.

@@ -1,6 +1,6 @@
 These settings are mainly useful when operating or tuning a Jupiter instance beyond the normal UI.
 
-## Environment variables
+## Environment Variables
 
 |           Variable           |                Purpose                 |     Default     |
 |------------------------------|----------------------------------------|-----------------|
@@ -15,7 +15,7 @@ These settings are mainly useful when operating or tuning a Jupiter instance bey
 | `INIT_SCRIPT`                | Root container initialisation script   | `/init.sh`      |
 | `INIT_USER_SCRIPT`           | User container initialisation script   | `/init-user.sh` |
 
-## State paths
+## State Paths
 
 The default database is:
 
