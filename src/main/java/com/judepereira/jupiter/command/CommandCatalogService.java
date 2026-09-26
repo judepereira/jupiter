@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -30,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -334,6 +336,10 @@ public class CommandCatalogService {
         }
     }
 
+    Stream<Path> walk(Path root) throws IOException {
+        return Files.walk(root);
+    }
+
     private void scanExternalRoot(Path root, String provider, boolean home, Set<String> ids,
             List<CommandDefinition> all) {
         if (root == null || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
@@ -342,7 +348,7 @@ public class CommandCatalogService {
             Path canonicalRoot = root.toRealPath();
             if (!canonicalRoot.equals(root.toAbsolutePath().normalize()))
                 return;
-            try (var paths = Files.walk(root)) {
+            try (var paths = walk(root)) {
                 paths.filter(path -> path.toString().endsWith(".md")).sorted().forEach(path -> {
                     try {
                         if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
@@ -365,7 +371,7 @@ public class CommandCatalogService {
                     }
                 });
             }
-        } catch (IOException e) {
+        } catch (IOException | UncheckedIOException e) {
             log.warn("Could not scan external command root {}: {}", root, e.getMessage());
         }
     }

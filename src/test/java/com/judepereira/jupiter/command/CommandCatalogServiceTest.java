@@ -3,10 +3,13 @@ package com.judepereira.jupiter.command;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -93,6 +96,30 @@ class CommandCatalogServiceTest {
             assertThat(command.name()).isEqualTo("Delimiter");
             assertThat(command.body()).isEqualTo("Body\n---not-a-delimiter\nTail");
         });
+    }
+
+    @Test
+    void traversalFailureDoesNotPreventOtherExternalRootsFromLoading() throws Exception {
+        Path brokenRoot = home().resolve(".claude/commands");
+        Path workingRoot = home().resolve(".codex/prompts");
+        Files.createDirectories(brokenRoot);
+        Files.createDirectories(workingRoot);
+        Files.writeString(workingRoot.resolve("available.md"), "available");
+
+        CommandCatalogService service = new CommandCatalogService(root.resolve("custom").toString(),
+                home().toString()) {
+            @Override
+            Stream<Path> walk(Path path) throws IOException {
+                if (path.equals(brokenRoot)) {
+                    return Stream.of(path).map(ignored -> {
+                        throw new UncheckedIOException(new IOException("synthetic traversal failure"));
+                    });
+                }
+                return super.walk(path);
+            }
+        };
+
+        assertThat(service.list()).extracting(CommandCatalogService.CommandDefinition::body).contains("available");
     }
 
     @Test
