@@ -2,6 +2,7 @@ package com.judepereira.jupiter.e2e;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -10,6 +11,42 @@ import org.junit.jupiter.api.Test;
 class BrowserScreenshotTest {
 
     private static final String URL = "http://localhost:7272";
+
+    private static int alphaAt(BufferedImage image, int x, int y) {
+        return new Color(image.getRGB(x, y), true).getAlpha();
+    }
+
+    @Test
+    void shadowFadesSmoothlyThroughBottomPadding() {
+        BufferedImage viewport = new BufferedImage(1_200, 1_800, BufferedImage.TYPE_INT_RGB);
+
+        BufferedImage framed = BrowserScreenshot.buildBrowserFramedImage(viewport, URL);
+        int x = framed.getWidth() / 2;
+        int frameBottom = BrowserScreenshot.PADDING_TOP + BrowserScreenshot.CHROME_HEIGHT + viewport.getHeight();
+        int cutoff = framed.getHeight() - BrowserScreenshot.SHADOW_RADIUS;
+        assertTrue(alphaAt(framed, x, cutoff) > 0, "shadow must not be cut off at the old convolution edge");
+        assertTrue(alphaAt(framed, x, cutoff + 1) > 0, "shadow must continue beyond the old convolution edge");
+        assertTrue(alphaAt(framed, x, cutoff + 1) <= alphaAt(framed, x, cutoff));
+        int nonZeroPixels = 0;
+        for (int y = frameBottom; y < framed.getHeight(); y++) {
+            if (alphaAt(framed, x, y) > 0) {
+                nonZeroPixels++;
+            }
+        }
+        assertTrue(nonZeroPixels > BrowserScreenshot.SHADOW_RADIUS / 2,
+                "shadow should remain visible across the bottom padding");
+        assertEquals(0, alphaAt(framed, x, framed.getHeight() - 1));
+    }
+
+    @Test
+    void shadowRemainsContinuousAtSidePadding() {
+        BufferedImage viewport = new BufferedImage(1_200, 1_800, BufferedImage.TYPE_INT_RGB);
+        BufferedImage framed = BrowserScreenshot.buildBrowserFramedImage(viewport, URL);
+        int y = BrowserScreenshot.PADDING_TOP + BrowserScreenshot.CHROME_HEIGHT + viewport.getHeight() / 2;
+
+        assertTrue(alphaAt(framed, BrowserScreenshot.PADDING_X - 1, y) > 0);
+        assertTrue(alphaAt(framed, framed.getWidth() - BrowserScreenshot.PADDING_X, y) > 0);
+    }
 
     @Test
     void framesViewportWithComputedPaddingAndChrome() {

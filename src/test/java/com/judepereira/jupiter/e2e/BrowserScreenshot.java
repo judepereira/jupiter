@@ -120,11 +120,31 @@ public final class BrowserScreenshot {
         for (int i = 0; i < size; i++) {
             values[i] /= total;
         }
-        BufferedImage horizontal = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        new ConvolveOp(new Kernel(size, 1, values), ConvolveOp.EDGE_ZERO_FILL, null).filter(image, horizontal);
-        BufferedImage vertical = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+
+        // ConvolveOp zero-fills the destination edge, so guard the source with a full
+        // kernel radius.
+        BufferedImage padded = new BufferedImage(image.getWidth() + radius * 2, image.getHeight() + radius * 2,
+                BufferedImage.TYPE_INT_ARGB);
+        Graphics2D paddingGraphics = padded.createGraphics();
+        try {
+            paddingGraphics.drawImage(image, radius, radius, null);
+        } finally {
+            paddingGraphics.dispose();
+        }
+        BufferedImage horizontal = new BufferedImage(padded.getWidth(), padded.getHeight(),
+                BufferedImage.TYPE_INT_ARGB);
+        new ConvolveOp(new Kernel(size, 1, values), ConvolveOp.EDGE_ZERO_FILL, null).filter(padded, horizontal);
+        BufferedImage vertical = new BufferedImage(padded.getWidth(), padded.getHeight(), BufferedImage.TYPE_INT_ARGB);
         new ConvolveOp(new Kernel(1, size, values), ConvolveOp.EDGE_ZERO_FILL, null).filter(horizontal, vertical);
-        return vertical;
+
+        BufferedImage cropped = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D cropGraphics = cropped.createGraphics();
+        try {
+            cropGraphics.drawImage(vertical, -radius, -radius, null);
+        } finally {
+            cropGraphics.dispose();
+        }
+        return cropped;
     }
 
     private static int scale(double value) {
