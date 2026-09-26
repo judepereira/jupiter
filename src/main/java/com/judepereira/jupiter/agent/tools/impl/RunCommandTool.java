@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class RunCommandTool implements AgentTool {
+    private static final Set<String> STANDARD_HOST_VARIABLES = Set.of("PATH", "HOME", "USER", "LOGNAME", "TMPDIR");
     private static final int INLINE_OUTPUT_LIMIT_BYTES = 4 * 1024;
     private static final int PREVIEW_EDGE_BYTES = 2 * 1024;
     private final List<String> forbidden = List.of("rm -rf /", "shutdown", "reboot", "mkfs", ":(){ :|:& };:");
@@ -151,6 +152,12 @@ public class RunCommandTool implements AgentTool {
     static Map<String, String> buildCommandEnvironment(Map<String, String> hostEnvironment, Set<String> allowlist,
             Map<String, String> projectEnvironment) {
         Map<String, String> environment = new HashMap<>();
+        for (String name : STANDARD_HOST_VARIABLES) {
+            String value = hostEnvironment.get(name);
+            if (value != null) {
+                environment.put(name, value);
+            }
+        }
         for (String name : allowlist) {
             String value = hostEnvironment.get(name);
             if (value != null) {

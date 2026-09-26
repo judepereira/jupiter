@@ -20,22 +20,27 @@ terminal tab for debugging.
 
 ## Project Environment Variables
 
-Add environment names and values that should be available to project processes.
+Add environment names and values that should be available to project processes. Project environment variables are
+available to `run_command`, terminals, and lifecycle hooks where applicable. They are also available to MCP
+configuration placeholders.
 
-Project variables are available to terminals, agent commands, MCP configuration, and lifecycle hooks where applicable.
+For `run_command`, Jupiter first forwards the standard host variables `PATH`, `HOME`, `USER`, `LOGNAME`, and `TMPDIR`
+when present. You can add more host variable names in **Additional command environment variables**; only those
+explicitly allowlisted names are forwarded. Project variables override host values with the same name. Security
+sanitization removes Jupiter credentials and other protected values, and commands always run with the fixed
+`LANG=C.utf8` and `LC_ALL=C.utf8` locale.
 
 **Important:** Do not add sensitive values here! Set those values as the Docker environment variables, and use
 `${env.VAR_NAME}` here.
 
+The integrated terminal intentionally receives its normal broader process environment, and workspace lifecycle hooks
+have their own hook-specific variables. These behaviors are separate from `run_command`.
+
 ## Host Variables Available to Agents
 
-Agent `run_command` does not inherit the entire Jupiter host environment.
-
-List the host variables an agent may receive, such as `PATH`. Jupiter copies only those variables before overlaying the
-project variables.
-
-The integrated terminal intentionally receives the broader Jupiter process environment before project variables are
-overlaid. Jupiter's encryption key is never restored into the terminal.
+Agent `run_command` does not inherit the entire Jupiter host environment. Standard variables listed above are automatic;
+the Settings allowlist is for additional host variables only. Jupiter's encryption key is never restored into commands
+or the terminal.
 
 ## Lifecycle Hooks
 
