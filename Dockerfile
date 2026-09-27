@@ -38,7 +38,7 @@ RUN     apt update && apt install -y git git-lfs ripgrep && apt-get clean && rm 
 RUN     userdel ubuntu || true
 RUN     groupdel ubuntu || true
 
-COPY --from=build /workspace/target/jupiter-0.0.1-SNAPSHOT.jar /opt/jupiter.jar
+COPY --from=build /workspace/target/jupiter.jar /opt/jupiter.jar
 ADD entrypoint.sh /entrypoint.sh
 
 # Keep only names so build-time environment values are not stored in the image.
