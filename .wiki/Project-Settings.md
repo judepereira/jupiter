@@ -26,7 +26,7 @@ configuration placeholders.
 
 For `run_command`, Jupiter first forwards the standard host variables `PATH`, `HOME`, `USER`, `LOGNAME`, and `TMPDIR`
 when present. You can add more host variable names in **Additional command environment variables**; only those
-explicitly allowlisted names are forwarded. Project variables override host values with the same name. Security
+explicitly whitelisted names are forwarded. Project variables override host values with the same name. Security
 sanitization removes Jupiter credentials and other protected values, and commands always run with the fixed
 `LANG=C.utf8` and `LC_ALL=C.utf8` locale.
 
@@ -39,7 +39,7 @@ have their own hook-specific variables. These behaviors are separate from `run_c
 ## Host Variables Available to Agents
 
 Agent `run_command` does not inherit the entire Jupiter host environment. Standard variables listed above are automatic;
-the Settings allowlist is for additional host variables only. Jupiter's encryption key is never restored into commands
+the Settings whitelist is for additional host variables only. Jupiter's encryption key is never restored into commands
 or the terminal.
 
 ## Lifecycle Hooks
