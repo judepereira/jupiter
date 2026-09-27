@@ -8,18 +8,23 @@ import com.pty4j.PtyProcessBuilder;
 import com.pty4j.WinSize;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.log4j.Log4j2;
@@ -32,6 +37,7 @@ import org.springframework.web.socket.WebSocketSession;
 public class TerminalManager {
 
     private static final int OUTPUT_REPLAY_CAP = 200_000;
+    private static final Duration CLOSE_WAIT = Duration.ofSeconds(2);
 
     private final ObjectMapper objectMapper;
     private final List<TerminalLifecycleListener> lifecycleListeners;
@@ -91,6 +97,10 @@ public class TerminalManager {
 
     public boolean hasTerminal(String terminalId) {
         return terminals.containsKey(terminalId);
+    }
+
+    void registerRuntime(String terminalId, TerminalRuntime runtime) {
+        terminals.put(terminalId, runtime);
     }
 
     public void closeTerminal(String terminalId) {
@@ -169,11 +179,15 @@ public class TerminalManager {
         private final String terminalId;
         private final String title;
         private final PtyProcess process;
+        private final InputStream processInput;
         private final OutputStream processOutput;
         private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
         private final AtomicBoolean cleanedUp = new AtomicBoolean(false);
+        private final AtomicBoolean inputClosed = new AtomicBoolean(false);
         private final AtomicBoolean outputClosed = new AtomicBoolean(false);
+        private final CompletableFuture<Void> readerCompletion = new CompletableFuture<>();
         private final Object outputLock = new Object();
+        private final Object processInputLock = new Object();
         private final Object processOutputLock = new Object();
         private final StringBuilder outputBuffer = new StringBuilder();
 
@@ -182,24 +196,29 @@ public class TerminalManager {
             this.title = title;
             this.process = process;
             try {
+                this.processInput = process.getInputStream();
                 this.processOutput = process.getOutputStream();
             } catch (Exception e) {
-                throw new IllegalStateException("Failed to acquire terminal input", e);
+                throw new IllegalStateException("Failed to acquire terminal streams", e);
             }
         }
 
-        private void startReader() {
+        void startReader() {
             Thread.ofVirtual().name("terminal-reader-" + terminalId).start(this::pumpOutput);
         }
 
         private void pumpOutput() {
             int exitCode = -1;
-            try (var reader = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+            try {
+                var reader = new InputStreamReader(processInput, StandardCharsets.UTF_8);
                 char[] buffer = new char[4096];
                 int read;
                 while ((read = reader.read(buffer)) != -1) {
                     String chunk = new String(buffer, 0, read);
                     synchronized (outputLock) {
+                        if (cleanedUp.get()) {
+                            continue;
+                        }
                         appendOutput(chunk);
                         sendToSessions(Map.of("type", "output", "data", chunk));
                     }
@@ -212,7 +231,14 @@ public class TerminalManager {
                             e.getMessage() == null ? "terminal_error" : e.getMessage()));
                 }
             } finally {
-                cleanup(exitCode);
+                try {
+                    cleanup(exitCode);
+                } catch (RuntimeException | Error e) {
+                    readerCompletion.completeExceptionally(e);
+                    throw e;
+                } finally {
+                    readerCompletion.complete(null);
+                }
             }
         }
 
@@ -255,10 +281,37 @@ public class TerminalManager {
         }
 
         private void closeProcess() {
+            closeProcess(CLOSE_WAIT);
+        }
+
+        void closeProcess(Duration waitDuration) {
+            RuntimeException destroyFailure = null;
             try {
                 process.destroy();
-            } finally {
+            } catch (RuntimeException e) {
+                destroyFailure = e;
+            }
+
+            boolean interrupted = false;
+            try {
+                readerCompletion.get(waitDuration.toNanos(), TimeUnit.NANOSECONDS);
+            } catch (TimeoutException e) {
+                // Closing the input unblocks the reader before fallback cleanup removes the
+                // runtime.
                 cleanup(-1);
+            } catch (InterruptedException e) {
+                interrupted = true;
+                cleanup(-1);
+            } catch (Exception e) {
+                // The reader's failure is reported by pumpOutput; fallback cleanup remains
+                // required.
+                cleanup(-1);
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            if (destroyFailure != null) {
+                throw destroyFailure;
             }
         }
 
@@ -291,6 +344,7 @@ public class TerminalManager {
                 return;
             }
             terminals.remove(terminalId);
+            closeProcessInput();
             closeProcessOutput();
             synchronized (outputLock) {
                 sendToSessions(Map.of("type", "exit", "code", exitCode));
@@ -299,17 +353,31 @@ public class TerminalManager {
                 notifyExited(terminalId, exitCode);
             } catch (Exception e) {
                 log.error("Terminal {} lifecycle listener failed", terminalId, e);
-            }
-            for (WebSocketSession session : sessions) {
-                try {
-                    if (session.isOpen()) {
-                        session.close();
+            } finally {
+                for (WebSocketSession session : sessions) {
+                    try {
+                        if (session.isOpen()) {
+                            session.close();
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to close websocket session", e);
                     }
+                }
+                sessions.clear();
+            }
+        }
+
+        private void closeProcessInput() {
+            synchronized (processInputLock) {
+                if (!inputClosed.compareAndSet(false, true)) {
+                    return;
+                }
+                try {
+                    processInput.close();
                 } catch (Exception e) {
-                    log.error("Failed to close websocket session", e);
+                    log.error("Failed to close terminal output for {}", terminalId, e);
                 }
             }
-            sessions.clear();
         }
 
         private void closeProcessOutput() {

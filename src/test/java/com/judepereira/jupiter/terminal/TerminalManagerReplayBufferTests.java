@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.terminal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -8,9 +9,17 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
 import com.pty4j.PtyProcess;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.web.socket.TextMessage;
@@ -22,6 +31,7 @@ public class TerminalManagerReplayBufferTests {
     public void attachReplaysBufferedOutputToNewSession() throws Exception {
         TerminalManager manager = new TerminalManager(new ObjectMapper(), List.of(), new RuntimeEnvironment(Map.of()));
         PtyProcess process = mock(PtyProcess.class);
+        when(process.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
         when(process.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         TerminalManager.TerminalRuntime runtime = manager.new TerminalRuntime("terminal-1", "Terminal 1", process);
 
@@ -37,31 +47,70 @@ public class TerminalManagerReplayBufferTests {
         assertThat(captor.getValue().getPayload()).contains("hello from replay", "\"type\":\"output\"");
     }
 
-    /*
-     * private static Object newRuntime(TerminalManager manager) throws Exception {
-     * Class<?> runtimeClass = null; for (Class<?> nested :
-     * TerminalManager.class.getDeclaredClasses()) { if
-     * (nested.getSimpleName().equals("TerminalRuntime")) { runtimeClass = nested;
-     * break; } } if (runtimeClass == null) { throw new
-     * IllegalStateException("TerminalRuntime not found"); }
-     *
-     * for (Constructor<?> constructor : runtimeClass.getDeclaredConstructors()) {
-     * constructor.setAccessible(true); if (constructor.getParameterCount() == 4) {
-     * return constructor.newInstance(manager, "terminal-1", "Terminal 1", null); }
-     * if (constructor.getParameterCount() == 3) { return
-     * constructor.newInstance("terminal-1", "Terminal 1", null); } }
-     *
-     * throw new IllegalStateException("Unsupported TerminalRuntime constructor"); }
-     *
-     * private static void invoke(Object target, String methodName, Object argument)
-     * throws Exception { Method method = null; for (Method candidate :
-     * target.getClass().getDeclaredMethods()) { if
-     * (!candidate.getName().equals(methodName) || candidate.getParameterCount() !=
-     * 1) { continue; } Class<?> parameterType = candidate.getParameterTypes()[0];
-     * if (argument == null || parameterType.isInstance(argument) ||
-     * parameterType.isAssignableFrom(argument.getClass())) { method = candidate;
-     * break; } } if (method == null) { throw new
-     * IllegalStateException("Method not found: " + methodName); }
-     * method.setAccessible(true); method.invoke(target, argument); }
-     */
+    @Test
+    void readerDrainRemovesTerminalAfterProcessExit() throws Exception {
+        AtomicInteger exitCode = new AtomicInteger();
+        TerminalManager manager = new TerminalManager(new ObjectMapper(),
+                List.of((terminalId, code) -> exitCode.set(code)), new RuntimeEnvironment(Map.of()));
+        PtyProcess process = mock(PtyProcess.class);
+        when(process.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        when(process.getInputStream()).thenReturn(new ByteArrayInputStream("output".getBytes()));
+        when(process.waitFor()).thenReturn(7);
+        TerminalManager.TerminalRuntime runtime = manager.new TerminalRuntime("terminal-2", "Terminal 2", process);
+        manager.registerRuntime("terminal-2", runtime);
+
+        runtime.startReader();
+        runtime.closeProcess(Duration.ofSeconds(1));
+
+        assertThat(manager.hasTerminal("terminal-2")).isFalse();
+        assertThat(exitCode).hasValue(7);
+        verify(process).destroy();
+    }
+
+    @Test
+    void cleanupStillHappensWhenDestroyFailsAfterTimeout() throws Exception {
+        TerminalManager manager = new TerminalManager(new ObjectMapper(), List.of(), new RuntimeEnvironment(Map.of()));
+        PtyProcess process = mock(PtyProcess.class);
+        when(process.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        CountDownLatch readerStarted = new CountDownLatch(1);
+        CountDownLatch releaseReader = new CountDownLatch(1);
+        when(process.getInputStream()).thenReturn(new BlockingInputStream(readerStarted, releaseReader));
+        doThrow(new IllegalStateException("destroy failed")).when(process).destroy();
+        TerminalManager.TerminalRuntime runtime = manager.new TerminalRuntime("terminal-3", "Terminal 3", process);
+        manager.registerRuntime("terminal-3", runtime);
+        runtime.startReader();
+        assertThat(readerStarted.await(1, TimeUnit.SECONDS)).isTrue();
+
+        Assertions.assertThatThrownBy(() -> runtime.closeProcess(Duration.ZERO))
+                .isInstanceOf(IllegalStateException.class).hasMessage("destroy failed");
+        assertThat(manager.hasTerminal("terminal-3")).isFalse();
+        assertThat(releaseReader.await(1, TimeUnit.SECONDS)).isTrue();
+        verify(process).getInputStream();
+    }
+
+    private static final class BlockingInputStream extends InputStream {
+        private final CountDownLatch started;
+        private final CountDownLatch release;
+
+        private BlockingInputStream(CountDownLatch started, CountDownLatch release) {
+            this.started = started;
+            this.release = release;
+        }
+
+        @Override
+        public int read() throws IOException {
+            started.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return -1;
+        }
+
+        @Override
+        public void close() {
+            release.countDown();
+        }
+    }
 }

@@ -711,14 +711,14 @@ public class UiController {
         }
 
         String targetAssistantId = assistantId;
-        Map.Entry<String, ActiveStream> selectedEntry = targetAssistantId == null || targetAssistantId.isBlank()
-                ? null
-                : Map.entry(targetAssistantId, activeStreams.get(targetAssistantId));
-        ActiveStream active = selectedEntry == null ? null : selectedEntry.getValue();
-        if (active != null && active.pendingStream().sessionId() != session.id()) {
-            throw new IllegalStateException("Assistant stream does not belong to the active session");
-        }
-        if (active == null) {
+        Map.Entry<String, ActiveStream> selectedEntry = null;
+        ActiveStream active;
+        if (targetAssistantId != null && !targetAssistantId.isBlank()) {
+            active = activeStreams.get(targetAssistantId);
+            if (active != null && active.pendingStream().sessionId() != session.id()) {
+                throw new IllegalStateException("Assistant stream does not belong to the active session");
+            }
+        } else {
             selectedEntry = activeStreams.entrySet().stream()
                     .filter(entry -> entry.getValue().pendingStream().sessionId() == session.id()).findFirst()
                     .orElse(null);

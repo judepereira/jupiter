@@ -818,6 +818,17 @@ public class UiControllerAsyncStreamingTests {
         assertThat(((ChatPresentationService.ChatMessage) assistant).pending()).isFalse();
         assertThat(((ChatPresentationService.ChatMessage) assistant).text()).isEqualTo("partial\n\nAction Interrupted");
     }
+    @Test
+    public void stopChatUnknownExplicitAssistantIdFallsBackWithoutNullPointer() {
+        var props = new AgentProperties();
+        props.setWorkspaceRoot(".");
+        UiController ctrl = TestAppStateSupport.controller(null, props);
+
+        String view = ctrl.stopChat("unknown-assistant-id", new ConcurrentModel());
+
+        assertThat(view).isEqualTo("fragments/chat :: chat");
+    }
+
     private static String assistantId(ConcurrentModel model) throws Exception {
         List<?> msgs = (List<?>) model.getAttribute("chatMessages");
         Object last = msgs.get(msgs.size() - 1);
