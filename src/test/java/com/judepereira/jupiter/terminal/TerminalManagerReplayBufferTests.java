@@ -70,6 +70,25 @@ public class TerminalManagerReplayBufferTests {
     }
 
     @Test
+    void normalReaderCompletionClosesProcessInputExactlyOnce() throws Exception {
+        TerminalManager manager = new TerminalManager(new ObjectMapper(), List.of(), new RuntimeEnvironment(Map.of()));
+        PtyProcess process = mock(PtyProcess.class);
+        CountingInputStream input = new CountingInputStream("output".getBytes());
+        when(process.getInputStream()).thenReturn(input);
+        when(process.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        when(process.waitFor()).thenReturn(0);
+        TerminalManager.TerminalRuntime runtime = manager.new TerminalRuntime("terminal-close", "Terminal close",
+                process);
+        manager.registerRuntime("terminal-close", runtime);
+
+        runtime.startReader();
+        runtime.closeProcess(Duration.ofSeconds(1));
+
+        assertThat(input.closeCount).hasValue(1);
+        assertThat(manager.hasTerminal("terminal-close")).isFalse();
+    }
+
+    @Test
     void timeoutCleanupPreventsLateReaderCleanup() throws Exception {
         AtomicInteger exitCode = new AtomicInteger();
         AtomicInteger notifications = new AtomicInteger();
@@ -154,6 +173,20 @@ public class TerminalManagerReplayBufferTests {
         assertThat(manager.hasTerminal("terminal-3")).isFalse();
         assertThat(releaseReader.await(1, TimeUnit.SECONDS)).isTrue();
         verify(process).getInputStream();
+    }
+
+    private static final class CountingInputStream extends ByteArrayInputStream {
+        private final AtomicInteger closeCount = new AtomicInteger();
+
+        private CountingInputStream(byte[] data) {
+            super(data);
+        }
+
+        @Override
+        public void close() throws IOException {
+            closeCount.incrementAndGet();
+            super.close();
+        }
     }
 
     private static final class BlockingInputStream extends InputStream {

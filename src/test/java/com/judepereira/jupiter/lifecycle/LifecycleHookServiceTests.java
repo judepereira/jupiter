@@ -145,19 +145,20 @@ class LifecycleHookServiceTests {
         AppStateService appStateService = configuredAppState(tempDir, "echo should-not-run");
         long sessionId = appStateService.loadViewData().activeSession().id();
         SystemBalloonService balloons = mock(SystemBalloonService.class);
-        var executor = Executors.newSingleThreadExecutor();
-        Error failure = new AssertionError("executor failure");
-        LifecycleHookService service = new LifecycleHookService(appStateService, balloons,
-                new LifecycleHookRuntime(executor, ignored -> {
-                    throw failure;
-                }, tempDir));
-        try {
-            var result = service.dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, sessionId);
-            assertThatThrownBy(result::join).hasCause(failure);
-            service.shutdown();
-            assertThat(executor.awaitTermination(1, TimeUnit.SECONDS)).isTrue();
-        } finally {
-            service.shutdown();
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            Error failure = new AssertionError("executor failure");
+            LifecycleHookService service = new LifecycleHookService(appStateService, balloons,
+                    new LifecycleHookRuntime(executor, ignored -> {
+                        throw failure;
+                    }, tempDir));
+            try {
+                var result = service.dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, sessionId);
+                assertThatThrownBy(result::join).hasCause(failure);
+                service.shutdown();
+                assertThat(executor.awaitTermination(1, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                service.shutdown();
+            }
         }
     }
 

@@ -7,6 +7,7 @@ import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import com.pty4j.WinSize;
 import jakarta.annotation.PreDestroy;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -210,17 +211,23 @@ public class TerminalManager {
         private void pumpOutput() {
             int exitCode = -1;
             try {
-                var reader = new InputStreamReader(processInput, StandardCharsets.UTF_8);
-                char[] buffer = new char[4096];
-                int read;
-                while ((read = reader.read(buffer)) != -1) {
-                    String chunk = new String(buffer, 0, read);
-                    synchronized (outputLock) {
-                        if (cleanedUp.get()) {
-                            continue;
+                try (var reader = new InputStreamReader(new FilterInputStream(processInput) {
+                    @Override
+                    public void close() {
+                        closeProcessInput();
+                    }
+                }, StandardCharsets.UTF_8)) {
+                    char[] buffer = new char[4096];
+                    int read;
+                    while ((read = reader.read(buffer)) != -1) {
+                        String chunk = new String(buffer, 0, read);
+                        synchronized (outputLock) {
+                            if (cleanedUp.get()) {
+                                continue;
+                            }
+                            appendOutput(chunk);
+                            sendToSessions(Map.of("type", "output", "data", chunk));
                         }
-                        appendOutput(chunk);
-                        sendToSessions(Map.of("type", "output", "data", chunk));
                     }
                 }
                 exitCode = process.waitFor();
