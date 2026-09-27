@@ -38,7 +38,8 @@ mount:
 docker pull judepereira/jupiter:latest
 ```
 
-**Note:** Versioning will soon be introduced.
+Images are available as `latest` for the current main branch and as immutable release tags in the `YYYY.MM.DD.N` format.
+Use a release tag when you need a fixed version.
 
 **Important:** Use your own network sandbox for now. A built-in one will be shipped soon!
 
