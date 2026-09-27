@@ -3,6 +3,7 @@ package com.judepereira.jupiter.terminal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -68,6 +70,72 @@ public class TerminalManagerReplayBufferTests {
     }
 
     @Test
+    void timeoutCleanupPreventsLateReaderCleanup() throws Exception {
+        AtomicInteger exitCode = new AtomicInteger();
+        AtomicInteger notifications = new AtomicInteger();
+        TerminalManager manager = new TerminalManager(new ObjectMapper(), List.of((terminalId, code) -> {
+            notifications.incrementAndGet();
+            exitCode.set(code);
+        }), new RuntimeEnvironment(Map.of()));
+        PtyProcess process = mock(PtyProcess.class);
+        when(process.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        CountDownLatch readerStarted = new CountDownLatch(1);
+        CountDownLatch releaseReader = new CountDownLatch(1);
+        CountDownLatch readerFinished = new CountDownLatch(1);
+        when(process.getInputStream())
+                .thenReturn(new BlockingInputStream(readerStarted, releaseReader, readerFinished));
+        TerminalManager.TerminalRuntime runtime = manager.new TerminalRuntime("terminal-late", "Terminal late",
+                process);
+        manager.registerRuntime("terminal-late", runtime);
+
+        runtime.startReader();
+        assertThat(readerStarted.await(1, TimeUnit.SECONDS)).isTrue();
+        runtime.closeProcess(Duration.ZERO);
+        assertThat(exitCode).hasValue(-1);
+        assertThat(notifications).hasValue(1);
+
+        releaseReader.countDown();
+        assertThat(readerFinished.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(notifications).hasValue(1);
+        verify(process, times(1)).destroy();
+    }
+
+    @Test
+    void closeProcessRestoresInterruptAfterFallbackCleanup() throws Exception {
+        AtomicInteger exitCode = new AtomicInteger();
+        TerminalManager manager = new TerminalManager(new ObjectMapper(),
+                List.of((terminalId, code) -> exitCode.set(code)), new RuntimeEnvironment(Map.of()));
+        PtyProcess process = mock(PtyProcess.class);
+        when(process.getOutputStream()).thenReturn(new ByteArrayOutputStream());
+        CountDownLatch readerStarted = new CountDownLatch(1);
+        CountDownLatch releaseReader = new CountDownLatch(1);
+        CountDownLatch readerFinished = new CountDownLatch(1);
+        when(process.getInputStream())
+                .thenReturn(new BlockingInputStream(readerStarted, releaseReader, readerFinished));
+        TerminalManager.TerminalRuntime runtime = manager.new TerminalRuntime("terminal-interrupt",
+                "Terminal interrupt", process);
+        manager.registerRuntime("terminal-interrupt", runtime);
+        runtime.startReader();
+        assertThat(readerStarted.await(1, TimeUnit.SECONDS)).isTrue();
+
+        CountDownLatch finished = new CountDownLatch(1);
+        AtomicBoolean restored = new AtomicBoolean();
+        Thread closer = Thread.ofPlatform().start(() -> {
+            Thread.currentThread().interrupt();
+            runtime.closeProcess(Duration.ofSeconds(1));
+            restored.set(Thread.currentThread().isInterrupted());
+            Thread.interrupted();
+            finished.countDown();
+        });
+        assertThat(finished.await(1, TimeUnit.SECONDS)).isTrue();
+        closer.join();
+        assertThat(restored).isTrue();
+        assertThat(exitCode).hasValue(-1);
+        releaseReader.countDown();
+        assertThat(readerFinished.await(1, TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
     void cleanupStillHappensWhenDestroyFailsAfterTimeout() throws Exception {
         TerminalManager manager = new TerminalManager(new ObjectMapper(), List.of(), new RuntimeEnvironment(Map.of()));
         PtyProcess process = mock(PtyProcess.class);
@@ -91,10 +159,16 @@ public class TerminalManagerReplayBufferTests {
     private static final class BlockingInputStream extends InputStream {
         private final CountDownLatch started;
         private final CountDownLatch release;
+        private final CountDownLatch finished;
 
         private BlockingInputStream(CountDownLatch started, CountDownLatch release) {
+            this(started, release, new CountDownLatch(0));
+        }
+
+        private BlockingInputStream(CountDownLatch started, CountDownLatch release, CountDownLatch finished) {
             this.started = started;
             this.release = release;
+            this.finished = finished;
         }
 
         @Override
@@ -105,6 +179,7 @@ public class TerminalManagerReplayBufferTests {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            finished.countDown();
             return -1;
         }
 
