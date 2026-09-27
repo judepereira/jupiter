@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.ui;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -17,14 +19,19 @@ public class ActiveStreamRegistryService {
         if (assistantId == null || assistantId.isBlank()) {
             return;
         }
-        streamsByAssistantId.put(assistantId, new StreamRef(sessionId, workspaceRoot));
+        Path workspace = normalize(workspaceRoot);
+        streamsByAssistantId.put(assistantId, new StreamRef(sessionId, workspaceRoot, workspace));
     }
 
     public void unregister(String assistantId) {
         if (assistantId == null || assistantId.isBlank()) {
             return;
         }
-        streamsByAssistantId.remove(assistantId);
+        StreamRef current = streamsByAssistantId.get(assistantId);
+        if (current == null) {
+            return;
+        }
+        streamsByAssistantId.remove(assistantId, current);
     }
 
     public Set<Long> activeSessionIdsSnapshot() {
@@ -51,6 +58,30 @@ public class ActiveStreamRegistryService {
         return assistantId != null && streamsByAssistantId.containsKey(assistantId);
     }
 
+    public boolean hasActiveStreamForWorkspace(String workspaceRoot) {
+        Path workspace = normalize(workspaceRoot);
+        if (workspace == null) {
+            return false;
+        }
+        return streamsByAssistantId.values().stream().anyMatch(ref -> workspace.equals(ref.workspace()));
+    }
+
+    private Path normalize(String workspaceRoot) {
+        if (workspaceRoot == null || workspaceRoot.isBlank()) {
+            return null;
+        }
+        try {
+            Path path = Path.of(workspaceRoot);
+            try {
+                return path.toRealPath();
+            } catch (IOException | RuntimeException e) {
+                return path.toAbsolutePath().normalize();
+            }
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     public Optional<Long> sessionIdForAssistantId(String assistantId) {
         StreamRef ref = assistantId == null ? null : streamsByAssistantId.get(assistantId);
         return ref == null ? Optional.empty() : Optional.of(ref.sessionId());
@@ -61,6 +92,6 @@ public class ActiveStreamRegistryService {
                 .map(Map.Entry::getKey).findFirst();
     }
 
-    private record StreamRef(long sessionId, String workspaceRoot) {
+    private record StreamRef(long sessionId, String workspaceRoot, Path workspace) {
     }
 }
