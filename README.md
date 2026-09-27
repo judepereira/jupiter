@@ -1,5 +1,10 @@
 # Jupiter
 
+[![Verify and publish](https://github.com/judepereira/jupiter/actions/workflows/verify-and-publish.yml/badge.svg)](https://github.com/judepereira/jupiter/actions/workflows/verify-and-publish.yml)
+[![Publish wiki](https://github.com/judepereira/jupiter/actions/workflows/publish-wiki.yml/badge.svg)](https://github.com/judepereira/jupiter/actions/workflows/publish-wiki.yml)
+[![Coverage](https://cloud.bluecave.io/badges/gh/judepereira/jupiter/coverage.svg)](https://cloud.bluecave.io/projects/gh/judepereira/jupiter)
+[![Code Quality](https://cloud.bluecave.io/badges/gh/judepereira/jupiter/analysis.svg)](https://cloud.bluecave.io/projects/gh/judepereira/jupiter)
+
 Jupiter is secure, agentic IDE (model agnostic) designed to run on a server and remain available from any browser -
 laptop, phone, whatever happens to be nearby. A perfect handoff enables seamless continuity of work.
 
