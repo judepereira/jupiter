@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -28,6 +29,11 @@ import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.exception.AuthenticationException;
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.InvalidRequestException;
+import dev.langchain4j.exception.ModelNotFoundException;
+import dev.langchain4j.exception.NonRetriableException;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -542,6 +548,110 @@ public class OpenAiAgentModelClientTest {
                                 List.of(), ignored -> {
                                 })));
         verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void known_deterministic_provider_failures_do_not_retry() {
+        for (RuntimeException failure : List.of(new AuthenticationException("auth"),
+                new InvalidRequestException("invalid"), new ModelNotFoundException("missing"),
+                new NonRetriableException("not retriable"), new HttpException(400, "bad request"))) {
+            ChatModel chatModel = mock(ChatModel.class);
+            when(chatModel.chat(any(ChatRequest.class))).thenThrow(failure);
+            RecordingClient client = new RecordingClient(chatModel, null,
+                    openAiProperties(3, Duration.ZERO, Duration.ZERO));
+
+            assertThrows(IllegalStateException.class,
+                    () -> client.chat(List.of(new Message(Message.Role.USER, "failure", null, null, null)), List.of()));
+            verify(chatModel, times(1)).chat(any(ChatRequest.class));
+        }
+    }
+
+    @Test
+    public void deterministic_streaming_callback_failure_is_wrapped_with_provider_detail_once() {
+        StreamingChatModel streamingModel = mock(StreamingChatModel.class);
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1))
+                    .onError(new RuntimeException(new ModelNotFoundException("missing model")));
+            return null;
+        }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, streamingModel,
+                openAiProperties(3, Duration.ZERO, Duration.ZERO));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
+                        List.of(), ignored -> {
+                        }));
+
+        assertEquals("OpenAI streaming request failed: dev.langchain4j.exception.ModelNotFoundException: missing model",
+                failure.getMessage());
+        verify(streamingModel, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void deterministic_synchronously_thrown_streaming_failure_is_wrapped_with_provider_detail_once() {
+        StreamingChatModel streamingModel = mock(StreamingChatModel.class);
+        doThrow(new InvalidRequestException("invalid request")).when(streamingModel).chat(any(ChatRequest.class),
+                any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, streamingModel,
+                openAiProperties(3, Duration.ZERO, Duration.ZERO));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
+                        List.of(), ignored -> {
+                        }));
+
+        assertEquals("OpenAI streaming request failed: invalid request", failure.getMessage());
+        verify(streamingModel, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void retryable_http_statuses_and_unknown_failures_retry() {
+        for (RuntimeException failure : List.of(new HttpException(408, "timeout"), new HttpException(429, "busy"),
+                new HttpException(500, "server"), new RuntimeException("overload"))) {
+            ChatModel chatModel = mock(ChatModel.class);
+            AtomicInteger attempts = new AtomicInteger();
+            when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
+                if (attempts.getAndIncrement() == 0) {
+                    throw failure;
+                }
+                return ChatResponse.builder().aiMessage(AiMessage.from("ok")).build();
+            });
+            RecordingClient client = new RecordingClient(chatModel, null,
+                    openAiProperties(1, Duration.ZERO, Duration.ZERO));
+
+            assertEquals("ok",
+                    client.chat(List.of(new Message(Message.Role.USER, "retry", null, null, null)), List.of())
+                            .getAssistantText());
+            verify(chatModel, times(2)).chat(any(ChatRequest.class));
+        }
+    }
+
+    @Test
+    public void backoff_calculation_is_saturating_and_supports_zero() {
+        assertEquals(0, OpenAiAgentModelClient.calculateBackoffMillis(Duration.ZERO, Duration.ZERO, Integer.MAX_VALUE));
+        assertEquals(8, OpenAiAgentModelClient.calculateBackoffMillis(Duration.ofMillis(1), Duration.ofMillis(8), 4));
+        assertEquals(8, OpenAiAgentModelClient.calculateBackoffMillis(Duration.ofMillis(1), Duration.ofMillis(8),
+                Integer.MAX_VALUE));
+        assertEquals(Long.MAX_VALUE, OpenAiAgentModelClient.calculateBackoffMillis(Duration.ofMillis(Long.MAX_VALUE),
+                Duration.ofMillis(Long.MAX_VALUE), Integer.MAX_VALUE));
+    }
+
+    @Test
+    public void invalid_backoff_durations_fail_fast() {
+        List<Duration[]> invalidDurations = List.of(new Duration[]{null, Duration.ofMillis(1)},
+                new Duration[]{Duration.ofMillis(1), null}, new Duration[]{Duration.ofMillis(-1), Duration.ofMillis(1)},
+                new Duration[]{Duration.ofMillis(1), Duration.ofMillis(-1)},
+                new Duration[]{Duration.ofMillis(2), Duration.ofMillis(1)});
+
+        for (Duration[] durations : invalidDurations) {
+            ChatModel chatModel = mock(ChatModel.class);
+            RecordingClient client = new RecordingClient(chatModel, null,
+                    openAiProperties(1, durations[0], durations[1]));
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.chat(List.of(new Message(Message.Role.USER, "invalid", null, null, null)), List.of()));
+            verify(chatModel, times(0)).chat(any(ChatRequest.class));
+        }
     }
 
     @Test

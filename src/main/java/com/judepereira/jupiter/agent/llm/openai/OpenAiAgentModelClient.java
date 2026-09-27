@@ -11,6 +11,8 @@ import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.NonRetriableException;
 import dev.langchain4j.http.client.HttpClient;
 import dev.langchain4j.http.client.HttpClientBuilder;
 import dev.langchain4j.http.client.HttpRequest;
@@ -120,7 +122,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 throw e;
             } catch (Exception e) {
                 retryPolicy.propagateNestedSpecialCause(e, "OpenAI streaming request interrupted");
-                if (attemptState.canRetry() && retryPolicy.canRetry(retriesUsed)) {
+                if (attemptState.canRetry() && retryPolicy.canRetry(e, retriesUsed)) {
                     retriesUsed++;
                     retryPolicy.logRetry("streaming", modelName, retriesUsed, e);
                     retryPolicy.sleepOrThrow(retriesUsed, "OpenAI streaming request interrupted");
@@ -140,7 +142,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 throw cancelled;
             }
             retryPolicy.propagateNestedSpecialCause(handlerError, "OpenAI streaming request interrupted");
-            if (attemptState.canRetry() && retryPolicy.canRetry(retriesUsed)) {
+            if (attemptState.canRetry() && retryPolicy.canRetry(handlerError, retriesUsed)) {
                 retriesUsed++;
                 retryPolicy.logRetry("streaming", modelName, retriesUsed, handlerError);
                 retryPolicy.sleepOrThrow(retriesUsed, "OpenAI streaming request interrupted");
@@ -163,7 +165,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 throw e;
             } catch (Exception e) {
                 retryPolicy.propagateNestedSpecialCause(e, failureMessage);
-                if (retryPolicy.canRetry(retriesUsed)) {
+                if (retryPolicy.canRetry(e, retriesUsed)) {
                     retriesUsed++;
                     retryPolicy.logRetry("request", null, retriesUsed, e);
                     retryPolicy.sleepOrThrow(retriesUsed, failureMessage);
@@ -314,6 +316,30 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     private record ResolvedAuth(String credential, String baseUrl, Optional<String> accountId, AuthMode mode) {
     }
 
+    static long calculateBackoffMillis(Duration initialBackoff, Duration maxBackoff, int retryNumber) {
+        long initialMillis = durationMillisSaturated(initialBackoff);
+        long maxMillis = durationMillisSaturated(maxBackoff);
+        if (initialMillis == 0 || retryNumber <= 1) {
+            return Math.min(initialMillis, maxMillis);
+        }
+        long delay = initialMillis;
+        for (int i = 1; i < retryNumber && delay < maxMillis; i++) {
+            if (delay > maxMillis / 2) {
+                return maxMillis;
+            }
+            delay *= 2;
+        }
+        return Math.min(delay, maxMillis);
+    }
+
+    private static long durationMillisSaturated(Duration duration) {
+        try {
+            return duration.toMillis();
+        } catch (ArithmeticException e) {
+            return Long.MAX_VALUE;
+        }
+    }
+
     private final class OpenAiRetryPolicy {
         private final int maxRetries;
         private final Duration initialBackoff;
@@ -321,23 +347,31 @@ public class OpenAiAgentModelClient implements AgentModelClient {
 
         private OpenAiRetryPolicy(OpenAiProperties.Retry retry) {
             this.maxRetries = Math.max(0, retry.getMaxRetries());
-            this.initialBackoff = retry.getInitialBackoff();
-            this.maxBackoff = retry.getMaxBackoff();
+            this.initialBackoff = requireDuration(retry.getInitialBackoff(), "initial backoff");
+            this.maxBackoff = requireDuration(retry.getMaxBackoff(), "max backoff");
+            if (maxBackoff.compareTo(initialBackoff) < 0) {
+                throw new IllegalArgumentException("max backoff must not be smaller than initial backoff");
+            }
+        }
+
+        private static Duration requireDuration(Duration duration, String name) {
+            if (duration == null || duration.isNegative()) {
+                throw new IllegalArgumentException(name + " must not be null or negative");
+            }
+            return duration;
         }
 
         private void sleepOrThrow(int retryNumber, String failureMessage) {
             try {
-                long backoffMillis = Math.min(maxBackoff.toMillis(),
-                        initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
-                Thread.sleep(backoffMillis);
+                Thread.sleep(backoffMillis(retryNumber));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException(failureMessage, e);
             }
         }
 
-        private boolean canRetry(int retriesUsed) {
-            return retriesUsed < maxRetries;
+        private boolean canRetry(Throwable throwable, int retriesUsed) {
+            return retriesUsed < maxRetries && !isKnownDeterministicFailure(throwable);
         }
 
         private void propagateNestedSpecialCause(Throwable throwable, String failureMessage) {
@@ -363,7 +397,23 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         }
 
         private long backoffMillis(int retryNumber) {
-            return Math.min(maxBackoff.toMillis(), initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
+            return OpenAiAgentModelClient.calculateBackoffMillis(initialBackoff, maxBackoff, retryNumber);
+        }
+
+        private static boolean isKnownDeterministicFailure(Throwable throwable) {
+            Throwable current = throwable;
+            while (current != null) {
+                if (current instanceof NonRetriableException
+                        || (current instanceof HttpException http && isDeterministicClientStatus(http.statusCode()))) {
+                    return true;
+                }
+                current = current.getCause();
+            }
+            return false;
+        }
+
+        private static boolean isDeterministicClientStatus(int statusCode) {
+            return statusCode >= 400 && statusCode < 500 && statusCode != 408 && statusCode != 429;
         }
     }
 
