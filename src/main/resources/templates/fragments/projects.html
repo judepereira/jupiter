@@ -348,6 +348,18 @@
             </form>
             <div th:if="${#lists.isEmpty(commands)}" class="settings-command-empty">No custom commands found.</div>
             <div class="settings-command-list">
+                <article th:each="command : ${externalCommands}" class="settings-command-card">
+                    <div class="settings-command-card-header">
+                        <strong th:text="${command.name}"></strong><code th:text="${command.id}"></code>
+                        <span class="badge text-bg-info" th:text="|${command.provider} / ${command.scope}|"
+                            >External</span
+                        >
+                    </div>
+                    <p class="settings-help-text" th:text="${command.origin}"></p>
+                    <p th:if="${command.description != null}" th:text="${command.description}"></p>
+                </article>
+            </div>
+            <div class="settings-command-list">
                 <article
                     th:each="command, iterStat : ${commands}"
                     class="settings-command-card"

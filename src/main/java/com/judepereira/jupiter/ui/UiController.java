@@ -1017,6 +1017,12 @@ public class UiController {
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
         model.addAttribute("anthropicOAuthView", anthropicOAuthService.currentView());
         model.addAttribute("customCommands", commandCatalogService.listCustom());
+        AppStateView view = appStateService.loadViewData();
+        Path workspace = view.activeSessionDetail() == null
+                ? null
+                : Path.of(view.activeSessionDetail().workspaceRoot());
+        model.addAttribute("externalCommands",
+                commandCatalogService.list(workspace).stream().filter(command -> !command.editable()).toList());
         populateSettingsModels(model);
     }
 
@@ -1120,6 +1126,12 @@ public class UiController {
     private String renderCommands(Model model, String success, String error, CommandDefinition submitted,
             String submittedOriginalId, String submittedOperation) {
         model.addAttribute("customCommands", commandCatalogService.listCustom());
+        AppStateView view = appStateService.loadViewData();
+        Path workspace = view.activeSessionDetail() == null
+                ? null
+                : Path.of(view.activeSessionDetail().workspaceRoot());
+        model.addAttribute("externalCommands",
+                commandCatalogService.list(workspace).stream().filter(command -> !command.editable()).toList());
         model.addAttribute("commandSuccess", success);
         model.addAttribute("commandError", error);
         model.addAttribute("submittedCommand", submitted);
