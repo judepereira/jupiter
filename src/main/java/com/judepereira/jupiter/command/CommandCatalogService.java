@@ -388,7 +388,10 @@ public class CommandCatalogService {
         if (bytes.length > MAX_EXTERNAL_BYTES)
             throw new IOException("file exceeds 256 KiB");
         String content = decodeUtf8(bytes);
-        FrontMatterAndBody parsed = externalFrontMatter(content);
+        CommandFrontMatterExtractor.Result parsed = CommandFrontMatterExtractor.extract(content);
+        if (parsed.status() == CommandFrontMatterExtractor.Status.UNTERMINATED) {
+            throw new IOException("missing closing frontmatter delimiter");
+        }
         JsonNode metadata = parsed.yaml().isBlank()
                 ? YAML_MAPPER.createObjectNode()
                 : YAML_MAPPER.readTree(parsed.yaml());
@@ -408,31 +411,6 @@ public class CommandCatalogService {
         CharBuffer chars = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes));
         return chars.toString();
-    }
-
-    private static FrontMatterAndBody externalFrontMatter(String content) {
-        if (!(content.startsWith("---\n") || content.startsWith("---\r\n")))
-            return new FrontMatterAndBody("", content);
-        int start = content.indexOf('\n') + 1;
-        int end = findClosingDelimiter(content, start);
-        if (end < 0)
-            return new FrontMatterAndBody("", content);
-        int body = end + 4;
-        while (body < content.length() && (content.charAt(body) == '\n' || content.charAt(body) == '\r'))
-            body++;
-        return new FrontMatterAndBody(content.substring(start, end).trim(), content.substring(body));
-    }
-
-    private static int findClosingDelimiter(String content, int start) {
-        int candidate = content.indexOf("\n---", start);
-        while (candidate >= 0) {
-            int afterDelimiter = candidate + 4;
-            if (afterDelimiter == content.length() || content.charAt(afterDelimiter) == '\n'
-                    || content.charAt(afterDelimiter) == '\r')
-                return candidate;
-            candidate = content.indexOf("\n---", afterDelimiter);
-        }
-        return -1;
     }
 
     private List<CustomEntry> loadUserCommands() throws IOException {
@@ -477,8 +455,8 @@ public class CommandCatalogService {
         }
     }
 
-    private static CommandDefinition loadCommand(String source, String content) {
-        FrontMatterAndBody parsed = parseFrontMatter(source, content);
+    static CommandDefinition loadCommand(String source, String content) {
+        CommandFrontMatterExtractor.Result parsed = parseFrontMatter(source, content);
         try {
             FrontMatter frontMatter = YAML_MAPPER.readValue(parsed.yaml(), FrontMatter.class);
             String id = normalize(resolveId(source, frontMatter.id()));
@@ -496,26 +474,15 @@ public class CommandCatalogService {
         }
     }
 
-    private static FrontMatterAndBody parseFrontMatter(String source, String content) {
-        if (content == null || !content.startsWith("---")) {
+    private static CommandFrontMatterExtractor.Result parseFrontMatter(String source, String content) {
+        CommandFrontMatterExtractor.Result parsed = CommandFrontMatterExtractor.extract(content);
+        if (parsed.status() == CommandFrontMatterExtractor.Status.ABSENT) {
             throw new IllegalStateException("Missing YAML frontmatter in " + source);
         }
-        int closing = content.indexOf("\n---", 3);
-        int delimiterLength = 4;
-        if (closing < 0) {
-            closing = content.indexOf("\r\n---", 3);
-            delimiterLength = 5;
-        }
-        if (closing < 0) {
+        if (parsed.status() == CommandFrontMatterExtractor.Status.UNTERMINATED) {
             throw new IllegalStateException("Missing closing YAML frontmatter delimiter in " + source);
         }
-        int yamlStart = 3;
-        while (yamlStart < content.length() && (content.charAt(yamlStart) == '\r' || content.charAt(yamlStart) == '\n'))
-            yamlStart++;
-        int bodyStart = closing + delimiterLength;
-        while (bodyStart < content.length() && (content.charAt(bodyStart) == '\r' || content.charAt(bodyStart) == '\n'))
-            bodyStart++;
-        return new FrontMatterAndBody(content.substring(yamlStart, closing).trim(), content.substring(bodyStart));
+        return parsed;
     }
 
     private static void validateCommands(List<CommandDefinition> commands) {
@@ -599,8 +566,6 @@ public class CommandCatalogService {
         return resource.getDescription();
     }
 
-    private record FrontMatterAndBody(String yaml, String body) {
-    }
     private record FrontMatter(String id, String name, String description,
             @JsonAlias("kind") @JsonProperty("type") CommandKind type, String workingDir, Integer timeoutSeconds) {
     }

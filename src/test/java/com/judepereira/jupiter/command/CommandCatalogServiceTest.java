@@ -26,7 +26,7 @@ class CommandCatalogServiceTest {
         Files.createDirectories(home().resolve(".codex/prompts"));
         Files.writeString(workspace.resolve(".claude/commands/nested/review.md"), "Review body");
         Files.writeString(workspace.resolve(".codex/prompts/plan.md"),
-                "---\nname: Planning\ndescription: Plan it\nprovider: arbitrary\n---\nPlan body");
+                "---\r\nname: Planning\r\ndescription: Plan it\r\nprovider: arbitrary\r\n---\r\nPlan body");
         Files.writeString(home().resolve(".claude/commands/home.md"), "Home body");
         Files.writeString(home().resolve(".codex/prompts/home.md"), "Home codex body");
 
@@ -120,6 +120,28 @@ class CommandCatalogServiceTest {
         };
 
         assertThat(service.list()).extracting(CommandCatalogService.CommandDefinition::body).contains("available");
+    }
+
+    @Test
+    void unterminatedExternalFrontmatterIsSkipped() throws Exception {
+        Path workspace = root.resolve("workspace");
+        Path commands = workspace.resolve(".claude/commands");
+        Files.createDirectories(commands);
+        Files.writeString(commands.resolve("unterminated.md"), "---\nname: Broken\nbody that must not be imported");
+
+        List<CommandCatalogService.CommandDefinition> external = new CommandCatalogService(
+                root.resolve("custom").toString(), home().toString()).list(workspace).stream()
+                .filter(c -> !c.editable()).toList();
+
+        assertThat(external).isEmpty();
+    }
+
+    @Test
+    void jupiterCommandsRequireCompleteFrontmatter() {
+        assertThatThrownBy(() -> CommandCatalogService.loadCommand("missing.md", "body only"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("frontmatter");
+        assertThatThrownBy(() -> CommandCatalogService.loadCommand("missing-close.md", "---\nid: broken\n"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("frontmatter");
     }
 
     @Test
