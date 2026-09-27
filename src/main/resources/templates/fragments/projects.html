@@ -572,19 +572,20 @@
                                     </div>
 
                                     <label class="project-form-field">
-                                        <h6>Command environment whitelist</h6>
+                                        <h6>Additional command environment variables</h6>
                                         <input
                                             type="text"
                                             name="commandEnvironmentAllowlist"
                                             autocomplete="off"
-                                            placeholder="HOME, PATH, CI"
+                                            placeholder="CI, NODE_OPTIONS"
                                             th:value="${commandEnvironmentAllowlistValue}"
                                             aria-describedby="command-environment-allowlist-help"
                                         >
                                         <small id="command-environment-allowlist-help"
-                                            >Comma-separated system environment variable names. This controls only the
-                                            run command tool; leave blank for no system variables. Terminal sessions
-                                            retain the normal system environment.</small
+                                            >Comma-separated additional host environment variable names for the run
+                                            command tool. PATH, HOME, USER, LOGNAME, and TMPDIR are forwarded
+                                            automatically when present. Terminal sessions retain the normal system
+                                            environment.</small
                                         >
                                     </label>
 

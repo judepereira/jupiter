@@ -102,6 +102,16 @@
     min-width: 0; /* prevent overflow in flex/grid children */
 }
 
+.chat-message-text.markdown-rendered table {
+    border-collapse: collapse;
+}
+
+.chat-message-text.markdown-rendered th,
+.chat-message-text.markdown-rendered td {
+    border: 1px solid var(--outline-colour);
+    padding: 10px;
+}
+
 .chat-message-text p {
     margin: 0 0 0.75em 0;
 }

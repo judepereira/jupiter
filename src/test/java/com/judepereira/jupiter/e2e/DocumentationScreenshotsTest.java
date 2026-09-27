@@ -23,6 +23,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -57,7 +58,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             "workspaces.png", "sessions-and-chat.png", "agents-models-thinking.png", "review-and-diffs.png",
             "tool-calls-and-images.png", "subagent-session.png", "terminal.png", "project-settings.png",
             "lifecycle-hooks.png", "mcp-servers.png", "openai-authentication.png", "usage-and-token-tracking.png",
-            "slash-commands.png");
+            "slash-commands.png", "settings-commands.png");
 
     private static final List<Persistence.ProjectTokenUsageHourly> FIXED_USAGE = List.of(
             new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T04:00:00Z"), "openai/gpt-5.6-terra", 2,
@@ -172,6 +173,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             captureOpenAiAuthentication(app, fixture, outputDir);
             captureUsage(app, fixture, outputDir);
             captureSlashCommands(app, fixture, outputDir);
+            captureSettingsCommands(app, fixture, outputDir);
             captureTerminal(app, fixture, outputDir);
 
             verifyCatalog(outputDir);
@@ -348,6 +350,16 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         });
     }
 
+    private static void captureSettingsCommands(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
+        captureDesktop(app, fixture, false, outputDir.resolve("settings-commands.png"), page -> {
+            openSettings(page);
+            page.locator("#settings-commands-tab").click();
+            page.locator("#settings-commands-content").waitFor();
+            page.locator(".settings-command-add").waitFor();
+            settlePage(page);
+        });
+    }
+
     private static void captureTerminal(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
         ensureReviewState(app, fixture, false);
         Browser.NewContextOptions options = commonContextOptions(DESKTOP_WIDTH, DESKTOP_HEIGHT, DESKTOP_DPR);
@@ -436,10 +448,10 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static void captureViewport(Page page, Path output, int cssWidth, int cssHeight, double dpr)
             throws IOException {
-        page.screenshot(
-                new Page.ScreenshotOptions().setPath(output).setFullPage(false).setScale(ScreenshotScale.DEVICE));
+        byte[] screenshot = page
+                .screenshot(new Page.ScreenshotOptions().setFullPage(false).setScale(ScreenshotScale.DEVICE));
 
-        BufferedImage image = ImageIO.read(output.toFile());
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(screenshot));
         if (image == null) {
             throw new IllegalStateException("Playwright did not produce a readable PNG: " + output);
         }
@@ -449,6 +461,10 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             throw new IllegalStateException(
                     "Unexpected screenshot dimensions for " + output + ": got " + image.getWidth() + "x"
                             + image.getHeight() + ", expected " + expectedWidth + "x" + expectedHeight);
+        }
+        BufferedImage framed = BrowserScreenshot.buildBrowserFramedImage(image, "http://localhost:7272");
+        if (!ImageIO.write(framed, "png", output.toFile())) {
+            throw new IllegalStateException("PNG writer is unavailable");
         }
     }
 

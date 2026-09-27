@@ -1,20 +1,18 @@
-# Interface Tour
-
-The normal development loop stays on one screen: project, workspace, chat, review, terminal.
+The normal development loop stays on one screen: projects, workspaces, sessions, reviews, terminals.
 
 ![Jupiter desktop interface](images/interface-desktop.png)
 
-## Project bar
+## Project Bar
 
-Projects sit across the top. Switching projects keeps you inside the same browser shell.
+Projects sit across the top. Agents continue to run in the background in other projects.
 
-## Workspace and session rail
+## Workspace and Session Rail
 
 The left rail contains Git workspaces and their sessions. It also shows unread, running, and failed activity.
 
 On smaller screens this turns into the mobile navigation rail rather than squeezing the desktop layout into oblivion.
 
-![Jupiter mobile interface](images/interface-mobile.png)
+<img src="images/interface-mobile.png" alt="Jupiter mobile interface" width="400">
 
 ## Chat
 
@@ -27,16 +25,16 @@ The review panel can show either files attributed to the current session or the 
 
 ## Terminal
 
-The bottom panel contains one or more real PTY terminals for the active workspace.
+The bottom panel contains one or more terminals for the active workspace.
 
-## Settings and notifications
+## Settings and Notifications
 
 Project environment, MCP servers, lifecycle hooks, Git updates, usage, and provider connection settings live in
 **Settings**.
 
 Warnings and errors appear as system balloons, so failures stay visible in the interface.
 
-## Keyboard shortcuts
+## Keyboard Shortcuts
 
 |        Shortcut        |          Action           |
 |------------------------|---------------------------|

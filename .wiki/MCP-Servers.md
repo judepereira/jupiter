@@ -1,10 +1,8 @@
-# MCP Servers
-
 Jupiter can attach remote MCP servers and expose their tools only to the projects you choose.
 
 ![MCP server settings](images/mcp-servers.png)
 
-## Server catalogue
+## Server Catalogue
 
 Each entry has:
 
@@ -16,7 +14,7 @@ Each entry has:
 
 The catalogue is global; exposure is project-specific.
 
-## Environment placeholders
+## Environment Placeholders
 
 URLs and header values can contain placeholders like this:
 
@@ -24,18 +22,18 @@ URLs and header values can contain placeholders like this:
 ${env.VARIABLE_NAME}
 ```
 
-Project environment variables are checked first, with host/runtime environment values available as fallbacks. The
-Jupiter encryption key is never available to `${env.NAME}`.
+Project environment variables are checked first, with host/runtime environment values available as fallbacks.
 
-Missing values fail resolution. For secrets, prefer project environment variables rather than hard-coding tokens into
-URLs or headers.
+Missing values fail resolution. For secrets, prefer environment variables rather than hard-coding tokens into URLs or
+headers. Either ways, there is no way a rogue agent can get access to these, since they are stored encrypted, and are
+never exposed to the agent's `run_command` tool, unless explicitly whitelisted.
 
-## Runtime behaviour
+## Runtime Behaviour
 
 Enabled servers connect for projects with access. Configuration changes reconnect the affected project integrations.
-Connection failures surface as system balloons, and tool-list changes are picked up automatically.
+Tool-list changes are picked up automatically.
 
-## Tool-name collisions
+## Tool-Name Collisions
 
 Tool names must be unique across connected MCP servers. If two servers expose the same effective tool name, Jupiter
 reports the collision instead of choosing one silently.
