@@ -38,7 +38,5 @@ Jupiter also discovers external prompt files from the active workspace and home 
 ~/.codex/prompts/**/*.md
 ```
 
-These external commands are prompt-only and read-only in Settings. Jupiter checks them when a command catalog request is
-made rather than watching the filesystem. For the same provider and relative path, the active workspace file overrides
-the home file; Claude and Codex paths are kept distinct.
+These external commands are prompt-only and read-only in Settings.
 
