@@ -15,6 +15,20 @@ These settings are mainly useful when operating or tuning a Jupiter instance bey
 | `INIT_SCRIPT`                | Root container initialisation script   | `/init.sh`      |
 | `INIT_USER_SCRIPT`           | User container initialisation script   | `/init-user.sh` |
 
+## OpenAI Request Retries
+
+Ordinary OpenAI request failures are retried with bounded exponential backoff. Streaming requests are retried only
+before any response text or tool call has been emitted, so a partial response is never replayed. Cancellation,
+interruption, and fatal JVM errors are not retried. If all attempts fail, the failure is still surfaced.
+
+These application properties control the retry policy:
+
+|            Property            | Default |                  Purpose                  |
+|--------------------------------|---------|-------------------------------------------|
+| `openai.retry.max-retries`     | `10`    | Maximum retries after the initial request |
+| `openai.retry.initial-backoff` | `1s`    | Initial delay between retries             |
+| `openai.retry.max-backoff`     | `120s`  | Maximum delay between retries             |
+
 ## State Paths
 
 The default database is:

@@ -11,9 +11,6 @@ import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
-import dev.langchain4j.exception.HttpException;
-import dev.langchain4j.exception.InternalServerException;
-import dev.langchain4j.exception.RateLimitException;
 import dev.langchain4j.http.client.HttpClient;
 import dev.langchain4j.http.client.HttpClientBuilder;
 import dev.langchain4j.http.client.HttpRequest;
@@ -30,10 +27,6 @@ import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiResponsesChatModel;
 import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel;
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -49,9 +42,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 public class OpenAiAgentModelClient implements AgentModelClient {
 
@@ -118,38 +113,40 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             try {
                 streamingChatModel(modelName, auth).chat(request, attemptState.handler());
                 attemptState.await();
-                Throwable handlerError = attemptState.error();
-                if (handlerError != null) {
-                    if (handlerError instanceof StreamCancelledException cancelled) {
-                        throw cancelled;
-                    }
-                    if (attemptState.canRetry() && retryPolicy.shouldRetry(handlerError)
-                            && retriesUsed < retryPolicy.maxRetries()) {
-                        retriesUsed++;
-                        retryPolicy.sleep(retriesUsed);
-                        continue;
-                    }
-                    throw attemptState.streamingFailure(handlerError, true);
-                }
-                return attemptState.finish();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("OpenAI streaming request interrupted", e);
             } catch (StreamCancelledException e) {
                 throw e;
             } catch (Exception e) {
-                if (attemptState.canRetry() && retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
+                retryPolicy.propagateNestedSpecialCause(e, "OpenAI streaming request interrupted");
+                if (attemptState.canRetry() && retryPolicy.canRetry(retriesUsed)) {
                     retriesUsed++;
-                    try {
-                        retryPolicy.sleep(retriesUsed);
-                        continue;
-                    } catch (InterruptedException interruptedException) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException("OpenAI streaming request interrupted", interruptedException);
-                    }
+                    retryPolicy.logRetry("streaming", modelName, retriesUsed, e);
+                    retryPolicy.sleepOrThrow(retriesUsed, "OpenAI streaming request interrupted");
+                    continue;
                 }
-                throw attemptState.streamingFailure(e, false);
+                throw attemptState.streamingFailure(e);
             }
+
+            Throwable handlerError = attemptState.error();
+            if (handlerError == null) {
+                return attemptState.finish();
+            }
+            if (handlerError instanceof Error error) {
+                throw error;
+            }
+            if (handlerError instanceof StreamCancelledException cancelled) {
+                throw cancelled;
+            }
+            retryPolicy.propagateNestedSpecialCause(handlerError, "OpenAI streaming request interrupted");
+            if (attemptState.canRetry() && retryPolicy.canRetry(retriesUsed)) {
+                retriesUsed++;
+                retryPolicy.logRetry("streaming", modelName, retriesUsed, handlerError);
+                retryPolicy.sleepOrThrow(retriesUsed, "OpenAI streaming request interrupted");
+                continue;
+            }
+            throw attemptState.streamingFailure(handlerError);
         }
     }
 
@@ -165,15 +162,12 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             } catch (StreamCancelledException e) {
                 throw e;
             } catch (Exception e) {
-                if (retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
+                retryPolicy.propagateNestedSpecialCause(e, failureMessage);
+                if (retryPolicy.canRetry(retriesUsed)) {
                     retriesUsed++;
-                    try {
-                        retryPolicy.sleep(retriesUsed);
-                        continue;
-                    } catch (InterruptedException interruptedException) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException(failureMessage, interruptedException);
-                    }
+                    retryPolicy.logRetry("request", null, retriesUsed, e);
+                    retryPolicy.sleepOrThrow(retriesUsed, failureMessage);
+                    continue;
                 }
                 throw new IllegalStateException(failureMessage, e);
             }
@@ -331,18 +325,45 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             this.maxBackoff = retry.getMaxBackoff();
         }
 
-        private void sleep(int retryNumber) throws InterruptedException {
-            long backoffMillis = Math.min(maxBackoff.toMillis(),
-                    initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
-            Thread.sleep(backoffMillis);
+        private void sleepOrThrow(int retryNumber, String failureMessage) {
+            try {
+                long backoffMillis = Math.min(maxBackoff.toMillis(),
+                        initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
+                Thread.sleep(backoffMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(failureMessage, e);
+            }
         }
 
-        private int maxRetries() {
-            return maxRetries;
+        private boolean canRetry(int retriesUsed) {
+            return retriesUsed < maxRetries;
         }
 
-        private boolean shouldRetry(Throwable throwable) {
-            return isTransient(throwable);
+        private void propagateNestedSpecialCause(Throwable throwable, String failureMessage) {
+            Throwable current = throwable;
+            while (current != null) {
+                if (current instanceof StreamCancelledException cancelled) {
+                    throw cancelled;
+                }
+                if (current instanceof Error error) {
+                    throw error;
+                }
+                if (current instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(failureMessage, throwable);
+                }
+                current = current.getCause();
+            }
+        }
+
+        private void logRetry(String operation, String modelName, int attempt, Throwable throwable) {
+            log.warn("OpenAI {} retry attempt={}/{} delay={}ms model={} exception={}", operation, attempt, maxRetries,
+                    backoffMillis(attempt), modelName == null ? "-" : modelName, throwable.getClass().getName());
+        }
+
+        private long backoffMillis(int retryNumber) {
+            return Math.min(maxBackoff.toMillis(), initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
         }
     }
 
@@ -416,36 +437,13 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             return new ModelResponse(null, toolCall.get(), ModelResponseMetadata.empty(), null);
         }
 
-        private IllegalStateException streamingFailure(Throwable throwable, boolean includePrefix) {
+        private IllegalStateException streamingFailure(Throwable throwable) {
             String message = throwable.getMessage();
-            if (includePrefix && message != null && !message.isBlank()) {
+            if (message != null && !message.isBlank()) {
                 return new IllegalStateException("OpenAI streaming request failed: " + message, throwable);
             }
             return new IllegalStateException("OpenAI streaming request failed", throwable);
         }
-    }
-
-    private boolean isTransient(Throwable throwable) {
-        Throwable current = throwable;
-        while (current != null) {
-            if (current instanceof RateLimitException || current instanceof InternalServerException) {
-                return true;
-            }
-            if (current instanceof HttpException httpException
-                    && (httpException.statusCode() == 429 || httpException.statusCode() / 100 == 5)) {
-                return true;
-            }
-            if (isConnectivityFailure(current)) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
-    }
-
-    private boolean isConnectivityFailure(Throwable throwable) {
-        return throwable instanceof IOException || throwable instanceof ConnectException
-                || throwable instanceof SocketTimeoutException || throwable instanceof UnknownHostException;
     }
 
     private enum AuthMode {

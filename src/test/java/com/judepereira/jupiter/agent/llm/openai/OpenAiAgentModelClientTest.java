@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,6 +18,7 @@ import static org.mockito.Mockito.when;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiProperties;
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
@@ -296,13 +298,14 @@ public class OpenAiAgentModelClientTest {
     }
 
     @Test
-    public void non_streaming_retries_transient_failures_then_succeeds() {
+    public void non_streaming_retries_arbitrary_provider_failures_then_succeeds() {
         OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
         ChatModel chatModel = mock(ChatModel.class);
         AtomicInteger attempts = new AtomicInteger();
         when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
             if (attempts.getAndIncrement() == 0) {
-                throw new IOException("transient");
+                throw new RuntimeException(
+                        "Response failed: Our servers are currently overloaded. Please try again later.");
             }
             return ChatResponse.builder().aiMessage(AiMessage.from("ok")).build();
         });
@@ -316,7 +319,7 @@ public class OpenAiAgentModelClientTest {
     }
 
     @Test
-    public void streaming_retries_a_transient_upstream_failure_before_any_partial_output() {
+    public void streaming_retries_an_arbitrary_upstream_failure_before_any_partial_output() {
         OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
         StreamingChatModel streamingModel = mock(StreamingChatModel.class);
         AtomicInteger attempts = new AtomicInteger();
@@ -362,10 +365,183 @@ public class OpenAiAgentModelClientTest {
                 () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
                         List.of(), deltas::add));
 
-        assertEquals("OpenAI streaming request failed", exception.getMessage());
+        assertEquals("OpenAI streaming request failed: after-partial", exception.getMessage());
         assertEquals(List.of("he"), deltas);
         assertEquals(1, attempts.get());
         verify(streamingModel, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void streaming_does_not_retry_after_a_completed_tool_call_without_text() {
+        OpenAiProperties properties = openAiProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            attempts.incrementAndGet();
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            handler.onCompleteToolCall(new CompleteToolCall(0, ToolExecutionRequest.builder().id("call-1")
+                    .name("read_file").arguments("{\"path\":\"x\"}").build()));
+            handler.onError(new RuntimeException("after-tool"));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        RecordingClient client = new RecordingClient(null, model, properties);
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "tool", null, null, null)), List.of(),
+                        ignored -> {
+                        }));
+
+        assertEquals("OpenAI streaming request failed: after-tool", exception.getMessage());
+        assertEquals(1, attempts.get());
+    }
+
+    @Test
+    public void streaming_retries_arbitrary_runtime_exception_from_callback_before_progress() {
+        OpenAiProperties properties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            if (attempts.getAndIncrement() == 0) {
+                handler.onError(new RuntimeException(
+                        "Response failed: Our servers are currently overloaded. Please try again later."));
+            } else {
+                handler.onCompleteResponse(ChatResponse.builder().aiMessage(AiMessage.from("ok")).build());
+            }
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        RecordingClient client = new RecordingClient(null, model, properties);
+        assertEquals("ok", client.chatStreaming(List.of(new Message(Message.Role.USER, "retry", null, null, null)),
+                List.of(), ignored -> {
+                }).getAssistantText());
+        assertEquals(2, attempts.get());
+    }
+
+    @Test
+    public void direct_cancellation_is_propagated_without_retry() {
+        OpenAiProperties properties = openAiProperties(3, Duration.ZERO, Duration.ZERO);
+        ChatModel model = mock(ChatModel.class);
+        StreamCancelledException cancellation = new StreamCancelledException();
+        when(model.chat(any(ChatRequest.class))).thenThrow(cancellation);
+        RecordingClient client = new RecordingClient(model, null, properties);
+
+        assertSame(cancellation, assertThrows(StreamCancelledException.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "cancel", null, null, null)), List.of())));
+        verify(model, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void callback_cancellation_is_propagated_without_retry() {
+        OpenAiProperties properties = openAiProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        StreamCancelledException cancellation = new StreamCancelledException();
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1)).onError(cancellation);
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, properties);
+
+        assertSame(cancellation,
+                assertThrows(StreamCancelledException.class,
+                        () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "cancel", null, null, null)),
+                                List.of(), ignored -> {
+                                })));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void nested_callback_cancellation_is_propagated_without_retry_or_wrapping() {
+        OpenAiProperties properties = openAiProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        StreamCancelledException cancellation = new StreamCancelledException();
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1)).onError(new RuntimeException(cancellation));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, properties);
+
+        assertSame(cancellation,
+                assertThrows(StreamCancelledException.class,
+                        () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "cancel", null, null, null)),
+                                List.of(), ignored -> {
+                                })));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void nested_callback_error_is_propagated_without_retry_or_wrapping() {
+        OpenAiProperties properties = openAiProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AssertionError providerError = new AssertionError("fatal nested callback");
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1)).onError(new RuntimeException(providerError));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, properties);
+
+        assertSame(providerError,
+                assertThrows(AssertionError.class,
+                        () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "fatal", null, null, null)),
+                                List.of(), ignored -> {
+                                })));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void nested_callback_interruption_restores_interrupt_and_fails_without_retry() {
+        OpenAiProperties properties = openAiProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1))
+                    .onError(new RuntimeException(new InterruptedException("interrupted callback")));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, properties);
+
+        try {
+            IllegalStateException exception = assertThrows(IllegalStateException.class,
+                    () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "interrupt", null, null, null)),
+                            List.of(), ignored -> {
+                            }));
+            assertEquals("OpenAI streaming request interrupted", exception.getMessage());
+            assertTrue(Thread.currentThread().isInterrupted());
+            verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    public void provider_errors_are_propagated_without_retry_or_wrapping() {
+        OpenAiProperties properties = openAiProperties(3, Duration.ZERO, Duration.ZERO);
+        ChatModel model = mock(ChatModel.class);
+        AssertionError providerError = new AssertionError("fatal");
+        when(model.chat(any(ChatRequest.class))).thenThrow(providerError);
+        RecordingClient client = new RecordingClient(model, null, properties);
+
+        assertSame(providerError, assertThrows(AssertionError.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "fatal", null, null, null)), List.of())));
+        verify(model, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void callback_errors_are_propagated_without_retry_or_wrapping() {
+        OpenAiProperties properties = openAiProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AssertionError providerError = new AssertionError("fatal callback");
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1)).onError(providerError);
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, properties);
+
+        assertSame(providerError,
+                assertThrows(AssertionError.class,
+                        () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "fatal", null, null, null)),
+                                List.of(), ignored -> {
+                                })));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
     }
 
     @Test
