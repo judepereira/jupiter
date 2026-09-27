@@ -21,11 +21,6 @@ It also discovers prompt-only, read-only commands from the active workspace and 
 ~/.codex/prompts/**/*.md
 ```
 
-Discovery happens when Jupiter serves the command catalog; there is no file watcher. Changes are picked up on the next
-request that reads the catalog. A project command takes precedence over a home command only when its provider and
-relative path are the same. Claude and Codex commands remain distinct even when their paths or names collide; their
-provider-qualified internal IDs keep them separate.
-
 ## Two Command Types
 
 **Prompt** commands put their body into the composer. You can review or edit it before sending.
