@@ -8,6 +8,7 @@ import com.judepereira.jupiter.agent.tools.impl.RunCommandTool;
 import com.judepereira.jupiter.agent.tools.impl.WriteFileTool;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -22,8 +23,7 @@ public class ToolGuardrailsTest {
                 Set.of(), null, null);
         ToolExecutionResult res = t.execute(Map.of("path", "a.txt", "content", "hello"), ctx);
         assertFalse(res.isSuccess());
-        assertTrue(
-                res.getText().toLowerCase().contains("disabled") || res.getText().toLowerCase().contains("disabled"));
+        assertTrue(res.getText().toLowerCase(Locale.ROOT).contains("disabled"));
         assertFalse(Files.exists(tmp.resolve("a.txt")));
     }
 
@@ -34,7 +34,7 @@ public class ToolGuardrailsTest {
                 Set.of(), null, null);
         ToolExecutionResult res = t.execute(Map.of("command", "echo hi"), ctx);
         assertFalse(res.isSuccess());
-        assertTrue(res.getText().toLowerCase().contains("disabled"));
+        assertTrue(res.getText().toLowerCase(Locale.ROOT).contains("disabled"));
     }
 
     @Test
@@ -48,7 +48,8 @@ public class ToolGuardrailsTest {
         // missing oldText
         ToolExecutionResult res = t.execute(Map.of("path", "file.txt", "newText", "new"), ctx);
         assertFalse(res.isSuccess());
-        assertTrue(res.getText().toLowerCase().contains("missing") || res.getText().toLowerCase().contains("oldtext")
-                || res.getText().toLowerCase().contains("missing args"));
+        assertTrue(res.getText().toLowerCase(Locale.ROOT).contains("missing")
+                || res.getText().toLowerCase(Locale.ROOT).contains("oldtext")
+                || res.getText().toLowerCase(Locale.ROOT).contains("missing args"));
     }
 }

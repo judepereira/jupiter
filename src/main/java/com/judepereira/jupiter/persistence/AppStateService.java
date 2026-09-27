@@ -1048,10 +1048,9 @@ public class AppStateService {
                 throw new GitWorktreeException("git worktree add failed with exit code " + exitCode, stdout, stderr,
                         null);
             }
+        } catch (GitWorktreeException e) {
+            throw e;
         } catch (Exception e) {
-            if (e instanceof GitWorktreeException gitWorktreeException) {
-                throw gitWorktreeException;
-            }
             throw new GitWorktreeException("git worktree add failed", stdout, stderr, e);
         }
     }
@@ -1120,10 +1119,9 @@ public class AppStateService {
                         + "\nstderr:\n" + stderr);
             }
             return new GitCommandResult(stdout, stderr, false);
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            if (e instanceof IllegalStateException) {
-                throw (IllegalStateException) e;
-            }
             throw new IllegalStateException("git command failed", e);
         }
     }
@@ -1137,10 +1135,9 @@ public class AppStateService {
             String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             int exitCode = process.waitFor();
             return new GitCommandResult(stdout, stderr, exitCode != 0);
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            if (e instanceof IllegalStateException) {
-                throw (IllegalStateException) e;
-            }
             throw new IllegalStateException("git command failed", e);
         }
     }

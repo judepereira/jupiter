@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+// The nested records/enums form the persistence namespace; this class is intentionally non-instantiable.
+@SuppressWarnings("PMD.MissingStaticMethodInNonInstantiatableClass")
 public final class Persistence {
 
     public enum ReviewSource {

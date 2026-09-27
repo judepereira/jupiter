@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
@@ -20,8 +21,8 @@ class SystemBalloonServiceTests {
 
         service.connect();
 
-        assertThat(emitter.sentEvent).isNotNull();
-        assertThat(emitter.sentEvent.build()).singleElement()
+        assertThat(emitter.sentEvent.get()).isNotNull();
+        assertThat(emitter.sentEvent.get().build()).singleElement()
                 .satisfies(data -> assertThat(data.getData()).isEqualTo(":connected\n\n"));
         assertThat(service.publishedBalloons()).isEmpty();
         assertThat(service.activeEmitterCount()).isEqualTo(1);
@@ -68,7 +69,7 @@ class SystemBalloonServiceTests {
         service.onContextClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
 
         assertThat(service.activeEmitterCount()).isZero();
-        assertThat(emitter.completed).isTrue();
+        assertThat(emitter.completed.get()).isTrue();
     }
 
     @Test
@@ -87,8 +88,8 @@ class SystemBalloonServiceTests {
     private static final class TestEmitter extends SseEmitter {
         private final IOException sendFailure;
         private final AtomicReference<Throwable> completionError;
-        private volatile SseEventBuilder sentEvent;
-        private volatile boolean completed;
+        private final AtomicReference<SseEventBuilder> sentEvent = new AtomicReference<>();
+        private final AtomicBoolean completed = new AtomicBoolean();
 
         private TestEmitter() {
             this(null, new AtomicReference<>());
@@ -104,18 +105,18 @@ class SystemBalloonServiceTests {
             if (sendFailure != null) {
                 throw sendFailure;
             }
-            sentEvent = builder;
+            sentEvent.set(builder);
         }
 
         @Override
         public void complete() {
-            completed = true;
+            completed.set(true);
             super.complete();
         }
 
         @Override
         public void completeWithError(Throwable ex) {
-            completed = true;
+            completed.set(true);
             completionError.set(ex);
             super.completeWithError(ex);
         }

@@ -23,6 +23,7 @@ import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -267,7 +268,7 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         }
         if (options != null && options.supportsReasoning() && options.thinkingLevel() != null) {
             body.putObject("thinking").put("type", "adaptive");
-            body.putObject("output_config").put("effort", options.thinkingLevel().name().toLowerCase());
+            body.putObject("output_config").put("effort", options.thinkingLevel().name().toLowerCase(Locale.ROOT));
         }
         return body;
     }

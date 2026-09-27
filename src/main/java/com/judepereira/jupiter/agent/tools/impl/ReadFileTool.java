@@ -57,19 +57,20 @@ public class ReadFileTool implements AgentTool {
             val out = new StringBuilder();
 
             try (val br = new BufferedReader(new InputStreamReader(Files.newInputStream(p), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = br.readLine()) != null) {
+                String line = br.readLine();
+                while (line != null) {
                     read++;
-                    if (start != null && ++skipped < start) {
-                        continue;
+                    if (start != null) {
+                        skipped++;
                     }
-
-                    if (end != null && read > end) {
-                        break;
+                    if (start == null || skipped >= start) {
+                        if (end != null && read > end) {
+                            break;
+                        }
+                        out.append(line);
+                        out.append(System.lineSeparator());
                     }
-
-                    out.append(line);
-                    out.append(System.lineSeparator());
+                    line = br.readLine();
                 }
 
                 text = out.toString();

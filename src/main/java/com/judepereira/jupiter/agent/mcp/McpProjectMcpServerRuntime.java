@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 final class McpProjectMcpServerRuntime implements AutoCloseable {
     private final Persistence.McpServerView server;
@@ -18,11 +19,10 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     private final McpClientFactory clientFactory;
     private final McpRuntimeListener runtimeListener;
     private final String serverSlug;
-    private volatile McpClient client;
-    private volatile McpRuntimeEvents.ConnectionStatus status = McpRuntimeEvents.ConnectionStatus.CONNECTING;
-    private volatile String statusMessage = "connecting";
-    private volatile List<ToolDefinition> toolDefinitions = List.of();
-    private volatile Map<String, McpProjectToolExecutor> executors = Map.of();
+    private McpClient client;
+    private long listenerGeneration;
+    private final AtomicReference<State> state = new AtomicReference<>(
+            new State(McpRuntimeEvents.ConnectionStatus.CONNECTING, "connecting", List.of(), Map.of()));
 
     private McpProjectMcpServerRuntime(Persistence.McpServerView server,
             Map<String, String> projectEnvironmentVariables, McpTemplateResolver templateResolver,
@@ -49,31 +49,40 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     }
 
     synchronized void reconnect() {
+        long generation = ++listenerGeneration;
         closeClient();
         updateStatus(McpRuntimeEvents.ConnectionStatus.CONNECTING, "connecting");
         try {
             String resolvedUrl = templateResolver.resolve("MCP server URL", server.url(), projectEnvironmentVariables);
             Map<String, String> resolvedHeaders = templateResolver.resolveHeaders(server.headers(),
                     projectEnvironmentVariables);
-            client = clientFactory.create(server.name(), resolvedUrl, resolvedHeaders, new Listener());
-            refreshTools();
+            Listener listener = new Listener(generation);
+            client = clientFactory.create(server.name(), resolvedUrl, resolvedHeaders, listener);
+            if (!refreshTools(generation)) {
+                return;
+            }
             updateStatus(McpRuntimeEvents.ConnectionStatus.READY, "ready");
         } catch (McpToolCollisionException e) {
-            toolDefinitions = List.of();
-            executors = Map.of();
+            clearTools();
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
             throw e;
         } catch (Exception e) {
-            toolDefinitions = List.of();
-            executors = Map.of();
+            clearTools();
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
         }
     }
 
     synchronized void refreshTools() {
+        refreshTools(listenerGeneration);
+    }
+
+    private boolean refreshTools(long generation) {
+        if (generation != listenerGeneration) {
+            return false;
+        }
         McpClient currentClient = client;
         if (currentClient == null) {
-            return;
+            return false;
         }
         try {
             List<ToolSpecification> remoteTools = currentClient.listTools();
@@ -86,18 +95,20 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
                 }
                 nextDefinitions.add(adapter.definition());
             }
-            toolDefinitions = List.copyOf(nextDefinitions);
-            executors = Map.copyOf(nextExecutors);
+            if (generation != listenerGeneration || currentClient != client) {
+                return false;
+            }
+            publishTools(List.copyOf(nextDefinitions), Map.copyOf(nextExecutors));
             runtimeListener.onToolsChanged(server.id());
+            return true;
         } catch (McpToolCollisionException e) {
-            toolDefinitions = List.of();
-            executors = Map.of();
+            clearTools();
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
             throw e;
         } catch (Exception e) {
-            toolDefinitions = List.of();
-            executors = Map.of();
+            clearTools();
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
+            return false;
         }
     }
 
@@ -114,19 +125,21 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     }
 
     McpRuntimeEvents.ConnectionStatus status() {
-        return status;
+        return state.get().status();
     }
 
     String statusMessage() {
-        return statusMessage;
+        return state.get().statusMessage();
     }
 
     McpProjectToolSnapshot snapshot(long projectId) {
-        return new McpProjectToolSnapshot(projectId, toolDefinitions, executors);
+        State current = state.get();
+        return new McpProjectToolSnapshot(projectId, current.toolDefinitions(), current.executors());
     }
 
     @Override
     public synchronized void close() {
+        ++listenerGeneration;
         closeClient();
         updateStatus(McpRuntimeEvents.ConnectionStatus.CLOSED, "closed");
     }
@@ -143,9 +156,20 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     }
 
     private void updateStatus(McpRuntimeEvents.ConnectionStatus status, String message) {
-        this.status = status;
-        this.statusMessage = message;
+        state.updateAndGet(current -> new State(status, message, current.toolDefinitions(), current.executors()));
         runtimeListener.onStatusChanged(server.id(), status, message);
+    }
+
+    private void publishTools(List<ToolDefinition> definitions, Map<String, McpProjectToolExecutor> nextExecutors) {
+        state.updateAndGet(current -> new State(current.status(), current.statusMessage(), definitions, nextExecutors));
+    }
+
+    private void clearTools() {
+        publishTools(List.of(), Map.of());
+    }
+
+    private record State(McpRuntimeEvents.ConnectionStatus status, String statusMessage,
+            List<ToolDefinition> toolDefinitions, Map<String, McpProjectToolExecutor> executors) {
     }
 
     private static String safeMessage(Exception e) {
@@ -153,9 +177,19 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     }
 
     private final class Listener implements McpClientListener {
+        private final long generation;
+
+        private Listener(long generation) {
+            this.generation = generation;
+        }
+
         @Override
         public void onNotificationToolsListChanged() {
-            refreshTools();
+            synchronized (McpProjectMcpServerRuntime.this) {
+                if (generation == listenerGeneration) {
+                    refreshTools(generation);
+                }
+            }
         }
     }
 

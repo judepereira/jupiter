@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -255,7 +256,8 @@ public class AgentDefinitionService {
 
     private static String idToDisplayName(String id) {
         return Arrays.stream(id.split("[-_]")).filter(part -> !part.isBlank())
-                .map(part -> part.substring(0, 1).toUpperCase() + part.substring(1)).collect(Collectors.joining(" "));
+                .map(part -> part.substring(0, 1).toUpperCase(Locale.ROOT) + part.substring(1))
+                .collect(Collectors.joining(" "));
     }
 
     private static List<String> parseModels(String value, String agentId) {

@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.agent.mcp;
 
+// This class is a namespace for related runtime event types, not an instantiable utility class.
+@SuppressWarnings("PMD.MissingStaticMethodInNonInstantiatableClass")
 public final class McpRuntimeEvents {
     private McpRuntimeEvents() {
     }

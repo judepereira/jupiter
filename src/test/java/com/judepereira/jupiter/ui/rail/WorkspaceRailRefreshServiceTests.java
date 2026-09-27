@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
@@ -40,7 +41,7 @@ class WorkspaceRailRefreshServiceTests {
         service.onContextClosed(new ContextClosedEvent(mock(ApplicationContext.class)));
 
         assertThat(service.activeEmitterCount()).isZero();
-        assertThat(emitter.completed).isTrue();
+        assertThat(emitter.completed.get()).isTrue();
     }
 
     @Test
@@ -63,17 +64,17 @@ class WorkspaceRailRefreshServiceTests {
     }
 
     private static final class TestEmitter extends SseEmitter {
-        private volatile boolean completed;
+        private final AtomicBoolean completed = new AtomicBoolean();
 
         @Override
         public void complete() {
-            completed = true;
+            completed.set(true);
             super.complete();
         }
 
         @Override
         public void completeWithError(Throwable ex) {
-            completed = true;
+            completed.set(true);
             super.completeWithError(ex);
         }
 

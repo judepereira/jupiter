@@ -65,10 +65,9 @@ public class SystemPromptComposer {
                 throw new IllegalStateException("Blank required resource: " + path);
             }
             return content;
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            if (e instanceof IllegalStateException ise) {
-                throw ise;
-            }
             throw new IllegalStateException("Failed to load required resource: " + path, e);
         }
     }

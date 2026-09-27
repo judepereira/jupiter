@@ -248,12 +248,14 @@ public class UiController {
             try {
                 activeStreamRegistryService.register(assistantId, session.id(), workspaceRoot);
                 appStateService.publishWorkspaceRailRefresh();
+            } catch (RuntimeException e) {
+                activeStreams.remove(assistantId, activeStream);
+                activeStreamRegistryService.unregister(assistantId);
+                throw e;
             } catch (Exception e) {
                 activeStreams.remove(assistantId, activeStream);
                 activeStreamRegistryService.unregister(assistantId);
-                throw e instanceof RuntimeException runtime
-                        ? runtime
-                        : new IllegalStateException("Failed to queue active stream", e);
+                throw new IllegalStateException("Failed to queue active stream", e);
             }
 
             view = appStateService.loadViewData();
@@ -364,9 +366,11 @@ public class UiController {
         try {
             Thread runner = Thread.startVirtualThread(() -> runActiveStream(assistantId, active));
             active.runner().set(runner);
-        } catch (Throwable t) {
+        } catch (RuntimeException e) {
             active.started().set(false);
-            Exception e = t instanceof Exception exception ? exception : new RuntimeException(t);
+            listenerStartFailed(active, assistantId, e, emitter);
+        } catch (Exception e) {
+            active.started().set(false);
             listenerStartFailed(active, assistantId, e, emitter);
         }
     }
@@ -582,7 +586,9 @@ public class UiController {
         }
         try {
             lifecycleHookService.dispatch(event, sessionId);
-        } catch (Throwable e) {
+        } catch (RuntimeException e) {
+            log.warn("Failed to dispatch lifecycle hook: event={}, sessionId={}", event, sessionId, e);
+        } catch (Exception e) {
             log.warn("Failed to dispatch lifecycle hook: event={}, sessionId={}", event, sessionId, e);
         }
     }
@@ -705,15 +711,18 @@ public class UiController {
         }
 
         String targetAssistantId = assistantId;
-        ActiveStream active = targetAssistantId == null || targetAssistantId.isBlank()
+        Map.Entry<String, ActiveStream> selectedEntry = targetAssistantId == null || targetAssistantId.isBlank()
                 ? null
-                : activeStreams.get(targetAssistantId);
+                : Map.entry(targetAssistantId, activeStreams.get(targetAssistantId));
+        ActiveStream active = selectedEntry == null ? null : selectedEntry.getValue();
         if (active != null && active.pendingStream().sessionId() != session.id()) {
             throw new IllegalStateException("Assistant stream does not belong to the active session");
         }
         if (active == null) {
-            active = activeStreams.values().stream().filter(s -> s.pendingStream().sessionId() == session.id())
-                    .findFirst().orElse(null);
+            selectedEntry = activeStreams.entrySet().stream()
+                    .filter(entry -> entry.getValue().pendingStream().sessionId() == session.id()).findFirst()
+                    .orElse(null);
+            active = selectedEntry == null ? null : selectedEntry.getValue();
         }
         if (active == null) {
             if (targetAssistantId != null && !targetAssistantId.isBlank()) {
@@ -734,9 +743,7 @@ public class UiController {
         }
 
         if (targetAssistantId == null || targetAssistantId.isBlank()) {
-            ActiveStream targetActive = active;
-            targetAssistantId = activeStreams.entrySet().stream().filter(entry -> entry.getValue() == targetActive)
-                    .map(Map.Entry::getKey).findFirst().orElseThrow();
+            targetAssistantId = selectedEntry.getKey();
         }
         stopActiveStream(targetAssistantId, active);
         view = appStateService.loadViewData();
@@ -1744,20 +1751,22 @@ public class UiController {
         if (detail == null) {
             return null;
         }
-        for (int i = detail.chatMessages().size() - 1; i >= 0; i--) {
+        ChatMessageMetadata metadata = null;
+        for (int i = detail.chatMessages().size() - 1; i >= 0 && metadata == null; i--) {
             ChatMessageView message = detail.chatMessages().get(i);
-            if (!"assistant".equals(message.role()) || message.metadata() == null) {
-                continue;
+            if ("assistant".equals(message.role())) {
+                metadata = message.metadata();
             }
-            ChatMessageMetadata metadata = message.metadata();
-            AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
-            ModelDefinition selectedModel = resolveAgentModel(selectedAgent);
-            AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-            ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-            return new ChatSelection(selectedAgent, selectedModel, selectedAgent.defaultThinkingLevel(), false,
-                    defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
         }
-        return null;
+        if (metadata == null) {
+            return null;
+        }
+        AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
+        ModelDefinition selectedModel = resolveAgentModel(selectedAgent);
+        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+        ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
+        return new ChatSelection(selectedAgent, selectedModel, selectedAgent.defaultThinkingLevel(), false,
+                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
     }
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {
@@ -2147,7 +2156,7 @@ public class UiController {
         }
 
         static BranchMode fromValue(String value) {
-            String normalized = value.trim().toLowerCase();
+            String normalized = value.trim().toLowerCase(Locale.ROOT);
             return switch (normalized) {
                 case "create" -> CREATE;
                 case "checkout" -> CHECKOUT;

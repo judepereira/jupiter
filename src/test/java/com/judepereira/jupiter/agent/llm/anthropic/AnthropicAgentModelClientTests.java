@@ -23,19 +23,35 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Flow;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import javax.net.ssl.SSLSession;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class AnthropicAgentModelClientTests {
+    private final List<HttpClient> clients = new ArrayList<>();
+
+    @AfterEach
+    void closeClients() throws Exception {
+        for (HttpClient client : clients) {
+            client.close();
+        }
+    }
+
+    private HttpClient mockHttpClient() {
+        HttpClient client = mock(HttpClient.class);
+        clients.add(client);
+        return client;
+    }
     @Test
     void requestUsesOauthHeadersAndMapsMessages() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
             request.set(i.getArgument(0));
             return response(200,
@@ -80,7 +96,7 @@ class AnthropicAgentModelClientTests {
     @Test
     void reasoningUsesAdaptiveThinkingAndMappedEffortWithoutChangingMaxTokens() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
             request.set(i.getArgument(0));
             return response(200, "{\"content\":[],\"usage\":{}}");
@@ -98,7 +114,8 @@ class AnthropicAgentModelClientTests {
                     new AgentModelOptions("id", "claude", level, true, null));
             JsonNode body = requestBody(request.get());
             assertThat(body.path("thinking").path("type").asText()).isEqualTo("adaptive");
-            assertThat(body.path("output_config").path("effort").asText()).isEqualTo(level.name().toLowerCase());
+            assertThat(body.path("output_config").path("effort").asText())
+                    .isEqualTo(level.name().toLowerCase(Locale.ROOT));
             assertThat(body.path("max_tokens").asInt()).isEqualTo(1234);
         }
     }
@@ -106,7 +123,7 @@ class AnthropicAgentModelClientTests {
     @Test
     void reasoningFieldsAreAbsentWhenDisabled() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
             request.set(i.getArgument(0));
             return response(200, "{\"content\":[],\"usage\":{}}");
@@ -125,7 +142,7 @@ class AnthropicAgentModelClientTests {
     @Test
     void requestDisablesParallelToolUseOnlyWhenToolsArePresent() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
             request.set(i.getArgument(0));
             return response(200, "{\"content\":[],\"usage\":{}}");
@@ -149,7 +166,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void unexpectedMultipleToolCallsFailLoudly() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(200,
                 "{\"content\":[{\"type\":\"tool_use\",\"id\":\"a\",\"name\":\"one\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"b\",\"name\":\"two\",\"input\":{}}]}"));
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
@@ -163,7 +180,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void unauthorizedRequestRefreshesOnceAndRetriesExactlyOnce() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         try {
             when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(401, "rejected"),
                     response(200, "{\"content\":[],\"usage\":{}}"));
@@ -184,7 +201,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void unauthorizedRequestDoesNotRetryWhenForcedRefreshHasNoReplacement() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         try {
             when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(401, "rejected"));
         } catch (Exception e) {
@@ -203,7 +220,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void streamingUnauthorizedRequestRefreshesAndRetriesOnce() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         String stream = "event: message_stop\ndata: {\"type\":\"message_stop\"}\n";
         try {
             when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(401, Stream.of("rejected")),
@@ -225,7 +242,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void secondUnauthorizedResponseIsNotRetried() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         try {
             when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(401, "first"),
                     response(401, "second"));
@@ -264,7 +281,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void interruptedRequestRestoresInterruptAndFailsClearly() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenThrow(new InterruptedException());
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
@@ -285,7 +302,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void streamingPreservesIndexedThinkingTextToolAndRedactedBlocks() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         String s = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"i\",\"model\":\"m\",\"usage\":{\"input_tokens\":4}}}\n"
                 + "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\"}}\n"
                 + "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"plan \"}}\n"
@@ -354,7 +371,7 @@ class AnthropicAgentModelClientTests {
     }
 
     private ModelResponse streaming(String stream) {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mockHttpClient();
         try {
             when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(200, stream.lines()));
         } catch (Exception e) {

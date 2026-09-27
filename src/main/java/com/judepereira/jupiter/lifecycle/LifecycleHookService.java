@@ -82,7 +82,7 @@ public class LifecycleHookService {
                 executor.submit(() -> {
                     try {
                         result.complete(run(event, script, context, settings.timeoutSeconds()));
-                    } catch (Throwable failure) {
+                    } catch (Exception failure) {
                         log.error("Lifecycle action failed: event={}, sessionId={}, reason={}", event, sessionId,
                                 failure.getClass().getSimpleName());
                         systemBalloonService.publishError("Lifecycle action failed",

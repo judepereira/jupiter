@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -250,7 +251,7 @@ public class GitAutoUpdateService {
     }
 
     private boolean upstreamIndicatesNoUpstream(GitCommandRunner.GitCommandResult result) {
-        String text = (result.stdout() + "\n" + result.stderr()).toLowerCase();
+        String text = (result.stdout() + "\n" + result.stderr()).toLowerCase(Locale.ROOT);
         return text.contains("no upstream") || text.contains("no such ref")
                 || text.contains("does not point to a valid object");
     }

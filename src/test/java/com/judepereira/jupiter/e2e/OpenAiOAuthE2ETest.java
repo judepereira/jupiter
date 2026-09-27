@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -77,9 +78,9 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
 
             PlaywrightAssertions.assertThat(page.locator("#openai-oauth-section")).containsText("Connected.");
             assertThat(server.deviceCalls.get()).isEqualTo(1);
-            assertThat(server.deviceRequestMethod).isEqualTo("POST");
-            assertThat(server.deviceRequestBody).isNotNull();
-            assertThat(server.deviceRequestBody).contains("\"client_id\":\"e2e-client\"");
+            assertThat(server.deviceRequestMethod.get()).isEqualTo("POST");
+            assertThat(server.deviceRequestBody.get()).isNotNull();
+            assertThat(server.deviceRequestBody.get()).contains("\"client_id\":\"e2e-client\"");
             assertThat(server.authorizationCalls.get()).isGreaterThanOrEqualTo(2);
             assertThat(server.tokenCalls.get()).isEqualTo(1);
             assertThat(server.authorizationRequestBodies).hasSizeGreaterThanOrEqualTo(2);
@@ -235,8 +236,8 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
         private final CopyOnWriteArrayList<String> authorizationRequestBodies = new CopyOnWriteArrayList<>();
         private final CopyOnWriteArrayList<String> tokenRequestMethods = new CopyOnWriteArrayList<>();
         private final CopyOnWriteArrayList<String> tokenRequestBodies = new CopyOnWriteArrayList<>();
-        private volatile String deviceRequestMethod;
-        private volatile String deviceRequestBody;
+        private final AtomicReference<String> deviceRequestMethod = new AtomicReference<>();
+        private final AtomicReference<String> deviceRequestBody = new AtomicReference<>();
 
         private TestServer(HttpServer server) {
             this.server = server;
@@ -264,8 +265,8 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
         private HttpHandler deviceHandler() {
             return exchange -> {
                 deviceCalls.incrementAndGet();
-                deviceRequestMethod = exchange.getRequestMethod();
-                deviceRequestBody = readBody(exchange);
+                deviceRequestMethod.set(exchange.getRequestMethod());
+                deviceRequestBody.set(readBody(exchange));
                 respond(exchange, 200, """
                         {
                           "device_auth_id": "device-123",
