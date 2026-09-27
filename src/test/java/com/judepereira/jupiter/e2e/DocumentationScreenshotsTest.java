@@ -58,7 +58,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             "workspaces.png", "sessions-and-chat.png", "agents-models-thinking.png", "review-and-diffs.png",
             "tool-calls-and-images.png", "subagent-session.png", "terminal.png", "project-settings.png",
             "lifecycle-hooks.png", "mcp-servers.png", "openai-authentication.png", "usage-and-token-tracking.png",
-            "slash-commands.png");
+            "slash-commands.png", "settings-commands.png");
 
     private static final List<Persistence.ProjectTokenUsageHourly> FIXED_USAGE = List.of(
             new Persistence.ProjectTokenUsageHourly(Instant.parse("2026-09-08T04:00:00Z"), "openai/gpt-5.6-terra", 2,
@@ -173,6 +173,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             captureOpenAiAuthentication(app, fixture, outputDir);
             captureUsage(app, fixture, outputDir);
             captureSlashCommands(app, fixture, outputDir);
+            captureSettingsCommands(app, fixture, outputDir);
             captureTerminal(app, fixture, outputDir);
 
             verifyCatalog(outputDir);
@@ -345,6 +346,16 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             page.locator("#chat-input").fill("/");
             page.locator("#command-modal").waitFor();
             page.locator(".command-modal-item").first().waitFor();
+            settlePage(page);
+        });
+    }
+
+    private static void captureSettingsCommands(RunningApp app, Fixture fixture, Path outputDir) throws Exception {
+        captureDesktop(app, fixture, false, outputDir.resolve("settings-commands.png"), page -> {
+            openSettings(page);
+            page.locator("#settings-commands-tab").click();
+            page.locator("#settings-commands-content").waitFor();
+            page.locator(".settings-command-add").waitFor();
             settlePage(page);
         });
     }

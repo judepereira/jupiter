@@ -8,15 +8,24 @@ import org.junit.jupiter.api.Test;
 
 class RunCommandEnvironmentTest {
     @Test
-    void emptyAllowlistExposesNoHostVariables() {
-        Map<String, String> environment = RunCommandTool.buildCommandEnvironment(Map.of("HOST_ONLY", "host-value"),
-                Set.of(), Map.of());
+    void standardHostVariablesAreForwardedAutomatically() {
+        Map<String, String> environment = RunCommandTool.buildCommandEnvironment(Map.of("PATH", "/bin", "HOME",
+                "/home/test", "USER", "test", "LOGNAME", "test", "TMPDIR", "/tmp", "HOST_ONLY", "hidden"), Set.of(),
+                Map.of());
 
-        assertThat(environment).doesNotContainKey("HOST_ONLY");
+        assertThat(environment).containsEntry("PATH", "/bin").containsEntry("HOME", "/home/test")
+                .containsEntry("USER", "test").containsEntry("LOGNAME", "test").containsEntry("TMPDIR", "/tmp")
+                .doesNotContainKey("HOST_ONLY");
     }
 
     @Test
-    void allowlistPassesOnlyRequestedHostVariables() {
+    void missingStandardHostVariablesAreOmitted() {
+        assertThat(RunCommandTool.buildCommandEnvironment(Map.of("PATH", "/bin"), Set.of(), Map.of()))
+                .containsEntry("PATH", "/bin").doesNotContainKeys("HOME", "USER", "LOGNAME", "TMPDIR");
+    }
+
+    @Test
+    void allowlistPassesOnlyRequestedAdditionalHostVariables() {
         Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
                 Map.of("ALLOWED_HOST", "allowed", "OTHER_HOST", "hidden"), Set.of("ALLOWED_HOST"), Map.of());
 
