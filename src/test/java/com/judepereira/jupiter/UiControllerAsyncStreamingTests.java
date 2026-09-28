@@ -55,6 +55,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -245,7 +246,8 @@ public class UiControllerAsyncStreamingTests {
 
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                if (request.getSystemPrompt() != null && request.getSystemPrompt().toLowerCase().contains("compact")) {
+                if (request.getSystemPrompt() != null
+                        && request.getSystemPrompt().toLowerCase(Locale.ROOT).contains("compact")) {
                     return new AgentTurnResult("compact summary", List.of());
                 }
                 requests.add(request);
