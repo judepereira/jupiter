@@ -53,6 +53,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -2147,7 +2148,7 @@ public class UiController {
         }
 
         static BranchMode fromValue(String value) {
-            String normalized = value.trim().toLowerCase();
+            String normalized = value.trim().toLowerCase(Locale.ROOT);
             return switch (normalized) {
                 case "create" -> CREATE;
                 case "checkout" -> CHECKOUT;
