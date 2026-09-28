@@ -194,18 +194,11 @@ public class SubagentTaskService {
             }
             return new SubagentTaskResult(true, childSessionId, subagent.id(), subagent.name(), result.getFinalText(),
                     drafts, traces, null);
-        } catch (Exception e) {
-            String message = e instanceof StreamCancelledException
-                    ? "Action Interrupted"
-                    : (e.getMessage() == null ? e.toString() : e.getMessage());
+        } catch (StreamCancelledException e) {
+            String message = "Action Interrupted";
             if (!closed.get()) {
                 try {
-                    if (e instanceof StreamCancelledException) {
-                        appStateService.stopAssistantMessage(childSessionId, assistantPublicId, "");
-                    } else {
-                        appStateService.failAssistantMessage(childSessionId, assistantPublicId, message);
-                        hookRequired.set(true);
-                    }
+                    appStateService.stopAssistantMessage(childSessionId, assistantPublicId, "");
                 } catch (Exception ignored) {
                 }
                 sink.onError(new SubagentTaskError(childSessionId, request.parentToolCallId(), subagent.id(),
@@ -213,8 +206,22 @@ public class SubagentTaskService {
             }
             List<ChangedFileDraft> drafts = buildChangedFileDrafts(request.workspaceRoot(), changedPaths);
             persistChangedFiles(childSessionId, request.parentSessionId(), drafts);
-            if (!(e instanceof StreamCancelledException) && hookRequired.get()
-                    && hookDispatched.compareAndSet(false, true)) {
+            return new SubagentTaskResult(false, childSessionId, subagent.id(), subagent.name(), message, drafts,
+                    traces, message);
+        } catch (Exception e) {
+            String message = e.getMessage() == null ? e.toString() : e.getMessage();
+            if (!closed.get()) {
+                try {
+                    appStateService.failAssistantMessage(childSessionId, assistantPublicId, message);
+                    hookRequired.set(true);
+                } catch (Exception ignored) {
+                }
+                sink.onError(new SubagentTaskError(childSessionId, request.parentToolCallId(), subagent.id(),
+                        subagent.name(), message));
+            }
+            List<ChangedFileDraft> drafts = buildChangedFileDrafts(request.workspaceRoot(), changedPaths);
+            persistChangedFiles(childSessionId, request.parentSessionId(), drafts);
+            if (hookRequired.get() && hookDispatched.compareAndSet(false, true)) {
                 dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED,
                         request.parentSessionId());
             }
