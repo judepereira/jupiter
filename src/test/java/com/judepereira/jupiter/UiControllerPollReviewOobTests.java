@@ -28,7 +28,7 @@ public class UiControllerPollReviewOobTests {
     @Test
     public void streamingCompletion_setsChangedFilesAndSelectionWithoutOpeningReviewPanel() throws Exception {
         // prepare a harness that emits a write_file trace on completion
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
@@ -78,7 +78,7 @@ public class UiControllerPollReviewOobTests {
 
     @Test
     public void toggleReviewKeepsResponseInBand() throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
@@ -110,7 +110,7 @@ public class UiControllerPollReviewOobTests {
 
     @Test
     public void openingReviewPanelDoesNotCloseOpenTerminalBottomPanel(@TempDir Path workspaceRoot) throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {

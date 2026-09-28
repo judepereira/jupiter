@@ -4,11 +4,11 @@ package com.judepereira.jupiter.command;
  * Extracts line-oriented YAML frontmatter without applying command-specific
  * policy.
  */
-final class CommandFrontMatterExtractor {
+public final class CommandFrontMatterExtractor {
     private CommandFrontMatterExtractor() {
     }
 
-    static Result extract(String content) {
+    public static Result extract(String content) {
         if (content == null || !isDelimiterLine(content, 0)) {
             return new Result(Status.ABSENT, "", content == null ? "" : content);
         }
@@ -62,10 +62,10 @@ final class CommandFrontMatterExtractor {
         return lineEnd + (lineEnd < content.length() && content.charAt(lineEnd) == '\n' ? 1 : 2);
     }
 
-    enum Status {
+    public enum Status {
         ABSENT, COMPLETE, UNTERMINATED
     }
 
-    record Result(Status status, String yaml, String body) {
+    public record Result(Status status, String yaml, String body) {
     }
 }

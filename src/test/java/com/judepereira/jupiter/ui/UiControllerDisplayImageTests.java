@@ -60,10 +60,11 @@ class UiControllerDisplayImageTests {
         var promptComposer = new SystemPromptComposer(skillComponents.renderer());
         UiController controller = new UiController(
                 new CodingAgentHarness(null, null, new AgentProperties(), null, null,
+                        ModelCatalogTestSupport.modelCatalogService(),
                         ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null,
                         null, null, promptComposer, skillComponents.discovery(), skillComponents.resolver(),
                         skillComponents.injector()),
-                new AgentProperties(), appStateService, new AgentDefinitionService(new ObjectMapper()),
+                new AgentProperties(), appStateService, new AgentDefinitionService(new ObjectMapper()), null,
                 ModelCatalogTestSupport.modelCatalogService(),
                 ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
                 null, Mockito.mock(AnthropicOAuthService.class),

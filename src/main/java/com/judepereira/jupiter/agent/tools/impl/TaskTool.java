@@ -2,6 +2,7 @@ package com.judepereira.jupiter.agent.tools.impl;
 
 import static com.judepereira.jupiter.agent.llm.dto.ToolParameter.string;
 
+import com.judepereira.jupiter.agent.catalog.AgentCatalogSnapshot;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
@@ -28,7 +29,11 @@ public class TaskTool implements AgentTool {
 
     @Override
     public ToolDefinition definition() {
-        return ToolDefinition.builtIn("task", buildDescription(),
+        return definition(null);
+    }
+
+    public ToolDefinition definition(AgentCatalogSnapshot snapshot) {
+        return ToolDefinition.builtIn("task", buildDescription(snapshot),
                 ToolSchema
                         .object(string("agentId", "subagent id to run"),
                                 string("requestSummary", "concise summary of the request for UI display"),
@@ -58,37 +63,36 @@ public class TaskTool implements AgentTool {
         }
 
         try {
-            var result = subagentTaskService
-                    .runTask(
-                            new SubagentTaskService.SubagentTaskRequest(context.getSessionId(), context.getToolCallId(),
-                                    context.getWorkspaceRoot().toString(), agentId, requestSummary, task,
-                                    expectedOutput, context.getCancellationToken()),
-                            new SubagentTaskService.SubagentTaskStreamListener() {
-                                @Override
-                                public void onStarted(SubagentTaskService.SubagentTaskStarted event) {
-                                    context.getProgressSink().emit("subagent_started", event);
-                                }
+            var result = subagentTaskService.runTask(
+                    new SubagentTaskService.SubagentTaskRequest(context.getSessionId(), context.getToolCallId(),
+                            context.getWorkspaceRoot().toString(), agentId, requestSummary, task, expectedOutput,
+                            context.getCancellationToken(), context.getCatalogSnapshot(), context.getEffectiveAgent()),
+                    new SubagentTaskService.SubagentTaskStreamListener() {
+                        @Override
+                        public void onStarted(SubagentTaskService.SubagentTaskStarted event) {
+                            context.getProgressSink().emit("subagent_started", event);
+                        }
 
-                                @Override
-                                public void onTextDelta(SubagentTaskService.SubagentTaskTextDelta event) {
-                                    context.getProgressSink().emit("subagent_delta", event);
-                                }
+                        @Override
+                        public void onTextDelta(SubagentTaskService.SubagentTaskTextDelta event) {
+                            context.getProgressSink().emit("subagent_delta", event);
+                        }
 
-                                @Override
-                                public void onToolCall(SubagentTaskService.SubagentTaskToolCall event) {
-                                    context.getProgressSink().emit("subagent_tool_call", event);
-                                }
+                        @Override
+                        public void onToolCall(SubagentTaskService.SubagentTaskToolCall event) {
+                            context.getProgressSink().emit("subagent_tool_call", event);
+                        }
 
-                                @Override
-                                public void onComplete(SubagentTaskService.SubagentTaskCompleted event) {
-                                    context.getProgressSink().emit("subagent_done", event);
-                                }
+                        @Override
+                        public void onComplete(SubagentTaskService.SubagentTaskCompleted event) {
+                            context.getProgressSink().emit("subagent_done", event);
+                        }
 
-                                @Override
-                                public void onError(SubagentTaskService.SubagentTaskError event) {
-                                    context.getProgressSink().emit("subagent_error", event);
-                                }
-                            });
+                        @Override
+                        public void onError(SubagentTaskService.SubagentTaskError event) {
+                            context.getProgressSink().emit("subagent_error", event);
+                        }
+                    });
 
             Map<String, Object> machine = new LinkedHashMap<>();
             machine.put("subagentSessionId", result.childSessionId());
@@ -106,8 +110,9 @@ public class TaskTool implements AgentTool {
         }
     }
 
-    private String buildDescription() {
-        List<String> subagents = agentDefinitionService.listSubagents().stream()
+    private String buildDescription(AgentCatalogSnapshot snapshot) {
+        List<String> subagents = (snapshot == null ? agentDefinitionService.listSubagents() : snapshot.agents())
+                .stream().filter(agent -> agent.mode() == AgentMode.SUBAGENT)
                 .map(agent -> agent.name() + " (" + agent.id() + ") - " + agent.description()).toList();
         return subagents.isEmpty()
                 ? "Run a hidden subagent task. No subagents are available."

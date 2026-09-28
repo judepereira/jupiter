@@ -32,7 +32,7 @@ public class UiControllerReviewFileTests {
 
         AgentProperties props = new AgentProperties();
         UiController controller = TestAppStateSupport.controller(new CodingAgentHarness(null, null, props, null, null,
-                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                null, null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()), props);
         AppStateService appStateService = appStateService(controller);
@@ -73,7 +73,7 @@ public class UiControllerReviewFileTests {
 
         AgentProperties props = new AgentProperties();
         UiController controller = TestAppStateSupport.controller(new CodingAgentHarness(null, null, props, null, null,
-                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                null, null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()), props);
         AppStateService appStateService = appStateService(controller);

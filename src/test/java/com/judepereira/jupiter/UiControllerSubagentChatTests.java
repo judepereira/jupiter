@@ -166,7 +166,7 @@ public class UiControllerSubagentChatTests {
         props.setWorkspaceRoot(workspaceRoot.toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
         TerminalStateService terminalStateService = new TerminalStateService();
-        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
@@ -176,7 +176,7 @@ public class UiControllerSubagentChatTests {
         var contextCompactionService = TestAppStateSupport.contextCompactionService(appStateService);
         var openAiOAuthService = new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(),
                 HttpClient.newHttpClient(), mock(AppStateRepository.class), null);
-        return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
+        return new UiController(harness, props, appStateService, agentDefinitionService, null, modelCatalog,
                 ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
                 Mockito.mock(AnthropicOAuthService.class), balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),

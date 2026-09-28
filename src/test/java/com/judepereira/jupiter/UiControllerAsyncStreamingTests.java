@@ -2,11 +2,14 @@ package com.judepereira.jupiter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentCatalogSnapshot;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.ExternalAgentCatalogService;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
@@ -64,6 +67,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -77,7 +81,7 @@ public class UiControllerAsyncStreamingTests {
     @Test
     public void sendReturnsQuickly_withPending_andDoesNotRunHarnessSynchronously() throws Exception {
         AtomicBoolean runCalled = new AtomicBoolean(false);
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
@@ -132,7 +136,7 @@ public class UiControllerAsyncStreamingTests {
             final CountDownLatch secondTurnCompleted = new CountDownLatch(1);
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, null,
+                super(null, null, null, null, null, null, null, null, null, null,
                         new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                         SkillTestSupport.defaultComponents().discovery(),
                         SkillTestSupport.defaultComponents().resolver(),
@@ -191,7 +195,7 @@ public class UiControllerAsyncStreamingTests {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, null,
+                super(null, null, null, null, null, null, null, null, null, null,
                         new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                         SkillTestSupport.defaultComponents().discovery(),
                         SkillTestSupport.defaultComponents().resolver(),
@@ -236,7 +240,7 @@ public class UiControllerAsyncStreamingTests {
             final List<AgentTurnRequest> requests = new ArrayList<>();
 
             RecordingHarness() {
-                super(null, null, null, null, null, null, null, null, null,
+                super(null, null, null, null, null, null, null, null, null, null,
                         new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                         SkillTestSupport.defaultComponents().discovery(),
                         SkillTestSupport.defaultComponents().resolver(),
@@ -321,8 +325,13 @@ public class UiControllerAsyncStreamingTests {
                 return Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 7L));
             }
         };
-        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+        ExternalAgentCatalogService externalCatalog = mock(ExternalAgentCatalogService.class);
+        when(externalCatalog.snapshot(ArgumentMatchers.any(Path.class))).thenReturn(new AgentCatalogSnapshot(
+                List.of(new AgentDefinition("plan", "Plan", "", "", AgentMode.AGENT, agent.modelIds(),
+                        ThinkingLevel.MEDIUM, "low", true, true, agent.allowedTools()), agent),
+                Map.of(), List.of(), Map.of()));
+        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, externalCatalog,
+                modelCatalog, ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
                 mock(AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
@@ -467,12 +476,17 @@ public class UiControllerAsyncStreamingTests {
         props.setMaxIterations(5);
         props.getTooling().setAllowWrite(true);
 
+        ExternalAgentCatalogService externalCatalog = mock(ExternalAgentCatalogService.class);
+        when(externalCatalog.snapshot(ArgumentMatchers.any(Path.class))).thenReturn(new AgentCatalogSnapshot(
+                List.of(new AgentDefinition("plan", "Plan", "", "", AgentMode.AGENT, agent.modelIds(),
+                        ThinkingLevel.MEDIUM, "low", true, true, agent.allowedTools()), agent),
+                Map.of(), List.of(), Map.of()));
         CodingAgentHarness harness = new CodingAgentHarness(new AgentModelClientFactory(null) {
             @Override
             public AgentModelClient getClient(String provider) {
                 return model;
             }
-        }, registry, props, agentDefinitionService, modelCatalog,
+        }, registry, props, agentDefinitionService, externalCatalog, modelCatalog,
                 ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
@@ -498,8 +512,8 @@ public class UiControllerAsyncStreamingTests {
             }
         };
 
-        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, externalCatalog,
+                modelCatalog, ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
                 mock(AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
@@ -530,7 +544,7 @@ public class UiControllerAsyncStreamingTests {
 
     @Test
     public void streaming_preserves_spaces_and_newlines_in_final_text() throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
@@ -643,7 +657,7 @@ public class UiControllerAsyncStreamingTests {
     public void streaming_error_normalizes_openai_json_message() throws Exception {
         String quotaJson = "{\"error\":{\"message\":\"You exceeded your current quota, please check your plan and billing details.\",\"type\":\"insufficient_quota\",\"param\":null,\"code\":\"insufficient_quota\"}}";
 
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
@@ -723,7 +737,7 @@ public class UiControllerAsyncStreamingTests {
     public void streaming_error_normalizes_nested_openai_token_expired_json() throws Exception {
         String nestedJson = "{\"error\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"},\"detail\":{\"message\":\"OpenAI streaming request failed\",\"code\":\"token_expired\"}}";
 
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
@@ -765,7 +779,7 @@ public class UiControllerAsyncStreamingTests {
 
     @Test
     public void stopChatCancelsInFlightStreamAndPersistsStoppedAssistantMessage(@TempDir Path tmp) throws Exception {
-        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {

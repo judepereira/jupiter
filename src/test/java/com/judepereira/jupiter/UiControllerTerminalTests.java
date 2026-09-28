@@ -409,7 +409,7 @@ public class UiControllerTerminalTests {
 
         private UiController controller() {
             return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
-                    new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                    new AgentDefinitionService(new ObjectMapper()), null, ModelCatalogTestSupport.modelCatalogService(),
                     ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null,
                     null, null, Mockito.mock(AnthropicOAuthService.class),
                     new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),

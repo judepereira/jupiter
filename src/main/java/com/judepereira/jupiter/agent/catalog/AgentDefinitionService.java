@@ -2,9 +2,11 @@ package com.judepereira.jupiter.agent.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import com.judepereira.jupiter.command.CommandFrontMatterExtractor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -94,15 +96,15 @@ public class AgentDefinitionService {
     static AgentDefinition loadAgent(Resource resource) {
         try (InputStream inputStream = resource.getInputStream()) {
             var content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-            var frontMatter = parseFrontMatter(resource, content);
-            var metadata = YAML_MAPPER.readValue(frontMatter.yaml(), FrontMatter.class);
+            var parsed = parseContent(content);
+            var metadata = YAML_MAPPER.readValue(parsed.yaml(), FrontMatter.class);
             var id = resolveId(resource, metadata.id());
             var name = resolveName(id, metadata.name());
             var allowedTools = resolveAllowedTools(metadata.tools(), id, metadata.mode());
             var allowWrite = allowedTools.contains("write_file") || allowedTools.contains("apply_patch");
             var allowCommand = allowedTools.contains("run_command");
             validateRequiredFields(metadata, id);
-            return new AgentDefinition(id, name, metadata.description(), frontMatter.body(), metadata.mode(),
+            return new AgentDefinition(id, name, metadata.description(), parsed.body(), metadata.mode(),
                     parseModels(metadata.model(), id), metadata.reasoningEffort(), metadata.textVerbosity(), allowWrite,
                     allowCommand, allowedTools);
         } catch (IOException e) {
@@ -114,50 +116,12 @@ public class AgentDefinitionService {
         }
     }
 
-    private static FrontMatterAndBody parseFrontMatter(Resource resource, String content) {
-        if (!content.startsWith("---")) {
-            throw new IllegalStateException("Missing YAML frontmatter in classpath:" + resourceSortKey(resource));
+    static FrontMatterAndBody parseContent(String content) {
+        var extracted = CommandFrontMatterExtractor.extract(content);
+        if (extracted.status() != CommandFrontMatterExtractor.Status.COMPLETE) {
+            throw new IllegalStateException("Missing or unterminated YAML frontmatter");
         }
-
-        int firstLineEnd = lineEnd(content, 0);
-        if (!stripTrailingCarriageReturn(content.substring(0, firstLineEnd)).equals("---")) {
-            throw new IllegalStateException("Malformed YAML frontmatter in classpath:" + resourceSortKey(resource));
-        }
-
-        int frontMatterStart = nextLineStart(content, firstLineEnd);
-        int frontMatterEnd = findClosingFrontMatterDelimiter(content, frontMatterStart, resource);
-        var yaml = content.substring(frontMatterStart, frontMatterEnd);
-        var bodyStart = nextLineStart(content, frontMatterEnd + 3);
-        var body = bodyStart >= content.length() ? "" : content.substring(bodyStart);
-        return new FrontMatterAndBody(yaml, trimTrailingLineBreak(trimLeadingLineBreak(body)));
-    }
-
-    private static int findClosingFrontMatterDelimiter(String content, int start, Resource resource) {
-        int index = start;
-        while (index <= content.length()) {
-            int lineEnd = lineEnd(content, index);
-            if (stripTrailingCarriageReturn(content.substring(index, lineEnd)).equals("---")) {
-                return index;
-            }
-            if (lineEnd == content.length()) {
-                break;
-            }
-            index = nextLineStart(content, lineEnd);
-        }
-        throw new IllegalStateException(
-                "Missing closing YAML frontmatter delimiter in classpath:" + resourceSortKey(resource));
-    }
-
-    private static int lineEnd(String content, int start) {
-        int newline = content.indexOf('\n', start);
-        return newline == -1 ? content.length() : newline;
-    }
-
-    private static int nextLineStart(String content, int lineEnd) {
-        if (lineEnd >= content.length()) {
-            return content.length();
-        }
-        return lineEnd + 1;
+        return new FrontMatterAndBody(extracted.yaml(), trimTrailingLineBreak(trimLeadingLineBreak(extracted.body())));
     }
 
     private static String trimLeadingLineBreak(String body) {
@@ -178,10 +142,6 @@ public class AgentDefinitionService {
             return body.substring(0, body.length() - 1);
         }
         return body;
-    }
-
-    private static String stripTrailingCarriageReturn(String line) {
-        return line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
     }
 
     private static String resourceSortKey(Resource resource) {
@@ -219,14 +179,21 @@ public class AgentDefinitionService {
             throw new IllegalStateException("tools is required for agent: " + agentId);
         }
         if (Boolean.TRUE.equals(tools.get("*"))) {
-            return mode == AgentMode.SUBAGENT
-                    ? List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "display_image",
-                            "run_command", "mcp:*")
-                    : List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "display_image",
-                            "run_command", "mcp:*", "task");
+            var potential = new ArrayList<>(List.of("list_files", "read_file", "search_code", "write_file",
+                    "apply_patch", "display_image", "run_command", "mcp:*"));
+            if (mode == AgentMode.AGENT)
+                potential.add("task");
+            tools.keySet().forEach(AgentDefinitionService::validateToolName);
+            tools.forEach((tool, enabled) -> {
+                if (Boolean.FALSE.equals(enabled))
+                    potential.remove(tool);
+            });
+            return List.copyOf(potential);
         }
         List<String> allowed = tools.entrySet().stream().filter(entry -> Boolean.TRUE.equals(entry.getValue()))
                 .map(Map.Entry::getKey).peek(AgentDefinitionService::validateToolName).toList();
+        tools.keySet().stream().filter(tool -> !Boolean.TRUE.equals(tools.get(tool)))
+                .forEach(AgentDefinitionService::validateToolName);
         if (mode == AgentMode.SUBAGENT && allowed.contains("task")) {
             throw new IllegalStateException("task is not allowed for subagent: " + agentId);
         }
@@ -237,7 +204,7 @@ public class AgentDefinitionService {
         if (tool == null || tool.isBlank()) {
             throw new IllegalStateException("tools contains a blank tool");
         }
-        if ("mcp:*".equals(tool)) {
+        if ("mcp:*".equals(tool) || "*".equals(tool)) {
             return;
         }
         if (!SUPPORTED_TOOLS.contains(tool)) {
@@ -319,7 +286,7 @@ public class AgentDefinitionService {
         }
     }
 
-    private record FrontMatterAndBody(String yaml, String body) {
+    static record FrontMatterAndBody(String yaml, String body) {
     }
 
     private record FrontMatter(String id, String name, String description, AgentMode mode, String model,

@@ -364,7 +364,7 @@ public class UiControllerProjectsAndDirectoryTests {
 
     private static UiController newController() {
         return TestAppStateSupport.controller(new CodingAgentHarness(null, null, null, null, null, null, null, null,
-                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
             @Override
@@ -453,7 +453,7 @@ public class UiControllerProjectsAndDirectoryTests {
         private final List<AgentTurnRequest> requests = new ArrayList<>();
 
         private RecordingHarness() {
-            super(null, null, null, null, null, null, null, null, null,
+            super(null, null, null, null, null, null, null, null, null, null,
                     new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                     SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                     SkillTestSupport.defaultComponents().injector());

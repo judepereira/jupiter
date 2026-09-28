@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentDefinition;
+import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
@@ -15,6 +17,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.agent.tools.impl.WriteFileTool;
+import com.judepereira.jupiter.testsupport.ExternalAgentCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
 import java.nio.file.Files;
@@ -28,6 +31,31 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 public class CodingAgentHarnessFakeModelTest {
+
+    private static AgentDefinitionService testAgentDefinitions() {
+        AgentDefinitionService bundled = new AgentDefinitionService(new ObjectMapper());
+        var plan = bundled.getRequired("plan");
+        var fixture = new AgentDefinition(plan.id(), plan.name(), plan.description(), "sys", plan.mode(),
+                plan.modelIds(), plan.defaultThinkingLevel(), plan.textVerbosity(), true, true,
+                List.of("list_files", "read_file", "search_code", "write_file", "apply_patch", "display_image",
+                        "run_command", "task"));
+        return new AgentDefinitionService(new ObjectMapper()) {
+            @Override
+            public List<AgentDefinition> list() {
+                return List.of(fixture);
+            }
+
+            @Override
+            public AgentDefinition defaultAgent() {
+                return fixture;
+            }
+
+            @Override
+            public AgentDefinition getRequired(String id) {
+                return fixture;
+            }
+        };
+    }
 
     private static AgentModelClientFactory fakeFactory(AgentModelClient client) {
         return new AgentModelClientFactory(null) {
@@ -72,7 +100,8 @@ public class CodingAgentHarnessFakeModelTest {
         props.setMaxIterations(1);
         props.setWorkspaceRoot(tmp.toString());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), new ToolRegistry(), props, null, null,
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), new ToolRegistry(), props,
+                testAgentDefinitions(), ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null,
                 null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
@@ -115,8 +144,9 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, testAgentDefinitions(),
+                ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
@@ -169,8 +199,9 @@ public class CodingAgentHarnessFakeModelTest {
         props.getTooling().setAllowWrite(true);
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, testAgentDefinitions(),
+                ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
         assertEquals("done",
@@ -200,8 +231,9 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, testAgentDefinitions(),
+                ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)), null,
@@ -228,8 +260,9 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, testAgentDefinitions(),
+                ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
         var res = harness.runTurn(new AgentTurnRequest("s",
@@ -255,8 +288,9 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, testAgentDefinitions(),
+                ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
         var res = harness.runTurn(new AgentTurnRequest("s",
@@ -289,7 +323,8 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         props.setMaxIterations(5);
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props, null, null,
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props,
+                testAgentDefinitions(), ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null,
                 null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
@@ -331,8 +366,9 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, testAgentDefinitions(),
+                ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
@@ -382,7 +418,8 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
         props.setMaxIterations(5);
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props, null, null,
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props,
+                testAgentDefinitions(), ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null,
                 null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
@@ -416,8 +453,9 @@ public class CodingAgentHarnessFakeModelTest {
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, testAgentDefinitions(),
+                ExternalAgentCatalogTestSupport.service(testAgentDefinitions(), tmp), null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
         var res = harness.runTurn(new AgentTurnRequest("sys",

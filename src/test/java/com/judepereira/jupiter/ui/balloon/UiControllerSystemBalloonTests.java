@@ -73,7 +73,7 @@ class UiControllerSystemBalloonTests {
         OpenAiOAuthService openAiOAuthService = mock(OpenAiOAuthService.class);
         ModelCatalogService modelCatalogService = ModelCatalogTestSupport.modelCatalogService();
         return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
-                new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
+                new AgentDefinitionService(new ObjectMapper()), null, modelCatalogService,
                 ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null, null, null, balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),

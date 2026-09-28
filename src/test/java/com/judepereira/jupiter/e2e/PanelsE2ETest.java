@@ -165,7 +165,7 @@ class PanelsE2ETest extends E2ETestSupport {
         static class TestCodingAgentHarness extends CodingAgentHarness {
 
             TestCodingAgentHarness() {
-                super(null, null, null, null, null, null, null, null, null,
+                super(null, null, null, null, null, null, null, null, null, null,
                         new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                         SkillTestSupport.defaultComponents().discovery(),
                         SkillTestSupport.defaultComponents().resolver(),

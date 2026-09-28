@@ -17,6 +17,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.agent.tools.impl.WriteFileTool;
+import com.judepereira.jupiter.testsupport.ExternalAgentCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import java.nio.file.Path;
@@ -85,7 +86,8 @@ class TokenUsageLifecycleAndHarnessTests {
                         metadata(10, 4, 14), null),
                 new ModelResponse("final response", null, metadata(15, 6, 21), null)));
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties,
-                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                new AgentDefinitionService(new ObjectMapper()), ExternalAgentCatalogTestSupport.bundled(workspacePath),
+                ModelCatalogTestSupport.modelCatalogService(),
                 ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
                 appStateService, tokenUsageService, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
