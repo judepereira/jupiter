@@ -5,6 +5,7 @@ import com.judepereira.jupiter.agent.config.OpenAiProperties;
 import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
+import com.judepereira.jupiter.agent.llm.ModelRetryExecutor;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
@@ -38,7 +39,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -61,6 +61,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     private final OpenAiOAuthService openAiOAuthService;
     private final LangChain4jChatRequestFactory chatRequestFactory;
     private final LangChain4jMessageMapper messageMapper;
+    private final ModelRetryExecutor retryExecutor;
     private final Map<String, ChatModel> chatModels = new ConcurrentHashMap<>();
     private final Map<String, StreamingChatModel> streamingChatModels = new ConcurrentHashMap<>();
 
@@ -70,6 +71,9 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         this.openAiProperties = openAiProperties;
         this.agentProperties = agentProperties;
         this.openAiOAuthService = openAiOAuthService;
+        AgentProperties.Retry retry = agentProperties.getRetry();
+        this.retryExecutor = new ModelRetryExecutor(retry.getMaxRetries(), retry.getInitialBackoff(),
+                retry.getMaxBackoff());
         this.messageMapper = new LangChain4jMessageMapper(new ToolArgumentsCodec());
         this.chatRequestFactory = new LangChain4jChatRequestFactory(messageMapper,
                 new LangChain4jToolSpecificationMapper(), new OpenAiRequestParametersMapper());
@@ -86,8 +90,8 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         ResolvedAuth auth = resolveAuth();
         ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools,
                 options);
-        return executeWithRetry(() -> messageMapper.toModelResponse(chatModel(modelName, auth).chat(request)),
-                "OpenAI request failed");
+        return retryExecutor.execute(() -> messageMapper.toModelResponse(chatModel(modelName, auth).chat(request)),
+                OpenAiAgentModelClient::isRetryable, "OpenAI", "request", null, "OpenAI request failed");
     }
 
     @Override
@@ -97,7 +101,19 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         ResolvedAuth auth = resolveAuth();
         ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools,
                 options);
-        return executeStreamingWithRetry(modelName, auth, request, onDelta);
+        return retryExecutor.executeStreaming(() -> {
+            StreamingAttemptState state = new StreamingAttemptState(onDelta);
+            try {
+                streamingChatModel(modelName, auth).chat(request, state.handler());
+                state.await();
+            } catch (Exception failure) {
+                return new ModelRetryExecutor.StreamingAttemptResult<>(null, failure, !state.canRetry());
+            }
+            if (state.error() != null) {
+                return new ModelRetryExecutor.StreamingAttemptResult<>(null, state.error(), !state.canRetry());
+            }
+            return new ModelRetryExecutor.StreamingAttemptResult<>(state.finish(), null, false);
+        }, OpenAiAgentModelClient::isRetryable, "OpenAI", "streaming", modelName, "OpenAI streaming request failed");
     }
 
     @Override
@@ -106,78 +122,17 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         return chatStreaming(conversation, tools, null, onDelta);
     }
 
-    private ModelResponse executeStreamingWithRetry(String modelName, ResolvedAuth auth, ChatRequest request,
-            Consumer<String> onDelta) {
-        OpenAiRetryPolicy retryPolicy = retryPolicy();
-        int retriesUsed = 0;
-        while (true) {
-            StreamingAttemptState attemptState = new StreamingAttemptState(onDelta);
-            try {
-                streamingChatModel(modelName, auth).chat(request, attemptState.handler());
-                attemptState.await();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("OpenAI streaming request interrupted", e);
-            } catch (StreamCancelledException e) {
-                throw e;
-            } catch (Exception e) {
-                retryPolicy.propagateNestedSpecialCause(e, "OpenAI streaming request interrupted");
-                if (attemptState.canRetry() && retryPolicy.canRetry(e, retriesUsed)) {
-                    retriesUsed++;
-                    retryPolicy.logRetry("streaming", modelName, retriesUsed, e);
-                    retryPolicy.sleepOrThrow(retriesUsed, "OpenAI streaming request interrupted");
-                    continue;
-                }
-                throw attemptState.streamingFailure(e);
-            }
-
-            Throwable handlerError = attemptState.error();
-            if (handlerError == null) {
-                return attemptState.finish();
-            }
-            if (handlerError instanceof Error error) {
-                throw error;
-            }
-            if (handlerError instanceof StreamCancelledException cancelled) {
-                throw cancelled;
-            }
-            retryPolicy.propagateNestedSpecialCause(handlerError, "OpenAI streaming request interrupted");
-            if (attemptState.canRetry() && retryPolicy.canRetry(handlerError, retriesUsed)) {
-                retriesUsed++;
-                retryPolicy.logRetry("streaming", modelName, retriesUsed, handlerError);
-                retryPolicy.sleepOrThrow(retriesUsed, "OpenAI streaming request interrupted");
-                continue;
-            }
-            throw attemptState.streamingFailure(handlerError);
+    private static boolean isRetryable(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            if (current instanceof StreamCancelledException)
+                return false;
+            if (current instanceof NonRetriableException)
+                return false;
+            if (current instanceof HttpException http && http.statusCode() >= 400 && http.statusCode() < 500
+                    && http.statusCode() != 408 && http.statusCode() != 429)
+                return false;
         }
-    }
-
-    private <T> T executeWithRetry(Callable<T> operation, String failureMessage) {
-        OpenAiRetryPolicy retryPolicy = retryPolicy();
-        int retriesUsed = 0;
-        while (true) {
-            try {
-                return operation.call();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException(failureMessage, e);
-            } catch (StreamCancelledException e) {
-                throw e;
-            } catch (Exception e) {
-                retryPolicy.propagateNestedSpecialCause(e, failureMessage);
-                if (retryPolicy.canRetry(e, retriesUsed)) {
-                    retriesUsed++;
-                    retryPolicy.logRetry("request", null, retriesUsed, e);
-                    retryPolicy.sleepOrThrow(retriesUsed, failureMessage);
-                    continue;
-                }
-                throw new IllegalStateException(failureMessage, e);
-            }
-        }
-    }
-
-    private OpenAiRetryPolicy retryPolicy() {
-        return new OpenAiRetryPolicy(openAiProperties.getRetry());
+        return true;
     }
 
     private ChatModel chatModel(String modelName) {
@@ -340,83 +295,6 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         }
     }
 
-    private final class OpenAiRetryPolicy {
-        private final int maxRetries;
-        private final Duration initialBackoff;
-        private final Duration maxBackoff;
-
-        private OpenAiRetryPolicy(OpenAiProperties.Retry retry) {
-            this.maxRetries = Math.max(0, retry.getMaxRetries());
-            this.initialBackoff = requireDuration(retry.getInitialBackoff(), "initial backoff");
-            this.maxBackoff = requireDuration(retry.getMaxBackoff(), "max backoff");
-            if (maxBackoff.compareTo(initialBackoff) < 0) {
-                throw new IllegalArgumentException("max backoff must not be smaller than initial backoff");
-            }
-        }
-
-        private static Duration requireDuration(Duration duration, String name) {
-            if (duration == null || duration.isNegative()) {
-                throw new IllegalArgumentException(name + " must not be null or negative");
-            }
-            return duration;
-        }
-
-        private void sleepOrThrow(int retryNumber, String failureMessage) {
-            try {
-                Thread.sleep(backoffMillis(retryNumber));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException(failureMessage, e);
-            }
-        }
-
-        private boolean canRetry(Throwable throwable, int retriesUsed) {
-            return retriesUsed < maxRetries && !isKnownDeterministicFailure(throwable);
-        }
-
-        private void propagateNestedSpecialCause(Throwable throwable, String failureMessage) {
-            Throwable current = throwable;
-            while (current != null) {
-                if (current instanceof StreamCancelledException cancelled) {
-                    throw cancelled;
-                }
-                if (current instanceof Error error) {
-                    throw error;
-                }
-                if (current instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException(failureMessage, throwable);
-                }
-                current = current.getCause();
-            }
-        }
-
-        private void logRetry(String operation, String modelName, int attempt, Throwable throwable) {
-            log.warn("OpenAI {} retry attempt={}/{} delay={}ms model={} exception={}", operation, attempt, maxRetries,
-                    backoffMillis(attempt), modelName == null ? "-" : modelName, throwable.getClass().getName());
-        }
-
-        private long backoffMillis(int retryNumber) {
-            return OpenAiAgentModelClient.calculateBackoffMillis(initialBackoff, maxBackoff, retryNumber);
-        }
-
-        private static boolean isKnownDeterministicFailure(Throwable throwable) {
-            Throwable current = throwable;
-            while (current != null) {
-                if (current instanceof NonRetriableException
-                        || (current instanceof HttpException http && isDeterministicClientStatus(http.statusCode()))) {
-                    return true;
-                }
-                current = current.getCause();
-            }
-            return false;
-        }
-
-        private static boolean isDeterministicClientStatus(int statusCode) {
-            return statusCode >= 400 && statusCode < 500 && statusCode != 408 && statusCode != 429;
-        }
-    }
-
     private final class StreamingAttemptState {
         private final Consumer<String> onDelta;
         private final AtomicBoolean observedPartial = new AtomicBoolean();
@@ -436,8 +314,11 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 public void onPartialResponse(String partialResponse) {
                     if (partialResponse != null && !partialResponse.isEmpty()) {
                         observedPartial.set(true);
-                        if (onDelta != null) {
-                            onDelta.accept(partialResponse);
+                        try {
+                            if (onDelta != null)
+                                onDelta.accept(partialResponse);
+                        } catch (Throwable failure) {
+                            fail(failure);
                         }
                     }
                 }
@@ -445,24 +326,39 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 @Override
                 public void onCompleteToolCall(CompleteToolCall completeToolCall) {
                     observedToolCall.set(true);
-                    toolCall.compareAndSet(null, messageMapper.toToolCall(completeToolCall.toolExecutionRequest()));
+                    try {
+                        toolCall.compareAndSet(null, messageMapper.toToolCall(completeToolCall.toolExecutionRequest()));
+                    } catch (Throwable failure) {
+                        fail(failure);
+                    }
                 }
 
                 @Override
                 public void onCompleteResponse(ChatResponse chatResponse) {
-                    response.set(messageMapper.toModelResponse(chatResponse));
-                    if (toolCall.get() == null && response.get() != null) {
-                        toolCall.compareAndSet(null, response.get().getToolCall());
+                    try {
+                        ModelResponse mapped = messageMapper.toModelResponse(chatResponse);
+                        if (error.get() == null) {
+                            response.compareAndSet(null, mapped);
+                            if (toolCall.get() == null && mapped != null)
+                                toolCall.compareAndSet(null, mapped.getToolCall());
+                        }
+                    } catch (Throwable failure) {
+                        fail(failure);
+                    } finally {
+                        done.countDown();
                     }
-                    done.countDown();
                 }
 
                 @Override
                 public void onError(Throwable throwable) {
-                    error.set(throwable);
-                    done.countDown();
+                    fail(throwable);
                 }
             };
+        }
+
+        private void fail(Throwable failure) {
+            error.compareAndSet(null, failure);
+            done.countDown();
         }
 
         private void await() throws InterruptedException {

@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.agent.config;
 
+import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "agent")
@@ -13,6 +14,14 @@ public class AgentProperties {
     private int commandTimeoutSeconds = 600;
     private String workspaceRoot = ".";
     private Tooling tooling = new Tooling();
+    private Retry retry = new Retry();
+
+    @Data
+    public static class Retry {
+        private int maxRetries = 10;
+        private Duration initialBackoff = Duration.ofSeconds(1);
+        private Duration maxBackoff = Duration.ofSeconds(120);
+    }
 
     @Data
     public static class Tooling {

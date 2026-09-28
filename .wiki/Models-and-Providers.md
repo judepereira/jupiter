@@ -39,6 +39,10 @@ outages.
 An explicit model selection is strict: if that provider or model is unavailable, the turn fails instead of silently
 switching models.
 
+OpenAI and Anthropic requests share bounded retries. Configure them with `agent.retry.max-retries`,
+`agent.retry.initial-backoff`, and `agent.retry.max-backoff`. Known deterministic failures are not retried, and a stream
+is not restarted after it has already made progress.
+
 ## Thinking Level
 
 The composer lets you choose a thinking level for a primary turn. Supported models receive that level when the request
