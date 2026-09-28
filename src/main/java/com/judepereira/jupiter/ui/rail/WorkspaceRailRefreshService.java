@@ -76,10 +76,15 @@ public class WorkspaceRailRefreshService {
         for (SseEmitter emitter : emitters) {
             try {
                 eventSender.send(emitter, eventName, data);
-            } catch (Exception e) {
-                if (!(e instanceof AsyncRequestNotUsableException)) {
-                    log.error("Failed to send workspace rail refresh to SSE client", e);
+            } catch (AsyncRequestNotUsableException e) {
+                disconnect(emitter);
+                try {
+                    emitter.completeWithError(e);
+                } catch (Exception completionError) {
+                    log.error("Failed to close failed workspace rail SSE client", completionError);
                 }
+            } catch (Exception e) {
+                log.error("Failed to send workspace rail refresh to SSE client", e);
                 disconnect(emitter);
                 try {
                     emitter.completeWithError(e);

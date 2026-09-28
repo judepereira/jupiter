@@ -132,13 +132,22 @@ abstract class E2ETestSupport {
         try (Playwright playwright = Playwright.create();
                 Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
             return null;
+        } catch (RuntimeException e) {
+            String skipReason = playwrightDependencySkipReason(e);
+            if (skipReason != null) {
+                return skipReason;
+            }
+            throw e;
+        } catch (Error e) {
+            String skipReason = playwrightDependencySkipReason(e);
+            if (skipReason != null) {
+                return skipReason;
+            }
+            throw new RuntimeException(e);
         } catch (Throwable throwable) {
             String skipReason = playwrightDependencySkipReason(throwable);
             if (skipReason != null) {
                 return skipReason;
-            }
-            if (throwable instanceof RuntimeException runtimeException) {
-                throw runtimeException;
             }
             throw new RuntimeException(throwable);
         }
