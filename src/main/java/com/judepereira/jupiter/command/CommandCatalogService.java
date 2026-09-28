@@ -20,7 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -326,15 +325,25 @@ public class CommandCatalogService {
     private void loadExternalCommands(Path workspace, List<CommandDefinition> all) {
         Set<String> ids = new HashSet<>();
         all.forEach(command -> ids.add(command.id()));
-        for (String provider : List.of("claude", "codex")) {
-            Path project = workspace == null
-                    ? null
-                    : workspace.toAbsolutePath().normalize().resolve("." + provider)
-                            .resolve(provider.equals("claude") ? "commands" : "prompts");
-            Path home = userHome.resolve("." + provider).resolve(provider.equals("claude") ? "commands" : "prompts");
-            scanExternalRoot(project, provider, false, ids, all);
-            scanExternalRoot(home, provider, true, ids, all);
+        for (ExternalRoot root : externalRoots(workspace)) {
+            scanExternalRoot(root.path(), root.provider(), root.home(), ids, all);
         }
+    }
+
+    private List<ExternalRoot> externalRoots(Path workspace) {
+        List<ExternalRoot> roots = new ArrayList<>();
+        for (boolean home : new boolean[]{false, true}) {
+            for (String provider : List.of("claude", "codex")) {
+                Path root = home
+                        ? userHome.resolve("." + provider)
+                        : workspace == null ? null : workspace.toAbsolutePath().normalize().resolve("." + provider);
+                if (root != null) {
+                    root = root.resolve(provider.equals("claude") ? "commands" : "prompts");
+                }
+                roots.add(new ExternalRoot(root, provider, home));
+            }
+        }
+        return roots;
     }
 
     Stream<Path> walk(Path root) throws IOException {
@@ -359,9 +368,17 @@ public class CommandCatalogService {
                             return;
                         String relative = canonicalRoot.relativize(real).toString().replace('\\', '/');
                         String relativeKey = relative.substring(0, relative.length() - 3);
-                        String id = externalId(provider, relativeKey);
-                        if (ids.contains(id))
+                        String id;
+                        try {
+                            id = externalId(relativeKey);
+                        } catch (IllegalArgumentException e) {
+                            log.warn("Skipping external command {}: {}", path, e.getMessage());
                             return;
+                        }
+                        if (ids.contains(id)) {
+                            log.warn("Skipping duplicate external command {} with id {}", path, id);
+                            return;
+                        }
                         CommandDefinition definition = loadExternal(real, id, provider, home, relativeKey);
                         if (definition != null) {
                             all.add(definition);
@@ -377,10 +394,12 @@ public class CommandCatalogService {
         }
     }
 
-    private static String externalId(String provider, String relativeKey) {
-        String encoded = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(relativeKey.getBytes(StandardCharsets.UTF_8));
-        return "external-" + provider + "-" + encoded;
+    private static String externalId(String relativeKey) {
+        String id = relativeKey.replace('/', '-');
+        if (!SAFE_ID.matcher(id).matches()) {
+            throw new IllegalArgumentException("relative path does not produce a safe command id");
+        }
+        return id;
     }
 
     private static CommandDefinition loadExternal(Path path, String id, String provider, boolean home,
@@ -571,6 +590,8 @@ public class CommandCatalogService {
             @JsonAlias("kind") @JsonProperty("type") CommandKind type, String workingDir, Integer timeoutSeconds) {
     }
     private record CustomEntry(Path path, CommandDefinition definition) {
+    }
+    private record ExternalRoot(Path path, String provider, boolean home) {
     }
     private record CatalogSnapshot(List<CommandDefinition> commands, Map<String, CommandDefinition> byId,
             List<CustomEntry> custom, Map<String, CustomEntry> customById) {

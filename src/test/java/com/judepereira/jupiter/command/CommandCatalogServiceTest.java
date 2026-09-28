@@ -28,7 +28,7 @@ class CommandCatalogServiceTest {
         Files.writeString(workspace.resolve(".codex/prompts/plan.md"),
                 "---\r\nname: Planning\r\ndescription: Plan it\r\nprovider: arbitrary\r\n---\r\nPlan body");
         Files.writeString(home().resolve(".claude/commands/home.md"), "Home body");
-        Files.writeString(home().resolve(".codex/prompts/home.md"), "Home codex body");
+        Files.writeString(home().resolve(".codex/prompts/home-codex.md"), "Home codex body");
 
         List<CommandCatalogService.CommandDefinition> commands = new CommandCatalogService(
                 root.resolve("custom").toString(), home().toString()).list(workspace);
@@ -48,23 +48,86 @@ class CommandCatalogServiceTest {
     }
 
     @Test
-    void projectOverridesHomeOnlyForSameProviderRelativePath() throws Exception {
+    void externalCommandsFollowNativeCustomProjectAndProviderPrecedence() throws Exception {
         Path workspace = root.resolve("workspace");
+        Path custom = root.resolve("custom");
         Files.createDirectories(workspace.resolve(".claude/commands"));
+        Files.createDirectories(workspace.resolve(".codex/prompts"));
         Files.createDirectories(home().resolve(".claude/commands"));
         Files.createDirectories(home().resolve(".codex/prompts"));
-        Files.writeString(workspace.resolve(".claude/commands/same.md"), "project");
-        Files.writeString(home().resolve(".claude/commands/same.md"), "home");
-        Files.writeString(home().resolve(".codex/prompts/same.md"), "codex");
+        Files.createDirectories(custom);
+        Files.writeString(custom.resolve("custom.md"), document("custom", "custom command"));
+        Files.writeString(workspace.resolve(".claude/commands/custom.md"), "project claude custom");
+        Files.writeString(workspace.resolve(".claude/commands/status.md"), "external status");
+        Files.writeString(workspace.resolve(".claude/commands/same.md"), "project claude");
+        Files.writeString(workspace.resolve(".codex/prompts/same.md"), "project codex");
+        Files.writeString(home().resolve(".claude/commands/custom.md"), "home claude custom");
+        Files.writeString(home().resolve(".claude/commands/same.md"), "home claude");
+        Files.writeString(home().resolve(".codex/prompts/same.md"), "home codex");
+
+        List<CommandCatalogService.CommandDefinition> commands = new CommandCatalogService(custom.toString(),
+                home().toString()).list(workspace);
+        List<CommandCatalogService.CommandDefinition> external = commands.stream().filter(c -> !c.editable()).toList();
+
+        assertThat(commands).filteredOn(c -> c.id().equals("custom")).singleElement()
+                .extracting(CommandCatalogService.CommandDefinition::body).isEqualTo("custom command");
+        assertThat(commands).filteredOn(c -> c.id().equals("status")).singleElement()
+                .extracting(CommandCatalogService.CommandDefinition::body).isNotEqualTo("external status");
+        assertThat(external).extracting(CommandCatalogService.CommandDefinition::id).containsExactly("same");
+        assertThat(external).singleElement().satisfies(command -> {
+            assertThat(command.body()).isEqualTo("project claude");
+            assertThat(command.provider()).isEqualTo("claude");
+            assertThat(command.scope()).isEqualTo("project");
+        });
+    }
+
+    @Test
+    void externalIdsUseReadableNativeStylePathNames() throws Exception {
+        Path workspace = root.resolve("workspace");
+        Files.createDirectories(workspace.resolve(".claude/commands/team"));
+        Files.createDirectories(workspace.resolve(".codex/prompts"));
+        Files.writeString(workspace.resolve(".claude/commands/review.md"), "review");
+        Files.writeString(workspace.resolve(".claude/commands/team/review.md"), "team review");
+        Files.writeString(workspace.resolve(".codex/prompts/plan.md"), "plan");
 
         List<CommandCatalogService.CommandDefinition> external = new CommandCatalogService(
                 root.resolve("custom").toString(), home().toString()).list(workspace).stream()
                 .filter(c -> !c.editable()).toList();
 
-        assertThat(external).extracting(CommandCatalogService.CommandDefinition::body)
-                .containsExactlyInAnyOrder("project", "codex");
-        assertThat(external).extracting(CommandCatalogService.CommandDefinition::provider)
-                .containsExactlyInAnyOrder("claude", "codex");
+        assertThat(external).extracting(CommandCatalogService.CommandDefinition::id).containsExactly("review",
+                "team-review", "plan");
+        assertThat(external).extracting(CommandCatalogService.CommandDefinition::id)
+                .allMatch(id -> id.matches("[a-z0-9][a-z0-9_-]*"));
+    }
+
+    @Test
+    void flatteningCollisionKeepsTheLexicographicallyFirstPath() throws Exception {
+        Path commands = root.resolve("workspace/.claude/commands");
+        Files.createDirectories(commands.resolve("team"));
+        Files.writeString(commands.resolve("team/review.md"), "nested review");
+        Files.writeString(commands.resolve("team-review.md"), "flat review");
+
+        List<CommandCatalogService.CommandDefinition> external = new CommandCatalogService(
+                root.resolve("custom").toString(), home().toString()).list(root.resolve("workspace")).stream()
+                .filter(c -> !c.editable()).toList();
+
+        assertThat(external).extracting(CommandCatalogService.CommandDefinition::id).containsExactly("team-review");
+        assertThat(external).singleElement().extracting(CommandCatalogService.CommandDefinition::body)
+                .isEqualTo("flat review");
+    }
+
+    @Test
+    void invalidExternalFilenameIsSkipped() throws Exception {
+        Path commands = root.resolve("workspace/.claude/commands");
+        Files.createDirectories(commands);
+        Files.writeString(commands.resolve("Not Safe.md"), "invalid");
+        Files.writeString(commands.resolve("valid.md"), "valid");
+
+        List<CommandCatalogService.CommandDefinition> external = new CommandCatalogService(
+                root.resolve("custom").toString(), home().toString()).list(root.resolve("workspace")).stream()
+                .filter(c -> !c.editable()).toList();
+
+        assertThat(external).extracting(CommandCatalogService.CommandDefinition::id).containsExactly("valid");
     }
 
     @Test
