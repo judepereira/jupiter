@@ -169,9 +169,9 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
             String content = label + " mixed entry " + sequence + "\n" + ("layout-shifting text ".repeat(18)) + "\n"
                     + marker;
             String role = sequence % 3 == 0 ? "assistant" : sequence % 3 == 1 ? "user" : "assistant";
-            boolean taskCall = role.equals("assistant") && sequence % 6 == 0;
+            boolean taskCall = "assistant".equals(role) && sequence % 6 == 0;
             String toolCallId = label.toLowerCase() + "-tool-" + sequence;
-            String toolCalls = role.equals("assistant") && sequence % 3 == 0
+            String toolCalls = "assistant".equals(role) && sequence % 3 == 0
                     ? "[{\"toolCallId\":\"" + toolCallId + "\",\"toolName\":\"" + (taskCall ? "task" : "search")
                             + "\",\"arguments\":"
                             + (taskCall

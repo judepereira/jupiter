@@ -308,11 +308,11 @@ public class ProjectsTemplateRenderTest {
         for (String fragment : List.of("modal", "settingsModal", "workspaceModal", "workspaceCloseModal")) {
             String html = engine.process(
                     new TemplateSpec("fragments/projects", Set.of(fragment), TemplateMode.HTML, null), context);
-            String id = fragment.equals("modal")
+            String id = "modal".equals(fragment)
                     ? "project-modal"
-                    : fragment.equals("settingsModal")
+                    : "settingsModal".equals(fragment)
                             ? "settings-modal"
-                            : fragment.equals("workspaceModal") ? "workspace-modal" : "workspace-close-modal";
+                            : "workspaceModal".equals(fragment) ? "workspace-modal" : "workspace-close-modal";
             String title = id + "-title";
             assertThat(html).contains("id=\"" + id + "\"", "role=\"dialog\"", "aria-labelledby=\"" + title + "\"",
                     "id=\"" + title + "\"", "hx-get=\"/ui/projects/modal/close\"", "hx-target=\"#modal-root\"",

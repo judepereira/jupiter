@@ -207,7 +207,7 @@ public class EncryptionMigrationService {
 
     private record ColumnDescriptor(String table, String column) {
         private boolean isProjectPath() {
-            return table.equals("projects") && column.equals("normalized_path");
+            return "projects".equals(table) && "normalized_path".equals(column);
         }
     }
 

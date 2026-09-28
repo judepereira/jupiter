@@ -329,8 +329,8 @@ public class CommandCatalogService {
             Path project = workspace == null
                     ? null
                     : workspace.toAbsolutePath().normalize().resolve("." + provider)
-                            .resolve(provider.equals("claude") ? "commands" : "prompts");
-            Path home = userHome.resolve("." + provider).resolve(provider.equals("claude") ? "commands" : "prompts");
+                            .resolve("claude".equals(provider) ? "commands" : "prompts");
+            Path home = userHome.resolve("." + provider).resolve("claude".equals(provider) ? "commands" : "prompts");
             scanExternalRoot(project, provider, false, ids, all);
             scanExternalRoot(home, provider, true, ids, all);
         }

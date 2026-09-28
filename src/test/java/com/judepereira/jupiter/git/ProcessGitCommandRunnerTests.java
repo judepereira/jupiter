@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class ProcessGitCommandRunnerTests {
     @Test
     void realChildDoesNotReceiveEncryptionKey() {
-        assumeTrue(System.getProperty("os.name").equals("Linux"));
+        assumeTrue("Linux".equals(System.getProperty("os.name")));
         GitCommandRunner.GitCommandResult result = new ProcessGitCommandRunner().runWithEnvironment(Path.of("/tmp"),
                 List.of("/usr/bin/env"), Duration.ofSeconds(2),
                 Map.of("JUPITER_ENCRYPTION_KEY", "secret", "GIT_SENTINEL", "preserved"));
