@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -605,7 +606,7 @@ public class CommandCatalogService {
         public static CommandKind fromValue(String value) {
             if (value == null || value.isBlank())
                 throw new IllegalArgumentException("type is required");
-            return switch (value.trim().toLowerCase()) {
+            return switch (value.trim().toLowerCase(Locale.ROOT)) {
                 case "prompt" -> PROMPT;
                 case "script" -> SCRIPT;
                 default -> throw new IllegalArgumentException("Invalid command kind: " + value);

@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -170,7 +171,7 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
                     + marker;
             String role = sequence % 3 == 0 ? "assistant" : sequence % 3 == 1 ? "user" : "assistant";
             boolean taskCall = "assistant".equals(role) && sequence % 6 == 0;
-            String toolCallId = label.toLowerCase() + "-tool-" + sequence;
+            String toolCallId = label.toLowerCase(Locale.ROOT) + "-tool-" + sequence;
             String toolCalls = "assistant".equals(role) && sequence % 3 == 0
                     ? "[{\"toolCallId\":\"" + toolCallId + "\",\"toolName\":\"" + (taskCall ? "task" : "search")
                             + "\",\"arguments\":"

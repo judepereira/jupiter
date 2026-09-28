@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
@@ -261,7 +262,7 @@ public class CodingAgentHarnessFakeModelTest {
                 SkillTestSupport.defaultComponents().injector());
         var res = harness.runTurn(new AgentTurnRequest("s",
                 List.of(new Message(Message.Role.USER, "u", null, null, null)), null, null, null, null, null, null));
-        assertTrue(res.getFinalText().toLowerCase().contains("max iterations"));
+        assertTrue(res.getFinalText().toLowerCase(Locale.ROOT).contains("max iterations"));
         // traces should be equal to maxIterations
         assertEquals(2, res.getTraces().size());
     }

@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -240,7 +241,7 @@ public class CatalogServicesTest {
                             body
                             """.formatted(filenameToId(filename), displayName(filenameToId(filename)),
                             mode == AgentMode.AGENT ? "Primary wildcard tools" : "Subagent wildcard tools",
-                            mode.name().toLowerCase())));
+                            mode.name().toLowerCase(Locale.ROOT))));
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load inline wildcard agent", e);
         }
@@ -283,7 +284,8 @@ public class CatalogServicesTest {
 
     private static String displayName(String id) {
         return Arrays.stream(id.split("[-_]")).filter(part -> !part.isBlank())
-                .map(part -> part.substring(0, 1).toUpperCase() + part.substring(1)).collect(Collectors.joining(" "));
+                .map(part -> part.substring(0, 1).toUpperCase(Locale.ROOT) + part.substring(1))
+                .collect(Collectors.joining(" "));
     }
 
     private static String trimLeadingLineBreak(String value) {

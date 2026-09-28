@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Flow;
@@ -98,7 +99,8 @@ class AnthropicAgentModelClientTests {
                     new AgentModelOptions("id", "claude", level, true, null));
             JsonNode body = requestBody(request.get());
             assertThat(body.path("thinking").path("type").asText()).isEqualTo("adaptive");
-            assertThat(body.path("output_config").path("effort").asText()).isEqualTo(level.name().toLowerCase());
+            assertThat(body.path("output_config").path("effort").asText())
+                    .isEqualTo(level.name().toLowerCase(Locale.ROOT));
             assertThat(body.path("max_tokens").asInt()).isEqualTo(1234);
         }
     }

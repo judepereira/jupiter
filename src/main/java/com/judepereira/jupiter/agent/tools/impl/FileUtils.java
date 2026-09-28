@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 public class FileUtils {
     public static Path resolveWorkspacePath(Path workspaceRoot, String relative) throws IOException {
@@ -54,7 +55,7 @@ public class FileUtils {
         if (relativePath == null) {
             return null;
         }
-        String lower = relativePath.toLowerCase();
+        String lower = relativePath.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".png")) {
             return "image/png";
         }
