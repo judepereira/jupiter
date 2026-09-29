@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ContextCompactionService {
@@ -49,12 +48,13 @@ public class ContextCompactionService {
         this.skillDiscoveryService = skillDiscoveryService;
     }
 
-    @Transactional
     public Optional<ChatMessageView> compactIfNeeded(long sessionId, AgentDefinition agent, ModelDefinition model,
             ThinkingLevel thinkingLevel, String workspaceRoot, String upcomingUserText) {
-        List<AppStateRepository.ConversationMessageRow> rows = includedCompletedRows(sessionId);
+        List<AppStateRepository.ConversationMessageRow> rows = appStateService
+                .listIncludedCompletedConversationMessages(sessionId);
         int budget = availableInputBudget(model);
-        int estimatedBefore = estimateTurnTokens(agent, model, rows, upcomingUserText, workspaceRoot);
+        PromptTokenCosts tokenCosts = precomputeTokenCosts(agent, model, workspaceRoot, upcomingUserText);
+        int estimatedBefore = estimateTurnTokens(tokenCosts, rows);
 
         if (estimatedBefore <= compactThreshold(budget)) {
             return Optional.empty();
@@ -104,23 +104,16 @@ public class ContextCompactionService {
         }
 
         long compactedThroughTurnId = compactableGroups.getLast().turnId();
-        appStateService.markTurnsIncludeInModelFalse(sessionId, compactedThroughTurnId);
-        ChatMessageView summaryMessage = appStateService.appendVisibleSystemMessage(sessionId, summary,
-                compactedThroughTurnId);
-
-        int estimatedAfter = estimateTurnTokens(agent, model, includedCompletedRows(sessionId), upcomingUserText,
-                workspaceRoot);
-        if (estimatedAfter > budget) {
-            throw new IllegalStateException("Conversation still does not fit after compaction for " + model.id()
-                    + ": estimated " + estimatedAfter + " tokens for budget " + budget);
-        }
+        ChatMessageView summaryMessage = appStateService.compactConversationAtomically(sessionId, rows,
+                compactedThroughTurnId, summary, afterRows -> {
+                    int estimatedAfter = estimateTurnTokens(tokenCosts, afterRows);
+                    if (estimatedAfter > budget) {
+                        throw new IllegalStateException("Conversation still does not fit after compaction for "
+                                + model.id() + ": estimated " + estimatedAfter + " tokens for budget " + budget);
+                    }
+                });
 
         return Optional.of(summaryMessage);
-    }
-
-    private List<AppStateRepository.ConversationMessageRow> includedCompletedRows(long sessionId) {
-        return appStateService.listConversationMessages(sessionId).stream()
-                .filter(message -> message.includeInModel() && !message.pending()).toList();
     }
 
     private List<TurnGroup> groupByTurn(List<AppStateRepository.ConversationMessageRow> rows) {
@@ -158,11 +151,17 @@ public class ContextCompactionService {
         return estimatePromptTokens(SUMMARY_SYSTEM_PROMPT) + estimateRowsTokens(rows) + model.outputTokens();
     }
 
-    private int estimateTurnTokens(AgentDefinition agent, ModelDefinition model,
-            List<AppStateRepository.ConversationMessageRow> rows, String userText, String workspaceRoot) {
-        return estimatePromptTokens(systemPromptComposer.composeForAgent(agent, workspaceRoot,
-                skillDiscoveryService.discover(Path.of(workspaceRoot)))) + estimateRowsTokens(rows)
-                + estimateTextTokens(userText) + toolSchemaTokens(agent) + model.outputTokens();
+    private PromptTokenCosts precomputeTokenCosts(AgentDefinition agent, ModelDefinition model, String workspaceRoot,
+            String userText) {
+        int promptTokens = estimatePromptTokens(systemPromptComposer.composeForAgent(agent, workspaceRoot,
+                skillDiscoveryService.discover(Path.of(workspaceRoot))));
+        return new PromptTokenCosts(promptTokens, estimateTextTokens(userText), toolSchemaTokens(agent),
+                model.outputTokens());
+    }
+
+    private int estimateTurnTokens(PromptTokenCosts costs, List<AppStateRepository.ConversationMessageRow> rows) {
+        return costs.promptTokens() + estimateRowsTokens(rows) + costs.userTextTokens() + costs.toolSchemaTokens()
+                + costs.outputTokens();
     }
 
     private int estimateRowsTokens(List<AppStateRepository.ConversationMessageRow> rows) {
@@ -201,6 +200,9 @@ public class ContextCompactionService {
     private int compactThreshold(int budget) {
         // 250k hardcoded, due to quality degradation. let compaction take care of this.
         return Math.min(250_000, budget - Math.max(512, budget / 10));
+    }
+
+    private record PromptTokenCosts(int promptTokens, int userTextTokens, int toolSchemaTokens, int outputTokens) {
     }
 
     private record TurnGroup(long turnId, List<AppStateRepository.ConversationMessageRow> rows) {
