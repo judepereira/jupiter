@@ -7,7 +7,6 @@ import static org.mockito.Mockito.mock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.persistence.AppStateRepository;
-import com.judepereira.jupiter.security.EncryptionMigrationService;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.sun.net.httpserver.HttpExchange;
@@ -310,11 +309,6 @@ public class OpenAiOAuthServiceTests {
 
             Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
             SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
-            try (var connection = dataSource.getConnection()) {
-                new EncryptionMigrationService(TestEncryptionSupport.encryptor()).run(connection);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to initialize encryption", e);
-            }
             return new TestDatabase(new AppStateRepository(new NamedParameterJdbcTemplate(dataSource),
                     TestEncryptionSupport.encryptor(), new ObjectMapper()));
         }
