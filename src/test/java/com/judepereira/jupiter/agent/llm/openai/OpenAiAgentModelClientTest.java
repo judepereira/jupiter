@@ -5,10 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +19,7 @@ import static org.mockito.Mockito.when;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiProperties;
+import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
@@ -26,6 +29,11 @@ import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.exception.AuthenticationException;
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.InvalidRequestException;
+import dev.langchain4j.exception.ModelNotFoundException;
+import dev.langchain4j.exception.NonRetriableException;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -49,18 +57,18 @@ import org.junit.jupiter.api.Test;
 public class OpenAiAgentModelClientTest {
 
     private static OpenAiProperties openAiProperties() {
-        return openAiProperties(10, Duration.ofSeconds(1), Duration.ofSeconds(120));
+        OpenAiProperties properties = new OpenAiProperties();
+        properties.setApiKey("api-key-123");
+        return properties;
     }
 
-    private static OpenAiProperties openAiProperties(int maxRetries, Duration initialBackoff, Duration maxBackoff) {
-        OpenAiProperties openAiProperties = new OpenAiProperties();
-        openAiProperties.setApiKey("api-key-123");
-        OpenAiProperties.Retry retry = new OpenAiProperties.Retry();
+    private static AgentProperties retryAgentProperties(int maxRetries, Duration initialBackoff, Duration maxBackoff) {
+        AgentProperties properties = new AgentProperties();
+        AgentProperties.Retry retry = properties.getRetry();
         retry.setMaxRetries(maxRetries);
         retry.setInitialBackoff(initialBackoff);
         retry.setMaxBackoff(maxBackoff);
-        openAiProperties.setRetry(retry);
-        return openAiProperties;
+        return properties;
     }
 
     @Test
@@ -296,18 +304,19 @@ public class OpenAiAgentModelClientTest {
     }
 
     @Test
-    public void non_streaming_retries_transient_failures_then_succeeds() {
-        OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
+    public void non_streaming_retries_arbitrary_provider_failures_then_succeeds() {
+        AgentProperties retryProperties = retryAgentProperties(2, Duration.ZERO, Duration.ZERO);
         ChatModel chatModel = mock(ChatModel.class);
         AtomicInteger attempts = new AtomicInteger();
         when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
             if (attempts.getAndIncrement() == 0) {
-                throw new IOException("transient");
+                throw new RuntimeException(
+                        "Response failed: Our servers are currently overloaded. Please try again later.");
             }
             return ChatResponse.builder().aiMessage(AiMessage.from("ok")).build();
         });
 
-        RecordingClient client = new RecordingClient(chatModel, null, openAiProperties);
+        RecordingClient client = new RecordingClient(chatModel, null, retryProperties);
 
         assertEquals("ok", client.chat(List.of(new Message(Message.Role.USER, "retry", null, null, null)), List.of())
                 .getAssistantText());
@@ -316,8 +325,8 @@ public class OpenAiAgentModelClientTest {
     }
 
     @Test
-    public void streaming_retries_a_transient_upstream_failure_before_any_partial_output() {
-        OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
+    public void streaming_retries_an_arbitrary_upstream_failure_before_any_partial_output() {
+        AgentProperties retryProperties = retryAgentProperties(2, Duration.ZERO, Duration.ZERO);
         StreamingChatModel streamingModel = mock(StreamingChatModel.class);
         AtomicInteger attempts = new AtomicInteger();
         doAnswer(invocation -> {
@@ -332,7 +341,7 @@ public class OpenAiAgentModelClientTest {
             return null;
         }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
 
-        RecordingClient client = new RecordingClient(null, streamingModel, openAiProperties);
+        RecordingClient client = new RecordingClient(null, streamingModel, retryProperties);
         List<String> deltas = new ArrayList<>();
 
         assertEquals("done", client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
@@ -344,7 +353,7 @@ public class OpenAiAgentModelClientTest {
 
     @Test
     public void streaming_does_not_retry_after_a_partial_delta_has_already_been_emitted() {
-        OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
+        AgentProperties retryProperties = retryAgentProperties(2, Duration.ZERO, Duration.ZERO);
         StreamingChatModel streamingModel = mock(StreamingChatModel.class);
         AtomicInteger attempts = new AtomicInteger();
         doAnswer(invocation -> {
@@ -355,22 +364,271 @@ public class OpenAiAgentModelClientTest {
             return null;
         }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
 
-        RecordingClient client = new RecordingClient(null, streamingModel, openAiProperties);
+        RecordingClient client = new RecordingClient(null, streamingModel, retryProperties);
         List<String> deltas = new ArrayList<>();
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
                         List.of(), deltas::add));
 
-        assertEquals("OpenAI streaming request failed", exception.getMessage());
+        assertEquals("OpenAI streaming request failed: after-partial", exception.getMessage());
         assertEquals(List.of("he"), deltas);
         assertEquals(1, attempts.get());
         verify(streamingModel, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
     }
 
     @Test
+    public void streaming_does_not_retry_after_a_completed_tool_call_without_text() {
+        AgentProperties retryProperties = retryAgentProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            attempts.incrementAndGet();
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            handler.onCompleteToolCall(new CompleteToolCall(0, ToolExecutionRequest.builder().id("call-1")
+                    .name("read_file").arguments("{\"path\":\"x\"}").build()));
+            handler.onError(new RuntimeException("after-tool"));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        RecordingClient client = new RecordingClient(null, model, retryProperties);
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "tool", null, null, null)), List.of(),
+                        ignored -> {
+                        }));
+
+        assertEquals("OpenAI streaming request failed: after-tool", exception.getMessage());
+        assertEquals(1, attempts.get());
+    }
+
+    @Test
+    public void streaming_retries_arbitrary_runtime_exception_from_callback_before_progress() {
+        AgentProperties retryProperties = retryAgentProperties(2, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            if (attempts.getAndIncrement() == 0) {
+                handler.onError(new RuntimeException(
+                        "Response failed: Our servers are currently overloaded. Please try again later."));
+            } else {
+                handler.onCompleteResponse(ChatResponse.builder().aiMessage(AiMessage.from("ok")).build());
+            }
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        RecordingClient client = new RecordingClient(null, model, retryProperties);
+        assertEquals("ok", client.chatStreaming(List.of(new Message(Message.Role.USER, "retry", null, null, null)),
+                List.of(), ignored -> {
+                }).getAssistantText());
+        assertEquals(2, attempts.get());
+    }
+
+    @Test
+    public void direct_cancellation_is_propagated_without_retry() {
+        AgentProperties retryProperties = retryAgentProperties(3, Duration.ZERO, Duration.ZERO);
+        ChatModel model = mock(ChatModel.class);
+        StreamCancelledException cancellation = new StreamCancelledException();
+        when(model.chat(any(ChatRequest.class))).thenThrow(cancellation);
+        RecordingClient client = new RecordingClient(model, null, retryProperties);
+
+        assertSame(cancellation, assertThrows(StreamCancelledException.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "cancel", null, null, null)), List.of())));
+        verify(model, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void callback_cancellation_is_propagated_without_retry() {
+        AgentProperties retryProperties = retryAgentProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        StreamCancelledException cancellation = new StreamCancelledException();
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1)).onError(cancellation);
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, retryProperties);
+
+        assertSame(cancellation,
+                assertThrows(StreamCancelledException.class,
+                        () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "cancel", null, null, null)),
+                                List.of(), ignored -> {
+                                })));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void nested_callback_cancellation_is_propagated_without_retry_or_wrapping() {
+        AgentProperties retryProperties = retryAgentProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        StreamCancelledException cancellation = new StreamCancelledException();
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1)).onError(new RuntimeException(cancellation));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, retryProperties);
+
+        assertSame(cancellation,
+                assertThrows(StreamCancelledException.class,
+                        () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "cancel", null, null, null)),
+                                List.of(), ignored -> {
+                                })));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void nested_callback_error_is_propagated_without_retry_or_wrapping() {
+        AgentProperties retryProperties = retryAgentProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AssertionError providerError = new AssertionError("fatal nested callback");
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1)).onError(new RuntimeException(providerError));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, retryProperties);
+
+        assertSame(providerError,
+                assertThrows(AssertionError.class,
+                        () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "fatal", null, null, null)),
+                                List.of(), ignored -> {
+                                })));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void nested_callback_interruption_restores_interrupt_and_fails_without_retry() {
+        AgentProperties retryProperties = retryAgentProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1))
+                    .onError(new RuntimeException(new InterruptedException("interrupted callback")));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, retryProperties);
+
+        try {
+            IllegalStateException exception = assertThrows(IllegalStateException.class,
+                    () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "interrupt", null, null, null)),
+                            List.of(), ignored -> {
+                            }));
+            assertEquals("OpenAI streaming request interrupted", exception.getMessage());
+            assertTrue(Thread.currentThread().isInterrupted());
+            verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    public void provider_errors_are_propagated_without_retry_or_wrapping() {
+        AgentProperties retryProperties = retryAgentProperties(3, Duration.ZERO, Duration.ZERO);
+        ChatModel model = mock(ChatModel.class);
+        AssertionError providerError = new AssertionError("fatal");
+        when(model.chat(any(ChatRequest.class))).thenThrow(providerError);
+        RecordingClient client = new RecordingClient(model, null, retryProperties);
+
+        assertSame(providerError, assertThrows(AssertionError.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "fatal", null, null, null)), List.of())));
+        verify(model, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void callback_errors_are_propagated_without_retry_or_wrapping() {
+        AgentProperties retryProperties = retryAgentProperties(3, Duration.ZERO, Duration.ZERO);
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AssertionError providerError = new AssertionError("fatal callback");
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1)).onError(providerError);
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, model, retryProperties);
+
+        assertSame(providerError,
+                assertThrows(AssertionError.class,
+                        () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "fatal", null, null, null)),
+                                List.of(), ignored -> {
+                                })));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void known_deterministic_provider_failures_do_not_retry() {
+        for (RuntimeException failure : List.of(new AuthenticationException("auth"),
+                new InvalidRequestException("invalid"), new ModelNotFoundException("missing"),
+                new NonRetriableException("not retriable"), new HttpException(400, "bad request"))) {
+            ChatModel chatModel = mock(ChatModel.class);
+            when(chatModel.chat(any(ChatRequest.class))).thenThrow(failure);
+            RecordingClient client = new RecordingClient(chatModel, null,
+                    retryAgentProperties(3, Duration.ZERO, Duration.ZERO));
+
+            assertThrows(IllegalStateException.class,
+                    () -> client.chat(List.of(new Message(Message.Role.USER, "failure", null, null, null)), List.of()));
+            verify(chatModel, times(1)).chat(any(ChatRequest.class));
+        }
+    }
+
+    @Test
+    public void deterministic_streaming_callback_failure_is_wrapped_with_provider_detail_once() {
+        StreamingChatModel streamingModel = mock(StreamingChatModel.class);
+        doAnswer(invocation -> {
+            ((StreamingChatResponseHandler) invocation.getArgument(1))
+                    .onError(new RuntimeException(new ModelNotFoundException("missing model")));
+            return null;
+        }).when(streamingModel).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, streamingModel,
+                retryAgentProperties(3, Duration.ZERO, Duration.ZERO));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
+                        List.of(), ignored -> {
+                        }));
+
+        assertEquals("OpenAI streaming request failed: dev.langchain4j.exception.ModelNotFoundException: missing model",
+                failure.getMessage());
+        verify(streamingModel, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void deterministic_synchronously_thrown_streaming_failure_is_wrapped_with_provider_detail_once() {
+        StreamingChatModel streamingModel = mock(StreamingChatModel.class);
+        doThrow(new InvalidRequestException("invalid request")).when(streamingModel).chat(any(ChatRequest.class),
+                any(StreamingChatResponseHandler.class));
+        RecordingClient client = new RecordingClient(null, streamingModel,
+                retryAgentProperties(3, Duration.ZERO, Duration.ZERO));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
+                        List.of(), ignored -> {
+                        }));
+
+        assertEquals("OpenAI streaming request failed: invalid request", failure.getMessage());
+        verify(streamingModel, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @Test
+    public void retryable_http_statuses_and_unknown_failures_retry() {
+        for (RuntimeException failure : List.of(new HttpException(408, "timeout"), new HttpException(429, "busy"),
+                new HttpException(500, "server"), new RuntimeException("overload"))) {
+            ChatModel chatModel = mock(ChatModel.class);
+            AtomicInteger attempts = new AtomicInteger();
+            when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
+                if (attempts.getAndIncrement() == 0) {
+                    throw failure;
+                }
+                return ChatResponse.builder().aiMessage(AiMessage.from("ok")).build();
+            });
+            RecordingClient client = new RecordingClient(chatModel, null,
+                    retryAgentProperties(1, Duration.ZERO, Duration.ZERO));
+
+            assertEquals("ok",
+                    client.chat(List.of(new Message(Message.Role.USER, "retry", null, null, null)), List.of())
+                            .getAssistantText());
+            verify(chatModel, times(2)).chat(any(ChatRequest.class));
+        }
+    }
+
+    @Test
     public void retry_count_is_capped_by_configured_max_retries() {
-        OpenAiProperties openAiProperties = openAiProperties(1, Duration.ZERO, Duration.ZERO);
+        AgentProperties retryProperties = retryAgentProperties(1, Duration.ZERO, Duration.ZERO);
         ChatModel chatModel = mock(ChatModel.class);
         AtomicInteger attempts = new AtomicInteger();
         when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
@@ -378,7 +636,7 @@ public class OpenAiAgentModelClientTest {
             throw new IOException("still failing");
         });
 
-        RecordingClient client = new RecordingClient(chatModel, null, openAiProperties);
+        RecordingClient client = new RecordingClient(chatModel, null, retryProperties);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 () -> client.chat(List.of(new Message(Message.Role.USER, "retry", null, null, null)), List.of()));
@@ -395,29 +653,14 @@ public class OpenAiAgentModelClientTest {
         private final StreamingChatModel streamingChatModel;
 
         private RecordingClient(ChatModel chatModel, StreamingChatModel streamingChatModel) {
-            this(chatModel, streamingChatModel, openAiProperties());
+            this(chatModel, streamingChatModel, retryAgentProperties(10, Duration.ZERO, Duration.ZERO));
         }
 
         private RecordingClient(ChatModel chatModel, StreamingChatModel streamingChatModel,
-                OpenAiProperties openAiProperties) {
-            super(openAiProperties, new AgentProperties(), null);
+                AgentProperties agentProperties) {
+            super(openAiProperties(), agentProperties, null);
             this.chatModel = chatModel;
             this.streamingChatModel = streamingChatModel;
-        }
-
-        private static OpenAiProperties openAiProperties() {
-            return openAiProperties(10, Duration.ofSeconds(1), Duration.ofSeconds(120));
-        }
-
-        private static OpenAiProperties openAiProperties(int maxRetries, Duration initialBackoff, Duration maxBackoff) {
-            OpenAiProperties openAiProperties = new OpenAiProperties();
-            openAiProperties.setApiKey("api-key-123");
-            OpenAiProperties.Retry retry = new OpenAiProperties.Retry();
-            retry.setMaxRetries(maxRetries);
-            retry.setInitialBackoff(initialBackoff);
-            retry.setMaxBackoff(maxBackoff);
-            openAiProperties.setRetry(retry);
-            return openAiProperties;
         }
 
         @Override

@@ -16,6 +16,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
 import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.*;
 import java.nio.ByteBuffer;
@@ -33,6 +34,14 @@ import javax.net.ssl.SSLSession;
 import org.junit.jupiter.api.Test;
 
 class AnthropicAgentModelClientTests {
+    private static AgentProperties retryAgentProperties(int maxRetries) {
+        AgentProperties properties = new AgentProperties();
+        AgentProperties.Retry retry = properties.getRetry();
+        retry.setMaxRetries(maxRetries);
+        retry.setInitialBackoff(Duration.ZERO);
+        retry.setMaxBackoff(Duration.ZERO);
+        return properties;
+    }
     @Test
     void requestUsesOauthHeadersAndMapsMessages() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
@@ -46,7 +55,7 @@ class AnthropicAgentModelClientTests {
         when(oauth.currentAccessToken()).thenReturn(Optional.of("oauth-token"));
         AnthropicProperties p = new AnthropicProperties();
         p.setBaseUrl("https://example.test/messages");
-        AgentProperties a = new AgentProperties();
+        AgentProperties a = retryAgentProperties(0);
         a.setModel("claude-default");
         var client = new AnthropicAgentModelClient(p, a, oauth, new ObjectMapper(), http);
         var result = client.chat(List.of(new Message(Message.Role.SYSTEM, "sys", null, null, null),
@@ -90,7 +99,7 @@ class AnthropicAgentModelClientTests {
         when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
         AnthropicProperties properties = new AnthropicProperties();
         properties.setMaxOutputTokens(1234);
-        AgentProperties agents = new AgentProperties();
+        AgentProperties agents = retryAgentProperties(0);
         agents.setModel("claude");
         var client = new AnthropicAgentModelClient(properties, agents, oauth, new ObjectMapper(), http);
 
@@ -115,7 +124,7 @@ class AnthropicAgentModelClientTests {
         });
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
-        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(0), oauth,
                 new ObjectMapper(), http);
         client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(),
                 new AgentModelOptions("id", "claude", null, false, null));
@@ -135,7 +144,7 @@ class AnthropicAgentModelClientTests {
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
         AnthropicProperties properties = new AnthropicProperties();
-        AgentProperties agents = new AgentProperties();
+        AgentProperties agents = retryAgentProperties(0);
         agents.setModel("claude");
         var client = new AnthropicAgentModelClient(properties, agents, oauth, new ObjectMapper(), http);
         ToolDefinition tool = ToolDefinition.builtIn("read", "Read", ToolSchema.object());
@@ -156,7 +165,7 @@ class AnthropicAgentModelClientTests {
                 "{\"content\":[{\"type\":\"tool_use\",\"id\":\"a\",\"name\":\"one\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"b\",\"name\":\"two\",\"input\":{}}]}"));
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
-        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(0), oauth,
                 new ObjectMapper(), http);
 
         assertThatThrownBy(() -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
@@ -175,7 +184,7 @@ class AnthropicAgentModelClientTests {
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
         when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
-        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(0), oauth,
                 new ObjectMapper(), http);
 
         client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of());
@@ -195,7 +204,7 @@ class AnthropicAgentModelClientTests {
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
         when(oauth.forceRefresh("old")).thenReturn(Optional.empty());
-        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(0), oauth,
                 new ObjectMapper(), http);
 
         assertThatThrownBy(() -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
@@ -216,7 +225,7 @@ class AnthropicAgentModelClientTests {
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
         when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
-        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(0), oauth,
                 new ObjectMapper(), http);
 
         client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(), null);
@@ -237,7 +246,7 @@ class AnthropicAgentModelClientTests {
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
         when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
-        var client = new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(0), oauth,
                 new ObjectMapper(), http);
 
         assertThatThrownBy(() -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
@@ -265,6 +274,184 @@ class AnthropicAgentModelClientTests {
     }
 
     @Test
+    void refreshedTokenIsUsedBySynchronousGeneralRetry() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        List<String> authorization = new ArrayList<>();
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(invocation -> {
+            HttpRequest request = invocation.getArgument(0);
+            authorization.add(request.headers().firstValue("Authorization").orElseThrow());
+            return switch (authorization.size()) {
+                case 1 -> response(401, "rejected");
+                case 2 -> response(503, "retry");
+                default -> response(200, "{\"content\":[],\"usage\":{}}");
+            };
+        });
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
+        when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(1), oauth,
+                new ObjectMapper(), http);
+
+        client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of());
+
+        assertThat(authorization).containsExactly("Bearer old", "Bearer new", "Bearer new");
+        verify(http, times(3)).send(any(), any(HttpResponse.BodyHandler.class));
+        verify(oauth).forceRefresh("old");
+    }
+
+    @Test
+    void refreshedTokenIsUsedByStreamingGeneralRetry() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        List<String> authorization = new ArrayList<>();
+        AtomicReference<Boolean> unauthorizedResponseClosed = new AtomicReference<>(false);
+        AtomicReference<Boolean> serviceUnavailableResponseClosed = new AtomicReference<>(false);
+        String success = "event: message_stop\ndata: {\"type\":\"message_stop\"}\n";
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(invocation -> {
+            HttpRequest request = invocation.getArgument(0);
+            authorization.add(request.headers().firstValue("Authorization").orElseThrow());
+            return switch (authorization.size()) {
+                case 1 -> response(401, Stream.of("rejected").onClose(() -> unauthorizedResponseClosed.set(true)));
+                case 2 -> response(503, Stream.of("retry").onClose(() -> serviceUnavailableResponseClosed.set(true)));
+                default -> response(200, success.lines());
+            };
+        });
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
+        when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(1), oauth,
+                new ObjectMapper(), http);
+
+        client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(), null);
+
+        assertThat(authorization).containsExactly("Bearer old", "Bearer new", "Bearer new");
+        assertThat(unauthorizedResponseClosed).hasValue(true);
+        assertThat(serviceUnavailableResponseClosed).hasValue(true);
+        verify(http, times(3)).send(any(), any(HttpResponse.BodyHandler.class));
+        verify(oauth).forceRefresh("old");
+    }
+
+    @Test
+    void synchronousRetryableStatusesAndIoRetryBeforeSuccess() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(408, "no"), response(429, "no"),
+                response(500, "no"), response(200, "{\"content\":[],\"usage\":{}}"));
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(3), oauth,
+                new ObjectMapper(), http);
+        client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of());
+        verify(http, times(4)).send(any(), any(HttpResponse.BodyHandler.class));
+
+        HttpClient ioHttp = mock(HttpClient.class);
+        when(ioHttp.send(any(), any(HttpResponse.BodyHandler.class))).thenThrow(new IOException("io"))
+                .thenReturn(response(200, "{\"content\":[],\"usage\":{}}"));
+        var ioClient = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(1), oauth,
+                new ObjectMapper(), ioHttp);
+        ioClient.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of());
+        verify(ioHttp, times(2)).send(any(), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void deterministicClientErrorDoesNotRetryAndRetryCountIsCapped() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(400, "secret body"));
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(5), oauth,
+                new ObjectMapper(), http);
+        assertThatThrownBy(() -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
+                .hasMessageContaining("status 400").doesNotHaveToString("secret body");
+        verify(http).send(any(), any(HttpResponse.BodyHandler.class));
+
+        HttpClient capped = mock(HttpClient.class);
+        when(capped.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(503, "no"));
+        var cappedClient = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(2), oauth,
+                new ObjectMapper(), capped);
+        assertThatThrownBy(
+                () -> cappedClient.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
+                .hasMessageContaining("Anthropic request failed");
+        verify(capped, times(3)).send(any(), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void streamingRetriesRetryableHttpIoButNotParserFailuresBeforeOutput() throws Exception {
+        String success = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{}}\n"
+                + "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\"}}\n"
+                + "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n"
+                + "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n"
+                + "event: message_stop\ndata: {\"type\":\"message_stop\"}\n";
+        HttpClient http = mock(HttpClient.class);
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(503, Stream.of("x")))
+                .thenThrow(new IOException("io")).thenReturn(response(200, success.lines()));
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(2), oauth,
+                new ObjectMapper(), http);
+        assertThat(client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(), null)
+                .getAssistantText()).isEqualTo("ok");
+        verify(http, times(3)).send(any(), any(HttpResponse.BodyHandler.class));
+
+        HttpClient parser = mock(HttpClient.class);
+        when(parser.send(any(), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(response(200, Stream.of("data: {bad")));
+        var parserClient = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(1), oauth,
+                new ObjectMapper(), parser);
+        assertThatThrownBy(() -> parserClient
+                .chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(), null))
+                .hasMessageContaining("malformed Anthropic SSE event");
+        verify(parser).send(any(), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void streamingDoesNotRetryAfterTextOutput() throws Exception {
+        String text = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\"}}\n"
+                + "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"seen\"}}\n";
+        HttpClient http = mock(HttpClient.class);
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(200, text.lines()));
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(3), oauth,
+                new ObjectMapper(), http);
+        assertThatThrownBy(() -> client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)),
+                List.of(), null)).hasMessageContaining("streaming");
+        verify(http).send(any(), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void streamingDoesNotRetryAfterCompletedToolOutput() throws Exception {
+        String tool = """
+                event: content_block_start
+                data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t","name":"read"}}
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"path\\":\\"a\\"}"}}
+                event: content_block_stop
+                data: {"type":"content_block_stop","index":0}
+                """;
+        HttpClient http = mock(HttpClient.class);
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(200, tool.lines()));
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(3), oauth,
+                new ObjectMapper(), http);
+        assertThatThrownBy(() -> client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)),
+                List.of(), null)).hasMessageContaining("streaming");
+        verify(http).send(any(), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void streamingDeterministicClientErrorDoesNotRetry() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(400, Stream.of("bad")));
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(3), oauth,
+                new ObjectMapper(), http);
+        assertThatThrownBy(() -> client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)),
+                List.of(), null)).hasMessageContaining("status 400");
+        verify(http).send(any(), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
     void interruptedRequestRestoresInterruptAndFailsClearly() throws Exception {
         HttpClient http = mock(HttpClient.class);
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenThrow(new InterruptedException());
@@ -272,7 +459,8 @@ class AnthropicAgentModelClientTests {
         when(oauth.currentAccessToken()).thenReturn(Optional.of("token"));
         AnthropicProperties properties = new AnthropicProperties();
         properties.setRequestTimeout(Duration.ofSeconds(7));
-        var client = new AnthropicAgentModelClient(properties, new AgentProperties(), oauth, new ObjectMapper(), http);
+        var client = new AnthropicAgentModelClient(properties, retryAgentProperties(0), oauth, new ObjectMapper(),
+                http);
 
         Thread.interrupted();
         try {
@@ -311,7 +499,7 @@ class AnthropicAgentModelClientTests {
         when(oauth.currentAccessToken()).thenReturn(Optional.of("t"));
         AnthropicProperties p = new AnthropicProperties();
         p.setBaseUrl("https://example.test");
-        var client = new AnthropicAgentModelClient(p, new AgentProperties(), oauth, new ObjectMapper(), http);
+        var client = new AnthropicAgentModelClient(p, retryAgentProperties(0), oauth, new ObjectMapper(), http);
         List<String> callback = new ArrayList<>();
         var result = client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(),
                 callback::add);
@@ -364,7 +552,7 @@ class AnthropicAgentModelClientTests {
         }
         AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
         when(oauth.currentAccessToken()).thenReturn(Optional.of("t"));
-        return new AnthropicAgentModelClient(new AnthropicProperties(), new AgentProperties(), oauth,
+        return new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(0), oauth,
                 new ObjectMapper(), http)
                 .chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(), x -> {
                 });
