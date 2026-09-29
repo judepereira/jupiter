@@ -23,6 +23,9 @@ import java.util.Map;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class ContextCompactionServiceTests {
 
@@ -53,6 +56,49 @@ class ContextCompactionServiceTests {
         assertThat(summary.text()).isEqualTo("streamed summary");
         assertThat(factory.client.conversations).hasSize(1);
         assertThat(factory.client.streamed).isTrue();
+    }
+
+    @Test
+    void staleConversationIsRejectedBeforeAnyCompactionWrite() {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", "workspace");
+        long sessionId = service.loadViewData().activeSession().id();
+        var turn = service.appendUserMessageAndPendingAssistant(sessionId, "first");
+        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply", List.of());
+        long compactedThroughTurnId = service.listIncludedCompletedConversationMessages(sessionId).getLast().turnId();
+        List<AppStateRepository.ConversationMessageRow> expected = service
+                .listIncludedCompletedConversationMessages(sessionId);
+        var changedTurn = service.appendUserMessageAndPendingAssistant(sessionId, "changed");
+        service.completeAssistantMessage(sessionId, changedTurn.assistantMessage().id(), "reply 2", List.of());
+
+        assertThatThrownBy(() -> service.compactConversationAtomically(sessionId, expected, compactedThroughTurnId,
+                "summary", rows -> {
+                    throw new AssertionError("stale input should be rejected before the fit check");
+                })).isInstanceOf(IllegalStateException.class).hasMessageContaining("Conversation changed");
+        assertThat(service.listConversationMessages(sessionId)).noneMatch(row -> "summary".equals(row.content()));
+    }
+
+    @Test
+    void failedPostCompactionFitRollsBackCutoffAndSummary() {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateService service = context.service();
+        service.addOrReopenProject("Alpha", "workspace");
+        long sessionId = service.loadViewData().activeSession().id();
+        var turn = service.appendUserMessageAndPendingAssistant(sessionId, "first");
+        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply", List.of());
+        long compactedThroughTurnId = service.listIncludedCompletedConversationMessages(sessionId).getLast().turnId();
+        List<AppStateRepository.ConversationMessageRow> expected = service
+                .listIncludedCompletedConversationMessages(sessionId);
+        TransactionTemplate transactionTemplate = new TransactionTemplate(
+                new DataSourceTransactionManager(context.dataSource()));
+
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status -> service
+                .compactConversationAtomically(sessionId, expected, compactedThroughTurnId, "summary", rows -> {
+                    throw new IllegalStateException("does not fit");
+                }))).hasMessage("does not fit");
+        assertThat(service.listConversationMessages(sessionId)).noneMatch(row -> "summary".equals(row.content()));
+        assertThat(service.listIncludedCompletedConversationMessages(sessionId)).containsExactlyElementsOf(expected);
     }
 
     @Test
@@ -150,6 +196,7 @@ class ContextCompactionServiceTests {
         @Override
         public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
                 AgentModelOptions options, Consumer<String> onDelta) {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             streamed = true;
             conversations.add(List.copyOf(conversation));
             toolCalls.add(List.copyOf(tools));
