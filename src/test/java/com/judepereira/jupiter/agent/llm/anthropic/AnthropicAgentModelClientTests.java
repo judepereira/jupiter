@@ -272,6 +272,63 @@ class AnthropicAgentModelClientTests {
     }
 
     @Test
+    void refreshedTokenIsUsedBySynchronousGeneralRetry() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        List<String> authorization = new ArrayList<>();
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(invocation -> {
+            HttpRequest request = invocation.getArgument(0);
+            authorization.add(request.headers().firstValue("Authorization").orElseThrow());
+            return switch (authorization.size()) {
+                case 1 -> response(401, "rejected");
+                case 2 -> response(503, "retry");
+                default -> response(200, "{\"content\":[],\"usage\":{}}");
+            };
+        });
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
+        when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(1), oauth,
+                new ObjectMapper(), http);
+
+        client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of());
+
+        assertThat(authorization).containsExactly("Bearer old", "Bearer new", "Bearer new");
+        verify(http, times(3)).send(any(), any(HttpResponse.BodyHandler.class));
+        verify(oauth).forceRefresh("old");
+    }
+
+    @Test
+    void refreshedTokenIsUsedByStreamingGeneralRetry() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        List<String> authorization = new ArrayList<>();
+        AtomicReference<Boolean> unauthorizedResponseClosed = new AtomicReference<>(false);
+        AtomicReference<Boolean> serviceUnavailableResponseClosed = new AtomicReference<>(false);
+        String success = "event: message_stop\ndata: {\"type\":\"message_stop\"}\n";
+        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(invocation -> {
+            HttpRequest request = invocation.getArgument(0);
+            authorization.add(request.headers().firstValue("Authorization").orElseThrow());
+            return switch (authorization.size()) {
+                case 1 -> response(401, Stream.of("rejected").onClose(() -> unauthorizedResponseClosed.set(true)));
+                case 2 -> response(503, Stream.of("retry").onClose(() -> serviceUnavailableResponseClosed.set(true)));
+                default -> response(200, success.lines());
+            };
+        });
+        AnthropicOAuthService oauth = mock(AnthropicOAuthService.class);
+        when(oauth.currentAccessToken()).thenReturn(Optional.of("old"));
+        when(oauth.forceRefresh("old")).thenReturn(Optional.of("new"));
+        var client = new AnthropicAgentModelClient(new AnthropicProperties(), retryAgentProperties(1), oauth,
+                new ObjectMapper(), http);
+
+        client.chatStreaming(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of(), null);
+
+        assertThat(authorization).containsExactly("Bearer old", "Bearer new", "Bearer new");
+        assertThat(unauthorizedResponseClosed).hasValue(true);
+        assertThat(serviceUnavailableResponseClosed).hasValue(true);
+        verify(http, times(3)).send(any(), any(HttpResponse.BodyHandler.class));
+        verify(oauth).forceRefresh("old");
+    }
+
+    @Test
     void synchronousRetryableStatusesAndIoRetryBeforeSuccess() throws Exception {
         HttpClient http = mock(HttpClient.class);
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(408, "no"), response(429, "no"),

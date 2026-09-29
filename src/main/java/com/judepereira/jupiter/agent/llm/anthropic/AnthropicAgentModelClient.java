@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
@@ -73,18 +74,19 @@ public class AnthropicAgentModelClient implements AgentModelClient {
             Consumer<String> onText) {
         JsonNode requestBody = body(messages, tools, options, true);
         String model = value(requestBody, "model");
-        String accessToken = token();
+        TokenState accessToken = new TokenState(token());
         return retryExecutor.executeStreaming(() -> streamingAttempt(requestBody, accessToken, onText),
                 AnthropicAgentModelClient::isRetryable, "Anthropic", "streaming", model,
                 failure -> statusMessage("Anthropic streaming request failed", failure));
     }
 
-    private ModelRetryExecutor.StreamingAttemptResult<ModelResponse> streamingAttempt(JsonNode body, String accessToken,
-            Consumer<String> onText) throws Exception {
-        HttpResponse<Stream<String>> response = sendStreaming(body, accessToken);
+    private ModelRetryExecutor.StreamingAttemptResult<ModelResponse> streamingAttempt(JsonNode body,
+            TokenState accessToken, Consumer<String> onText) throws Exception {
+        HttpResponse<Stream<String>> response = sendStreaming(body, accessToken.get());
         if (response.statusCode() == 401) {
             close(response.body());
-            String refreshed = refresh(accessToken);
+            String refreshed = refresh(accessToken.get());
+            accessToken.set(refreshed);
             response = sendStreaming(body, refreshed);
             if (response.statusCode() == 401) {
                 close(response.body());
@@ -227,16 +229,17 @@ public class AnthropicAgentModelClient implements AgentModelClient {
 
     private JsonNode send(JsonNode body) {
         String model = value(body, "model");
-        String accessToken = token();
+        TokenState accessToken = new TokenState(token());
         return retryExecutor.execute(() -> sendAttempt(body, accessToken), AnthropicAgentModelClient::isRetryable,
                 "Anthropic", "request", model, failure -> statusMessage("Anthropic request failed", failure));
     }
 
-    private JsonNode sendAttempt(JsonNode body, String accessToken) throws IOException, InterruptedException {
-        HttpResponse<String> response = httpClient.send(request(body, accessToken),
+    private JsonNode sendAttempt(JsonNode body, TokenState accessToken) throws IOException, InterruptedException {
+        HttpResponse<String> response = httpClient.send(request(body, accessToken.get()),
                 HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() == 401) {
-            String refreshed = refresh(accessToken);
+            String refreshed = refresh(accessToken.get());
+            accessToken.set(refreshed);
             response = httpClient.send(request(body, refreshed), HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 401)
                 throw new AnthropicStatusFailure(401);
@@ -460,6 +463,22 @@ public class AnthropicAgentModelClient implements AgentModelClient {
             throw protocolFailure("Anthropic streaming event is missing a content block index");
         }
         return node.path("index").asInt();
+    }
+
+    private static final class TokenState {
+        private final AtomicReference<String> value;
+
+        private TokenState(String token) {
+            value = new AtomicReference<>(token);
+        }
+
+        private String get() {
+            return value.get();
+        }
+
+        private void set(String token) {
+            value.set(token);
+        }
     }
 
     private static final class StreamingBlock {
