@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.ExternalAgentCatalogService;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
@@ -48,10 +49,11 @@ public class CodingAgentHarnessTaskToolTests {
                         ModelResponseMetadata.empty(), null),
                 new ModelResponse("primary complete", null, ModelResponseMetadata.empty(), null)));
 
+        var models = ModelCatalogTestSupport.modelCatalogService();
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp),
-                agentService(primary), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
-                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                agentService(primary), new ExternalAgentCatalogService(agentService(primary), models, tmp.toString()),
+                models, ModelCatalogTestSupport.resolutionService(models), null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
@@ -81,10 +83,11 @@ public class CodingAgentHarnessTaskToolTests {
                         ModelResponseMetadata.empty(), null),
                 new ModelResponse("subagent complete", null, ModelResponseMetadata.empty(), null)));
 
+        var models = ModelCatalogTestSupport.modelCatalogService();
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp),
-                agentService(subagent), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
-                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                agentService(subagent), new ExternalAgentCatalogService(agentService(subagent), models, tmp.toString()),
+                models, ModelCatalogTestSupport.resolutionService(models), null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 

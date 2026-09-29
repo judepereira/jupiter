@@ -29,6 +29,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
+import com.judepereira.jupiter.testsupport.ExternalAgentCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
@@ -73,7 +74,8 @@ public class CodingAgentHarnessAgentSelectionTest {
                 List.of("list_files", "read_file", "search_code", "mcp:*", "task"));
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model),
                 registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
-                agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(),
+                agentService(mcpPlan), ExternalAgentCatalogTestSupport.service(agentService(mcpPlan), tmp),
+                ModelCatalogTestSupport.modelCatalogService(),
                 ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
                 appStateService, null, mcpManager,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
@@ -125,6 +127,7 @@ public class CodingAgentHarnessAgentSelectionTest {
         AgentDefinitionService agentDefinitions = new AgentDefinitionService(new ObjectMapper());
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model),
                 registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props, agentDefinitions,
+                ExternalAgentCatalogTestSupport.service(agentDefinitions, tmp),
                 ModelCatalogTestSupport.modelCatalogService(),
                 ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
                 null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),

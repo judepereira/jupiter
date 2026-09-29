@@ -149,8 +149,8 @@ public final class TestAppStateSupport {
         resolver.setCacheable(false);
         templateEngine.setTemplateResolver(resolver);
         return new UiController(harness, properties, appStateService, new AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null, null,
-                null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                null, modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null,
+                null, null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 activeStreamRegistryService, terminalManager, new TerminalStateService(),

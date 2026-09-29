@@ -30,6 +30,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
+import com.judepereira.jupiter.testsupport.ExternalAgentCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -54,7 +55,8 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                new AgentDefinitionService(new ObjectMapper()), null, null, appStateService, null, mcpManager,
+                new AgentDefinitionService(new ObjectMapper()), ExternalAgentCatalogTestSupport.bundled(tmp), null,
+                null, appStateService, null, mcpManager,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
@@ -98,7 +100,8 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                new AgentDefinitionService(new ObjectMapper()), null, null, appStateService, null, mcpManager,
+                new AgentDefinitionService(new ObjectMapper()), ExternalAgentCatalogTestSupport.bundled(tmp), null,
+                null, appStateService, null, mcpManager,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
@@ -132,7 +135,8 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                agentService(agent), null, null, appStateService, null, mcpManager,
+                agentService(agent), ExternalAgentCatalogTestSupport.service(agentService(agent), tmp), null, null,
+                appStateService, null, mcpManager,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());

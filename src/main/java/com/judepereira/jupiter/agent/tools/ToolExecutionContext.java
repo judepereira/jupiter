@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.agent.tools;
 
+import com.judepereira.jupiter.agent.catalog.AgentCatalogSnapshot;
+import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.harness.CancellationToken;
 import java.nio.file.Path;
@@ -21,6 +23,8 @@ public class ToolExecutionContext {
     private final Set<String> commandEnvironmentAllowlist;
     private final ToolProgressSink progressSink;
     private final CancellationToken cancellationToken;
+    private AgentCatalogSnapshot catalogSnapshot;
+    private AgentDefinition effectiveAgent;
 
     public ToolExecutionContext(Path workspaceRoot, boolean allowWrite, boolean allowCommand, int commandTimeoutSeconds,
             Long sessionId, String agentId, AgentMode agentMode, String toolCallId,
@@ -40,5 +44,10 @@ public class ToolExecutionContext {
                 : Set.copyOf(commandEnvironmentAllowlist);
         this.progressSink = progressSink == null ? ToolProgressSink.noop() : progressSink;
         this.cancellationToken = cancellationToken;
+    }
+
+    public void setRuntimeContext(AgentCatalogSnapshot snapshot, AgentDefinition agent) {
+        this.catalogSnapshot = snapshot;
+        this.effectiveAgent = agent;
     }
 }

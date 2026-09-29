@@ -479,7 +479,7 @@ class SubagentTaskE2ETest extends E2ETestSupport {
             private final TaskTool taskTool;
 
             TestCodingAgentHarness(TaskTool taskTool) {
-                super(null, null, null, null, null, null, null, null, null,
+                super(null, null, null, null, null, null, null, null, null, null,
                         new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                         SkillTestSupport.defaultComponents().discovery(),
                         SkillTestSupport.defaultComponents().resolver(),

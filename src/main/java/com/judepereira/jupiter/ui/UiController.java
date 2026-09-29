@@ -85,6 +85,7 @@ public class UiController {
     private final AgentProperties agentProperties;
     private final AppStateService appStateService;
     private final AgentDefinitionService agentDefinitionService;
+    private final ExternalAgentCatalogService externalAgentCatalogService;
     private final ModelCatalogService modelCatalogService;
     private final AgentModelResolutionService agentModelResolutionService;
     private final ModelPickerService modelPickerService;
@@ -119,11 +120,11 @@ public class UiController {
 
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
-            AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-            AgentModelResolutionService agentModelResolutionService, ModelPickerService modelPickerService,
-            ModelPreferencesService modelPreferencesService, ProviderAvailabilityService providerAvailabilityService,
-            AnthropicOAuthService anthropicOAuthService, SystemBalloonService systemBalloonService,
-            WorkspaceRailRefreshService workspaceRailRefreshService,
+            AgentDefinitionService agentDefinitionService, ExternalAgentCatalogService externalAgentCatalogService,
+            ModelCatalogService modelCatalogService, AgentModelResolutionService agentModelResolutionService,
+            ModelPickerService modelPickerService, ModelPreferencesService modelPreferencesService,
+            ProviderAvailabilityService providerAvailabilityService, AnthropicOAuthService anthropicOAuthService,
+            SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
             ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
             TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
             ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
@@ -138,6 +139,7 @@ public class UiController {
         this.agentProperties = agentProperties;
         this.appStateService = appStateService;
         this.agentDefinitionService = agentDefinitionService;
+        this.externalAgentCatalogService = externalAgentCatalogService;
         this.modelCatalogService = modelCatalogService;
         this.agentModelResolutionService = agentModelResolutionService;
         this.modelPickerService = modelPickerService;
@@ -188,7 +190,7 @@ public class UiController {
         AppStateView view = appStateService.loadViewData();
         SessionView session = null;
         boolean shellRefresh = false;
-        ChatSelection selected = resolveChatSelection(agentId, modelId, thinkingLevel);
+        ChatSelection selected = resolveChatSelection(agentId, modelId, thinkingLevel, workspacePath(view));
 
         if (message != null && !message.isBlank()) {
             boolean implicitModel = modelId == null || modelId.isBlank();
@@ -200,9 +202,7 @@ public class UiController {
             // request implicit so the harness resolves availability again at execution
             // time.
             if (implicitModel) {
-                selected = new ChatSelection(selected.selectedAgent(), modelResolution.model(),
-                        selected.selectedThinking(), false, selected.defaultAgent(), selected.defaultModel(),
-                        selected.defaultThinking());
+                selected = selected.withSelectedModel(modelResolution.model());
             }
             String selectedModelId = selected.selectedModel().id();
             if (modelPickerService != null && modelPickerService.listPickerModels().stream()
@@ -240,10 +240,11 @@ public class UiController {
 
             List<Message> conversationHistory = new ArrayList<>(appStateService.buildConversationHistory(session.id()));
             CancellationToken cancellationToken = new CancellationToken();
-            ActiveStream activeStream = ActiveStream.create(new PendingStream(session.id(), workspaceRoot,
-                    new AgentTurnRequest(null, conversationHistory, workspaceRoot, selected.selectedAgent().id(),
-                            implicitModel ? null : selected.selectedModel().id(), selected.selectedThinking(),
-                            session.id(), cancellationToken)),
+            AgentTurnRequest turnRequest = new AgentTurnRequest(null, conversationHistory, workspaceRoot,
+                    selected.selectedAgent().id(), implicitModel ? null : selected.selectedModel().id(),
+                    selected.selectedThinking(), session.id(), cancellationToken)
+                    .withRuntimeContext(selected.catalogSnapshot(), selected.effectiveAgent());
+            ActiveStream activeStream = ActiveStream.create(new PendingStream(session.id(), workspaceRoot, turnRequest),
                     cancellationToken);
             activeStreams.put(assistantId, activeStream);
             try {
@@ -1749,24 +1750,67 @@ public class UiController {
         if (detail == null) {
             return null;
         }
+        AgentCatalogSnapshot snapshot = catalogSnapshot(Path.of(detail.workspaceRoot()));
+        AgentDefinition defaultAgent = snapshot == null
+                ? agentDefinitionService.defaultAgent()
+                : snapshot.defaultAgent();
         for (int i = detail.chatMessages().size() - 1; i >= 0; i--) {
             ChatMessageView message = detail.chatMessages().get(i);
             if (!"assistant".equals(message.role()) || message.metadata() == null) {
                 continue;
             }
             ChatMessageMetadata metadata = message.metadata();
-            AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
+            AgentDefinition selectedAgent = findSavedAgent(snapshot, metadata);
             ModelDefinition selectedModel = resolveAgentModel(selectedAgent);
-            AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
             ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
             return new ChatSelection(selectedAgent, selectedModel, selectedAgent.defaultThinkingLevel(), false,
-                    defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+                    defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), snapshot, selectedAgent);
         }
         return null;
     }
 
+    private AgentDefinition findSavedAgent(AgentCatalogSnapshot snapshot, ChatMessageMetadata metadata) {
+        if (snapshot != null) {
+            return snapshot.agents().stream().filter(agent -> agent.id().equals(metadata.agentId())).findFirst()
+                    .orElseGet(() -> unavailableAgent(metadata));
+        }
+        return agentDefinitionService.resolveOrDefault(metadata.agentId());
+    }
+
+    private AgentDefinition unavailableAgent(ChatMessageMetadata metadata) {
+        return new AgentDefinition(metadata.agentId(), metadata.agentName() + " (unavailable)",
+                "This saved agent is no longer available.", "", AgentMode.AGENT, List.of(),
+                ThinkingLevel.fromValue(metadata.thinkingLevel()), "", false, false, List.of());
+    }
+
+    private AgentCatalogSnapshot catalogSnapshot(Path workspace) {
+        return externalAgentCatalogService == null ? null : externalAgentCatalogService.snapshot(workspace);
+    }
+
+    private Path workspacePath(AppStateView view) {
+        if (view != null && view.activeWorkspace() != null && view.activeWorkspace().path() != null) {
+            return Path.of(view.activeWorkspace().path());
+        }
+        return Path.of(agentProperties.getWorkspaceRoot());
+    }
+
     private void populateChatControlsModel(Model model, ChatSelection selection) {
-        List<AgentDefinition> agents = agentDefinitionService.listPrimaryAgents();
+        AppStateView view = appStateService.loadViewData();
+        Path workspace = workspacePath(view);
+        AgentCatalogSnapshot snapshot = selection != null && selection.catalogSnapshot() != null
+                ? selection.catalogSnapshot()
+                : externalAgentCatalogService == null ? null : externalAgentCatalogService.snapshot(workspace);
+        List<AgentDefinition> agents = snapshot == null
+                ? agentDefinitionService.listPrimaryAgents()
+                : snapshot.agents().stream().filter(agent -> agent.mode() == AgentMode.AGENT).toList();
+        if (selection != null && selection.selectedAgent() != null
+                && agents.stream().noneMatch(agent -> agent.id().equals(selection.selectedAgent().id()))) {
+            agents = new ArrayList<>(agents);
+            agents.add(selection.selectedAgent());
+        }
+        if (snapshot != null) {
+            model.addAttribute("agentCatalogDiagnostics", snapshot.diagnostics());
+        }
         model.addAttribute("agents", agents);
         List<ModelDefinition> pickerModels = modelPickerService == null
                 ? modelCatalogService.list()
@@ -1798,10 +1842,13 @@ public class UiController {
     }
 
     private ChatSelection defaultChatSelection() {
-        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+        AgentCatalogSnapshot snapshot = catalogSnapshot(workspacePath(appStateService.loadViewData()));
+        AgentDefinition defaultAgent = snapshot == null
+                ? agentDefinitionService.defaultAgent()
+                : snapshot.defaultAgent();
         ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
         return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), false, defaultAgent,
-                defaultModel, defaultAgent.defaultThinkingLevel());
+                defaultModel, defaultAgent.defaultThinkingLevel(), snapshot, defaultAgent);
     }
 
     private ModelDefinition resolveAgentModel(AgentDefinition agent) {
@@ -1812,20 +1859,26 @@ public class UiController {
         }
     }
 
-    private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {
-        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+    private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel, Path workspace) {
+        AgentCatalogSnapshot snapshot = catalogSnapshot(workspace);
+        AgentDefinition defaultAgent = snapshot == null
+                ? agentDefinitionService.defaultAgent()
+                : snapshot.defaultAgent();
         AgentDefinition selectedAgent = agentId == null || agentId.isBlank()
                 ? defaultAgent
-                : agentDefinitionService.getRequired(agentId);
+                : snapshot == null ? agentDefinitionService.getRequired(agentId) : snapshot.getRequired(agentId);
+        AgentDefinition effectiveAgent = snapshot == null
+                ? selectedAgent
+                : snapshot.resolve(selectedAgent.id(), defaultAgent);
         ModelDefinition selectedModel = modelId == null || modelId.isBlank()
-                ? resolveAgentModel(selectedAgent)
+                ? resolveAgentModel(effectiveAgent)
                 : modelCatalogService.getRequired(modelId);
         ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank()
                 ? selectedAgent.defaultThinkingLevel()
                 : ThinkingLevel.fromValue(thinkingLevel);
         ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
         return new ChatSelection(selectedAgent, selectedModel, selectedThinking, modelId != null && !modelId.isBlank(),
-                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), snapshot, effectiveAgent);
     }
 
     private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {
@@ -2210,7 +2263,12 @@ public class UiController {
 
     private record ChatSelection(AgentDefinition selectedAgent, ModelDefinition selectedModel,
             ThinkingLevel selectedThinking, boolean explicitModel, AgentDefinition defaultAgent,
-            ModelDefinition defaultModel, ThinkingLevel defaultThinking) {
+            ModelDefinition defaultModel, ThinkingLevel defaultThinking, AgentCatalogSnapshot catalogSnapshot,
+            AgentDefinition effectiveAgent) {
+        private ChatSelection withSelectedModel(ModelDefinition model) {
+            return new ChatSelection(selectedAgent, model, selectedThinking, false, defaultAgent, defaultModel,
+                    defaultThinking, catalogSnapshot, effectiveAgent);
+        }
     }
 
     private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {

@@ -1,8 +1,10 @@
 package com.judepereira.jupiter.agent.task;
 
+import com.judepereira.jupiter.agent.catalog.AgentCatalogSnapshot;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.ExternalAgentCatalogService;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
@@ -38,14 +40,17 @@ public class SubagentTaskService {
 
     private final AppStateService appStateService;
     private final AgentDefinitionService agentDefinitionService;
+    private final ExternalAgentCatalogService externalAgentCatalogService;
     private final ObjectProvider<CodingAgentHarness> harnessProvider;
     private final LifecycleHookService lifecycleHookService;
 
     @Autowired
     public SubagentTaskService(AppStateService appStateService, AgentDefinitionService agentDefinitionService,
-            ObjectProvider<CodingAgentHarness> harnessProvider, LifecycleHookService lifecycleHookService) {
+            ExternalAgentCatalogService externalAgentCatalogService, ObjectProvider<CodingAgentHarness> harnessProvider,
+            LifecycleHookService lifecycleHookService) {
         this.appStateService = appStateService;
         this.agentDefinitionService = agentDefinitionService;
+        this.externalAgentCatalogService = externalAgentCatalogService;
         this.harnessProvider = harnessProvider;
         this.lifecycleHookService = lifecycleHookService;
     }
@@ -80,7 +85,11 @@ public class SubagentTaskService {
             throw new IllegalStateException("Expected output is required");
         }
 
-        AgentDefinition subagent = agentDefinitionService.getRequired(request.subagentAgentId());
+        AgentCatalogSnapshot snapshot = request.catalogSnapshot() != null
+                ? request.catalogSnapshot()
+                : externalAgentCatalogService.snapshot(Path.of(request.workspaceRoot()));
+        AgentDefinition caller = request.effectiveCaller();
+        AgentDefinition subagent = snapshot.resolve(request.subagentAgentId(), caller);
         if (subagent.mode() != AgentMode.SUBAGENT) {
             throw new IllegalStateException("Target agent is not a subagent: " + subagent.id());
         }
@@ -108,7 +117,8 @@ public class SubagentTaskService {
             CodingAgentHarness harness = harnessProvider.getObject();
             AgentTurnRequest childRequest = new AgentTurnRequest(subagent.systemPrompt(),
                     appStateService.buildConversationHistory(childSessionId), request.workspaceRoot(), subagent.id(),
-                    null, subagent.defaultThinkingLevel(), childSessionId, request.cancellationToken());
+                    null, subagent.defaultThinkingLevel(), childSessionId, request.cancellationToken())
+                    .withRuntimeContext(snapshot, subagent);
 
             AgentTurnResult result = harness.runTurnStreaming(childRequest, new AgentStreamListener() {
                 private final StringBuilder accumulated = new StringBuilder();
@@ -334,7 +344,8 @@ public class SubagentTaskService {
 
     public record SubagentTaskRequest(Long parentSessionId, String parentToolCallId, String workspaceRoot,
             String subagentAgentId, String requestSummary, String task, String expectedOutput,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, AgentCatalogSnapshot catalogSnapshot,
+            AgentDefinition effectiveCaller) {
     }
 
     public record SubagentTaskResult(boolean success, long childSessionId, String subagentAgentId,

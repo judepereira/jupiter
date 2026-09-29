@@ -29,6 +29,7 @@ import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.task.SubagentTaskService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
+import com.judepereira.jupiter.testsupport.ExternalAgentCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
@@ -129,7 +130,8 @@ class LifecycleHookIntegrationTests {
             return result;
         });
         SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()),
-                provider(harness), hooks);
+                ExternalAgentCatalogTestSupport.service(definitions(subagent()), workspaceRoot), provider(harness),
+                hooks);
         service.runTask(request(parentSessionId, workspaceRoot));
 
         var order = inOrder(appStateService, hooks);
@@ -150,7 +152,8 @@ class LifecycleHookIntegrationTests {
         Files.writeString(workspaceRoot.resolve("changed.txt"), "changed");
 
         SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()),
-                provider(harness), hooks);
+                ExternalAgentCatalogTestSupport.service(definitions(subagent()), workspaceRoot), provider(harness),
+                hooks);
         var result = service.runTask(request(parentSessionId, workspaceRoot));
 
         assertThat(result.success()).isFalse();
@@ -173,7 +176,8 @@ class LifecycleHookIntegrationTests {
             return result;
         });
         SubagentTaskService successService = new SubagentTaskService(appStateService, definitions,
-                provider(successHarness), successHooks);
+                ExternalAgentCatalogTestSupport.service(definitions, workspaceRoot), provider(successHarness),
+                successHooks);
         var success = successService.runTask(request(parentSessionId, workspaceRoot));
         assertThat(success.success()).isTrue();
         verify(successHooks).dispatch(eq(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED), eq(parentSessionId));
@@ -184,7 +188,8 @@ class LifecycleHookIntegrationTests {
         CodingAgentHarness errorHarness = harness((request, listener) -> {
             throw new IllegalStateException("child failed");
         });
-        SubagentTaskService errorService = new SubagentTaskService(appStateService, definitions, provider(errorHarness),
+        SubagentTaskService errorService = new SubagentTaskService(appStateService, definitions,
+                ExternalAgentCatalogTestSupport.service(definitions, workspaceRoot), provider(errorHarness),
                 errorHooks);
         var error = errorService.runTask(request(parentSessionId, workspaceRoot));
         assertThat(error.success()).isFalse();
@@ -200,7 +205,8 @@ class LifecycleHookIntegrationTests {
             throw new StreamCancelledException();
         });
         SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()),
-                provider(harness), hooks);
+                ExternalAgentCatalogTestSupport.service(definitions(subagent()), workspaceRoot), provider(harness),
+                hooks);
 
         var result = service.runTask(request(parentSessionId, workspaceRoot));
 
@@ -246,6 +252,11 @@ class LifecycleHookIntegrationTests {
     private static AgentDefinitionService definitions(AgentDefinition subagent) {
         return new AgentDefinitionService(new ObjectMapper()) {
             @Override
+            public List<AgentDefinition> list() {
+                return List.of(subagent);
+            }
+
+            @Override
             public AgentDefinition getRequired(String id) {
                 return subagent;
             }
@@ -254,7 +265,7 @@ class LifecycleHookIntegrationTests {
 
     private static SubagentTaskService.SubagentTaskRequest request(long parentSessionId, Path workspaceRoot) {
         return new SubagentTaskService.SubagentTaskRequest(parentSessionId, "parent-tool", workspaceRoot.toString(),
-                "worker", "summary", "task", "output", null);
+                "worker", "summary", "task", "output", null, null, null);
     }
 
     private static ObjectProvider<CodingAgentHarness> provider(CodingAgentHarness harness) {
@@ -277,7 +288,7 @@ class LifecycleHookIntegrationTests {
     }
 
     private static CodingAgentHarness harness(HarnessBehavior behavior) {
-        return new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+        return new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {

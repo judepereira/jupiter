@@ -130,7 +130,7 @@ class UiControllerInvalidCheckoutBranchTests {
     private static UiController controller(Path projectRoot, AppStateService appStateService,
             SystemBalloonService balloonService) {
         return new UiController(mock(CodingAgentHarness.class), agentProperties(projectRoot), appStateService,
-                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                new AgentDefinitionService(new ObjectMapper()), null, ModelCatalogTestSupport.modelCatalogService(),
                 ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
                 null, Mockito.mock(AnthropicOAuthService.class), balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),

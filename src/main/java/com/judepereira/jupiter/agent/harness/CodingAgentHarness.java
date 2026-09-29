@@ -1,9 +1,11 @@
 package com.judepereira.jupiter.agent.harness;
 
+import com.judepereira.jupiter.agent.catalog.AgentCatalogSnapshot;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.AgentModelResolutionService;
+import com.judepereira.jupiter.agent.catalog.ExternalAgentCatalogService;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
@@ -27,6 +29,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
+import com.judepereira.jupiter.agent.tools.impl.TaskTool;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.TokenUsageService;
 import java.nio.file.Path;
@@ -46,6 +49,7 @@ public class CodingAgentHarness {
     private final ToolRegistry registry;
     private final AgentProperties props;
     private final AgentDefinitionService agentDefinitionService;
+    private final ExternalAgentCatalogService externalAgentCatalogService;
     private final ModelCatalogService modelCatalogService;
     private final AgentModelResolutionService agentModelResolutionService;
     private final AppStateService appStateService;
@@ -58,15 +62,17 @@ public class CodingAgentHarness {
 
     @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
-            AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-            AgentModelResolutionService agentModelResolutionService, AppStateService appStateService,
-            TokenUsageService tokenUsageService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
-            SystemPromptComposer systemPromptComposer, SkillDiscoveryService skillDiscoveryService,
-            SkillInvocationResolver skillInvocationResolver, SkillContextInjector skillContextInjector) {
+            AgentDefinitionService agentDefinitionService, ExternalAgentCatalogService externalAgentCatalogService,
+            ModelCatalogService modelCatalogService, AgentModelResolutionService agentModelResolutionService,
+            AppStateService appStateService, TokenUsageService tokenUsageService,
+            McpProjectMcpServerRuntimeManager mcpRuntimeManager, SystemPromptComposer systemPromptComposer,
+            SkillDiscoveryService skillDiscoveryService, SkillInvocationResolver skillInvocationResolver,
+            SkillContextInjector skillContextInjector) {
         this.modelFactory = modelFactory;
         this.registry = registry;
         this.props = props;
         this.agentDefinitionService = agentDefinitionService;
+        this.externalAgentCatalogService = externalAgentCatalogService;
         this.modelCatalogService = modelCatalogService;
         this.agentModelResolutionService = agentModelResolutionService;
         this.appStateService = appStateService;
@@ -87,11 +93,18 @@ public class CodingAgentHarness {
         String workspaceRoot = request.getWorkspaceRoot() == null || request.getWorkspaceRoot().isBlank()
                 ? props.getWorkspaceRoot()
                 : request.getWorkspaceRoot();
-        Path workspace = Path.of(workspaceRoot);
+        Path workspace = Path.of(workspaceRoot).toAbsolutePath().normalize();
         SkillCatalog skillCatalog = skillDiscoveryService.discover(workspace);
-        AgentDefinition agent = resolveAgent(request);
+        AgentCatalogSnapshot catalog = request.getCatalogSnapshot() != null
+                ? request.getCatalogSnapshot()
+                : externalAgentCatalogService.snapshot(workspace);
+        AgentDefinition agent = request.getEffectiveAgent() != null
+                ? request.getEffectiveAgent()
+                : resolveAgent(request, catalog);
         ModelResolution selectedResolution = resolveModel(request, agent);
         ModelDefinition selectedModel = selectedResolution.model();
+        agent = effectiveAgent(agent, selectedModel);
+        request = request.withRuntimeContext(catalog, agent);
         if (selectedModel != null) {
             listener.onModelResolved(selectedResolution.preferredModelId(), selectedModel);
         }
@@ -123,12 +136,13 @@ public class CodingAgentHarness {
                 props.getCommandTimeoutSeconds(), request.getSessionId(), request.getAgentId(),
                 agent == null ? null : agent.mode(), null, environmentVariables, commandEnvironmentAllowlist,
                 ToolProgressSink.noop(), null);
+        execCtxTemplate.setRuntimeContext(catalog, agent);
 
         long projectId = resolveProjectId(request.getSessionId());
         McpProjectToolSnapshot mcpSnapshot = resolveMcpSnapshot(projectId);
 
         Set<String> allowedTools = resolveAllowedTools(agent);
-        List<ToolDefinition> defs = resolveToolDefinitions(allowedTools, mcpSnapshot);
+        List<ToolDefinition> defs = resolveToolDefinitions(allowedTools, mcpSnapshot, catalog);
 
         StringBuilder accumulated = new StringBuilder();
         CancellationToken cancellationToken = request.getCancellationToken();
@@ -213,6 +227,7 @@ public class CodingAgentHarness {
                                 execCtxTemplate.getCommandEnvironmentAllowlist(), (eventName, payload) -> listener
                                         .onToolCallProgress(toolCallId, toolName, eventName, payload),
                                 cancellationToken);
+                        execCtx.setRuntimeContext(catalog, agent);
                         ToolExecutionResult result = executeTool(toolName, args, execCtx, mcpSnapshot);
                         String toolText = result.getText() == null ? "" : result.getText();
                         convo.add(new Message(Message.Role.TOOL, toolText, toolCallId, null, null));
@@ -278,7 +293,12 @@ public class CodingAgentHarness {
         return "tool-" + iteration + "-" + toolIndex;
     }
 
-    private AgentDefinition resolveAgent(AgentTurnRequest request) {
+    private AgentDefinition resolveAgent(AgentTurnRequest request, AgentCatalogSnapshot catalog) {
+        if (catalog != null) {
+            if (request.getAgentId() == null || request.getAgentId().isBlank())
+                return catalog.defaultAgent();
+            return catalog.getRequired(request.getAgentId());
+        }
         if (agentDefinitionService == null) {
             return null;
         }
@@ -286,6 +306,15 @@ public class CodingAgentHarness {
             return agentDefinitionService.defaultAgent();
         }
         return agentDefinitionService.getRequired(request.getAgentId());
+    }
+
+    private AgentDefinition effectiveAgent(AgentDefinition agent, ModelDefinition selectedModel) {
+        if (agent == null || selectedModel == null || agent.modelIds().equals(List.of(selectedModel.id()))) {
+            return agent;
+        }
+        return new AgentDefinition(agent.id(), agent.name(), agent.description(), agent.systemPrompt(), agent.mode(),
+                List.of(selectedModel.id()), agent.defaultThinkingLevel(), agent.textVerbosity(), agent.allowWrite(),
+                agent.allowCommand(), agent.allowedTools());
     }
 
     private ModelResolution resolveModel(AgentTurnRequest request, AgentDefinition agent) {
@@ -353,10 +382,12 @@ public class CodingAgentHarness {
         return allowed;
     }
 
-    private List<ToolDefinition> resolveToolDefinitions(Set<String> allowedTools, McpProjectToolSnapshot mcpSnapshot) {
+    private List<ToolDefinition> resolveToolDefinitions(Set<String> allowedTools, McpProjectToolSnapshot mcpSnapshot,
+            AgentCatalogSnapshot catalog) {
         List<ToolDefinition> builtIns = registry.all().values().stream()
                 .filter(tool -> allowedTools != null && allowedTools.contains(tool.name()))
-                .map(tool -> tool.definition()).collect(Collectors.toCollection(ArrayList::new));
+                .map(tool -> tool instanceof TaskTool taskTool ? taskTool.definition(catalog) : tool.definition())
+                .collect(Collectors.toCollection(ArrayList::new));
         if (!allowsMcpTools(allowedTools)) {
             return builtIns;
         }

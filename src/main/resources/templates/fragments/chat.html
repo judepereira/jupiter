@@ -40,6 +40,19 @@
             th:attr="data-session-id=${activeSession != null ? activeSession.id : null}, data-model-explicit=${selectedModelExplicit}"
         >
             <div
+                th:if="${agentCatalogDiagnostics != null and !agentCatalogDiagnostics.isEmpty()}"
+                class="chat-catalog-diagnostics"
+                role="alert"
+            >
+                <strong>Agent catalog issues</strong>
+                <ul>
+                    <li th:each="diagnostic : ${agentCatalogDiagnostics}">
+                        <span th:text="${diagnostic.source}"></span>: <span th:text="${diagnostic.message}"></span>
+                    </li>
+                </ul>
+            </div>
+
+            <div
                 id="chat-controls"
                 class="chat-controls"
                 th:fragment="chatControls"

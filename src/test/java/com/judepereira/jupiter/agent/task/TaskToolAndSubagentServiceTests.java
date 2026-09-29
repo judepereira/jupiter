@@ -1,11 +1,15 @@
 package com.judepereira.jupiter.agent.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentCatalogSnapshot;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.ExternalAgentCatalogService;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
@@ -38,9 +42,38 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.ObjectProvider;
 
 public class TaskToolAndSubagentServiceTests {
+
+    private static AgentCatalogSnapshot catalog(AgentDefinition subagent) {
+        AgentDefinition caller = new AgentDefinition("parent", "Parent", "", "", AgentMode.AGENT, subagent.modelIds(),
+                ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file", "task"));
+        return new AgentCatalogSnapshot(List.of(caller, subagent), Map.of(), List.of(), Map.of());
+    }
+
+    private static ToolExecutionContext context(Path workspace, long sessionId, String toolCallId,
+            AgentCatalogSnapshot snapshot) {
+        ToolExecutionContext context = new ToolExecutionContext(workspace, false, false, 30, sessionId, "parent",
+                AgentMode.AGENT, toolCallId, Map.of(), Set.of(), ToolProgressSink.noop(), null);
+        context.setRuntimeContext(snapshot, snapshot.getRequired("parent"));
+        return context;
+    }
+
+    private static ToolExecutionContext contextWithSink(Path workspace, long sessionId, String toolCallId,
+            AgentCatalogSnapshot snapshot, ToolProgressSink sink) {
+        ToolExecutionContext context = new ToolExecutionContext(workspace, false, false, 30, sessionId, "parent",
+                AgentMode.AGENT, toolCallId, Map.of(), Set.of(), sink, null);
+        context.setRuntimeContext(snapshot, snapshot.getRequired("parent"));
+        return context;
+    }
+
+    private static ExternalAgentCatalogService externalCatalog(AgentCatalogSnapshot snapshot) {
+        ExternalAgentCatalogService service = mock(ExternalAgentCatalogService.class);
+        when(service.snapshot(ArgumentMatchers.any(Path.class))).thenReturn(snapshot);
+        return service;
+    }
 
     @Test
     public void taskToolCreatesHiddenChildSessionPersistsChildTranscriptAndReturnsMetadata(
@@ -55,7 +88,7 @@ public class TaskToolAndSubagentServiceTests {
         AgentDefinitionService agentDefinitionService = agentService(subagent);
 
         CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
-                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
             @Override
@@ -73,14 +106,13 @@ public class TaskToolAndSubagentServiceTests {
         };
 
         SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService,
-                childHarnessProvider(childHarness), null);
+                externalCatalog(catalog(subagent)), childHarnessProvider(childHarness), null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         ToolExecutionResult result = taskTool.execute(
                 Map.of("agentId", "engineer", "requestSummary", "Create the parser file", "task", "write a file",
                         "expectedOutput", "child final"),
-                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call",
-                        AgentMode.AGENT, "parent-tool-call", Map.of(), Set.of(), ToolProgressSink.noop(), null));
+                context(workspaceRoot, parentSessionId, "parent-tool-call", catalog(subagent)));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getText()).isEqualTo("child final");
@@ -128,14 +160,14 @@ public class TaskToolAndSubagentServiceTests {
         CodingAgentHarness childHarness = realHarness(model, workspaceRoot);
 
         SubagentTaskService service = new SubagentTaskService(appStateService, definitions,
-                childHarnessProvider(childHarness), null);
+                externalCatalog(catalog(subagent)), childHarnessProvider(childHarness), null);
         TaskTool taskTool = new TaskTool(definitions, service);
 
-        var firstResult = taskTool.execute(
-                Map.of("agentId", "engineer", "requestSummary", "release", "task", "use $release", "expectedOutput",
-                        "done"),
-                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool-explicit",
-                        AgentMode.AGENT, "tool-explicit", Map.of(), Set.of(), ToolProgressSink.noop(), null));
+        var firstResult = taskTool
+                .execute(
+                        Map.of("agentId", "engineer", "requestSummary", "release", "task", "use $release",
+                                "expectedOutput", "done"),
+                        context(workspaceRoot, parentSessionId, "tool-explicit", catalog(subagent)));
         assertThat(captured).hasSize(1);
         assertThat(captured.getFirst().getFirst().getContent()).contains("<available_skills>")
                 .contains("release workflow");
@@ -144,11 +176,8 @@ public class TaskToolAndSubagentServiceTests {
         assertThat(captured.getFirst())
                 .anySatisfy(message -> assertThat(message.getContent()).contains("Primary task:\nuse $release"));
 
-        taskTool.execute(
-                Map.of("agentId", "engineer", "requestSummary", "metadata", "task", "inspect skills", "expectedOutput",
-                        "done"),
-                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool-metadata",
-                        AgentMode.AGENT, "tool-metadata", Map.of(), Set.of(), ToolProgressSink.noop(), null));
+        taskTool.execute(Map.of("agentId", "engineer", "requestSummary", "metadata", "task", "inspect skills",
+                "expectedOutput", "done"), context(workspaceRoot, parentSessionId, "tool-metadata", catalog(subagent)));
         assertThat(captured).hasSize(2);
         assertThat(captured.get(1).getFirst().getContent()).contains("<available_skills>");
         assertThat(captured.get(1))
@@ -168,7 +197,7 @@ public class TaskToolAndSubagentServiceTests {
             }
         };
         props.setModel("openai/gpt-5.6-sol");
-        return new CodingAgentHarness(factory, new ToolRegistry(), props, null, null, null, null, null, null,
+        return new CodingAgentHarness(factory, new ToolRegistry(), props, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.components(workspace).discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
@@ -185,7 +214,7 @@ public class TaskToolAndSubagentServiceTests {
                 List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
         SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService,
-                childHarnessProvider(null), null);
+                externalCatalog(catalog(subagent)), childHarnessProvider(null), null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         ToolExecutionResult result = taskTool
@@ -199,12 +228,51 @@ public class TaskToolAndSubagentServiceTests {
     }
 
     @Test
+    public void taskToolDescriptionIncludesOnlySubagentsFromExternalSnapshot() {
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "subagent description", "",
+                AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of());
+        AgentDefinition primary = new AgentDefinition("primary", "Primary", "primary description", "", AgentMode.AGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("task"));
+        AgentDefinition parent = new AgentDefinition("parent", "Parent", "", "", AgentMode.AGENT, "openai/gpt-5.5",
+                ThinkingLevel.MEDIUM, "low", true, true, List.of("task"));
+        AgentCatalogSnapshot snapshot = new AgentCatalogSnapshot(List.of(parent, primary, subagent), Map.of(),
+                List.of(), Map.of());
+        AgentDefinitionService agentDefinitionService = agentService(subagent);
+        TaskTool taskTool = new TaskTool(agentDefinitionService, new SubagentTaskService(null, agentDefinitionService,
+                externalCatalog(snapshot), childHarnessProvider(null), null));
+
+        assertThat(taskTool.definition(snapshot).getDescription()).contains("Engineer (engineer)")
+                .doesNotContain("Primary (primary)");
+    }
+
+    @Test
+    public void taskToolRejectsExternalPrimaryTarget() {
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "", AgentMode.SUBAGENT,
+                "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of());
+        AgentDefinition primary = new AgentDefinition("primary", "Primary", "", "", AgentMode.AGENT, "openai/gpt-5.5",
+                ThinkingLevel.MEDIUM, "low", true, true, List.of("task"));
+        AgentDefinition parent = new AgentDefinition("parent", "Parent", "", "", AgentMode.AGENT, "openai/gpt-5.5",
+                ThinkingLevel.MEDIUM, "low", true, true, List.of("task"));
+        AgentCatalogSnapshot snapshot = new AgentCatalogSnapshot(List.of(parent, primary, subagent), Map.of(),
+                List.of(), Map.of());
+        AgentDefinitionService agentDefinitionService = agentService(subagent);
+        TaskTool taskTool = new TaskTool(agentDefinitionService, new SubagentTaskService(null, agentDefinitionService,
+                externalCatalog(snapshot), childHarnessProvider(null), null));
+
+        ToolExecutionResult result = taskTool.execute(Map.of("agentId", "primary", "requestSummary", "run primary",
+                "task", "do work", "expectedOutput", "done"), context(Path.of("."), 1L, "tool-call", snapshot));
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getText()).contains("Target agent is not a subagent: primary");
+    }
+
+    @Test
     public void taskToolSchemaRequiresRequestSummary() {
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent system prompt",
                 AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
-        TaskTool taskTool = new TaskTool(agentDefinitionService,
-                new SubagentTaskService(null, agentDefinitionService, childHarnessProvider(null), null));
+        TaskTool taskTool = new TaskTool(agentDefinitionService, new SubagentTaskService(null, agentDefinitionService,
+                externalCatalog(catalog(subagent)), childHarnessProvider(null), null));
 
         var schema = taskTool.definition().getSchema();
         assertThat(schema.properties()).extracting(ToolParameter::name).contains("agentId", "requestSummary", "task",
@@ -223,7 +291,7 @@ public class TaskToolAndSubagentServiceTests {
         AgentDefinitionService agentDefinitionService = agentService(subagent);
 
         CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
-                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector()) {
             @Override
@@ -240,7 +308,7 @@ public class TaskToolAndSubagentServiceTests {
         };
 
         SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService,
-                childHarnessProvider(childHarness), null);
+                externalCatalog(catalog(subagent)), childHarnessProvider(childHarness), null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         List<String> events = new ArrayList<>();
@@ -267,8 +335,7 @@ public class TaskToolAndSubagentServiceTests {
         ToolExecutionResult result = taskTool.execute(
                 Map.of("agentId", "engineer", "requestSummary", "Create the parser file", "task", "write a file",
                         "expectedOutput", "child final"),
-                new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "parent-tool-call",
-                        AgentMode.AGENT, "parent-tool-call", Map.of(), Set.of(), sink, null));
+                contextWithSink(workspaceRoot, parentSessionId, "parent-tool-call", catalog(subagent), sink));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(events).containsExactly("started:Engineer:Create the parser file", "delta:child final",

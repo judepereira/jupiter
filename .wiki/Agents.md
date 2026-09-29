@@ -1,4 +1,14 @@
 Jupiter agents are Markdown files with YAML frontmatter. This is similar to other coding agents such as Claude or Codex.
+Jupiter also discovers compatible home/workspace agents from `.jupiter/agents`, `.claude/agents`, and `.codex/agents`
+(home definitions are lower precedence than workspace definitions; within a scope Codex < Claude < Jupiter). Claude
+Markdown accepts comma-separated or YAML-list tools and Codex TOML supports native tables such as
+`developer_instructions`, `model_reasoning_effort`, and `sandbox_mode`. Unsupported control fields are reported rather
+than silently ignored. Claude custom agents and Codex roles/files default to the primary `agent` mode when `mode` is
+omitted; explicit `mode: subagent` keeps them as subagents. Jupiter supports an explicit `mode: agent` or `mode:
+subagent` extension in Claude Markdown and Codex Markdown/TOML (registered Codex roles may also set `mode`; conflicting
+file and role values are rejected). Primary imports receive the bundled primary model fallback when model is omitted or
+`inherit`, and may use `task`; subagents cannot use recursive task delegation. Agents omitting model or tools are marked
+as inheriting those values; only subagent tools are intersected with the invoking agent's permissions.
 
 ![Agent, model, and thinking controls](images/agents-models-thinking.png)
 

@@ -78,7 +78,7 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
         @Bean
         @Primary
         CodingAgentHarness codingAgentHarness() {
-            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+            return new CodingAgentHarness(null, null, null, null, null, null, null, null, null, null,
                     new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                     SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                     SkillTestSupport.defaultComponents().injector()) {
