@@ -37,5 +37,7 @@ One subtle point: Plan has no direct write or command tools, but it **can** dele
 
 Subagents never receive `task`, so native delegation cannot recurse forever.
 
-The composer lets you pick the agent, model, and thinking level for a turn. Without an explicit model or thinking
-override, the selected agent's configured defaults apply.
+The composer lets you pick the agent, model, and thinking level for a turn. When you return to a session, Jupiter
+restores the latest visible assistant turn's agent, model, and thinking configuration. For a fresh session, or when a
+persisted choice is no longer available, the selected agent's configured defaults apply. Without an explicit model or
+thinking override, those defaults apply to the next turn.

@@ -42,7 +42,9 @@ switching models.
 ## Thinking Level
 
 The composer lets you choose a thinking level for a primary turn. Supported models receive that level when the request
-is sent. Without an explicit override, the selected agent's configured defaults apply.
+is sent. Without an explicit override, the selected agent's configured defaults apply. When returning to a session,
+Jupiter restores the agent, model, and thinking level used by the latest visible assistant turn. Fresh sessions use
+agent defaults, and unavailable or stale persisted choices fall back to the current agent's defaults.
 
 ## Treat Provider Credentials as Secrets
 

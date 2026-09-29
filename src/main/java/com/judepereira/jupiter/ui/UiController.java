@@ -1749,6 +1749,8 @@ public class UiController {
         if (detail == null) {
             return null;
         }
+        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+        ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
         for (int i = detail.chatMessages().size() - 1; i >= 0; i--) {
             ChatMessageView message = detail.chatMessages().get(i);
             if (!"assistant".equals(message.role()) || message.metadata() == null) {
@@ -1757,10 +1759,26 @@ public class UiController {
             ChatMessageMetadata metadata = message.metadata();
             AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
             ModelDefinition selectedModel = resolveAgentModel(selectedAgent);
-            AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-            ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-            return new ChatSelection(selectedAgent, selectedModel, selectedAgent.defaultThinkingLevel(), false,
-                    defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+            boolean explicitModel = false;
+            if (metadata.modelId() != null && !metadata.modelId().isBlank()) {
+                try {
+                    selectedModel = modelCatalogService.getRequired(metadata.modelId());
+                    explicitModel = true;
+                } catch (IllegalArgumentException e) {
+                    log.warn("Ignoring unknown persisted model '{}' while restoring session", metadata.modelId());
+                }
+            }
+            ThinkingLevel selectedThinking = selectedAgent.defaultThinkingLevel();
+            if (metadata.thinkingLevel() != null && !metadata.thinkingLevel().isBlank()) {
+                try {
+                    selectedThinking = ThinkingLevel.fromValue(metadata.thinkingLevel());
+                } catch (IllegalArgumentException e) {
+                    log.warn("Ignoring invalid persisted thinking level '{}' while restoring session",
+                            metadata.thinkingLevel());
+                }
+            }
+            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, explicitModel, defaultAgent,
+                    defaultModel, defaultAgent.defaultThinkingLevel());
         }
         return null;
     }
@@ -1787,6 +1805,13 @@ public class UiController {
         model.addAttribute("models", pickerModels);
         model.addAttribute("pickerEmpty", pickerModels.isEmpty());
         ModelDefinition renderedModel = selection.selectedModel();
+        boolean explicitModel = selection.explicitModel();
+        String renderedModelId = renderedModel == null ? null : renderedModel.id();
+        if (renderedModelId != null
+                && pickerModels.stream().noneMatch(candidate -> candidate.id().equals(renderedModelId))) {
+            renderedModel = resolveAgentModel(selection.selectedAgent());
+            explicitModel = false;
+        }
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
         model.addAttribute("defaultModel", selection.defaultModel());
@@ -1794,7 +1819,7 @@ public class UiController {
         model.addAttribute("selectedAgent", selection.selectedAgent());
         model.addAttribute("selectedModel", renderedModel);
         model.addAttribute("selectedThinking", selection.selectedThinking());
-        model.addAttribute("selectedModelExplicit", selection.explicitModel());
+        model.addAttribute("selectedModelExplicit", explicitModel);
     }
 
     private ChatSelection defaultChatSelection() {

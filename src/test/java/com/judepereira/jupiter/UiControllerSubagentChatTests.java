@@ -119,14 +119,13 @@ public class UiControllerSubagentChatTests {
     }
 
     @Test
-    public void loadPrimaryChatRestoresAgentIdentityAndUsesFrontmatterModelAndThinkingDefaults(
-            @TempDir Path workspaceRoot) {
+    public void loadPrimaryChatRestoresLatestInvocationConfiguration(@TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH",
-                null);
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-sol", "HIGH",
+                "openai/gpt-5.6-terra");
         appStateService.appendVisibleSystemMessage(sessionId, "summary one");
         appStateService.appendVisibleSystemMessage(sessionId, "summary two");
         appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
@@ -137,18 +136,19 @@ public class UiControllerSubagentChatTests {
         controller.loadPrimaryChat(model);
 
         assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
-        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
-        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-sol");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(true);
     }
 
     @Test
-    public void indexRestoresAgentIdentityAndUsesFrontmatterModelAndThinkingDefaults(@TempDir Path workspaceRoot) {
+    public void indexRestoresLatestInvocationConfiguration(@TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH",
-                null);
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-sol", "HIGH",
+                "openai/gpt-5.6-terra");
         appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
         appStateService.completeAssistantMessage(sessionId, "assistant-1", "done", List.of());
 
@@ -157,8 +157,48 @@ public class UiControllerSubagentChatTests {
         controller.index(model);
 
         assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-sol");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(true);
+    }
+
+    @Test
+    public void reloadUsesNewestVisibleAssistantMetadataIncludingPendingMessages(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "old-user", "old-assistant", "old",
+                new ChatMessageMetadata("plan", "Plan", "openai/gpt-5.6-terra", "LOW", null));
+        appStateService.appendVisibleSystemMessage(sessionId, "system update");
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "latest-user", "latest-assistant", "latest",
+                new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-sol", "HIGH", null));
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        controller.loadPrimaryChat(model);
+
+        assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-sol");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(true);
+    }
+
+    @Test
+    public void reloadFallsBackForInvalidPersistedChoices(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "task",
+                new ChatMessageMetadata("engineer", "Engineer", "unknown/model", "not-a-level", null));
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        controller.loadPrimaryChat(model);
+
+        assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
         assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
         assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(false);
     }
 
     private static UiController controller(AppStateService appStateService, Path workspaceRoot) {
