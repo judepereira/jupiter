@@ -69,9 +69,9 @@ class CommandCatalogServiceTest {
                 home().toString()).list(workspace);
         List<CommandCatalogService.CommandDefinition> external = commands.stream().filter(c -> !c.editable()).toList();
 
-        assertThat(commands).filteredOn(c -> c.id().equals("custom")).singleElement()
+        assertThat(commands).filteredOn(c -> "custom".equals(c.id())).singleElement()
                 .extracting(CommandCatalogService.CommandDefinition::body).isEqualTo("custom command");
-        assertThat(commands).filteredOn(c -> c.id().equals("status")).singleElement()
+        assertThat(commands).filteredOn(c -> "status".equals(c.id())).singleElement()
                 .extracting(CommandCatalogService.CommandDefinition::body).isNotEqualTo("external status");
         assertThat(external).extracting(CommandCatalogService.CommandDefinition::id).containsExactly("same");
         assertThat(external).singleElement().satisfies(command -> {
