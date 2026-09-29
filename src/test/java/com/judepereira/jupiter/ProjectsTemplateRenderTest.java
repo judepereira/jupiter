@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
+import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
@@ -338,6 +339,40 @@ public class ProjectsTemplateRenderTest {
                 "name=\"provider\" value=\"openai\"", "name=\"provider\" value=\"anthropic\"",
                 "value=\"openai/gpt-test\"", "selected", "value=\"anthropic/claude-test\"");
         assertThat(html.split("class=\"settings-model-selections\"", -1)).hasSize(3);
+    }
+
+    @Test
+    public void anthropicOAuthPendingStateRendersAuthorizationLinkOnlyWhenAvailable() {
+        SpringTemplateEngine engine = engine();
+        String authorizationUrl = "https://console.anthropic.com/oauth/authorize?state=test-state&scope=code";
+        WebContext pending = webContext();
+        pending.setVariable("anthropicOAuthView", new AnthropicOAuthService.AnthropicOAuthView(
+                AnthropicOAuthService.Status.AUTHENTICATION_PENDING, "Authentication pending.", authorizationUrl));
+
+        String pendingHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("anthropicOAuthSection"), TemplateMode.HTML, null),
+                pending);
+
+        String escapedAuthorizationUrl = HtmlUtils.htmlEscape(authorizationUrl);
+        assertThat(pendingHtml)
+                .contains("<a href=\"" + escapedAuthorizationUrl + "\">" + escapedAuthorizationUrl + "</a>")
+                .contains("Authorize Claude at:").contains("name=\"code\"");
+
+        WebContext pendingWithoutUrl = webContext();
+        pendingWithoutUrl.setVariable("anthropicOAuthView", new AnthropicOAuthService.AnthropicOAuthView(
+                AnthropicOAuthService.Status.AUTHENTICATION_PENDING, "Authentication pending.", null));
+        String pendingWithoutUrlHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("anthropicOAuthSection"), TemplateMode.HTML, null),
+                pendingWithoutUrl);
+        assertThat(pendingWithoutUrlHtml).doesNotContain("Authorize Claude at:", "console.anthropic.com");
+
+        WebContext connected = webContext();
+        connected.setVariable("anthropicOAuthView", new AnthropicOAuthService.AnthropicOAuthView(
+                AnthropicOAuthService.Status.CONNECTED, "Anthropic connected.", authorizationUrl));
+        String connectedHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("anthropicOAuthSection"), TemplateMode.HTML, null),
+                connected);
+        assertThat(connectedHtml).doesNotContain("Authorize Claude at:", authorizationUrl);
     }
 
     @Test

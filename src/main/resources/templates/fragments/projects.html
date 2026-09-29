@@ -916,6 +916,10 @@
         th:with="view=${anthropicOAuthView}"
     >
         <p th:text="${view.message}"></p>
+        <p th:if="${view.pending and view.authorizationUrl != null}">
+            <strong>Authorize Claude at:</strong>
+            <a th:href="${view.authorizationUrl}" th:text="${view.authorizationUrl}"></a>
+        </p>
         <form
             th:if="${view.pending}"
             hx-post="/ui/settings/anthropic/complete"

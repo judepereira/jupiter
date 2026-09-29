@@ -16,7 +16,8 @@ available independently.
 
 ## Connect Claude
 
-Open **Settings → Model Providers** and choose **Connect Claude**.
+Open **Settings → Model Providers** and choose **Connect Claude**. Follow the displayed authorization link, then paste
+the authentication code back into Jupiter.
 
 Claude OAuth state is stored encrypted and restored across restarts. **Disconnect** removes the saved connection. If you
 need support for adding an Anthropic API key, submit a feature request.

@@ -54,14 +54,18 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                             .click());
             assertThat(page.locator("#openai-oauth-section")).containsText("Connected.");
 
-            // Starting Claude creates a pending local authorization flow. The current
-            // fragment asks for the code directly; omitting the optional state suffix
-            // makes the server use the pending flow's state.
+            // Starting Claude creates a pending local authorization flow. Omitting the
+            // optional state suffix makes the server use the pending flow's state.
             assertThat(page.locator("#settings-model-providers")).isVisible();
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/anthropic/start") && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect Claude"))
                             .click());
+            Locator authorizationLink = page.locator("#anthropic-oauth-section a[href]");
+            assertThat(authorizationLink).hasCount(1);
+            String authorizationUrl = authorizationLink.getAttribute("href");
+            assertThat(authorizationUrl).startsWith(fixture.url("/claude/authorize"));
+            assertThat(authorizationLink).hasText(authorizationUrl);
             page.locator("#anthropic-oauth-section input[name='code']").fill("local-code");
             page.waitForResponse(
                     response -> response.url().contains("/ui/settings/anthropic/complete") && response.status() == 200,
