@@ -249,12 +249,14 @@ public class UiController {
             try {
                 activeStreamRegistryService.register(assistantId, session.id(), workspaceRoot);
                 appStateService.publishWorkspaceRailRefresh();
+            } catch (RuntimeException e) {
+                activeStreams.remove(assistantId, activeStream);
+                activeStreamRegistryService.unregister(assistantId);
+                throw e;
             } catch (Exception e) {
                 activeStreams.remove(assistantId, activeStream);
                 activeStreamRegistryService.unregister(assistantId);
-                throw e instanceof RuntimeException runtime
-                        ? runtime
-                        : new IllegalStateException("Failed to queue active stream", e);
+                throw new IllegalStateException("Failed to queue active stream", e);
             }
 
             view = appStateService.loadViewData();
@@ -365,10 +367,12 @@ public class UiController {
         try {
             Thread runner = Thread.startVirtualThread(() -> runActiveStream(assistantId, active));
             active.runner().set(runner);
+        } catch (Exception e) {
+            active.started().set(false);
+            listenerStartFailed(active, assistantId, e, emitter);
         } catch (Throwable t) {
             active.started().set(false);
-            Exception e = t instanceof Exception exception ? exception : new RuntimeException(t);
-            listenerStartFailed(active, assistantId, e, emitter);
+            listenerStartFailed(active, assistantId, new RuntimeException(t), emitter);
         }
     }
 

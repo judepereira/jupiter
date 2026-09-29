@@ -147,10 +147,15 @@ public class SystemBalloonService {
     private void sendToEmitter(SseEmitter emitter, SseEmitter.SseEventBuilder event) {
         try {
             emitter.send(event);
-        } catch (Exception e) {
-            if (!(e instanceof AsyncRequestNotUsableException)) {
-                log.error("Failed to send system balloon to SSE client", e);
+        } catch (AsyncRequestNotUsableException e) {
+            disconnect(emitter);
+            try {
+                emitter.completeWithError(e);
+            } catch (Exception completionError) {
+                log.error("Failed to close failed SSE client", completionError);
             }
+        } catch (Exception e) {
+            log.error("Failed to send system balloon to SSE client", e);
             disconnect(emitter);
             try {
                 emitter.completeWithError(e);

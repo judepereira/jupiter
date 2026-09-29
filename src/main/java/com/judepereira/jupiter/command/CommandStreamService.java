@@ -97,10 +97,12 @@ public class CommandStreamService {
         try {
             Thread runner = Thread.startVirtualThread(() -> runActiveStream(assistantId, active));
             active.runner().set(runner);
+        } catch (Exception e) {
+            active.started().set(false);
+            fail(active, assistantId, e);
         } catch (Throwable t) {
             active.started().set(false);
-            Exception e = t instanceof Exception exception ? exception : new RuntimeException(t);
-            fail(active, assistantId, e);
+            fail(active, assistantId, new RuntimeException(t));
         }
     }
 
