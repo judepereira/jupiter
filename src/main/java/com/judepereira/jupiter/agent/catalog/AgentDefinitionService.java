@@ -121,7 +121,7 @@ public class AgentDefinitionService {
         }
 
         int firstLineEnd = lineEnd(content, 0);
-        if (!stripTrailingCarriageReturn(content.substring(0, firstLineEnd)).equals("---")) {
+        if (!"---".equals(stripTrailingCarriageReturn(content.substring(0, firstLineEnd)))) {
             throw new IllegalStateException("Malformed YAML frontmatter in classpath:" + resourceSortKey(resource));
         }
 
@@ -137,7 +137,7 @@ public class AgentDefinitionService {
         int index = start;
         while (index <= content.length()) {
             int lineEnd = lineEnd(content, index);
-            if (stripTrailingCarriageReturn(content.substring(index, lineEnd)).equals("---")) {
+            if ("---".equals(stripTrailingCarriageReturn(content.substring(index, lineEnd)))) {
                 return index;
             }
             if (lineEnd == content.length()) {

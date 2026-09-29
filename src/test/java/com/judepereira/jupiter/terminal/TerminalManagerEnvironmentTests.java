@@ -14,7 +14,7 @@ class TerminalManagerEnvironmentTests {
 
     @Test
     void terminalChildDoesNotReceiveEncryptionKey() throws Exception {
-        assumeTrue(System.getProperty("os.name").equals("Linux"));
+        assumeTrue("Linux".equals(System.getProperty("os.name")));
         Map<String, String> environment = new HashMap<>(
                 Map.of("JUPITER_ENCRYPTION_KEY", "secret", "TERMINAL_SENTINEL", "preserved"));
         var process = TerminalManager.startProcess("/tmp", new String[]{"/usr/bin/env"}, environment);

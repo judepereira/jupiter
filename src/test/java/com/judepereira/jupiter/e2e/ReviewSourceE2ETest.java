@@ -105,7 +105,7 @@ class ReviewSourceE2ETest extends E2ETestSupport {
             Page page = context.newPage();
             List<String> consoleErrors = new CopyOnWriteArrayList<>();
             page.onConsoleMessage(message -> {
-                if (message.type().equals("error")) {
+                if ("error".equals(message.type())) {
                     consoleErrors.add(formatConsoleMessage(message));
                 }
             });

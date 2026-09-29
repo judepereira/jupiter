@@ -35,7 +35,7 @@ public final class SkillParser {
             Path canonicalFile = skillFile.toRealPath();
             if (!canonicalFile.getParent().equals(lexicalDirectory))
                 return ParseResult.error(skillFile, "skill directory must not escape skills root");
-            if (!canonicalFile.getFileName().toString().equals("SKILL.md"))
+            if (!"SKILL.md".equals(canonicalFile.getFileName().toString()))
                 return ParseResult.error(skillFile, "path must name SKILL.md");
             byte[] bytes;
             try (InputStream input = Files.newInputStream(canonicalFile, LinkOption.NOFOLLOW_LINKS)) {
@@ -88,7 +88,7 @@ public final class SkillParser {
             if (end < 0)
                 end = text.length();
             String line = text.substring(position, end);
-            if (line.equals("---") || line.equals("---\r"))
+            if ("---".equals(line) || "---\r".equals(line))
                 return text.substring(start, position);
             if (end == text.length())
                 break;

@@ -338,7 +338,7 @@ public class CommandCatalogService {
                         ? userHome.resolve("." + provider)
                         : workspace == null ? null : workspace.toAbsolutePath().normalize().resolve("." + provider);
                 if (root != null) {
-                    root = root.resolve(provider.equals("claude") ? "commands" : "prompts");
+                    root = root.resolve("claude".equals(provider) ? "commands" : "prompts");
                 }
                 roots.add(new ExternalRoot(root, provider, home));
             }

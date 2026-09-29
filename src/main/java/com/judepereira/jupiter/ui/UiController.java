@@ -1191,7 +1191,7 @@ public class UiController {
                         row.totalTokenCount()))
                 .toList();
         model.addAttribute("usageRange",
-                range.equals("7d") || range.equals("30d") || range.equals("60d") ? range : "24h");
+                "7d".equals(range) || "30d".equals(range) || "60d".equals(range) ? range : "24h");
         try {
             model.addAttribute("usageJson", SseJson.writeValueAsString(points));
         } catch (JsonProcessingException e) {

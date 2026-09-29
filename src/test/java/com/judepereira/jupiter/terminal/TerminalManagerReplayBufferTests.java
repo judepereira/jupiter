@@ -38,7 +38,7 @@ public class TerminalManagerReplayBufferTests {
     private static Object newRuntime(TerminalManager manager) throws Exception {
         Class<?> runtimeClass = null;
         for (Class<?> nested : TerminalManager.class.getDeclaredClasses()) {
-            if (nested.getSimpleName().equals("TerminalRuntime")) {
+            if ("TerminalRuntime".equals(nested.getSimpleName())) {
                 runtimeClass = nested;
                 break;
             }
