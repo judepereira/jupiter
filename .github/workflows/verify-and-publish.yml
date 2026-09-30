@@ -40,6 +40,17 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Verify Docker documentation versions
+        env:
+          EXPECTED_VERSION: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$EXPECTED_VERSION" ]]; then
+            python3 scripts/sync_docker_docs.py --check --version "$EXPECTED_VERSION" --root "$GITHUB_WORKSPACE"
+          else
+            python3 scripts/sync_docker_docs.py --check --root "$GITHUB_WORKSPACE"
+          fi
+
       - name: Verify release checkout and Maven version
         if: inputs.checkout_ref != ''
         env:

@@ -4,6 +4,12 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: Exact release commit to publish
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -16,22 +22,28 @@ jobs:
   publish:
     runs-on: macos-latest
     steps:
-      - name: Require main
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-            echo "::error::Wiki publication and screenshot generation are permitted only from the main branch (got ref $GITHUB_REF)."
-            exit 1
-          fi
-
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
-          fetch-depth: 1
+          ref: ${{ inputs.source_ref || 'main' }}
+          fetch-depth: 0
           persist-credentials: false
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require current main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\r\n')"
+          git -c "http.extraHeader=Authorization: Basic $auth" fetch --no-tags origin main
+          checked_out_sha="$(git rev-parse HEAD)"
+          remote_main="$(git rev-parse origin/main)"
+          if [[ "$checked_out_sha" != "$remote_main" ]]; then
+            echo "::error::Wiki publication is permitted only for the current main commit (checked out $checked_out_sha, main is $remote_main)."
+            exit 1
+          fi
 
       - name: Install and verify ripgrep
         shell: bash
