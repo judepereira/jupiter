@@ -344,9 +344,10 @@ public class ProjectsTemplateRenderTest {
     public void anthropicAndModelsFragmentsRenderWithNullAndPopulatedContexts() {
         SpringTemplateEngine engine = engine();
         WebContext empty = webContext();
-        String emptyHtml = engine.process(new TemplateSpec("fragments/projects",
-                Set.of("anthropicOAuthSection", "settingsModels"), TemplateMode.HTML, null), empty);
-        assertThat(emptyHtml).contains("Anthropic is not connected").doesNotContain("${view.message}");
+        String emptyHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("settingsModels"), TemplateMode.HTML, null), empty);
+        assertThat(emptyHtml).contains("Set", "ANTHROPIC_API_KEY", "anthropic.api-key").doesNotContain("Connect Claude",
+                "Auth code", "Disconnect Anthropic", "${view.message}");
         assertThat(emptyHtml).contains("id=\"settings-models\"", "class=\"settings-section\"");
 
         String oobHtml = engine.process(

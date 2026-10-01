@@ -30,7 +30,6 @@ import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
@@ -325,7 +324,6 @@ public class UiControllerAsyncStreamingTests {
         };
         UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
-                mock(AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
@@ -502,7 +500,6 @@ public class UiControllerAsyncStreamingTests {
 
         UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
-                mock(AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),

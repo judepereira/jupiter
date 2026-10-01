@@ -9,7 +9,6 @@ import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
@@ -32,7 +31,6 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -132,7 +130,7 @@ class UiControllerInvalidCheckoutBranchTests {
         return new UiController(mock(CodingAgentHarness.class), agentProperties(projectRoot), appStateService,
                 new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
                 ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
-                null, Mockito.mock(AnthropicOAuthService.class), balloonService,
+                null, balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),

@@ -74,7 +74,7 @@ class UiControllerSystemBalloonTests {
         ModelCatalogService modelCatalogService = ModelCatalogTestSupport.modelCatalogService();
         return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
                 new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null, null, null, balloonService,
+                ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null, null, balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(),

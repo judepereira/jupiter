@@ -13,7 +13,6 @@ import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
@@ -38,7 +37,6 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -177,8 +175,7 @@ public class UiControllerSubagentChatTests {
         var openAiOAuthService = new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(),
                 HttpClient.newHttpClient(), mock(AppStateRepository.class), null);
         return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
-                Mockito.mock(AnthropicOAuthService.class), balloonService,
+                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null, balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,

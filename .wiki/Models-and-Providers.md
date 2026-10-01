@@ -14,12 +14,14 @@ The device flow shows a user code and verification URL while Jupiter waits for a
 stored encrypted and restored across restarts. **Disconnect** clears that OAuth connection; a configured API key remains
 available independently.
 
-## Connect Claude
+## Configure Claude
 
-Open **Settings → Model Providers** and choose **Connect Claude**.
+Claude is available only when an Anthropic API key is configured. Set `ANTHROPIC_API_KEY` (or the equivalent
+`anthropic.api-key` configuration property), then restart Jupiter. Settings reports whether the key is available; the
+key value is never displayed or entered there. Claude account or subscription login is unsupported.
 
-Claude OAuth state is stored encrypted and restored across restarts. **Disconnect** removes the saved connection. If you
-need support for adding an Anthropic API key, submit a feature request.
+When upgrading Jupiter, carry the environment variable or configuration property into the new process. Changing it while
+Jupiter is running has no effect until restart.
 
 ## Choose Models
 
@@ -46,5 +48,6 @@ is sent. Without an explicit override, the selected agent's configured defaults 
 
 ## Treat Provider Credentials as Secrets
 
-Provider credentials and OAuth state are sensitive even though Jupiter stores persisted provider state encrypted.
-Protect the Jupiter host, database, and encryption key accordingly.
+Provider credentials and OAuth state are sensitive. Jupiter stores only OpenAI OAuth state, encrypted; the Anthropic API
+key comes from process configuration and is never stored by Jupiter. Protect the Jupiter host, database, and encryption
+key accordingly.

@@ -14,7 +14,6 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.llm.dto.ToolParameter;
 import com.judepereira.jupiter.agent.llm.dto.ToolSchema;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -35,15 +34,13 @@ import org.springframework.stereotype.Component;
 public class AnthropicAgentModelClient implements AgentModelClient {
     private final AnthropicProperties properties;
     private final AgentProperties agentProperties;
-    private final AnthropicOAuthService oauth;
     private final ObjectMapper mapper;
     private final HttpClient httpClient;
 
     public AnthropicAgentModelClient(AnthropicProperties properties, AgentProperties agentProperties,
-            AnthropicOAuthService oauth, ObjectMapper mapper, HttpClient httpClient) {
+            ObjectMapper mapper, HttpClient httpClient) {
         this.properties = properties;
         this.agentProperties = agentProperties;
-        this.oauth = oauth;
         this.mapper = mapper;
         this.httpClient = httpClient;
     }
@@ -67,17 +64,7 @@ public class AnthropicAgentModelClient implements AgentModelClient {
     public ModelResponse chatStreaming(List<Message> messages, List<ToolDefinition> tools, AgentModelOptions options,
             Consumer<String> onText) {
         JsonNode requestBody = body(messages, tools, options, true);
-        String accessToken = token();
-        HttpResponse<Stream<String>> response = sendStreaming(requestBody, accessToken);
-        if (response.statusCode() == 401) {
-            try (Stream<String> ignored = response.body()) {
-                // Release the rejected response before refreshing and retrying.
-            }
-            String refreshed = oauth.forceRefresh(accessToken).filter(value -> !value.isBlank())
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Anthropic OAuth forced refresh failed; no replacement access token is available"));
-            response = sendStreaming(requestBody, refreshed);
-        }
+        HttpResponse<Stream<String>> response = sendStreaming(requestBody);
         if (response.statusCode() / 100 != 2) {
             try (Stream<String> ignored = response.body()) {
             }
@@ -185,16 +172,8 @@ public class AnthropicAgentModelClient implements AgentModelClient {
     }
 
     private JsonNode send(JsonNode body) {
-        String accessToken = token();
         try {
-            HttpResponse<String> response = httpClient.send(request(body, accessToken),
-                    HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() == 401) {
-                String refreshed = oauth.forceRefresh(accessToken).filter(value -> !value.isBlank())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "Anthropic OAuth forced refresh failed; no replacement access token is available"));
-                response = httpClient.send(request(body, refreshed), HttpResponse.BodyHandlers.ofString());
-            }
+            HttpResponse<String> response = httpClient.send(request(body), HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() / 100 != 2) {
                 throw new IllegalStateException("Anthropic request failed with status " + response.statusCode());
             }
@@ -207,9 +186,9 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         }
     }
 
-    private HttpResponse<Stream<String>> sendStreaming(JsonNode body, String accessToken) {
+    private HttpResponse<Stream<String>> sendStreaming(JsonNode body) {
         try {
-            return httpClient.send(request(body, accessToken), HttpResponse.BodyHandlers.ofLines());
+            return httpClient.send(request(body), HttpResponse.BodyHandlers.ofLines());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Anthropic streaming request cancelled", e);
@@ -218,16 +197,16 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         }
     }
 
-    private String token() {
-        return oauth.currentAccessToken().filter(token -> !token.isBlank())
-                .orElseThrow(() -> new IllegalStateException("Anthropic OAuth access token is required"));
-    }
-
-    private HttpRequest request(JsonNode body, String token) {
-        return HttpRequest.newBuilder(URI.create(properties.getBaseUrl())).header("Authorization", "Bearer " + token)
-                .header("anthropic-version", properties.getVersion()).header("anthropic-beta", properties.getBeta())
-                .header("Content-Type", "application/json").timeout(properties.getRequestTimeout())
-                .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build();
+    private HttpRequest request(JsonNode body) {
+        String apiKey = properties.effectiveApiKey();
+        if (apiKey == null)
+            throw new IllegalStateException("Anthropic API key is required");
+        var builder = HttpRequest.newBuilder(URI.create(properties.getBaseUrl())).header("x-api-key", apiKey)
+                .header("anthropic-version", properties.getVersion()).header("Content-Type", "application/json")
+                .timeout(properties.getRequestTimeout());
+        if (properties.getBeta() != null && !properties.getBeta().isBlank())
+            builder.header("anthropic-beta", properties.getBeta().trim());
+        return builder.POST(HttpRequest.BodyPublishers.ofString(body.toString())).build();
     }
 
     private ObjectNode body(List<Message> messages, List<ToolDefinition> tools, AgentModelOptions options,
