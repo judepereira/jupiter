@@ -21,12 +21,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
-import org.sqlite.SQLiteDataSource;
 
 class JupiterStartupIntegrationTests {
     @TempDir
@@ -37,43 +33,6 @@ class JupiterStartupIntegrationTests {
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(45);
 
     @Test
-    @EnabledOnOs(OS.LINUX)
-    void migratesV25DatabaseBeforeStartupWithSingleConnectionPool() throws Exception {
-        Path home = tempDir.resolve("v25-startup");
-        Path database = home.resolve(".jupiter/jupiter.sqlite");
-        Files.createDirectories(database.getParent());
-        var dataSource = new SQLiteDataSource();
-        dataSource.setUrl("jdbc:sqlite:" + database);
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("25").load().migrate();
-        try (var connection = dataSource.getConnection();
-                var statement = connection.prepareStatement(
-                        "INSERT INTO projects (id,name,normalized_path,display_order) VALUES (1,?,?,1)")) {
-            statement.setString(1, "startup secret");
-            statement.setString(2, "/tmp/startup-secret");
-            statement.executeUpdate();
-        }
-        try (RunningJupiter app = start(KEY, home)) {
-            assertThat(app.responseBody()).contains("UP");
-        }
-        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
-                var query = connection.createStatement();
-                var rows = query.executeQuery(
-                        "SELECT name, normalized_path, normalized_path_blind_index FROM projects WHERE id=1")) {
-            assertThat(rows.next()).isTrue();
-            assertThat(rows.getString("name")).startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:");
-            assertThat(rows.getString("normalized_path")).startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:");
-            assertThat(rows.getString("normalized_path_blind_index")).isNotBlank();
-        }
-        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
-                var query = connection.createStatement();
-                var rows = query.executeQuery("SELECT migration_complete FROM encryption_metadata WHERE id=1")) {
-            assertThat(rows.next()).isTrue();
-            assertThat(rows.getInt(1)).isEqualTo(1);
-        }
-    }
-
-    @Test
-    @EnabledOnOs(OS.LINUX)
     void startsWithKeySuppliedOnStdinAndDoesNotExposeItToChildEnvironment() throws Exception {
         try (RunningJupiter app = start(KEY, tempDir.resolve("startup"))) {
             assertThat(app.responseBody()).contains("UP");
@@ -133,9 +92,20 @@ class JupiterStartupIntegrationTests {
 
     private static void seedEncryptedApplicationData(Path home) throws Exception {
         Path database = home.resolve(".jupiter/jupiter.sqlite");
-        String ciphertext = new TextEncryptor(EncryptionKey.fromBase64(KEY)).encrypt("encrypted restart data",
-                "app_state.assistant_completed_hook_script");
+        TextEncryptor crypto = new TextEncryptor(EncryptionKey.fromBase64(KEY));
+        String ciphertext = crypto.encrypt("encrypted restart data", "app_state.assistant_completed_hook_script");
+        String projectName = crypto.encrypt("encrypted project", "projects.name");
+        String projectPath = "/tmp/encrypted-project";
+        String encryptedProjectPath = crypto.encrypt(projectPath, "projects.normalized_path");
+        String blindIndex = crypto.blindIndex(projectPath, "projects.normalized_path");
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database)) {
+            try (var insert = connection.prepareStatement(
+                    "INSERT INTO projects (id, name, normalized_path, normalized_path_blind_index, display_order) VALUES (1, ?, ?, ?, 1)")) {
+                insert.setString(1, projectName);
+                insert.setString(2, encryptedProjectPath);
+                insert.setString(3, blindIndex);
+                insert.executeUpdate();
+            }
             try (var update = connection.prepareStatement("UPDATE app_state SET assistant_completed_hook_script = ?, "
                     + "assistant_errored_hook_script = NULL, subagent_completed_hook_script = NULL WHERE id = 1")) {
                 update.setString(1, ciphertext);
@@ -146,10 +116,6 @@ class JupiterStartupIntegrationTests {
                             .executeQuery("SELECT assistant_completed_hook_script FROM app_state WHERE id = 1")) {
                 assertThat(rows.next()).isTrue();
                 assertThat(rows.getString(1)).isNotEmpty();
-            }
-            try (var update = connection
-                    .prepareStatement("UPDATE encryption_metadata SET migration_complete = 0 WHERE id = 1")) {
-                update.executeUpdate();
             }
         }
         assertThat(ciphertext).startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:");

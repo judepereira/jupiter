@@ -27,6 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AppStateService {
 
+    @FunctionalInterface
+    interface CompactionFitCheck {
+        void verify(List<AppStateRepository.ConversationMessageRow> rows);
+    }
+
     private static final int DEFAULT_LIFECYCLE_HOOK_TIMEOUT_SECONDS = 30;
     private static final int MIN_LIFECYCLE_HOOK_TIMEOUT_SECONDS = 1;
     private static final int MAX_LIFECYCLE_HOOK_TIMEOUT_SECONDS = 3600;
@@ -983,9 +988,39 @@ public class AppStateService {
         return repository.listMessagesBySession(sessionId);
     }
 
+    @Transactional(readOnly = true)
+    public List<AppStateRepository.ConversationMessageRow> listIncludedCompletedConversationMessages(long sessionId) {
+        return repository.listMessagesBySession(sessionId).stream()
+                .filter(message -> message.includeInModel() && !message.pending()).toList();
+    }
+
     @Transactional
     public void markTurnsIncludeInModelFalse(long sessionId, long maxTurnId) {
         repository.updateConversationMessagesIncludeInModelUpToTurnId(sessionId, maxTurnId, false);
+    }
+
+    /**
+     * Revalidates the read used to produce a summary and applies the summary as one
+     * transaction. The fit check is deliberately inside this transaction so a
+     * failed post-compaction check rolls back both the cutoff and visible message.
+     */
+    @Transactional
+    public ChatMessageView compactConversationAtomically(long sessionId,
+            List<AppStateRepository.ConversationMessageRow> expectedIncludedRows, long compactedThroughTurnId,
+            String summary, CompactionFitCheck fitsAfter) {
+        List<AppStateRepository.ConversationMessageRow> currentIncludedRows = repository
+                .listMessagesBySession(sessionId).stream()
+                .filter(message -> message.includeInModel() && !message.pending()).toList();
+        if (!currentIncludedRows.equals(expectedIncludedRows)) {
+            throw new IllegalStateException("Conversation changed while context compaction was being generated");
+        }
+
+        repository.updateConversationMessagesIncludeInModelUpToTurnId(sessionId, compactedThroughTurnId, false);
+        ChatMessageView summaryMessage = appendVisibleSystemMessage(sessionId, summary, compactedThroughTurnId);
+        List<AppStateRepository.ConversationMessageRow> afterRows = repository.listMessagesBySession(sessionId).stream()
+                .filter(message -> message.includeInModel() && !message.pending()).toList();
+        fitsAfter.verify(afterRows);
+        return summaryMessage;
     }
 
     public List<Message> buildConversationHistory(long sessionId) {

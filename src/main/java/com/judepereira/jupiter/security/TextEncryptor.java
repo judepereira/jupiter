@@ -6,6 +6,7 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
+import javax.crypto.AEADBadTagException;
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
@@ -83,6 +84,10 @@ public class TextEncryptor {
         } catch (GeneralSecurityException exception) {
             throw new EncryptionException("Blind index failed", exception);
         }
+    }
+
+    public static boolean isAuthenticatedDecryptionFailure(EncryptionException exception) {
+        return exception.getCause() instanceof AEADBadTagException;
     }
 
     public static boolean isEncrypted(String value) {

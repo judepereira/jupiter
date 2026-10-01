@@ -205,7 +205,7 @@ class GitAutoUpdateServiceTests {
                 .thenReturn(new Persistence.AutoGitUpdateFailureNotification(true));
         var workspace = workspace(21, name, tempDir.resolve(name));
         GitCommandRunner commandRunner;
-        if (name.equals("count") || name.equals("zero") || name.equals("invalid")) {
+        if ("count".equals(name) || "zero".equals(name) || "invalid".equals(name)) {
             commandRunner = metadataRunner(new ArrayList<>(), "before", "after", metadataResult, success("subject"));
         } else {
             commandRunner = metadataRunner(new ArrayList<>(), "before", "after", success("2"), metadataResult);
@@ -428,12 +428,12 @@ class GitAutoUpdateServiceTests {
                     public GitCommandRunner.GitCommandResult answer(InvocationOnMock invocation) {
                         List<String> command = invocation.getArgument(1);
                         commands.add(command);
-                        if (command.get(1).equals("rev-parse") && command.getLast().equals("HEAD")) {
+                        if ("rev-parse".equals(command.get(1)) && "HEAD".equals(command.getLast())) {
                             return headLookups++ == 0 ? success(before) : success(after);
                         }
-                        if (command.get(1).equals("rev-list"))
+                        if ("rev-list".equals(command.get(1)))
                             return count;
-                        if (command.get(1).equals("log"))
+                        if ("log".equals(command.get(1)))
                             return subject;
                         return switch (command.get(1)) {
                             case "symbolic-ref" -> success("main");
