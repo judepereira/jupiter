@@ -12,6 +12,12 @@ plan, but one session to manage all active agent work.
 
 The stop button cancels the active assistant turn and any managed command execution attached to it.
 
+## Agent, Model, and Thinking Choices
+
+The composer can override the agent's model and thinking level for the current turn. If left at the built-in default,
+Jupiter uses the independent preference saved for that agent in Settings → Agents. Explicit choices take precedence and
+saved unavailable models fail clearly rather than silently switching.
+
 ## Drafts
 
 Unsent composer text is saved per session, which means you can navigate elsewhere without losing half-written prompts.

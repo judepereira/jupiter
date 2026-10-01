@@ -3,7 +3,7 @@ package com.judepereira.jupiter.agent.harness;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
-import com.judepereira.jupiter.agent.catalog.AgentModelResolutionService;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceResolver;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -47,7 +46,7 @@ public class CodingAgentHarness {
     private final AgentProperties props;
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
-    private final AgentModelResolutionService agentModelResolutionService;
+    private final AgentPreferenceResolver agentPreferenceResolver;
     private final AppStateService appStateService;
     private final TokenUsageService tokenUsageService;
     private final McpProjectMcpServerRuntimeManager mcpRuntimeManager;
@@ -56,10 +55,9 @@ public class CodingAgentHarness {
     private final SkillInvocationResolver skillInvocationResolver;
     private final SkillContextInjector skillContextInjector;
 
-    @Autowired
     public CodingAgentHarness(AgentModelClientFactory modelFactory, ToolRegistry registry, AgentProperties props,
             AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-            AgentModelResolutionService agentModelResolutionService, AppStateService appStateService,
+            AgentPreferenceResolver agentPreferenceResolver, AppStateService appStateService,
             TokenUsageService tokenUsageService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
             SystemPromptComposer systemPromptComposer, SkillDiscoveryService skillDiscoveryService,
             SkillInvocationResolver skillInvocationResolver, SkillContextInjector skillContextInjector) {
@@ -68,7 +66,7 @@ public class CodingAgentHarness {
         this.props = props;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
-        this.agentModelResolutionService = agentModelResolutionService;
+        this.agentPreferenceResolver = agentPreferenceResolver;
         this.appStateService = appStateService;
         this.tokenUsageService = tokenUsageService;
         this.mcpRuntimeManager = mcpRuntimeManager;
@@ -90,14 +88,14 @@ public class CodingAgentHarness {
         Path workspace = Path.of(workspaceRoot);
         SkillCatalog skillCatalog = skillDiscoveryService.discover(workspace);
         AgentDefinition agent = resolveAgent(request);
-        ModelResolution selectedResolution = resolveModel(request, agent);
+        AgentPreferenceResolver.Resolution selectedResolution = resolvePreferences(request, agent);
         ModelDefinition selectedModel = selectedResolution.model();
         if (selectedModel != null) {
             listener.onModelResolved(selectedResolution.preferredModelId(), selectedModel);
         }
         AgentModelClient model = modelFactory
                 .getClient(selectedModel == null ? props.getProvider() : selectedModel.provider());
-        ThinkingLevel thinkingLevel = resolveThinkingLevel(request, agent);
+        ThinkingLevel thinkingLevel = selectedResolution.thinkingLevel();
         AgentModelOptions modelOptions = selectedModel == null
                 ? null
                 : new AgentModelOptions(selectedModel.id(), selectedModel.apiModelId(), thinkingLevel,
@@ -288,27 +286,19 @@ public class CodingAgentHarness {
         return agentDefinitionService.getRequired(request.getAgentId());
     }
 
-    private ModelResolution resolveModel(AgentTurnRequest request, AgentDefinition agent) {
-        String requestedModelId = request.getModelId();
-        if (requestedModelId == null || requestedModelId.isBlank()) {
-            if (agent != null && agentModelResolutionService != null) {
-                var resolution = agentModelResolutionService.resolve(agent);
-                return new ModelResolution(resolution.preferredModelId(), resolution.model());
-            }
-            return new ModelResolution(null,
-                    modelCatalogService == null ? null : modelCatalogService.getRequired(props.getModel()));
+    private AgentPreferenceResolver.Resolution resolvePreferences(AgentTurnRequest request, AgentDefinition agent) {
+        if (request.getPreferenceSnapshot() != null) {
+            return request.getPreferenceSnapshot();
         }
-        return new ModelResolution(null, modelCatalogService.getRequired(requestedModelId));
-    }
-
-    private record ModelResolution(String preferredModelId, ModelDefinition model) {
-    }
-
-    private ThinkingLevel resolveThinkingLevel(AgentTurnRequest request, AgentDefinition agent) {
-        if (request.getThinkingLevel() != null) {
-            return request.getThinkingLevel();
+        if (agent == null) {
+            ModelDefinition model = request.getModelId() == null
+                    ? modelCatalogService.getRequired(props.getModel())
+                    : modelCatalogService.getRequired(request.getModelId());
+            return new AgentPreferenceResolver.Resolution(model, request.getModelId(), request.getThinkingLevel(),
+                    request.getModelId() != null);
         }
-        return agent == null ? null : agent.defaultThinkingLevel();
+        return agentPreferenceResolver.resolve(agent, request.getModelId(), request.getThinkingLevel(),
+                request.getModelId() != null && !request.getModelId().isBlank());
     }
 
     private String resolveSystemPrompt(AgentTurnRequest request, AgentDefinition agent, SkillCatalog catalog) {

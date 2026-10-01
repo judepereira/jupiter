@@ -177,7 +177,8 @@ public class UiControllerSubagentChatTests {
         var openAiOAuthService = new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(),
                 HttpClient.newHttpClient(), mock(AppStateRepository.class), null);
         return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+                ModelCatalogTestSupport.resolutionService(modelCatalog),
+                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null, null,
                 Mockito.mock(AnthropicOAuthService.class), balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),

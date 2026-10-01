@@ -38,4 +38,6 @@ One subtle point: Plan has no direct write or command tools, but it **can** dele
 Subagents never receive `task`, so native delegation cannot recurse forever.
 
 The composer lets you pick the agent, model, and thinking level for a turn. Without an explicit model or thinking
-override, the selected agent's configured defaults apply.
+override, the selected agent's configured defaults apply. Settings → Agents lets you override model and thinking level
+independently for every primary agent and subagent; reset restores the bundled defaults. Agent descriptions are shown
+beside each setting so the role is clear.

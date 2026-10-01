@@ -37,7 +37,9 @@ model request fails, Jupiter will retry the turn with the next preference. This 
 outages.
 
 An explicit model selection is strict: if that provider or model is unavailable, the turn fails instead of silently
-switching models.
+switching models. A saved agent override is also strict and is never silently replaced by a bundled model. If its model
+is stale or unavailable, Settings identifies the problem so it can be corrected or reset. The Agents settings form
+accepts any eligible configured text-and-tools model, not only bundled model IDs.
 
 ## Thinking Level
 

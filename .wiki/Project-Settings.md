@@ -54,5 +54,6 @@ encryption key is never available as an MCP placeholder.
 
 ## Other Settings
 
-The Settings UI also contains MCP servers, provider connections, lifecycle hooks, automatic Git updates, and usage
-views.
+The Settings UI also contains MCP servers, provider connections, lifecycle hooks, automatic Git updates, usage views,
+and **Agents**. Agents settings group primary agents and subagents and allow independent model and thinking-level
+preferences, with reset actions for returning to bundled defaults.

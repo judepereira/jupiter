@@ -3,6 +3,7 @@ package com.judepereira.jupiter.agent.task;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceResolver;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
@@ -28,7 +29,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -39,14 +39,16 @@ public class SubagentTaskService {
     private final AppStateService appStateService;
     private final AgentDefinitionService agentDefinitionService;
     private final ObjectProvider<CodingAgentHarness> harnessProvider;
+    private final AgentPreferenceResolver preferenceResolver;
     private final LifecycleHookService lifecycleHookService;
 
-    @Autowired
     public SubagentTaskService(AppStateService appStateService, AgentDefinitionService agentDefinitionService,
-            ObjectProvider<CodingAgentHarness> harnessProvider, LifecycleHookService lifecycleHookService) {
+            ObjectProvider<CodingAgentHarness> harnessProvider, AgentPreferenceResolver preferenceResolver,
+            LifecycleHookService lifecycleHookService) {
         this.appStateService = appStateService;
         this.agentDefinitionService = agentDefinitionService;
         this.harnessProvider = harnessProvider;
+        this.preferenceResolver = preferenceResolver;
         this.lifecycleHookService = lifecycleHookService;
     }
 
@@ -108,7 +110,10 @@ public class SubagentTaskService {
             CodingAgentHarness harness = harnessProvider.getObject();
             AgentTurnRequest childRequest = new AgentTurnRequest(subagent.systemPrompt(),
                     appStateService.buildConversationHistory(childSessionId), request.workspaceRoot(), subagent.id(),
-                    null, subagent.defaultThinkingLevel(), childSessionId, request.cancellationToken());
+                    null, subagent.defaultThinkingLevel(), childSessionId, request.cancellationToken(),
+                    preferenceResolver == null
+                            ? null
+                            : preferenceResolver.resolve(subagent, null, subagent.defaultThinkingLevel(), false));
 
             AgentTurnResult result = harness.runTurnStreaming(childRequest, new AgentStreamListener() {
                 private final StringBuilder accumulated = new StringBuilder();

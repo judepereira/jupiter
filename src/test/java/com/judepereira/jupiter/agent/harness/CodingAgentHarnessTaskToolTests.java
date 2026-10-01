@@ -48,16 +48,16 @@ public class CodingAgentHarnessTaskToolTests {
                         ModelResponseMetadata.empty(), null),
                 new ModelResponse("primary complete", null, ModelResponseMetadata.empty(), null)));
 
+        var catalog = ModelCatalogTestSupport.modelCatalogService();
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp),
-                agentService(primary), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
-                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                agentService(primary), catalog, ModelCatalogTestSupport.preferenceResolver(catalog), null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest("Primary system prompt",
                 List.of(new Message(Message.Role.USER, "hello", null, null, null)), tmp.toString(), "primary", null,
-                null, null, null));
+                null, null, null, null));
 
         assertThat(model.capturedToolNames()).hasSize(2).allMatch(names -> names.contains("task"));
         assertThat(taskTool.executions).isEqualTo(1);
@@ -81,16 +81,16 @@ public class CodingAgentHarnessTaskToolTests {
                         ModelResponseMetadata.empty(), null),
                 new ModelResponse("subagent complete", null, ModelResponseMetadata.empty(), null)));
 
+        var catalog = ModelCatalogTestSupport.modelCatalogService();
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry(taskTool), properties(tmp),
-                agentService(subagent), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
-                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                agentService(subagent), catalog, ModelCatalogTestSupport.preferenceResolver(catalog), null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest("Subagent system prompt",
                 List.of(new Message(Message.Role.USER, "hello", null, null, null)), tmp.toString(), "engineer", null,
-                null, null, null));
+                null, null, null, null));
 
         assertThat(model.capturedToolNames()).hasSize(2).allMatch(List::isEmpty);
         assertThat(taskTool.executions).isZero();

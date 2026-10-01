@@ -477,6 +477,18 @@
                         </button>
                         <button
                             class="nav-link"
+                            id="settings-agents-tab"
+                            data-bs-toggle="pill"
+                            data-bs-target="#settings-agents"
+                            type="button"
+                            role="tab"
+                            aria-controls="settings-agents"
+                            aria-selected="false"
+                        >
+                            Agents
+                        </button>
+                        <button
+                            class="nav-link"
                             id="settings-model-providers-tab"
                             data-bs-toggle="pill"
                             data-bs-target="#settings-model-providers"
@@ -826,6 +838,19 @@
 
                         <div
                             class="tab-pane fade"
+                            id="settings-agents"
+                            role="tabpanel"
+                            aria-labelledby="settings-agents-tab"
+                            tabindex="0"
+                        >
+                            <div
+                                id="settings-agents-content"
+                                th:replace="~{fragments/projects :: settingsAgents}"
+                            ></div>
+                        </div>
+
+                        <div
+                            class="tab-pane fade"
                             id="settings-model-providers"
                             role="tabpanel"
                             aria-labelledby="settings-model-providers-tab"
@@ -1170,3 +1195,112 @@
     <th:block th:replace="~{fragments/terminal :: panel}"></th:block>
     <th:block th:replace="~{fragments/projects :: modalClose}"></th:block>
 </th:block>
+
+<th:block th:fragment="settingsAgents">
+    <section id="settings-agents-content" class="settings-section">
+        <div class="settings-section-header">
+            <div>
+                <h4>Agent defaults</h4>
+                <p class="settings-help-text">
+                    Choose a model and thinking level independently for each agent. Choices made in the chat composer
+                    always win.
+                </p>
+            </div>
+        </div>
+        <div
+            th:if="${agentPreferenceError}"
+            class="alert alert-danger settings-agent-alert"
+            role="alert"
+            th:text="${agentPreferenceError}"
+        ></div>
+        <div
+            th:if="${agentPreferenceSuccess}"
+            class="alert alert-success settings-agent-alert"
+            role="status"
+            th:text="${agentPreferenceSuccess}"
+        ></div>
+        <div th:each="group : ${ {'Primary agents', 'Subagents'} }" class="settings-agent-group">
+            <h5 th:text="${group}"></h5>
+            <div
+                th:each="preference : ${agentPreferences}"
+                th:if="${(group == 'Primary agents' and preference.agent.mode.name() == 'AGENT') or (group == 'Subagents' and preference.agent.mode.name() == 'SUBAGENT')}"
+                class="agent-preference-card"
+            >
+                <div class="agent-preference-heading">
+                    <div>
+                        <h6 th:text="${preference.agent.name}"></h6>
+                        <p
+                            th:if="${preference.agent.description != null and !preference.agent.description.isBlank()}"
+                            class="agent-preference-description"
+                            th:text="${preference.agent.description}"
+                        ></p>
+                    </div>
+                    <span
+                        class="settings-agent-badge"
+                        th:text="${group == 'Subagents' ? 'Subagent' : 'Primary'}"
+                    ></span>
+                </div>
+                <form
+                    class="agent-preference-form"
+                    hx-post="/ui/settings/agents/save"
+                    hx-target="#settings-agents-content"
+                    hx-swap="outerHTML"
+                >
+                    <input type="hidden" name="agentId" th:value="${preference.agent.id}">
+                    <label
+                        ><span>Model</span>
+                        <select name="modelId" class="form-select">
+                            <option value="">Built-in default</option>
+                            <option
+                                th:each="model : ${preference.eligibleModels}"
+                                th:value="${model.id}"
+                                th:text="${model.displayName + ' (' + model.provider + ')'}"
+                                th:selected="${preference.agent.id == agentPreferenceSubmittedAgentId ? agentPreferenceSubmittedModelId == model.id : preference.saved != null and preference.saved.modelId == model.id}"
+                            ></option>
+                        </select>
+                    </label>
+                    <label
+                        ><span>Thinking level</span>
+                        <select name="thinkingLevel" class="form-select">
+                            <option value="">Built-in default</option>
+                            <option
+                                th:each="level : ${T(com.judepereira.jupiter.agent.catalog.ThinkingLevel).values()}"
+                                th:value="${level.name()}"
+                                th:text="${level.name()}"
+                                th:selected="${preference.agent.id == agentPreferenceSubmittedAgentId ? agentPreferenceSubmittedThinkingLevel == level.name() : preference.thinkingLevel == level.name()}"
+                            ></option>
+                        </select>
+                    </label>
+                    <div class="agent-preference-actions">
+                        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                    </div>
+                </form>
+                <div
+                    th:if="${preference.staleModel or preference.unavailableModel}"
+                    class="settings-agent-warning"
+                    role="note"
+                >
+                    <span th:if="${preference.staleModel}"
+                        >The saved model is no longer configured. Choose another model or reset.</span
+                    >
+                    <span th:if="${preference.unavailableModel}"
+                        >This model's provider is currently unavailable; execution will report the connection failure.</span
+                    >
+                </div>
+                <form
+                    class="agent-preference-reset"
+                    hx-post="/ui/settings/agents/reset"
+                    hx-target="#settings-agents-content"
+                    hx-swap="outerHTML"
+                >
+                    <input type="hidden" name="agentId" th:value="${preference.agent.id}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">Reset to built-in defaults</button>
+                </form>
+            </div>
+        </div>
+    </section>
+</th:block>
+<th:block th:fragment="settingsAgentsOobResponse"
+    ><th:block th:replace="~{fragments/projects :: settingsAgents}"></th:block
+    ><th:block th:replace="~{fragments/chat :: chatControls}"></th:block></th:block
+>

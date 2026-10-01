@@ -131,6 +131,47 @@ public class AppStateRepository {
                 nullableInteger(rs, "lifecycle_hook_timeout_seconds")));
     }
 
+    Optional<Persistence.AgentModelPreference> findAgentModelPreference(String agentId) {
+        return queryOne(
+                "SELECT agent_id, model_id, thinking_level FROM agent_model_preferences WHERE agent_id = :agentId",
+                new MapSqlParameterSource("agentId", agentId),
+                (rs, rowNum) -> new Persistence.AgentModelPreference(rs.getString("agent_id"), rs.getString("model_id"),
+                        rs.getString("thinking_level")));
+    }
+
+    void upsertAgentModelPreference(Persistence.AgentModelPreference preference) {
+        jdbc.update("""
+                INSERT INTO agent_model_preferences (agent_id, model_id, thinking_level)
+                VALUES (:agentId, :modelId, :thinkingLevel)
+                ON CONFLICT (agent_id) DO UPDATE SET model_id = excluded.model_id,
+                    thinking_level = excluded.thinking_level
+                """, new MapSqlParameterSource().addValue("agentId", preference.agentId())
+                .addValue("modelId", preference.modelId()).addValue("thinkingLevel", preference.thinkingLevel()));
+    }
+
+    void deleteAgentModelPreference(String agentId) {
+        jdbc.update("DELETE FROM agent_model_preferences WHERE agent_id = :agentId",
+                new MapSqlParameterSource("agentId", agentId));
+    }
+
+    List<Persistence.AgentModelPreference> listAgentModelPreferences() {
+        return jdbc.query("SELECT agent_id, model_id, thinking_level FROM agent_model_preferences ORDER BY agent_id",
+                new MapSqlParameterSource(),
+                (rs, rowNum) -> new Persistence.AgentModelPreference(rs.getString("agent_id"), rs.getString("model_id"),
+                        rs.getString("thinking_level")));
+    }
+
+    void replaceAgentModelPreferences(List<Persistence.AgentModelPreference> preferences) {
+        jdbc.update("DELETE FROM agent_model_preferences", new MapSqlParameterSource());
+        for (var preference : preferences) {
+            jdbc.update("""
+                    INSERT INTO agent_model_preferences (agent_id, model_id, thinking_level)
+                    VALUES (:agentId, :modelId, :thinkingLevel)
+                    """, new MapSqlParameterSource().addValue("agentId", preference.agentId())
+                    .addValue("modelId", preference.modelId()).addValue("thinkingLevel", preference.thinkingLevel()));
+        }
+    }
+
     void updateLifecycleHookSettings(String assistantCompletedScript, String assistantErroredScript,
             String subagentCompletedScript, int timeoutSeconds) {
         jdbc.update("""
