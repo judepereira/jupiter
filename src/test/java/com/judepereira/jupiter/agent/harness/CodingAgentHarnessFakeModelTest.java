@@ -1,9 +1,9 @@
 package com.judepereira.jupiter.agent.harness;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
@@ -15,6 +15,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.agent.tools.impl.WriteFileTool;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
 import java.nio.file.Files;
@@ -72,16 +73,19 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(1);
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), new ToolRegistry(), props, null, null,
-                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), new ToolRegistry(), props, null,
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
         var req = new AgentTurnRequest("sys",
                 List.of(new Message(Message.Role.USER, "u1", null, null, null),
                         new Message(Message.Role.ASSISTANT, "a1", null, null, null),
                         new Message(Message.Role.USER, "u2", null, null, null)),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         var res = harness.runTurn(req);
 
@@ -111,18 +115,22 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(5);
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
         props.getTooling().setAllowWrite(true);
 
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null,
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
-        var res = harness.runTurn(new AgentTurnRequest("sys",
-                List.of(new Message(Message.Role.USER, "user", null, null, null)), null, null, null, null, null, null));
+        var res = harness
+                .runTurn(new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)),
+                        null, null, null, null, null, null, null));
 
         assertEquals("Done! final text.", res.getFinalText());
         assertEquals(1, res.getTraces().size());
@@ -167,17 +175,20 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(3);
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
         props.getTooling().setAllowWrite(true);
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null,
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
         assertEquals("done",
                 harness.runTurn(
                         new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "u", null, null, null)),
-                                null, null, null, null, null, null))
+                                null, null, null, null, null, null, null))
                         .getFinalText());
         Message assistant = captured.get(1).get(2);
         assertEquals(blocks, assistant.getProviderContent());
@@ -196,17 +207,20 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(5);
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
         props.getTooling().setAllowWrite(true);
 
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null,
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)), null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         var res = harness.runTurn(req);
         assertEquals("Done! final text.", res.getFinalText());
         // trace should contain one write_file
@@ -226,15 +240,19 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(5);
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null,
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
-        var res = harness.runTurn(new AgentTurnRequest("s",
-                List.of(new Message(Message.Role.USER, "u", null, null, null)), null, null, null, null, null, null));
+        var res = harness
+                .runTurn(new AgentTurnRequest("s", List.of(new Message(Message.Role.USER, "u", null, null, null)), null,
+                        null, null, null, null, null, null));
         assertEquals("Recovered final.", res.getFinalText());
         assertEquals(1, res.getTraces().size());
         assertFalse(res.getTraces().get(0).isSuccess());
@@ -253,15 +271,19 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(2);
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null,
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
-        var res = harness.runTurn(new AgentTurnRequest("s",
-                List.of(new Message(Message.Role.USER, "u", null, null, null)), null, null, null, null, null, null));
+        var res = harness
+                .runTurn(new AgentTurnRequest("s", List.of(new Message(Message.Role.USER, "u", null, null, null)), null,
+                        null, null, null, null, null, null));
         assertTrue(res.getFinalText().toLowerCase(Locale.ROOT).contains("max iterations"));
         // traces should be equal to maxIterations
         assertEquals(2, res.getTraces().size());
@@ -289,14 +311,18 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
         props.setMaxIterations(5);
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props, null, null,
-                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        var modelCatalog = ModelCatalogTestSupport.modelCatalogService();
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props,
+                new AgentDefinitionService(new ObjectMapper()), modelCatalog,
+                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)), null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         // listener to capture deltas
         StringBuilder acc = new StringBuilder();
         AgentStreamListener listener = new AgentStreamListener() {
@@ -327,18 +353,21 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(5);
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
         props.getTooling().setAllowWrite(true);
 
         ToolRegistry reg = new ToolRegistry();
         reg.register(new WriteFileTool());
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null,
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)), null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         final boolean[] saw = new boolean[1];
         final ToolCallTrace[] captured = new ToolCallTrace[1];
 
@@ -382,14 +411,18 @@ public class CodingAgentHarnessFakeModelTest {
         ToolRegistry reg = new ToolRegistry();
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
         props.setMaxIterations(5);
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props, null, null,
-                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        var modelCatalog = ModelCatalogTestSupport.modelCatalogService();
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(new StreamingModel()), reg, props,
+                new AgentDefinitionService(new ObjectMapper()), modelCatalog,
+                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         var req = new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)), null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         StringBuilder acc = new StringBuilder();
         AgentStreamListener listener = new AgentStreamListener() {
             @Override
@@ -414,15 +447,19 @@ public class CodingAgentHarnessFakeModelTest {
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(5);
         props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
 
         ToolRegistry reg = new ToolRegistry();
 
-        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null, null, null, null,
-                null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), reg, props, null,
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
-        var res = harness.runTurn(new AgentTurnRequest("sys",
-                List.of(new Message(Message.Role.USER, "user", null, null, null)), null, null, null, null, null, null));
+        var res = harness
+                .runTurn(new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)),
+                        null, null, null, null, null, null, null));
         assertEquals("Final recovered text", res.getFinalText());
         assertEquals(1, res.getTraces().size());
         assertEquals("(missing_tool_name)", res.getTraces().get(0).getToolName());

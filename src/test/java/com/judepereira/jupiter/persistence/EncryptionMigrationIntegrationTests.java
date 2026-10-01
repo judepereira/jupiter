@@ -48,6 +48,24 @@ class EncryptionMigrationIntegrationTests {
     }
 
     @Test
+    void v30CreatesAgentModelPreferencesWithConstraint() throws Exception {
+        var dataSource = SQLiteTestSupport
+                .fileBackedDataSource(Files.createTempDirectory("jupiter-v30-").resolve("db.sqlite"));
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("29").load().migrate();
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+        var jdbc = new JdbcTemplate(dataSource);
+
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pragma_table_info('agent_model_preferences') WHERE name IN ('agent_id','model_id','thinking_level')",
+                Integer.class)).isEqualTo(3);
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO agent_model_preferences(agent_id) VALUES ('engineer')"))
+                .hasMessageContaining("CHECK constraint failed");
+        jdbc.update("INSERT INTO agent_model_preferences(agent_id,model_id) VALUES ('engineer','openai/gpt-5.6-sol')");
+        assertThat(jdbc.queryForObject("SELECT model_id FROM agent_model_preferences WHERE agent_id='engineer'",
+                String.class)).isEqualTo("openai/gpt-5.6-sol");
+    }
+
+    @Test
     void strategyMigratesRowsAfterV26AndCompletesMigration() throws Exception {
         var dataSource = SQLiteTestSupport
                 .fileBackedDataSource(Files.createTempDirectory("jupiter-encryption-strategy-").resolve("db.sqlite"));
@@ -62,7 +80,7 @@ class EncryptionMigrationIntegrationTests {
 
         assertThat(jdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE installed_rank = (SELECT MAX(installed_rank) FROM flyway_schema_history)",
-                String.class)).isEqualTo("29");
+                String.class)).isEqualTo("30");
         assertThat(jdbc.queryForObject("SELECT migration_complete FROM encryption_metadata WHERE id=1", Integer.class))
                 .isEqualTo(1);
         assertEncryptedAndHidden(jdbc, "projects", "name", "strategy secret");

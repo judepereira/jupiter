@@ -225,6 +225,10 @@ public class UiControllerAsyncStreamingTests {
         assertThat(request.getAgentId()).isEqualTo("engineer");
         assertThat(request.getModelId()).isEqualTo("openai/gpt-5.6-terra");
         assertThat(request.getThinkingLevel()).isEqualTo(ThinkingLevel.LOW);
+        assertThat(request.getPreferenceSnapshot()).isNotNull();
+        assertThat(request.getPreferenceSnapshot().model().id()).isEqualTo("openai/gpt-5.6-terra");
+        assertThat(request.getPreferenceSnapshot().thinkingLevel()).isEqualTo(ThinkingLevel.LOW);
+        assertThat(request.getPreferenceSnapshot().strictModel()).isTrue();
         assertThat(request.getSystemPrompt()).isNull();
         assertThat(request.getConversationHistory()).hasSize(1);
         assertThat(request.getConversationHistory().get(0).getRole()).isEqualTo(Message.Role.USER);
@@ -324,7 +328,8 @@ public class UiControllerAsyncStreamingTests {
             }
         };
         UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+                ModelCatalogTestSupport.resolutionService(modelCatalog),
+                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null, null,
                 mock(AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
@@ -475,7 +480,7 @@ public class UiControllerAsyncStreamingTests {
                 return model;
             }
         }, registry, props, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
@@ -501,7 +506,8 @@ public class UiControllerAsyncStreamingTests {
         };
 
         UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null,
+                ModelCatalogTestSupport.resolutionService(modelCatalog),
+                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null, null,
                 mock(AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),

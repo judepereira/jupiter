@@ -30,6 +30,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -54,14 +55,16 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                new AgentDefinitionService(new ObjectMapper()), null, null, appStateService, null, mcpManager,
+                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
+                appStateService, null, mcpManager,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurnStreaming(
                 new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "use mcp", null, null, null)),
-                        tmp.toString(), "engineer", null, null, 42L, null),
+                        tmp.toString(), "engineer", null, null, 42L, null, null),
                 new AgentStreamListener() {
                     private boolean switched;
 
@@ -98,14 +101,16 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                new AgentDefinitionService(new ObjectMapper()), null, null, appStateService, null, mcpManager,
+                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
+                appStateService, null, mcpManager,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(
                 new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "use mcp", null, null, null)),
-                        tmp.toString(), "apprentice", null, null, 42L, null));
+                        tmp.toString(), "apprentice", null, null, 42L, null, null));
 
         assertThat(result.getFinalText()).isEqualTo("done");
         assertThat(model.capturedToolNames()).allSatisfy(names -> {
@@ -122,7 +127,7 @@ class CodingAgentHarnessMcpIntegrationTest {
     @Test
     void explicitBuiltInAllowListDoesNotExposeMcp(@TempDir Path tmp) {
         AgentDefinition agent = new AgentDefinition("custom", "Custom", "", "Custom system prompt", AgentMode.AGENT,
-                "openai/gpt-5.5", ThinkingLevel.HIGH, null, false, false, List.of("list_files"));
+                "openai/gpt-5.6-sol", ThinkingLevel.HIGH, null, false, false, List.of("list_files"));
         RecordingModel model = new RecordingModel(List.of(
                 new ModelResponse(null, new ToolCall(null, "mcp__project__alpha", Map.of()),
                         ModelResponseMetadata.empty(), null),
@@ -132,14 +137,16 @@ class CodingAgentHarnessMcpIntegrationTest {
         AppStateService appStateService = appStateService(42L);
 
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties(tmp),
-                agentService(agent), null, null, appStateService, null, mcpManager,
+                agentService(agent), ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
+                appStateService, null, mcpManager,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(
                 new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "use mcp", null, null, null)),
-                        tmp.toString(), "custom", null, null, 42L, null));
+                        tmp.toString(), "custom", null, null, 42L, null, null));
 
         assertThat(result.getFinalText()).isEqualTo("done");
         assertThat(model.capturedToolNames().getFirst()).containsExactly("list_files");

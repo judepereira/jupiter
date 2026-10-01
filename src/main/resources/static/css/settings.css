@@ -78,6 +78,89 @@
     margin: 0;
 }
 
+.settings-agent-group {
+    display: grid;
+    gap: 10px;
+}
+
+.agent-preference-card {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--outline-colour);
+    border-radius: 10px;
+    background: #fbfdff;
+}
+
+.agent-preference-heading,
+.agent-preference-actions,
+.agent-preference-reset {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.agent-preference-heading h6,
+.agent-preference-description {
+    margin: 0;
+}
+
+.agent-preference-description,
+.settings-help-text {
+    color: var(--muted);
+}
+
+.agent-preference-description {
+    margin-top: 4px;
+    font-size: 0.9rem;
+}
+
+.settings-agent-badge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #e8f1fb;
+    color: var(--text);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.agent-preference-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.agent-preference-form label {
+    display: grid;
+    gap: 5px;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.agent-preference-warning,
+.settings-agent-warning {
+    color: #855b00;
+    font-size: 0.85rem;
+}
+
+.settings-agent-warning {
+    display: grid;
+    gap: 3px;
+    padding: 9px 11px;
+    border-left: 3px solid #e5a900;
+    background: #fff8e5;
+}
+
+.settings-agent-alert {
+    margin: 0;
+}
+
+.agent-preference-reset {
+    justify-content: flex-start;
+}
+
 .settings-usage-summary {
     display: flex;
     flex-wrap: wrap;
@@ -553,6 +636,14 @@
     .settings-section-header {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .agent-preference-form {
+        grid-template-columns: 1fr;
+    }
+
+    .agent-preference-actions {
+        justify-content: flex-start;
     }
 
     .project-form-actions {

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceService;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
@@ -149,8 +150,9 @@ public final class TestAppStateSupport {
         resolver.setCacheable(false);
         templateEngine.setTemplateResolver(resolver);
         return new UiController(harness, properties, appStateService, new AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null, null,
-                null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService),
+                ModelCatalogTestSupport.preferenceResolver(modelCatalogService), mock(AgentPreferenceService.class),
+                null, null, null, null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 activeStreamRegistryService, terminalManager, new TerminalStateService(),

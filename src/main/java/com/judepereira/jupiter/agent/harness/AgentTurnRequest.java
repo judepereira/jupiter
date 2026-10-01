@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.agent.harness;
 
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceResolver;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import java.util.List;
@@ -15,10 +16,11 @@ public class AgentTurnRequest {
     private final ThinkingLevel thinkingLevel;
     private final Long sessionId;
     private final CancellationToken cancellationToken;
+    private final AgentPreferenceResolver.Resolution preferenceSnapshot;
 
     public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
             String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken, AgentPreferenceResolver.Resolution preferenceSnapshot) {
         this.systemPrompt = systemPrompt;
         this.conversationHistory = List.copyOf(conversationHistory);
         this.workspaceRoot = workspaceRoot;
@@ -27,5 +29,6 @@ public class AgentTurnRequest {
         this.thinkingLevel = thinkingLevel;
         this.sessionId = sessionId;
         this.cancellationToken = cancellationToken;
+        this.preferenceSnapshot = preferenceSnapshot;
     }
 }

@@ -20,6 +20,14 @@ public class ModelPickerService {
         this.catalog = catalog;
     }
 
+    public List<ModelDefinition> listConfiguredModels() {
+        Map<String, ModelDefinition> models = new LinkedHashMap<>();
+        for (String provider : List.of("openai", "anthropic")) {
+            preferences.selectedModels(provider).forEach(model -> models.putIfAbsent(model.id(), model));
+        }
+        return List.copyOf(models.values());
+    }
+
     public List<ModelDefinition> listPickerModels() {
         Map<String, ModelDefinition> models = new LinkedHashMap<>();
         for (String provider : List.of("openai", "anthropic")) {

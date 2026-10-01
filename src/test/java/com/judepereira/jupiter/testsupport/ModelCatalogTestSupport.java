@@ -9,9 +9,12 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentModelResolutionService;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceResolver;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
 import com.judepereira.jupiter.agent.config.ModelCatalogProperties;
+import com.judepereira.jupiter.persistence.AppStateService;
+import java.util.Optional;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -135,6 +138,14 @@ public final class ModelCatalogTestSupport {
 
     public static String catalogJsonWithBundledAnthropicModels() {
         return OPENAI_CATALOG_JSON;
+    }
+
+    public static AgentPreferenceResolver preferenceResolver(ModelCatalogService catalog) {
+        AppStateService state = mock(AppStateService.class);
+        when(state.findAgentModelPreference(anyString())).thenReturn(Optional.empty());
+        ProviderAvailabilityService availability = mock(ProviderAvailabilityService.class);
+        when(availability.isAvailable(anyString())).thenReturn(true);
+        return new AgentPreferenceResolver(state, catalog, availability, resolutionService(catalog));
     }
 
     public static ModelCatalogService modelCatalogService() {

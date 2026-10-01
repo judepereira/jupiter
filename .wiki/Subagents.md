@@ -11,8 +11,8 @@ Jupiter ships with:
 - **Test** - testing-focused work.
 
 Their current model preferences live in the bundled agent definitions and may change independently of this
-documentation. Model selection follows the same rules as primary agents; see
-[Models and Providers](Models-and-Providers).
+documentation. Model selection follows the same rules as primary agents; each subagent can also have an independent
+model and thinking-level override under Settings → Agents. See [Models and Providers](Models-and-Providers).
 
 ## Changed Files Bubble Up
 

@@ -74,7 +74,7 @@ public class CodingAgentHarnessAgentSelectionTest {
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model),
                 registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props,
                 agentService(mcpPlan), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
                 appStateService, null, mcpManager,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
@@ -82,7 +82,7 @@ public class CodingAgentHarnessAgentSelectionTest {
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest("You are Plan.",
                 List.of(new Message(Message.Role.USER, "use tools", null, null, null)), tmp.toString(), "plan",
-                "openai/gpt-5.6-sol", ThinkingLevel.HIGH, 42L, null));
+                "openai/gpt-5.6-sol", ThinkingLevel.HIGH, 42L, null, null));
 
         assertThat(result.getFinalText()).isEqualTo("finished");
         assertThat(model.capturedToolNames().get(0)).containsExactlyInAnyOrder("list_files", "read_file", "search_code",
@@ -126,14 +126,14 @@ public class CodingAgentHarnessAgentSelectionTest {
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model),
                 registry(listFiles, readFile, searchCode, writeFile, applyPatch, runCommand), props, agentDefinitions,
                 ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
                 null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
 
         AgentTurnResult result = harness.runTurn(new AgentTurnRequest("You are Engineer.",
                 List.of(new Message(Message.Role.USER, "run a command", null, null, null)), tmp.toString(), "engineer",
-                null, null, null, null));
+                null, null, null, null, null));
 
         assertThat(result.getFinalText()).isEqualTo("done");
         assertThat(model.capturedToolNames().get(0)).containsExactlyInAnyOrder("list_files", "read_file", "search_code",
