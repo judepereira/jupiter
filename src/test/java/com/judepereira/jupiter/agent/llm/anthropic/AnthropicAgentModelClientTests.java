@@ -80,15 +80,16 @@ class AnthropicAgentModelClientTests {
     void configuredBetaIsSent() throws Exception {
         AnthropicProperties properties = propertiesWithKey();
         properties.setBeta("prompt-caching-2024-07-31");
-        HttpClient http = mock(HttpClient.class);
-        AtomicReference<HttpRequest> request = new AtomicReference<>();
-        when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
-            request.set(i.getArgument(0));
-            return response(200, "{\"content\":[],\"usage\":{}}");
-        });
-        new AnthropicAgentModelClient(properties, new AgentProperties(), new ObjectMapper(), http)
-                .chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of());
-        assertThat(request.get().headers().firstValue("anthropic-beta")).contains("prompt-caching-2024-07-31");
+        try (HttpClient http = mock(HttpClient.class)) {
+            AtomicReference<HttpRequest> request = new AtomicReference<>();
+            when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
+                request.set(i.getArgument(0));
+                return response(200, "{\"content\":[],\"usage\":{}}");
+            });
+            new AnthropicAgentModelClient(properties, new AgentProperties(), new ObjectMapper(), http)
+                    .chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of());
+            assertThat(request.get().headers().firstValue("anthropic-beta")).contains("prompt-caching-2024-07-31");
+        }
     }
 
     @Test
@@ -106,16 +107,18 @@ class AnthropicAgentModelClientTests {
         if (key != null) {
             properties.setApiKey(key);
         }
-        HttpClient http = mock(HttpClient.class);
-        var client = new AnthropicAgentModelClient(properties, new AgentProperties(), new ObjectMapper(), http);
-        assertThatThrownBy(() -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
-                .isInstanceOf(IllegalStateException.class).hasMessage("Anthropic API key is required");
-        if (key != null) {
+        try (HttpClient http = mock(HttpClient.class)) {
+            var client = new AnthropicAgentModelClient(properties, new AgentProperties(), new ObjectMapper(), http);
             assertThatThrownBy(
                     () -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
-                    .hasMessageNotContaining(key);
+                    .isInstanceOf(IllegalStateException.class).hasMessage("Anthropic API key is required");
+            if (key != null) {
+                assertThatThrownBy(
+                        () -> client.chat(List.of(new Message(Message.Role.USER, "x", null, null, null)), List.of()))
+                        .hasMessageNotContaining(key);
+            }
+            verifyNoInteractions(http);
         }
-        verifyNoInteractions(http);
     }
 
     @Test
