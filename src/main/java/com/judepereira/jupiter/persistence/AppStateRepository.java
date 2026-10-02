@@ -356,30 +356,6 @@ public class AppStateRepository {
                 new MapSqlParameterSource());
     }
 
-    public Optional<AnthropicOAuthStateRow> loadAnthropicOAuthState() {
-        return queryOne(
-                "SELECT anthropic_access_token, anthropic_refresh_token, anthropic_expires_at, anthropic_scopes, anthropic_account_json FROM app_state WHERE id = 1",
-                new MapSqlParameterSource(), this::mapAnthropicOAuthState);
-    }
-
-    public void updateAnthropicOAuthState(String accessToken, String refreshToken, Instant expiresAt, String scopes,
-            String accountJson) {
-        jdbc.update(
-                "UPDATE app_state SET anthropic_access_token = :accessToken, anthropic_refresh_token = :refreshToken, anthropic_expires_at = :expiresAt, anthropic_scopes = :scopes, anthropic_account_json = :accountJson WHERE id = 1",
-                new MapSqlParameterSource()
-                        .addValue("accessToken", enc("app_state", "anthropic_access_token", accessToken))
-                        .addValue("refreshToken", enc("app_state", "anthropic_refresh_token", refreshToken))
-                        .addValue("expiresAt", expiresAt == null ? null : Timestamp.from(expiresAt))
-                        .addValue("scopes", enc("app_state", "anthropic_scopes", scopes))
-                        .addValue("accountJson", enc("app_state", "anthropic_account_json", accountJson)));
-    }
-
-    public void clearAnthropicOAuthState() {
-        jdbc.update(
-                "UPDATE app_state SET anthropic_access_token = NULL, anthropic_refresh_token = NULL, anthropic_expires_at = NULL, anthropic_scopes = NULL, anthropic_account_json = NULL WHERE id = 1",
-                new MapSqlParameterSource());
-    }
-
     public List<String> loadSelectedModelIds(String provider) {
         return jdbc.query(
                 "SELECT model_id FROM provider_model_selections WHERE provider = :provider ORDER BY model_id ASC",
@@ -1513,15 +1489,6 @@ public class AppStateRepository {
                 timestampToInstant(rs.getTimestamp("openai_expires_at")));
     }
 
-    private AnthropicOAuthStateRow mapAnthropicOAuthState(ResultSet rs, int rowNum) throws SQLException {
-        return new AnthropicOAuthStateRow(
-                dec("app_state", "anthropic_access_token", rs.getString("anthropic_access_token")),
-                dec("app_state", "anthropic_refresh_token", rs.getString("anthropic_refresh_token")),
-                timestampToInstant(rs.getTimestamp("anthropic_expires_at")),
-                dec("app_state", "anthropic_scopes", rs.getString("anthropic_scopes")),
-                dec("app_state", "anthropic_account_json", rs.getString("anthropic_account_json")));
-    }
-
     private ToolCallTraceRow mapToolCallTrace(ResultSet rs, int rowNum) throws SQLException {
         return new ToolCallTraceRow(rs.getLong("id"), rs.getLong("session_id"), rs.getLong("assistant_message_id"),
                 rs.getLong("sequence"), rs.getString("tool_call_id"), rs.getString("tool_name"),
@@ -1566,9 +1533,6 @@ public class AppStateRepository {
     }
     public record OpenAiOAuthStateRow(String accessToken, String refreshToken, String idToken, String accountId,
             Instant expiresAt) {
-    }
-    public record AnthropicOAuthStateRow(String accessToken, String refreshToken, Instant expiresAt, String scopes,
-            String accountJson) {
     }
     record ProjectRow(long id, String name, String normalizedPath, long displayOrder, Instant closedAt,
             Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables,

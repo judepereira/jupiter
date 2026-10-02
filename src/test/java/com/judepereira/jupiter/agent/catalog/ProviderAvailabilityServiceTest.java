@@ -4,33 +4,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.judepereira.jupiter.agent.config.AnthropicProperties;
 import com.judepereira.jupiter.agent.config.OpenAiProperties;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import org.junit.jupiter.api.Test;
 
 class ProviderAvailabilityServiceTest {
     private final OpenAiOAuthService openAi = mock(OpenAiOAuthService.class);
-    private final AnthropicOAuthService anthropic = mock(AnthropicOAuthService.class);
-    private final OpenAiProperties properties = new OpenAiProperties();
+    private final OpenAiProperties openAiProperties = new OpenAiProperties();
+    private final AnthropicProperties anthropicProperties = new AnthropicProperties();
 
     @Test
     void openAiIsAvailableWithTrimmedNonBlankApiKeyEvenWhenOAuthIsDisconnected() {
-        properties.setApiKey("  sk-test  ");
+        openAiProperties.setApiKey("  sk-test  ");
         when(openAi.currentView()).thenReturn(
                 new OpenAiOAuthService.OpenAiOAuthView(false, false, "not connected", null, null, null, null));
 
-        assertThat(new ProviderAvailabilityService(openAi, anthropic, properties).isAvailable("openai")).isTrue();
-        assertThat(properties.trimmedApiKey()).isEqualTo("sk-test");
+        assertThat(service().isAvailable("openai")).isTrue();
+        assertThat(openAiProperties.trimmedApiKey()).isEqualTo("sk-test");
     }
 
     @Test
     void blankApiKeyDoesNotMakeDisconnectedOpenAiAvailable() {
-        properties.setApiKey("  \t");
+        openAiProperties.setApiKey("  \t");
         when(openAi.currentView()).thenReturn(
                 new OpenAiOAuthService.OpenAiOAuthView(false, false, "not connected", null, null, null, null));
 
-        assertThat(new ProviderAvailabilityService(openAi, anthropic, properties).isAvailable("openai")).isFalse();
+        assertThat(service().isAvailable("openai")).isFalse();
     }
 
     @Test
@@ -38,6 +38,17 @@ class ProviderAvailabilityServiceTest {
         when(openAi.currentView())
                 .thenReturn(new OpenAiOAuthService.OpenAiOAuthView(true, false, "connected", null, null, null, null));
 
-        assertThat(new ProviderAvailabilityService(openAi, anthropic, properties).isAvailable("openai")).isTrue();
+        assertThat(service().isAvailable("openai")).isTrue();
+    }
+
+    @Test
+    void anthropicRequiresNonBlankApiKey() {
+        assertThat(service().isAvailable("anthropic")).isFalse();
+        anthropicProperties.setApiKey("  sk-ant-test  ");
+        assertThat(service().isAvailable("anthropic")).isTrue();
+    }
+
+    private ProviderAvailabilityService service() {
+        return new ProviderAvailabilityService(openAi, openAiProperties, anthropicProperties);
     }
 }

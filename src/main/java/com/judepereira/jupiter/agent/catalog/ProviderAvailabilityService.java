@@ -1,7 +1,7 @@
 package com.judepereira.jupiter.agent.catalog;
 
+import com.judepereira.jupiter.agent.config.AnthropicProperties;
 import com.judepereira.jupiter.agent.config.OpenAiProperties;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -11,20 +11,20 @@ import org.springframework.stereotype.Service;
 @Service
 public class ProviderAvailabilityService {
     private final OpenAiOAuthService openAi;
-    private final AnthropicOAuthService anthropic;
     private final OpenAiProperties openAiProperties;
+    private final AnthropicProperties anthropicProperties;
 
-    public ProviderAvailabilityService(OpenAiOAuthService openAi, AnthropicOAuthService anthropic,
-            OpenAiProperties openAiProperties) {
+    public ProviderAvailabilityService(OpenAiOAuthService openAi, OpenAiProperties openAiProperties,
+            AnthropicProperties anthropicProperties) {
         this.openAi = openAi;
-        this.anthropic = anthropic;
         this.openAiProperties = openAiProperties;
+        this.anthropicProperties = anthropicProperties;
     }
 
     public boolean isAvailable(String provider) {
         return switch (provider) {
             case "openai" -> openAi.currentView().connected() || openAiProperties.hasApiKey();
-            case "anthropic" -> anthropic.isConnected();
+            case "anthropic" -> anthropicProperties.hasApiKey();
             default -> false;
         };
     }

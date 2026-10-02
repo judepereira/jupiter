@@ -122,6 +122,7 @@ implementation details.
 - Keep maintainer-only architecture, testing, publishing, and implementation guidance in `AGENTS.md` or other repository
   contributor documentation rather than the user-facing wiki.
 - Treat `.wiki/` as the source of truth for wiki content. Do not directly edit the published GitHub wiki.
+- Do not document Spring property names in user-facing documentation; document supported environment variables instead.
 
 ## Principles
 
