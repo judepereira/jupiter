@@ -1,8 +1,8 @@
 ---
 description:  A seasoned software engineer.
 mode: agent
-model: openai/gpt-5.6-terra, anthropic/claude-opus-5
-reasoningEffort: medium
+model: openai/gpt-6.1-sol, anthropic/claude-opus-5
+reasoningEffort: high
 textVerbosity: low
 tools:
   "*": true

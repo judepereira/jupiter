@@ -76,9 +76,9 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                     response -> response.url().contains("/ui/projects/") && response.url().contains("/activate")
                             && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Alpha")).click());
-            assertPicker(page, "openai/gpt-5.6-sol|OpenAI Test", "openai/gpt-5.6-terra|Terra",
-                    "openai/gpt-5.6-luna|Luna", "anthropic/claude-sonnet-5|Claude Sonnet Test",
-                    "anthropic/claude-opus-5|Claude Opus Test");
+            assertPicker(page, "openai/gpt-5.6-sol|OpenAI Test", "openai/gpt-6.1-sol|GPT-6.1 Sol",
+                    "openai/gpt-6-luna|GPT-6 Luna", "openai/gpt-5.6-terra|Terra", "openai/gpt-5.6-luna|Luna",
+                    "anthropic/claude-sonnet-5|Claude Sonnet Test", "anthropic/claude-opus-5|Claude Opus Test");
 
             openSettings(page);
             Locator anthropicSelections = page.locator("form.settings-model-selections").filter(
@@ -107,8 +107,8 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                             .setHas(page.locator("input[name='provider'][value='anthropic']")))
                     .locator("select[name='modelId']")).hasValues(new String[]{"anthropic/claude-opus-5"});
             page.locator("#settings-modal .btn-close").click();
-            assertPicker(page, "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna",
-                    "anthropic/claude-sonnet-5", "anthropic/claude-opus-5");
+            assertPicker(page, "openai/gpt-5.6-sol", "openai/gpt-6.1-sol", "openai/gpt-6-luna", "openai/gpt-5.6-terra",
+                    "openai/gpt-5.6-luna", "anthropic/claude-sonnet-5", "anthropic/claude-opus-5");
 
             // Disconnecting removes only that provider's model; reconnecting preserves the
             // selection.
@@ -236,6 +236,8 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
     private static final String CATALOG = """
             {"models": {
               "openai/gpt-5.6-sol": {"id":"openai/gpt-5.6-sol","name":"OpenAI Test","reasoning":false,"tool_call":true,"limit":{"context":1000,"output":100}},
+              "openai/gpt-6.1-sol": {"id":"openai/gpt-6.1-sol","name":"GPT-6.1 Sol","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
+              "openai/gpt-6-luna": {"id":"openai/gpt-6-luna","name":"GPT-6 Luna","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
               "openai/gpt-5.6-terra": {"id":"openai/gpt-5.6-terra","name":"Terra","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
               "openai/gpt-5.6-luna": {"id":"openai/gpt-5.6-luna","name":"Luna","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
               "anthropic/claude-sonnet-5": {"id":"anthropic/claude-sonnet-5","name":"Claude Sonnet Test","reasoning":true,"tool_call":true,"release_date":"2026-01-01","limit":{"context":1000,"output":100}},
