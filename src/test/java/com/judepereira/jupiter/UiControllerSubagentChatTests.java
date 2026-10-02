@@ -125,7 +125,7 @@ public class UiControllerSubagentChatTests {
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH",
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-6.1-sol", "HIGH",
                 null);
         appStateService.appendVisibleSystemMessage(sessionId, "summary one");
         appStateService.appendVisibleSystemMessage(sessionId, "summary two");
@@ -137,8 +137,8 @@ public class UiControllerSubagentChatTests {
         controller.loadPrimaryChat(model);
 
         assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
-        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
-        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-6.1-sol");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
     }
 
     @Test
@@ -147,7 +147,7 @@ public class UiControllerSubagentChatTests {
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
         long sessionId = appStateService.loadViewData().activeSession().id();
 
-        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-terra", "HIGH",
+        ChatMessageMetadata metadata = new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-6.1-sol", "HIGH",
                 null);
         appStateService.appendUserMessageAndPendingAssistant(sessionId, "user-1", "assistant-1", "task", metadata);
         appStateService.completeAssistantMessage(sessionId, "assistant-1", "done", List.of());
@@ -157,8 +157,8 @@ public class UiControllerSubagentChatTests {
         controller.index(model);
 
         assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
-        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
-        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-6.1-sol");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
     }
 
     private static UiController controller(AppStateService appStateService, Path workspaceRoot) {

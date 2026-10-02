@@ -299,6 +299,14 @@ public class UiControllerAsyncStreamingTests {
                       "context": 5000,
                         "output": 500
                       }
+                    },
+                    "openai/gpt-6.1-sol": {
+                      "id": "openai/gpt-6.1-sol",
+                      "name": "GPT-6.1 Sol",
+                      "reasoning": true,
+                      "tool_call": true,
+                      "release_date": "2026-09-01",
+                      "limit": {"context": 5000, "output": 500}
                     }
                   }
                 }
@@ -416,6 +424,14 @@ public class UiControllerAsyncStreamingTests {
                       "reasoning": true,
                       "tool_call": true,
                       "release_date": "2026-05-10",
+                      "limit": {"context": 5000, "output": 128}
+                    },
+                    "openai/gpt-6.1-sol": {
+                      "id": "openai/gpt-6.1-sol",
+                      "name": "GPT-6.1 Sol",
+                      "reasoning": true,
+                      "tool_call": true,
+                      "release_date": "2026-09-01",
                       "limit": {"context": 5000, "output": 128}
                     }
                   }
