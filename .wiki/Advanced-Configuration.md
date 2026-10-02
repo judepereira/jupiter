@@ -1,7 +1,6 @@
 These settings are mainly useful when operating or tuning a Jupiter instance beyond the normal UI. Set
-`ANTHROPIC_API_KEY` (or `anthropic.api-key`) to enable Claude; account or subscription login is unsupported. Restart
-Jupiter after changing provider configuration. When upgrading, preserve the key in the new process environment or
-configuration.
+`ANTHROPIC_API_KEY` to enable Claude; account or subscription login is unsupported. Restart Jupiter after changing the
+key. When upgrading, preserve the key in the new process environment.
 
 ## Environment Variables
 

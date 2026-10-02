@@ -70,8 +70,8 @@ an external IDE), and to configure system init and user init scripts (preinstall
 ## Connecting Model Providers
 
 Open **Settings → Model Providers** to connect an OpenAI subscription or configure Claude. OpenAI can also use
-`OPENAI_API_KEY`; Claude requires `ANTHROPIC_API_KEY` (or `anthropic.api-key`) and does not support account or
-subscription login. Restart Jupiter after changing configuration. See
+`OPENAI_API_KEY`; Claude requires `ANTHROPIC_API_KEY` and does not support account or subscription login. Restart
+Jupiter after changing the key. See
 [Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers) for connection and
 model-selection details.
 
