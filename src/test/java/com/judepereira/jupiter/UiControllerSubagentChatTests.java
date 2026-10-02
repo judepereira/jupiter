@@ -184,6 +184,27 @@ public class UiControllerSubagentChatTests {
     }
 
     @Test
+    public void reloadUsesDefaultsWhenNewestAssistantHasNoMetadata(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "old-user", "old-assistant", "old",
+                new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-sol", "HIGH", null));
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "latest-user", "latest-assistant", "latest");
+        appStateService.appendVisibleSystemMessage(sessionId, "trailing system update");
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        controller.loadPrimaryChat(model);
+
+        assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id())
+                .isEqualTo(((AgentDefinition) model.getAttribute("defaultAgent")).id());
+        assertThat(model.getAttribute("selectedModel")).isEqualTo(model.getAttribute("defaultModel"));
+        assertThat(model.getAttribute("selectedThinking")).isEqualTo(model.getAttribute("defaultThinking"));
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(false);
+    }
+
+    @Test
     public void reloadFallsBackForInvalidPersistedChoices(@TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());

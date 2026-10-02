@@ -1751,36 +1751,34 @@ public class UiController {
         }
         AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
         ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-        for (int i = detail.chatMessages().size() - 1; i >= 0; i--) {
-            ChatMessageView message = detail.chatMessages().get(i);
-            if (!"assistant".equals(message.role()) || message.metadata() == null) {
-                continue;
-            }
-            ChatMessageMetadata metadata = message.metadata();
-            AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
-            ModelDefinition selectedModel = resolveAgentModel(selectedAgent);
-            boolean explicitModel = false;
-            if (metadata.modelId() != null && !metadata.modelId().isBlank()) {
-                try {
-                    selectedModel = modelCatalogService.getRequired(metadata.modelId());
-                    explicitModel = true;
-                } catch (IllegalArgumentException e) {
-                    log.warn("Ignoring unknown persisted model '{}' while restoring session", metadata.modelId());
-                }
-            }
-            ThinkingLevel selectedThinking = selectedAgent.defaultThinkingLevel();
-            if (metadata.thinkingLevel() != null && !metadata.thinkingLevel().isBlank()) {
-                try {
-                    selectedThinking = ThinkingLevel.fromValue(metadata.thinkingLevel());
-                } catch (IllegalArgumentException e) {
-                    log.warn("Ignoring invalid persisted thinking level '{}' while restoring session",
-                            metadata.thinkingLevel());
-                }
-            }
-            return new ChatSelection(selectedAgent, selectedModel, selectedThinking, explicitModel, defaultAgent,
-                    defaultModel, defaultAgent.defaultThinkingLevel());
+        ChatMessageView newestAssistant = detail.chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role())).reduce((first, second) -> second).orElse(null);
+        if (newestAssistant == null || newestAssistant.metadata() == null) {
+            return null;
         }
-        return null;
+        ChatMessageMetadata metadata = newestAssistant.metadata();
+        AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
+        ModelDefinition selectedModel = resolveAgentModel(selectedAgent);
+        boolean explicitModel = false;
+        if (metadata.modelId() != null && !metadata.modelId().isBlank()) {
+            try {
+                selectedModel = modelCatalogService.getRequired(metadata.modelId());
+                explicitModel = true;
+            } catch (IllegalArgumentException e) {
+                log.warn("Ignoring unknown persisted model '{}' while restoring session", metadata.modelId());
+            }
+        }
+        ThinkingLevel selectedThinking = selectedAgent.defaultThinkingLevel();
+        if (metadata.thinkingLevel() != null && !metadata.thinkingLevel().isBlank()) {
+            try {
+                selectedThinking = ThinkingLevel.fromValue(metadata.thinkingLevel());
+            } catch (IllegalArgumentException e) {
+                log.warn("Ignoring invalid persisted thinking level '{}' while restoring session",
+                        metadata.thinkingLevel());
+            }
+        }
+        return new ChatSelection(selectedAgent, selectedModel, selectedThinking, explicitModel, defaultAgent,
+                defaultModel, defaultAgent.defaultThinkingLevel());
     }
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {
