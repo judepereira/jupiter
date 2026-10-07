@@ -308,11 +308,11 @@ public class ProjectsTemplateRenderTest {
         for (String fragment : List.of("modal", "settingsModal", "workspaceModal", "workspaceCloseModal")) {
             String html = engine.process(
                     new TemplateSpec("fragments/projects", Set.of(fragment), TemplateMode.HTML, null), context);
-            String id = fragment.equals("modal")
+            String id = "modal".equals(fragment)
                     ? "project-modal"
-                    : fragment.equals("settingsModal")
+                    : "settingsModal".equals(fragment)
                             ? "settings-modal"
-                            : fragment.equals("workspaceModal") ? "workspace-modal" : "workspace-close-modal";
+                            : "workspaceModal".equals(fragment) ? "workspace-modal" : "workspace-close-modal";
             String title = id + "-title";
             assertThat(html).contains("id=\"" + id + "\"", "role=\"dialog\"", "aria-labelledby=\"" + title + "\"",
                     "id=\"" + title + "\"", "hx-get=\"/ui/projects/modal/close\"", "hx-target=\"#modal-root\"",
@@ -344,9 +344,10 @@ public class ProjectsTemplateRenderTest {
     public void anthropicAndModelsFragmentsRenderWithNullAndPopulatedContexts() {
         SpringTemplateEngine engine = engine();
         WebContext empty = webContext();
-        String emptyHtml = engine.process(new TemplateSpec("fragments/projects",
-                Set.of("anthropicOAuthSection", "settingsModels"), TemplateMode.HTML, null), empty);
-        assertThat(emptyHtml).contains("Anthropic is not connected").doesNotContain("${view.message}");
+        String emptyHtml = engine.process(
+                new TemplateSpec("fragments/projects", Set.of("settingsModels"), TemplateMode.HTML, null), empty);
+        assertThat(emptyHtml).contains("Set", "ANTHROPIC_API_KEY", "anthropic.api-key").doesNotContain("Connect Claude",
+                "Auth code", "Disconnect Anthropic", "${view.message}");
         assertThat(emptyHtml).contains("id=\"settings-models\"", "class=\"settings-section\"");
 
         String oobHtml = engine.process(

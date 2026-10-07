@@ -10,7 +10,6 @@ import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
@@ -41,7 +40,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -411,8 +409,7 @@ public class UiControllerTerminalTests {
             return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
                     new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
                     ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null,
-                    null, null, Mockito.mock(AnthropicOAuthService.class),
-                    new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                    null, null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                     new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                             (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                     appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,

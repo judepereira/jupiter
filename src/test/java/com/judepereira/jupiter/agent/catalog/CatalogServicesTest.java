@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -99,6 +100,25 @@ public class CatalogServicesTest {
     }
 
     @Test
+    public void bundledAgentsUseExpectedOrderedModelsAndReasoningSettings() {
+        AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
+
+        assertThat(service.list())
+                .extracting(AgentDefinition::id, AgentDefinition::modelIds, AgentDefinition::defaultThinkingLevel)
+                .containsExactly(
+                        Tuple.tuple("plan", List.of("openai/gpt-6.1-sol", "anthropic/claude-opus-5"),
+                                ThinkingLevel.HIGH),
+                        Tuple.tuple("engineer", List.of("openai/gpt-6.1-sol", "anthropic/claude-opus-5"),
+                                ThinkingLevel.HIGH),
+                        Tuple.tuple("explore", List.of("openai/gpt-6-luna", "anthropic/claude-sonnet-5"),
+                                ThinkingLevel.MEDIUM),
+                        Tuple.tuple("apprentice", List.of("openai/gpt-6-luna", "anthropic/claude-sonnet-5"),
+                                ThinkingLevel.MEDIUM),
+                        Tuple.tuple("test", List.of("openai/gpt-6-luna", "anthropic/claude-sonnet-5"),
+                                ThinkingLevel.MEDIUM));
+    }
+
+    @Test
     public void planAgentIncludesMcpWildcardAndRemainsReadOnly() {
         AgentDefinitionService service = new AgentDefinitionService(new ObjectMapper());
         AgentDefinition plan = service.getRequired("plan");
@@ -144,9 +164,9 @@ public class CatalogServicesTest {
         ModelCatalogService service = ModelCatalogTestSupport.modelCatalogService();
 
         assertThat(service.defaultModelId()).isEqualTo("openai/gpt-5.6-sol");
-        assertThat(service.list()).extracting(ModelDefinition::id).containsExactly("openai/gpt-5.6-sol",
-                "openai/gpt-4.1", "openai/gpt-5.60-preview", "anthropic/claude-opus-5", "anthropic/claude-sonnet-5",
-                "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
+        assertThat(service.list()).extracting(ModelDefinition::id).containsExactly("openai/gpt-6.1-sol",
+                "openai/gpt-6-luna", "openai/gpt-5.6-sol", "openai/gpt-4.1", "openai/gpt-5.60-preview",
+                "anthropic/claude-opus-5", "anthropic/claude-sonnet-5", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna");
         assertThat(service.list()).extracting(ModelDefinition::id).doesNotContain("openai/gpt-5.5",
                 "openai/gpt-5.5-pro");
         assertThat(service.list()).extracting(ModelDefinition::provider).contains("openai", "anthropic");

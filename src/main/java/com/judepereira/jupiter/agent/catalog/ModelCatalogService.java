@@ -131,7 +131,7 @@ public class ModelCatalogService {
         if (separator <= 0)
             return false;
         String provider = modelKey.substring(0, separator);
-        return provider.equals("openai") || provider.equals("anthropic");
+        return "openai".equals(provider) || "anthropic".equals(provider);
     }
 
     private static void validateCatalogEntry(String key, JsonNode node) {
@@ -162,10 +162,10 @@ public class ModelCatalogService {
     }
 
     private static boolean eligible(ModelDefinition m) {
-        if (!(m.provider().equals("openai") || m.provider().equals("anthropic")) || !m.supportsTools()
+        if (!("openai".equals(m.provider()) || "anthropic".equals(m.provider())) || !m.supportsTools()
                 || !m.inputModalities().contains("text") || !m.outputModalities().contains("text"))
             return false;
-        if (m.provider().equals("anthropic"))
+        if ("anthropic".equals(m.provider()))
             return m.id().startsWith("anthropic/claude-");
         String value = (m.id() + " " + m.displayName()).toLowerCase(Locale.ROOT);
         return OPENAI_SPECIALIZED_TERMS.stream().noneMatch(value::contains);

@@ -133,31 +133,101 @@ export function formatAllChatSubtitles(root) {
     } catch (_) {}
 }
 
+const chatCopyResetTimers = new WeakMap();
+
+function copyChatResponse(text) {
+    const activeElement = document.activeElement;
+    const activeSelection =
+        activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement
+            ? {
+                  start: activeElement.selectionStart,
+                  end: activeElement.selectionEnd,
+                  direction: activeElement.selectionDirection,
+              }
+            : null;
+    const documentSelection = document.getSelection();
+    const selectionRanges = documentSelection
+        ? Array.from({ length: documentSelection.rangeCount }, (_, index) =>
+              documentSelection.getRangeAt(index).cloneRange(),
+          )
+        : [];
+    const history = document.getElementById("chat-history");
+    const scroll = {
+        windowX: window.scrollX,
+        windowY: window.scrollY,
+        historyLeft: history && history.scrollLeft,
+        historyTop: history && history.scrollTop,
+    };
+    const textarea = document.createElement("textarea");
+
+    try {
+        textarea.value = text;
+        textarea.readOnly = true;
+        textarea.tabIndex = -1;
+        textarea.setAttribute("aria-label", "Text to copy");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "0";
+        textarea.style.width = "1px";
+        textarea.style.height = "1px";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus({ preventScroll: true });
+        textarea.select();
+        if (document.execCommand("copy") !== true) throw new Error("document.execCommand('copy') returned false");
+    } finally {
+        textarea.remove();
+        try {
+            if (activeElement && activeElement.isConnected) {
+                activeElement.focus({ preventScroll: true });
+                if (activeSelection && activeSelection.start != null && activeSelection.end != null) {
+                    activeElement.setSelectionRange(
+                        activeSelection.start,
+                        activeSelection.end,
+                        activeSelection.direction,
+                    );
+                }
+            }
+        } catch (_) {}
+        try {
+            if (documentSelection) {
+                documentSelection.removeAllRanges();
+                selectionRanges.forEach((range) => documentSelection.addRange(range));
+            }
+        } catch (_) {}
+        try {
+            window.scrollTo(scroll.windowX, scroll.windowY);
+            if (history) history.scrollTo(scroll.historyLeft, scroll.historyTop);
+        } catch (_) {}
+    }
+}
+
 export function bindChatMessageCopyButtons() {
     try {
         if (document.body.dataset.chatCopyButtonsBound === "true") return;
         document.body.dataset.chatCopyButtonsBound = "true";
-        document.body.addEventListener("click", async (event) => {
+        document.body.addEventListener("click", (event) => {
             const button = event.target && event.target.closest && event.target.closest(".chat-message-copy-button");
             if (!button) return;
             const row = button.closest('li[data-role="assistant"]');
             const message = row && row.querySelector(".chat-message-text");
-            if (
-                !message ||
-                !navigator.clipboard ||
-                typeof navigator.clipboard.writeText !== "function" ||
-                button.dataset.copyPending === "true"
-            )
-                return;
+            if (!message || button.dataset.copyPending === "true") return;
+
+            const previousTimer = chatCopyResetTimers.get(button);
+            if (previousTimer) window.clearTimeout(previousTimer);
             button.dataset.copyPending = "true";
             try {
-                await navigator.clipboard.writeText(getRawChatMarkdown(message));
+                copyChatResponse(getRawChatMarkdown(message));
                 button.setAttribute("aria-label", "Copied");
                 button.title = "Copied";
-                window.setTimeout(() => {
-                    button.setAttribute("aria-label", "Copy response");
-                    button.title = "Copy response";
-                }, 1500);
+                chatCopyResetTimers.set(
+                    button,
+                    window.setTimeout(() => {
+                        chatCopyResetTimers.delete(button);
+                        button.setAttribute("aria-label", "Copy response");
+                        button.title = "Copy response";
+                    }, 1500),
+                );
             } catch (error) {
                 button.setAttribute("aria-label", "Copy failed");
                 button.title = "Copy failed";

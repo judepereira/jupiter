@@ -103,6 +103,22 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                   "limit": {"context": 400000, "output": 128000},
                   "release_date": "2026-08-01"
                 },
+                "openai/gpt-6.1-sol": {
+                  "id": "openai/gpt-6.1-sol",
+                  "name": "GPT-6.1 Sol",
+                  "reasoning": true,
+                  "tool_call": true,
+                  "limit": {"context": 400000, "output": 128000},
+                  "release_date": "2026-09-01"
+                },
+                "openai/gpt-6-luna": {
+                  "id": "openai/gpt-6-luna",
+                  "name": "GPT-6 Luna",
+                  "reasoning": true,
+                  "tool_call": true,
+                  "limit": {"context": 400000, "output": 128000},
+                  "release_date": "2026-09-01"
+                },
                 "openai/gpt-5.6-sol": {
                   "id": "openai/gpt-5.6-sol",
                   "name": "GPT-5.6 Sol",

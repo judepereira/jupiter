@@ -34,7 +34,7 @@ public class ChatToolCallHtmlService {
                         .anyMatch(call -> anchorToolCallId.equals(call.toolCallId())))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Tool call group not found: " + anchorToolCallId));
-        if (group.toolName().equals("display_image")) {
+        if ("display_image".equals(group.toolName())) {
             throw new IllegalStateException("Display image tool calls are eager: " + anchorToolCallId);
         }
         return renderGroup(group, assistantId);
@@ -67,7 +67,7 @@ public class ChatToolCallHtmlService {
                 ChatPresentationService.ToolCallView call = group.calls().getLast();
                 patches.add(
                         renderCall(call, group.toolName(), assistantId, group.callsDomId(assistantId), "beforeend"));
-                patches.add(render(group.toolName().equals("task") ? "taskSummary" : "groupSummary", group, assistantId,
+                patches.add(render("task".equals(group.toolName()) ? "taskSummary" : "groupSummary", group, assistantId,
                         group.summaryDomId(assistantId), "outerHTML"));
             }
             return List.copyOf(patches);
@@ -78,7 +78,7 @@ public class ChatToolCallHtmlService {
         }
         ChatPresentationService.ToolCallView call = group.calls().getLast();
         return List.of(renderCall(call, group.toolName(), assistantId, group.callsDomId(assistantId), "beforeend"),
-                render(group.toolName().equals("task") ? "taskSummary" : "groupSummary", group, assistantId,
+                render("task".equals(group.toolName()) ? "taskSummary" : "groupSummary", group, assistantId,
                         group.summaryDomId(assistantId), "outerHTML"));
     }
 
@@ -116,7 +116,7 @@ public class ChatToolCallHtmlService {
         }
         List<DomPatch> patches = new ArrayList<>();
         patches.add(renderCall(call, group.toolName(), assistantId, call.domId(assistantId), "outerHTML"));
-        patches.add(render(group.toolName().equals("task") ? "taskSummary" : "groupSummary", group, assistantId,
+        patches.add(render("task".equals(group.toolName()) ? "taskSummary" : "groupSummary", group, assistantId,
                 group.summaryDomId(assistantId), "outerHTML"));
         ChatPresentationService.ToolCallBlockView block = model.toolCallBlocks().stream()
                 .filter(candidate -> candidate.bundle() != null && candidate.bundle().groups().contains(group))

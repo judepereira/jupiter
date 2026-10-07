@@ -16,7 +16,6 @@ import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandCatalogService.CommandDefinition;
 import com.judepereira.jupiter.command.CommandCatalogService.CommandKind;
@@ -90,7 +89,6 @@ public class UiController {
     private final ModelPickerService modelPickerService;
     private final ModelPreferencesService modelPreferencesService;
     private final ProviderAvailabilityService providerAvailabilityService;
-    private final AnthropicOAuthService anthropicOAuthService;
     private final ContextCompactionService contextCompactionService;
     private final TokenUsageService tokenUsageService;
     private final CommandStreamService commandStreamService;
@@ -122,8 +120,7 @@ public class UiController {
             AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
             AgentModelResolutionService agentModelResolutionService, ModelPickerService modelPickerService,
             ModelPreferencesService modelPreferencesService, ProviderAvailabilityService providerAvailabilityService,
-            AnthropicOAuthService anthropicOAuthService, SystemBalloonService systemBalloonService,
-            WorkspaceRailRefreshService workspaceRailRefreshService,
+            SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
             ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
             TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
             ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
@@ -143,7 +140,6 @@ public class UiController {
         this.modelPickerService = modelPickerService;
         this.modelPreferencesService = modelPreferencesService;
         this.providerAvailabilityService = providerAvailabilityService;
-        this.anthropicOAuthService = anthropicOAuthService;
         this.contextCompactionService = contextCompactionService;
         this.tokenUsageService = tokenUsageService;
         this.commandStreamService = commandStreamService;
@@ -1020,7 +1016,6 @@ public class UiController {
         model.addAttribute("lifecycleHookSettings", appStateService.loadLifecycleHookSettings());
         model.addAttribute("autoGitUpdateEnabled", appStateService.loadAutoGitUpdateEnabled());
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
-        model.addAttribute("anthropicOAuthView", anthropicOAuthService.currentView());
         model.addAttribute("customCommands", commandCatalogService.listCustom());
         AppStateView view = appStateService.loadViewData();
         Path workspace = view.activeSessionDetail() == null
@@ -1191,7 +1186,7 @@ public class UiController {
                         row.totalTokenCount()))
                 .toList();
         model.addAttribute("usageRange",
-                range.equals("7d") || range.equals("30d") || range.equals("60d") ? range : "24h");
+                "7d".equals(range) || "30d".equals(range) || "60d".equals(range) ? range : "24h");
         try {
             model.addAttribute("usageJson", SseJson.writeValueAsString(points));
         } catch (JsonProcessingException e) {
@@ -1325,32 +1320,6 @@ public class UiController {
         populateSettingsModel(model);
         model.addAttribute("openAiOAuthView", view);
         return "fragments/projects :: openaiOAuthResponse";
-    }
-
-    @PostMapping("/ui/settings/anthropic/start")
-    public String startAnthropicOAuth(Model model) {
-        var view = anthropicOAuthService.startAuthorization();
-        populateSettingsModel(model);
-        model.addAttribute("anthropicOAuthView", view);
-        return "fragments/projects :: anthropicOAuthResponse";
-    }
-
-    @PostMapping("/ui/settings/anthropic/complete")
-    public String completeAnthropicOAuth(@RequestParam("code") String code, Model model) {
-        var view = anthropicOAuthService.completeAuthorization(code);
-        populateSettingsModel(model);
-        model.addAttribute("anthropicOAuthView", view);
-        populateChatControlsOob(model);
-        return "fragments/projects :: anthropicOAuthResponse";
-    }
-
-    @PostMapping("/ui/settings/anthropic/disconnect")
-    public String disconnectAnthropicOAuth(Model model) {
-        var view = anthropicOAuthService.disconnect();
-        populateSettingsModel(model);
-        model.addAttribute("anthropicOAuthView", view);
-        populateChatControlsOob(model);
-        return "fragments/projects :: anthropicOAuthResponse";
     }
 
     @PostMapping("/ui/settings/openai/logout")

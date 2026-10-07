@@ -11,14 +11,16 @@ import org.junit.jupiter.api.Test;
 class ProcessEnvironmentSanitizerTest {
     @Test
     void sanitizeMapRemovesSensitiveCredentialsInPlaceAndPreservesUnrelatedVariables() {
-        Map<String, String> environment = new HashMap<>(
-                Map.of("JUPITER_ENCRYPTION_KEY", "key", "JUPITER_HTTP_AUTH_PASSWORD", "password",
-                        "JUPITER_HTTP_AUTH_USERNAME", "username", "PROJECT_ENV_VAR", "project"));
+        Map<String, String> environment = new HashMap<>(Map.of("JUPITER_ENCRYPTION_KEY", "key",
+                "JUPITER_HTTP_AUTH_PASSWORD", "password", "JUPITER_HTTP_AUTH_USERNAME", "username", "ANTHROPIC_API_KEY",
+                "anthropic", "OPENAI_API_KEY", "openai", "PROJECT_ENV_VAR", "project"));
 
         ProcessEnvironmentSanitizer.sanitize(environment);
 
-        assertThat(environment).doesNotContainKeys("JUPITER_ENCRYPTION_KEY", "JUPITER_HTTP_AUTH_PASSWORD",
-                "JUPITER_HTTP_AUTH_USERNAME").containsEntry("PROJECT_ENV_VAR", "project");
+        assertThat(environment)
+                .doesNotContainKeys("JUPITER_ENCRYPTION_KEY", "JUPITER_HTTP_AUTH_PASSWORD",
+                        "JUPITER_HTTP_AUTH_USERNAME", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+                .containsEntry("PROJECT_ENV_VAR", "project");
     }
 
     @Test
@@ -26,13 +28,16 @@ class ProcessEnvironmentSanitizerTest {
         ProcessBuilder builder = new ProcessBuilder("/usr/bin/env");
         builder.environment().put("JUPITER_ENCRYPTION_KEY", "key");
         builder.environment().put("SECURITY_SENTINEL", "preserved");
+        builder.environment().put("ANTHROPIC_API_KEY", "anthropic");
+        builder.environment().put("OPENAI_API_KEY", "openai");
         ProcessEnvironmentSanitizer.sanitize(builder);
 
         Process process = builder.start();
         try {
             assertThat(process.waitFor(2, TimeUnit.SECONDS)).isTrue();
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            assertThat(output).doesNotContain("JUPITER_ENCRYPTION_KEY=").contains("SECURITY_SENTINEL=preserved");
+            assertThat(output).doesNotContain("JUPITER_ENCRYPTION_KEY=", "ANTHROPIC_API_KEY=", "OPENAI_API_KEY=")
+                    .contains("SECURITY_SENTINEL=preserved");
         } finally {
             process.destroyForcibly();
         }
@@ -41,12 +46,16 @@ class ProcessEnvironmentSanitizerTest {
     @Test
     void sanitizeProcessBuilderRemovesSensitiveCredentialsAndPreservesUnrelatedVariables() {
         ProcessBuilder builder = new ProcessBuilder();
-        builder.environment().putAll(Map.of("JUPITER_ENCRYPTION_KEY", "key", "JUPITER_HTTP_AUTH_PASSWORD", "password",
-                "JUPITER_HTTP_AUTH_USERNAME", "username", "PROJECT_ENV_VAR", "project"));
+        builder.environment()
+                .putAll(Map.of("JUPITER_ENCRYPTION_KEY", "key", "JUPITER_HTTP_AUTH_PASSWORD", "password",
+                        "JUPITER_HTTP_AUTH_USERNAME", "username", "ANTHROPIC_API_KEY", "anthropic", "OPENAI_API_KEY",
+                        "openai", "PROJECT_ENV_VAR", "project"));
 
         ProcessEnvironmentSanitizer.sanitize(builder);
 
-        assertThat(builder.environment()).doesNotContainKeys("JUPITER_ENCRYPTION_KEY", "JUPITER_HTTP_AUTH_PASSWORD",
-                "JUPITER_HTTP_AUTH_USERNAME").containsEntry("PROJECT_ENV_VAR", "project");
+        assertThat(builder.environment())
+                .doesNotContainKeys("JUPITER_ENCRYPTION_KEY", "JUPITER_HTTP_AUTH_PASSWORD",
+                        "JUPITER_HTTP_AUTH_USERNAME", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+                .containsEntry("PROJECT_ENV_VAR", "project");
     }
 }

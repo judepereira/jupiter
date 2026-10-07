@@ -28,7 +28,7 @@ class SkillDiscoveryServiceTest {
 
         assertEquals(List.of("repo-only", "shared", "user-only"),
                 catalog.skills().stream().map(SkillDefinition::name).toList());
-        assertEquals("repo", catalog.skills().stream().filter(s -> s.name().equals("shared")).findFirst().orElseThrow()
+        assertEquals("repo", catalog.skills().stream().filter(s -> "shared".equals(s.name())).findFirst().orElseThrow()
                 .description());
     }
 

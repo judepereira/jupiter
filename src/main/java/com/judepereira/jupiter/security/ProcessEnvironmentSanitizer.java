@@ -3,14 +3,20 @@ package com.judepereira.jupiter.security;
 import java.util.Map;
 import java.util.Set;
 
-/** Removes sensitive Jupiter credentials before starting child processes. */
+/**
+ * Removes application and Jupiter credentials before starting child processes.
+ */
 public final class ProcessEnvironmentSanitizer {
     public static final String ENCRYPTION_KEY = "JUPITER_ENCRYPTION_KEY";
     public static final String HTTP_AUTH_PASSWORD = "JUPITER_HTTP_AUTH_PASSWORD";
     public static final String HTTP_AUTH_USERNAME = "JUPITER_HTTP_AUTH_USERNAME";
+    public static final String ANTHROPIC_API_KEY = "ANTHROPIC_API_KEY";
+    public static final String OPENAI_API_KEY = "OPENAI_API_KEY";
 
     private static final Set<String> SENSITIVE_VARIABLES = Set.of(ENCRYPTION_KEY, HTTP_AUTH_PASSWORD,
-            HTTP_AUTH_USERNAME);
+            HTTP_AUTH_USERNAME, ANTHROPIC_API_KEY, OPENAI_API_KEY);
+    private static final Set<String> TRUSTED_TERMINAL_SENSITIVE_VARIABLES = Set.of(ENCRYPTION_KEY, ANTHROPIC_API_KEY,
+            OPENAI_API_KEY);
 
     private ProcessEnvironmentSanitizer() {
     }
@@ -21,11 +27,11 @@ public final class ProcessEnvironmentSanitizer {
     }
 
     /**
-     * Sanitizes a trusted terminal environment; bootstrap auth variables are
-     * intentional there.
+     * Sanitizes trusted terminal environments without exposing encryption or
+     * provider credentials.
      */
     public static void sanitizeTrustedTerminal(Map<String, String> environment) {
-        environment.remove(ENCRYPTION_KEY);
+        environment.keySet().removeAll(TRUSTED_TERMINAL_SENSITIVE_VARIABLES);
     }
 
     public static void sanitize(ProcessBuilder builder) {

@@ -6,8 +6,9 @@ See [Running with Docker](Running-with-Docker).
 
 ## Connect a Model Provider
 
-Either set `OPENAI_API_KEY`, connect your ChatGPT/OpenAI subscription, or connect Claude in **Settings → Model
-Providers**.
+For OpenAI, either set `OPENAI_API_KEY` or connect your ChatGPT/OpenAI subscription in **Settings → Model Providers**.
+Claude requires `ANTHROPIC_API_KEY`; Claude account or subscription login is unsupported. Restart Jupiter after setting
+or changing the key so provider availability is refreshed.
 
 See [Models and Providers](Models-and-Providers).
 
