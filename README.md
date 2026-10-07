@@ -22,10 +22,10 @@ PS - the mobile interface looks like [this](https://github.com/judepereira/jupit
 
 ## Quick Start
 
-Pull the latest published image:
+Pull the latest published immutable release image:
 
 ```bash
-docker pull judepereira/jupiter:latest
+docker pull judepereira/jupiter:2026.10.02.1
 ```
 
 Generate an encryption key:
@@ -46,7 +46,7 @@ docker run --rm \
   -e JUPITER_ENCRYPTION_KEY="$JUPITER_ENCRYPTION_KEY" \
   -v "$HOME/.jupiter:/home/jupiter/.jupiter" \
   -v "$HOME/developer:/home/jupiter/developer" \ # Replace developer with the dir where all your projects are checked out
-  judepereira/jupiter:latest
+  judepereira/jupiter:2026.10.02.1
 ```
 
 Open `http://localhost:7272`, choose **Open Project**, and select a repository under `/home/jupiter/developer`.
@@ -55,11 +55,11 @@ To update Jupiter, pull the latest image and restart the container with the same
 mount:
 
 ```bash
-docker pull judepereira/jupiter:latest
+docker pull judepereira/jupiter:2026.10.02.1
 ```
 
-Images are available as `latest` for the current main branch and as immutable release tags in the `YYYY.MM.DD.N` format.
-Use a release tag when you need a fixed version.
+The `latest` tag follows the current main branch; use the immutable `YYYY.MM.DD.N` release tag above for recommended
+deployments. Use a release tag when you need a fixed version.
 
 **Important:** Use your own network sandbox for now. A built-in one will be shipped soon!
 
@@ -69,8 +69,10 @@ an external IDE), and to configure system init and user init scripts (preinstall
 
 ## Connecting Model Providers
 
-Open **Settings → Model Providers** to connect an OpenAI subscription or Claude. OpenAI can also use `OPENAI_API_KEY`.
-See [Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers) for connection and
+Open **Settings → Model Providers** to connect an OpenAI subscription or configure Claude. OpenAI can also use
+`OPENAI_API_KEY`; Claude requires `ANTHROPIC_API_KEY` and does not support account or subscription login. Restart
+Jupiter after changing the key. See
+[Models and Providers](https://github.com/judepereira/jupiter/wiki/Models-and-Providers) for connection and
 model-selection details.
 
 ## Protection against Rogue Agents

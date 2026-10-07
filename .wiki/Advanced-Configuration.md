@@ -1,4 +1,6 @@
-These settings are mainly useful when operating or tuning a Jupiter instance beyond the normal UI.
+These settings are mainly useful when operating or tuning a Jupiter instance beyond the normal UI. Set
+`ANTHROPIC_API_KEY` to enable Claude; account or subscription login is unsupported. Restart Jupiter after changing the
+key. When upgrading, preserve the key in the new process environment.
 
 ## Environment Variables
 
@@ -9,6 +11,7 @@ These settings are mainly useful when operating or tuning a Jupiter instance bey
 | `JUPITER_HTTP_AUTH_PASSWORD` | Enables HTTP Basic auth when nonblank  | blank           |
 | `JUPITER_HTTP_AUTH_USERNAME` | Basic auth username                    | `jupiter`       |
 | `OPENAI_API_KEY`             | OpenAI API credential                  | blank           |
+| `ANTHROPIC_API_KEY`          | Anthropic API credential for Claude    | blank           |
 | `USERNAME`                   | Container app user                     | `jupiter`       |
 | `WITH_UID`                   | Container app UID                      | `1000`          |
 | `WITH_GID`                   | Container app GID                      | `1000`          |

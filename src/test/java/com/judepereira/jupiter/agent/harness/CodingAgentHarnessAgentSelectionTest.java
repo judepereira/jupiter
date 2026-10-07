@@ -140,9 +140,9 @@ public class CodingAgentHarnessAgentSelectionTest {
                 "write_file", "apply_patch", "run_command");
         assertThat(model.capturedConversations().get(0).get(0).getContent()).satisfies(
                 system -> assertSystemPrompt(system, agentDefinitions.getRequired("engineer").systemPrompt(), tmp));
-        assertThat(model.capturedOptions().get(0).modelId()).isEqualTo("openai/gpt-5.6-terra");
-        assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-5.6-terra");
-        assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(model.capturedOptions().get(0).modelId()).isEqualTo("openai/gpt-6.1-sol");
+        assertThat(model.capturedOptions().get(0).apiModelId()).isEqualTo("gpt-6.1-sol");
+        assertThat(model.capturedOptions().get(0).thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(runCommand.executions).isEqualTo(1);
         assertThat(runCommand.lastContext).isNotNull();
         assertThat(runCommand.lastContext.isAllowWrite()).isTrue();

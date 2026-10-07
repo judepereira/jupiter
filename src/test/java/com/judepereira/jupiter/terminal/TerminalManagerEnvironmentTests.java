@@ -15,26 +15,28 @@ class TerminalManagerEnvironmentTests {
     @Test
     void terminalChildDoesNotReceiveEncryptionKey() throws Exception {
         assumeTrue("Linux".equals(System.getProperty("os.name")));
-        Map<String, String> environment = new HashMap<>(
-                Map.of("JUPITER_ENCRYPTION_KEY", "secret", "TERMINAL_SENTINEL", "preserved"));
+        Map<String, String> environment = new HashMap<>(Map.of("JUPITER_ENCRYPTION_KEY", "secret", "ANTHROPIC_API_KEY",
+                "anthropic", "OPENAI_API_KEY", "openai", "TERMINAL_SENTINEL", "preserved"));
         var process = TerminalManager.startProcess("/tmp", new String[]{"/usr/bin/env"}, environment);
         try {
             assertThat(process.waitFor(2, TimeUnit.SECONDS)).isTrue();
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            assertThat(output).doesNotContain("JUPITER_ENCRYPTION_KEY=").contains("TERMINAL_SENTINEL=preserved");
+            assertThat(output).doesNotContain("JUPITER_ENCRYPTION_KEY=", "ANTHROPIC_API_KEY=", "OPENAI_API_KEY=")
+                    .contains("TERMINAL_SENTINEL=preserved");
         } finally {
             process.destroyForcibly();
         }
     }
 
     @Test
-    void removesHttpAuthCredentialsButPreservesProjectEnvironment() {
+    void removesEncryptionAndProviderCredentialsButPreservesHttpAuthAndProjectEnvironment() {
         Map<String, String> environment = TerminalManager.terminalEnvironment(
                 Map.of("JUPITER_ENCRYPTION_KEY", "secret-key", "PROJECT_ENV_VAR", "project-value"),
-                new RuntimeEnvironment(Map.of("JUPITER_HTTP_AUTH_PASSWORD", "secret-password",
-                        "JUPITER_HTTP_AUTH_USERNAME", "secret-user")));
+                new RuntimeEnvironment(
+                        Map.of("JUPITER_HTTP_AUTH_PASSWORD", "secret-password", "JUPITER_HTTP_AUTH_USERNAME",
+                                "secret-user", "ANTHROPIC_API_KEY", "anthropic", "OPENAI_API_KEY", "openai")));
 
-        assertThat(environment).doesNotContainKey("JUPITER_ENCRYPTION_KEY")
+        assertThat(environment).doesNotContainKeys("JUPITER_ENCRYPTION_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
                 .containsEntry("JUPITER_HTTP_AUTH_PASSWORD", "secret-password")
                 .containsEntry("JUPITER_HTTP_AUTH_USERNAME", "secret-user")
                 .containsEntry("PROJECT_ENV_VAR", "project-value");

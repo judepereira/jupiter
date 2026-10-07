@@ -30,7 +30,6 @@ import com.judepereira.jupiter.agent.tools.AgentTool;
 import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
@@ -303,6 +302,14 @@ public class UiControllerAsyncStreamingTests {
                       "context": 5000,
                         "output": 500
                       }
+                    },
+                    "openai/gpt-6.1-sol": {
+                      "id": "openai/gpt-6.1-sol",
+                      "name": "GPT-6.1 Sol",
+                      "reasoning": true,
+                      "tool_call": true,
+                      "release_date": "2026-09-01",
+                      "limit": {"context": 5000, "output": 500}
                     }
                   }
                 }
@@ -330,7 +337,6 @@ public class UiControllerAsyncStreamingTests {
         UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.resolutionService(modelCatalog),
                 ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null, null,
-                mock(AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
@@ -422,6 +428,14 @@ public class UiControllerAsyncStreamingTests {
                       "tool_call": true,
                       "release_date": "2026-05-10",
                       "limit": {"context": 5000, "output": 128}
+                    },
+                    "openai/gpt-6.1-sol": {
+                      "id": "openai/gpt-6.1-sol",
+                      "name": "GPT-6.1 Sol",
+                      "reasoning": true,
+                      "tool_call": true,
+                      "release_date": "2026-09-01",
+                      "limit": {"context": 5000, "output": 128}
                     }
                   }
                 }
@@ -508,7 +522,6 @@ public class UiControllerAsyncStreamingTests {
         UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.resolutionService(modelCatalog),
                 ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null, null,
-                mock(AnthropicOAuthService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),

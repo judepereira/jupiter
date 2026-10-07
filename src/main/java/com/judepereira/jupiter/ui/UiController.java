@@ -16,7 +16,6 @@ import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandCatalogService.CommandDefinition;
 import com.judepereira.jupiter.command.CommandCatalogService.CommandKind;
@@ -92,7 +91,6 @@ public class UiController {
     private final ModelPickerService modelPickerService;
     private final ModelPreferencesService modelPreferencesService;
     private final ProviderAvailabilityService providerAvailabilityService;
-    private final AnthropicOAuthService anthropicOAuthService;
     private final ContextCompactionService contextCompactionService;
     private final TokenUsageService tokenUsageService;
     private final CommandStreamService commandStreamService;
@@ -125,8 +123,7 @@ public class UiController {
             AgentModelResolutionService agentModelResolutionService, AgentPreferenceResolver agentPreferenceResolver,
             AgentPreferenceService agentPreferenceService, ModelPickerService modelPickerService,
             ModelPreferencesService modelPreferencesService, ProviderAvailabilityService providerAvailabilityService,
-            AnthropicOAuthService anthropicOAuthService, SystemBalloonService systemBalloonService,
-            WorkspaceRailRefreshService workspaceRailRefreshService,
+            SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
             ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
             TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
             ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
@@ -148,7 +145,6 @@ public class UiController {
         this.modelPickerService = modelPickerService;
         this.modelPreferencesService = modelPreferencesService;
         this.providerAvailabilityService = providerAvailabilityService;
-        this.anthropicOAuthService = anthropicOAuthService;
         this.contextCompactionService = contextCompactionService;
         this.tokenUsageService = tokenUsageService;
         this.commandStreamService = commandStreamService;
@@ -1031,7 +1027,6 @@ public class UiController {
         model.addAttribute("lifecycleHookSettings", appStateService.loadLifecycleHookSettings());
         model.addAttribute("autoGitUpdateEnabled", appStateService.loadAutoGitUpdateEnabled());
         model.addAttribute("openAiOAuthView", openAiOAuthService.currentView());
-        model.addAttribute("anthropicOAuthView", anthropicOAuthService.currentView());
         model.addAttribute("customCommands", commandCatalogService.listCustom());
         AppStateView view = appStateService.loadViewData();
         Path workspace = view.activeSessionDetail() == null
@@ -1366,32 +1361,6 @@ public class UiController {
         populateSettingsModel(model);
         model.addAttribute("openAiOAuthView", view);
         return "fragments/projects :: openaiOAuthResponse";
-    }
-
-    @PostMapping("/ui/settings/anthropic/start")
-    public String startAnthropicOAuth(Model model) {
-        var view = anthropicOAuthService.startAuthorization();
-        populateSettingsModel(model);
-        model.addAttribute("anthropicOAuthView", view);
-        return "fragments/projects :: anthropicOAuthResponse";
-    }
-
-    @PostMapping("/ui/settings/anthropic/complete")
-    public String completeAnthropicOAuth(@RequestParam("code") String code, Model model) {
-        var view = anthropicOAuthService.completeAuthorization(code);
-        populateSettingsModel(model);
-        model.addAttribute("anthropicOAuthView", view);
-        populateChatControlsOob(model);
-        return "fragments/projects :: anthropicOAuthResponse";
-    }
-
-    @PostMapping("/ui/settings/anthropic/disconnect")
-    public String disconnectAnthropicOAuth(Model model) {
-        var view = anthropicOAuthService.disconnect();
-        populateSettingsModel(model);
-        model.addAttribute("anthropicOAuthView", view);
-        populateChatControlsOob(model);
-        return "fragments/projects :: anthropicOAuthResponse";
     }
 
     @PostMapping("/ui/settings/openai/logout")
@@ -1790,20 +1759,37 @@ public class UiController {
         if (detail == null) {
             return null;
         }
-        for (int i = detail.chatMessages().size() - 1; i >= 0; i--) {
-            ChatMessageView message = detail.chatMessages().get(i);
-            if (!"assistant".equals(message.role()) || message.metadata() == null) {
-                continue;
-            }
-            ChatMessageMetadata metadata = message.metadata();
-            AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
-            AgentPreferenceResolver.Resolution resolved = resolveAgentPreferenceForDisplay(selectedAgent);
-            AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-            AgentPreferenceResolver.Resolution defaultResolved = resolveAgentPreferenceForDisplay(defaultAgent);
-            return new ChatSelection(selectedAgent, resolved.model(), resolved.thinkingLevel(), false, defaultAgent,
-                    defaultResolved.model(), defaultResolved.thinkingLevel());
+        ChatMessageView newestAssistant = detail.chatMessages().stream()
+                .filter(message -> "assistant".equals(message.role())).reduce((first, second) -> second).orElse(null);
+        if (newestAssistant == null || newestAssistant.metadata() == null) {
+            return null;
         }
-        return null;
+        ChatMessageMetadata metadata = newestAssistant.metadata();
+        AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
+        AgentPreferenceResolver.Resolution selectedDefaults = resolveAgentPreferenceForDisplay(selectedAgent);
+        ModelDefinition selectedModel = selectedDefaults.model();
+        boolean explicitModel = false;
+        if (metadata.modelId() != null && !metadata.modelId().isBlank()) {
+            try {
+                selectedModel = modelCatalogService.getRequired(metadata.modelId());
+                explicitModel = true;
+            } catch (IllegalArgumentException e) {
+                log.warn("Ignoring unknown persisted model '{}' while restoring session", metadata.modelId());
+            }
+        }
+        ThinkingLevel selectedThinking = selectedDefaults.thinkingLevel();
+        if (metadata.thinkingLevel() != null && !metadata.thinkingLevel().isBlank()) {
+            try {
+                selectedThinking = ThinkingLevel.fromValue(metadata.thinkingLevel());
+            } catch (IllegalArgumentException e) {
+                log.warn("Ignoring invalid persisted thinking level '{}' while restoring session",
+                        metadata.thinkingLevel());
+            }
+        }
+        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+        AgentPreferenceResolver.Resolution defaultResolved = resolveAgentPreferenceForDisplay(defaultAgent);
+        return new ChatSelection(selectedAgent, selectedModel, selectedThinking, explicitModel, defaultAgent,
+                defaultResolved.model(), defaultResolved.thinkingLevel());
     }
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {
@@ -1828,6 +1814,13 @@ public class UiController {
         model.addAttribute("models", pickerModels);
         model.addAttribute("pickerEmpty", pickerModels.isEmpty());
         ModelDefinition renderedModel = selection.selectedModel();
+        boolean explicitModel = selection.explicitModel();
+        String renderedModelId = renderedModel == null ? null : renderedModel.id();
+        if (renderedModelId != null
+                && pickerModels.stream().noneMatch(candidate -> candidate.id().equals(renderedModelId))) {
+            renderedModel = resolveAgentModelForDisplay(selection.selectedAgent());
+            explicitModel = false;
+        }
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
         model.addAttribute("defaultModel", selection.defaultModel());
@@ -1835,7 +1828,7 @@ public class UiController {
         model.addAttribute("selectedAgent", selection.selectedAgent());
         model.addAttribute("selectedModel", renderedModel);
         model.addAttribute("selectedThinking", selection.selectedThinking());
-        model.addAttribute("selectedModelExplicit", selection.explicitModel());
+        model.addAttribute("selectedModelExplicit", explicitModel);
     }
 
     private ChatSelection defaultChatSelection() {

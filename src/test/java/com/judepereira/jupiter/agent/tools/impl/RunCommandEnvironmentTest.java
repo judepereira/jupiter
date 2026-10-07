@@ -58,12 +58,16 @@ class RunCommandEnvironmentTest {
     }
 
     @Test
-    void authCredentialsAreBlockedFromBothSources() {
+    void sensitiveCredentialsAreBlockedFromBothSources() {
         Map<String, String> environment = RunCommandTool.buildCommandEnvironment(
-                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "host-password", "JUPITER_HTTP_AUTH_USERNAME", "host-user"),
-                Set.of("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME"),
-                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "project-password", "JUPITER_HTTP_AUTH_USERNAME", "project-user"));
+                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "host-password", "JUPITER_HTTP_AUTH_USERNAME", "host-user",
+                        "ANTHROPIC_API_KEY", "anthropic-host", "OPENAI_API_KEY", "openai-host"),
+                Set.of("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME", "ANTHROPIC_API_KEY",
+                        "OPENAI_API_KEY"),
+                Map.of("JUPITER_HTTP_AUTH_PASSWORD", "project-password", "JUPITER_HTTP_AUTH_USERNAME", "project-user",
+                        "ANTHROPIC_API_KEY", "anthropic-project", "OPENAI_API_KEY", "openai-project"));
 
-        assertThat(environment).doesNotContainKeys("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME");
+        assertThat(environment).doesNotContainKeys("JUPITER_HTTP_AUTH_PASSWORD", "JUPITER_HTTP_AUTH_USERNAME",
+                "ANTHROPIC_API_KEY", "OPENAI_API_KEY");
     }
 }

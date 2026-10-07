@@ -933,58 +933,8 @@
     </div>
 </th:block>
 
-<th:block th:fragment="anthropicOAuthSection">
-    <div
-        th:if="${anthropicOAuthView != null}"
-        id="anthropic-oauth-section"
-        class="settings-openai-oauth"
-        th:with="view=${anthropicOAuthView}"
-    >
-        <p th:text="${view.message}"></p>
-        <form
-            th:if="${view.pending}"
-            hx-post="/ui/settings/anthropic/complete"
-            hx-target="#anthropic-oauth-section"
-            hx-swap="outerHTML"
-        >
-            <label>Paste authentication code <input name="code" type="text" autocomplete="off" required></label>
-            <button class="btn btn-primary" type="submit">Complete authentication</button>
-        </form>
-        <div class="project-form-actions">
-            <button
-                th:if="${view.status.name() == 'NOT_CONNECTED' or view.status.name() == 'REFRESH_FAILED'}"
-                type="button"
-                class="btn btn-primary"
-                hx-post="/ui/settings/anthropic/start"
-                hx-target="#anthropic-oauth-section"
-                hx-swap="outerHTML"
-            >
-                Connect Claude
-            </button>
-            <button
-                th:if="${view.connected or view.status.name() == 'REFRESH_FAILED'}"
-                type="button"
-                class="btn btn-outline-danger"
-                hx-post="/ui/settings/anthropic/disconnect"
-                hx-target="#anthropic-oauth-section"
-                hx-swap="outerHTML"
-            >
-                Disconnect
-            </button>
-        </div>
-    </div>
-    <div th:unless="${anthropicOAuthView != null}" id="anthropic-oauth-section" class="settings-openai-oauth">
-        <p>Anthropic is not connected.</p>
-    </div>
-</th:block>
-
 <th:block th:fragment="openaiOAuthResponse">
     <th:block th:replace="~{fragments/projects :: openaiOAuthSection}"></th:block>
-    <th:block th:replace="~{fragments/projects :: oauthResponseTail(${chatControlsOob ?: false})}"></th:block>
-</th:block>
-
-<th:block th:fragment="anthropicOAuthResponse">
-    <th:block th:replace="~{fragments/projects :: anthropicOAuthSection}"></th:block>
     <th:block th:replace="~{fragments/projects :: oauthResponseTail(${chatControlsOob ?: false})}"></th:block>
 </th:block>
 
@@ -1033,7 +983,13 @@
     </div>
     <div class="settings-provider-subsection">
         <h5>Anthropic</h5>
-        <div th:replace="~{fragments/projects :: anthropicOAuthSection}"></div>
+        <div id="anthropic-api-key-status" class="settings-openai-oauth">
+            <p th:if="${availability['anthropic'] == true}">Anthropic API key is configured.</p>
+            <p th:unless="${availability['anthropic'] == true}">
+                Set <code>ANTHROPIC_API_KEY</code> (or <code>anthropic.api-key</code>) and restart Jupiter to use
+                Claude.
+            </p>
+        </div>
         <th:block th:if="${availability['anthropic'] == true}">
             <th:block
                 th:replace="~{fragments/project-components :: modelSelection('anthropic', ${groups['anthropic']}, ${selected['anthropic']})}"

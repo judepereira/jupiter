@@ -14,12 +14,13 @@ The device flow shows a user code and verification URL while Jupiter waits for a
 stored encrypted and restored across restarts. **Disconnect** clears that OAuth connection; a configured API key remains
 available independently.
 
-## Connect Claude
+## Configure Claude
 
-Open **Settings → Model Providers** and choose **Connect Claude**.
+Claude is available only when an Anthropic API key is configured. Set `ANTHROPIC_API_KEY`, then restart Jupiter. Claude
+account or subscription login is unsupported.
 
-Claude OAuth state is stored encrypted and restored across restarts. **Disconnect** removes the saved connection. If you
-need support for adding an Anthropic API key, submit a feature request.
+When upgrading Jupiter, carry the environment variable into the new process. Changing it while Jupiter is running has no
+effect until restart.
 
 ## Choose Models
 
@@ -44,7 +45,9 @@ accepts any eligible configured text-and-tools model, not only bundled model IDs
 ## Thinking Level
 
 The composer lets you choose a thinking level for a primary turn. Supported models receive that level when the request
-is sent. Without an explicit override, the selected agent's configured defaults apply.
+is sent. A remembered session selection is restored when its saved metadata is valid; otherwise, new sessions and
+missing or invalid metadata use the saved agent defaults. The controls remain safe to render when a provider is
+disconnected.
 
 ## Treat Provider Credentials as Secrets
 

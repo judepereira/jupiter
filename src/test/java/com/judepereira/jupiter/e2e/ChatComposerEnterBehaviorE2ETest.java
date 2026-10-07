@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.e2e;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
@@ -26,10 +27,10 @@ import org.springframework.context.annotation.Primary;
 
 class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
 
-    private static final String ASSISTANT_REPLY = "Deterministic assistant reply";
+    private static final String ASSISTANT_REPLY = "Deterministic **assistant** reply\n\n- copied as Markdown";
 
     @Test
-    void desktopEnterSubmitsMessage(@TempDir Path tempDir) throws Exception {
+    void desktopEnterSubmitsMessageAndCopiesAssistantResponse(@TempDir Path tempDir) throws Exception {
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
         Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
         Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
@@ -37,6 +38,8 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
 
         try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
                 BrowserContext context = newBrowserContext()) {
+            context.grantPermissions(List.of("clipboard-read", "clipboard-write"),
+                    new BrowserContext.GrantPermissionsOptions().setOrigin(app.baseUrl()));
             Page page = context.newPage();
 
             page.navigate(app.baseUrl());
@@ -46,12 +49,14 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
             page.locator("#chat-input").fill("hello there");
             page.locator("#chat-input").press("Enter");
 
-            assertThat(page.locator("#chat-messages-list li")).hasCount(3);
-            assertThat(page.locator("#chat-messages-list li").nth(1).locator(".chat-message-text"))
-                    .hasText("hello there");
-            assertThat(page.locator("#chat-messages-list li").nth(2).locator(".chat-message-text"))
-                    .hasText(ASSISTANT_REPLY);
-            var assistantRow = page.locator("#chat-messages-list li").nth(2);
+            var userMessages = page.locator("#chat-messages-list li[data-role='user']");
+            var assistantMessages = page.locator("#chat-messages-list li[data-role='assistant']");
+            assertThat(userMessages).hasCount(1);
+            assertThat(assistantMessages).hasCount(1);
+            assertThat(userMessages.first().locator(".chat-message-text")).hasText("hello there");
+            assertThat(assistantMessages.first().locator(".chat-message-text"))
+                    .containsText("Deterministic assistant reply");
+            var assistantRow = assistantMessages.first();
             var forkButton = assistantRow.locator(".chat-message-fork-button");
             assertThat(assistantRow.locator(".chat-message-subtitle")).containsText("Fork");
             Assertions.assertThat(forkButton.getAttribute("hx-post"))
@@ -59,6 +64,16 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
             assertThat(forkButton).hasAttribute("hx-target", "#shell");
             assertThat(forkButton).hasAttribute("hx-swap", "none");
             assertThat(page.locator("#chat-input")).hasValue("");
+
+            var copyButton = assistantRow.locator(".chat-message-copy-button");
+            assertThat(copyButton).hasAttribute("aria-label", "Copy response");
+            page.evaluate("() => navigator.clipboard.writeText('clipboard sentinel')");
+            int textareaCountBefore = page.locator("textarea").count();
+            copyButton.click();
+            assertEquals(ASSISTANT_REPLY, page.evaluate("() => navigator.clipboard.readText()"));
+            assertThat(copyButton).hasAttribute("aria-label", "Copied");
+            assertThat(page.locator("textarea")).hasCount(textareaCountBefore);
+            assertThat(copyButton).isFocused();
         }
     }
 

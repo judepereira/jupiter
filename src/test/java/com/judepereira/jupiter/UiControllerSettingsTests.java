@@ -20,7 +20,6 @@ import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
-import com.judepereira.jupiter.anthropic.oauth.AnthropicOAuthService;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
@@ -439,7 +438,7 @@ public class UiControllerSettingsTests {
                 new UiController(mock(CodingAgentHarness.class), properties, appStateService, agentDefinitionService,
                         modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService),
                         preferenceResolver, agentPreferenceService, Mockito.mock(ModelPickerService.class),
-                        modelPreferencesService, providerAvailabilityService, Mockito.mock(AnthropicOAuthService.class),
+                        modelPreferencesService, providerAvailabilityService,
                         new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                         new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                                 (emitter, eventName, data) -> emitter

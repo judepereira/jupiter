@@ -68,6 +68,28 @@ class AgentPreferenceResolverTest {
     }
 
     @Test
+    void savedModelAndThinkingDefaultsAreUsedIndependently() {
+        when(state.findAgentModelPreference("agent"))
+                .thenReturn(Optional.of(new AgentModelPreference("agent", null, "HIGH")));
+
+        var result = resolver.resolve(agent, null, null, false);
+
+        assertThat(result.model()).isSameAs(bundled);
+        assertThat(result.thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
+    }
+
+    @Test
+    void savedModelOverrideWinsOverBundledFallback() {
+        when(state.findAgentModelPreference("agent"))
+                .thenReturn(Optional.of(new AgentModelPreference("agent", "configured", null)));
+
+        var result = resolver.resolve(agent, null, null, false);
+
+        assertThat(result.model()).isSameAs(configured);
+        assertThat(result.preferredModelId()).isEqualTo("configured");
+    }
+
+    @Test
     void displayResolutionUsesSavedModelWithoutProviderAvailability() {
         when(state.findAgentModelPreference("agent"))
                 .thenReturn(Optional.of(new AgentModelPreference("agent", "configured", "HIGH")));

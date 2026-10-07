@@ -25,7 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 class AnthropicModelsE2ETest extends E2ETestSupport {
 
     @Test
-    void providersModelsAndFavouritesUseMockedOAuthEndpoints(@TempDir Path tempDir) throws Exception {
+    void providersModelsAndFavouritesUseConfiguredApiKey(@TempDir Path tempDir) throws Exception {
         Path home = Files.createDirectories(tempDir.resolve("home"));
         Path project = Files.createDirectories(home.resolve("child-project"));
         Path db = tempDir.resolve("db/jupiter.db");
@@ -34,9 +34,7 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                 RunningApp app = startApp(home, db,
                         Map.of("models.dev.catalog-url", fixture.url("/catalog.json"), "openai.api-key", "",
                                 "openai.oauth.issuer", fixture.baseUrl(), "openai.oauth.client-id", "e2e-openai",
-                                "anthropic.oauth.authorization-url", fixture.url("/claude/authorize"),
-                                "anthropic.oauth.token-url", fixture.url("/claude/token"), "anthropic.oauth.client-id",
-                                "e2e-anthropic", "anthropic.oauth.redirect-uri", fixture.url("/claude/callback")));
+                                "anthropic.api-key", "sk-ant-e2e"));
                 BrowserContext context = newBrowserContext()) {
             Page page = context.newPage();
             page.navigate(app.baseUrl());
@@ -54,31 +52,21 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                             .click());
             assertThat(page.locator("#openai-oauth-section")).containsText("Connected.");
 
-            // Starting Claude creates a pending local authorization flow. The current
-            // fragment asks for the code directly; omitting the optional state suffix
-            // makes the server use the pending flow's state.
-            assertThat(page.locator("#settings-model-providers")).isVisible();
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings/anthropic/start") && response.status() == 200,
-                    () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect Claude"))
-                            .click());
-            page.locator("#anthropic-oauth-section input[name='code']").fill("local-code");
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings/anthropic/complete") && response.status() == 200,
-                    () -> page
-                            .getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Complete authentication"))
-                            .click());
-            assertThat(page.locator("#anthropic-oauth-section")).containsText("Anthropic connected.");
-            assertThat(fixture.anthropicTokenCalls.get()).isEqualTo(1);
+            assertThat(page.locator("#anthropic-api-key-status")).containsText("Anthropic API key is configured.");
+            assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect Claude")))
+                    .hasCount(0);
+            assertThat(page.getByText("Connect Claude", new Page.GetByTextOptions())).hasCount(0);
+            assertThat(page.getByText("Auth code", new Page.GetByTextOptions())).hasCount(0);
+            assertThat(page.getByText("Disconnect Anthropic", new Page.GetByTextOptions())).hasCount(0);
 
             page.locator("#settings-modal .btn-close").click();
             page.waitForResponse(
                     response -> response.url().contains("/ui/projects/") && response.url().contains("/activate")
                             && response.status() == 200,
                     () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Alpha")).click());
-            assertPicker(page, "openai/gpt-5.6-sol|OpenAI Test", "openai/gpt-5.6-terra|Terra",
-                    "openai/gpt-5.6-luna|Luna", "anthropic/claude-sonnet-5|Claude Sonnet Test",
-                    "anthropic/claude-opus-5|Claude Opus Test");
+            assertPicker(page, "openai/gpt-5.6-sol|OpenAI Test", "openai/gpt-6.1-sol|GPT-6.1 Sol",
+                    "openai/gpt-6-luna|GPT-6 Luna", "openai/gpt-5.6-terra|Terra", "openai/gpt-5.6-luna|Luna",
+                    "anthropic/claude-sonnet-5|Claude Sonnet Test", "anthropic/claude-opus-5|Claude Opus Test");
 
             openSettings(page);
             Locator anthropicSelections = page.locator("form.settings-model-selections").filter(
@@ -107,50 +95,9 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                             .setHas(page.locator("input[name='provider'][value='anthropic']")))
                     .locator("select[name='modelId']")).hasValues(new String[]{"anthropic/claude-opus-5"});
             page.locator("#settings-modal .btn-close").click();
-            assertPicker(page, "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna",
-                    "anthropic/claude-sonnet-5", "anthropic/claude-opus-5");
+            assertPicker(page, "openai/gpt-5.6-sol", "openai/gpt-6.1-sol", "openai/gpt-6-luna", "openai/gpt-5.6-terra",
+                    "openai/gpt-5.6-luna", "anthropic/claude-sonnet-5", "anthropic/claude-opus-5");
 
-            // Disconnecting removes only that provider's model; reconnecting preserves the
-            // selection.
-            openSettings(page);
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings/openai/logout") && response.status() == 200,
-                    () -> page
-                            .getByRole(AriaRole.BUTTON,
-                                    new Page.GetByRoleOptions().setName("Disconnect ChatGPT/OpenAI subscription"))
-                            .click());
-            assertThat(page.locator("#openai-oauth-section")).containsText("not connected");
-            page.locator("#settings-modal .btn-close").click();
-            assertPicker(page, "anthropic/claude-sonnet-5|Claude Sonnet Test",
-                    "anthropic/claude-opus-5|Claude Opus Test");
-
-            openSettings(page);
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings/anthropic/disconnect")
-                            && response.status() == 200,
-                    () -> page.getByRole(AriaRole.BUTTON,
-                            new Page.GetByRoleOptions().setName("Disconnect").setExact(true)).click());
-            assertThat(page.locator("#anthropic-oauth-section")).containsText("not connected");
-            page.locator("#settings-modal .btn-close").click();
-            assertPicker(page);
-            openSettings(page);
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Connect Claude")).click();
-            page.locator("#anthropic-oauth-section input[name='code']").fill("local-code");
-            page.waitForResponse(
-                    response -> response.url().contains("/ui/settings/anthropic/complete") && response.status() == 200,
-                    () -> page
-                            .getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Complete authentication"))
-                            .click());
-            assertThat(page.locator("#anthropic-oauth-section")).containsText("Anthropic connected.");
-            page.locator("#settings-modal .btn-close").click();
-            assertPicker(page, "anthropic/claude-sonnet-5|Claude Sonnet Test",
-                    "anthropic/claude-opus-5|Claude Opus Test");
-
-            openSettings(page);
-            Locator reconnectedAnthropicSelections = page.locator("form.settings-model-selections").filter(
-                    new Locator.FilterOptions().setHas(page.locator("input[name='provider'][value='anthropic']")));
-            assertThat(reconnectedAnthropicSelections.locator("select[name='modelId']"))
-                    .hasValue("anthropic/claude-opus-5");
         }
     }
 
@@ -181,8 +128,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
     private static final class FixtureServer implements AutoCloseable {
         private final HttpServer server;
         private final AtomicInteger openAiPollCalls = new AtomicInteger();
-        private final AtomicInteger anthropicTokenCalls = new AtomicInteger();
-
         private FixtureServer(HttpServer server) {
             this.server = server;
         }
@@ -203,11 +148,6 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
             });
             server.createContext("/oauth/token", e -> respond(e, 200,
                     "{\"access_token\":\"openai-access\",\"refresh_token\":\"openai-refresh\",\"id_token\":\"id\"}"));
-            server.createContext("/claude/token", e -> {
-                fixture.anthropicTokenCalls.incrementAndGet();
-                respond(e, 200,
-                        "{\"access_token\":\"claude-access\",\"refresh_token\":\"claude-refresh\",\"expires_in\":3600}");
-            });
             server.start();
             return fixture;
         }
@@ -236,6 +176,8 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
     private static final String CATALOG = """
             {"models": {
               "openai/gpt-5.6-sol": {"id":"openai/gpt-5.6-sol","name":"OpenAI Test","reasoning":false,"tool_call":true,"limit":{"context":1000,"output":100}},
+              "openai/gpt-6.1-sol": {"id":"openai/gpt-6.1-sol","name":"GPT-6.1 Sol","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
+              "openai/gpt-6-luna": {"id":"openai/gpt-6-luna","name":"GPT-6 Luna","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
               "openai/gpt-5.6-terra": {"id":"openai/gpt-5.6-terra","name":"Terra","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
               "openai/gpt-5.6-luna": {"id":"openai/gpt-5.6-luna","name":"Luna","reasoning":true,"tool_call":true,"limit":{"context":1000,"output":100}},
               "anthropic/claude-sonnet-5": {"id":"anthropic/claude-sonnet-5","name":"Claude Sonnet Test","reasoning":true,"tool_call":true,"release_date":"2026-01-01","limit":{"context":1000,"output":100}},
