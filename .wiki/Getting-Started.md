@@ -31,8 +31,10 @@ Next, read [Interface Tour](Interface-Tour) and [Workspaces and Git Worktrees](W
 Before updating, make sure you still have the encryption key and back up `~/.jupiter` (or the persistent Docker state
 directory).
 
-Pull the latest published immutable release image, and restart Jupiter with the same state mount, source mounts, and encryption key:
+Pull the latest published immutable release image, and restart Jupiter with the same state mount, source mounts, and
+encryption key:
 
 ```bash
-docker pull judepereira/jupiter:2026.09.29.1
+docker pull judepereira/jupiter:2026.10.02.1
 ```
+
