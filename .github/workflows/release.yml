@@ -59,11 +59,23 @@ jobs:
             echo "Effective Maven version was $effective_version, expected $version" >&2
             exit 1
           }
-          mapfile -t changed < <(git diff --name-only)
-          [[ "${#changed[@]}" -eq 1 && "${changed[0]}" == "pom.xml" ]] || {
-            printf 'Unexpected changed files:\n%s\n' "${changed[*]}" >&2
+          python3 scripts/sync_docker_docs.py --update --version "$version"
+          expected_files=(pom.xml README.md .wiki/Getting-Started.md .wiki/Running-with-Docker.md)
+          untracked="$(git ls-files --others --exclude-standard)"
+          [[ -z "$untracked" ]] || {
+            echo "Unexpected untracked files:" >&2
+            printf '%s\n' "$untracked" >&2
             exit 1
           }
+          mapfile -t changed < <(git diff --name-only --diff-filter=ACMRTUXB | sort)
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected_files[@]}" | sort)
+          if [[ "$(printf '%s\n' "${changed[@]}")" != "$(printf '%s\n' "${expected_sorted[@]}")" ]]; then
+            echo "Release preparation changed an unexpected set of files." >&2
+            printf 'Expected:\n%s\n' "${expected_sorted[*]}" >&2
+            printf 'Found:\n%s\n' "${changed[*]}" >&2
+            exit 1
+          fi
+          python3 scripts/sync_docker_docs.py --check --version "$version"
           git diff --check
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -74,7 +86,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add pom.xml
+          git add pom.xml README.md .wiki/Getting-Started.md .wiki/Running-with-Docker.md
           git commit -m "Release $VERSION"
           git tag -a "$VERSION" -m "Release $VERSION"
 
@@ -95,6 +107,13 @@ jobs:
       checkout_ref: ${{ needs.prepare.outputs.commit_sha }}
       image_tag: ${{ needs.prepare.outputs.version }}
       publish: true
+    secrets: inherit
+
+  publish-wiki:
+    needs: [prepare, publish]
+    uses: ./.github/workflows/publish-wiki.yml
+    with:
+      source_ref: ${{ needs.prepare.outputs.commit_sha }}
     secrets: inherit
 
   github-release:
