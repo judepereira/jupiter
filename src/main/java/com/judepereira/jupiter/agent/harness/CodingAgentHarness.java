@@ -127,7 +127,9 @@ public class CodingAgentHarness {
         long projectId = resolveProjectId(request.getSessionId());
         McpProjectToolSnapshot mcpSnapshot = resolveMcpSnapshot(projectId);
 
-        Set<String> allowedTools = resolveAllowedTools(agent);
+        Set<String> allowedTools = request.getAllowedTools() == null
+                ? resolveAllowedTools(agent)
+                : Set.copyOf(request.getAllowedTools());
         List<ToolDefinition> defs = resolveToolDefinitions(allowedTools, mcpSnapshot);
 
         StringBuilder accumulated = new StringBuilder();

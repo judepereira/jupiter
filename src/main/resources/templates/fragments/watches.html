@@ -1,0 +1,56 @@
+<aside
+    th:fragment="panel"
+    id="bottom-panel"
+    class="main-panel bottom-panel watches-panel"
+    th:style="'--terminal-panel-height: ' + ${bottomPanelHeight} + 'px'"
+    hx-get="/ui/panel/watches/refresh"
+    hx-trigger="every 20s"
+    hx-target="#bottom-panel"
+    hx-swap="outerHTML"
+>
+    <div id="terminal-panel-divider" class="terminal-panel-divider" role="separator" aria-label="Drag to resize"></div>
+    <section class="terminal-shell">
+        <header class="terminal-tabs">
+            <strong>WATCHES</strong>
+            <button
+                class="terminal-tab-close"
+                type="button"
+                aria-label="Close watches panel"
+                title="Close watches panel"
+                hx-post="/ui/panel/watches"
+                hx-target="#bottom-panel"
+                hx-swap="outerHTML"
+            >
+                Close
+            </button>
+        </header>
+        <div class="watches-history" th:if="${activeSession != null}">
+            <p class="watch-history-empty" th:if="${#lists.isEmpty(watchRuns)}">No watch runs for this session yet.</p>
+            <article
+                th:each="run : ${watchRuns}"
+                class="watch-run"
+                th:classappend="${run.status() == 'FAILED'} ? ' error' : (${run.status() == 'CANCELLED'} ? ' cancelled' : '')"
+            >
+                <div class="watch-run-heading">
+                    <strong class="watch-run-name" th:text="${run.watchName()}"></strong>
+                    <span
+                        class="watch-status"
+                        th:text="${run.status()}"
+                        th:attr="aria-label=${'Watch run status: ' + run.status()}"
+                    ></span>
+                </div>
+                <time class="watch-run-time" th:text="${run.startedAt()}" th:datetime="${run.startedAt()}"></time>
+                <span
+                    th:if="${run.actionable() != null and run.actionable()}"
+                    class="watch-actionable"
+                    aria-label="Actionable watch result"
+                    >ACTIONABLE</span
+                >
+                <p class="watch-run-error" th:if="${run.error() != null}" th:text="${run.error()}"></p>
+            </article>
+        </div>
+        <p class="watch-history-empty" th:unless="${activeSession != null}">
+            Select a primary session to view watch history.
+        </p>
+    </section>
+</aside>

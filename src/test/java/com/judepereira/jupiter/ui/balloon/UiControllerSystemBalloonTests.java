@@ -33,6 +33,8 @@ import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
+import com.judepereira.jupiter.watch.WatchService;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -81,7 +83,8 @@ class UiControllerSystemBalloonTests {
                 openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService), null,
                 mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
                 runtimeManager, new ChatPresentationService(), null, null, new HttpAuthProperties(),
-                mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "test",
+                mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class),
+                mock(SessionActivityCoordinator.class), mock(WatchService.class), "test",
                 System.getProperty("user.home"));
     }
 }

@@ -13,21 +13,36 @@ const controller = createPointerResizeController({
     bodyClass: "dragging-divider",
     onMove: (event) => {
         const shell = document.getElementById("shell");
-        if (!shell) return;
+        const bottomPanel = document.getElementById("bottom-panel");
+        if (!shell || !bottomPanel) return;
 
         const shellRect = shell.getBoundingClientRect();
-        shell.style.setProperty(
+        bottomPanel.style.setProperty(
             "--terminal-panel-height",
             Math.max(160, Math.min(shellRect.bottom - event.clientY, Math.floor(shellRect.height - 120))) + "px",
         );
+    },
+    onEnd: () => {
+        const shell = document.getElementById("shell");
+        const bottomPanel = document.getElementById("bottom-panel");
+        if (!shell || !bottomPanel) return;
+        const height = parseFloat(getComputedStyle(bottomPanel).getPropertyValue("--terminal-panel-height"));
+        if (Number.isFinite(height)) {
+            fetch("/ui/panel/height", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: "height=" + encodeURIComponent(Math.round(height)),
+            });
+        }
     },
 });
 
 function clampTerminalPanelHeight() {
     const shell = document.getElementById("shell");
-    if (!shell) return;
+    const bottomPanel = document.getElementById("bottom-panel");
+    if (!shell || !bottomPanel) return;
 
-    const current = getComputedStyle(shell).getPropertyValue("--terminal-panel-height").trim();
+    const current = getComputedStyle(bottomPanel).getPropertyValue("--terminal-panel-height").trim();
     if (!current || current.endsWith("%")) return;
 
     const px = parseFloat(current);
@@ -37,7 +52,7 @@ function clampTerminalPanelHeight() {
     const minPx = 160;
     const maxPx = Math.floor(shellRect.height - 120);
     if (maxPx < minPx) return;
-    shell.style.setProperty("--terminal-panel-height", Math.max(minPx, Math.min(px, maxPx)) + "px");
+    bottomPanel.style.setProperty("--terminal-panel-height", Math.max(minPx, Math.min(px, maxPx)) + "px");
 }
 
 window.addEventListener("resize", clampTerminalPanelHeight);

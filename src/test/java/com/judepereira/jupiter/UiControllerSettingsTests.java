@@ -37,6 +37,8 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
+import com.judepereira.jupiter.watch.WatchService;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -439,7 +441,8 @@ public class UiControllerSettingsTests {
                         openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService),
                         tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager,
                         new ChatPresentationService(), null, null, new HttpAuthProperties(), gitAutoUpdateService,
-                        coordinator, "test", System.getProperty("user.home")),
+                        coordinator, Mockito.mock(SessionActivityCoordinator.class), Mockito.mock(WatchService.class),
+                        "test", System.getProperty("user.home")),
                 commandCatalogService);
     }
 

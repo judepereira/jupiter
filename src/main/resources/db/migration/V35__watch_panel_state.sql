@@ -1,0 +1,2 @@
+ALTER TABLE sessions ADD COLUMN watch_panel_open INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sessions ADD COLUMN watch_panel_height INTEGER NOT NULL DEFAULT 320;

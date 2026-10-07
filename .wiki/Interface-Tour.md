@@ -25,7 +25,8 @@ The review panel can show either files attributed to the current session or the 
 
 ## Terminal
 
-The bottom panel contains one or more terminals for the active workspace.
+The bottom panel contains one or more terminals for the active workspace. The WATCHES button switches the same region to
+persisted watch history for the current session.
 
 ## Settings and Notifications
 

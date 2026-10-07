@@ -25,6 +25,14 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
         return state(sessionId).openTerminalPane();
     }
 
+    public TerminalPanelState openWatchesPane(long sessionId) {
+        return state(sessionId).openWatchesPane();
+    }
+
+    public TerminalPanelState closeWatchesPane(long sessionId) {
+        return state(sessionId).closeWatchesPane();
+    }
+
     public TerminalPanelState closeTerminalPane(long sessionId) {
         SessionState state = states.get(sessionId);
         return state == null ? SessionState.emptySnapshot() : state.closeTerminalPane();
@@ -97,6 +105,17 @@ public class TerminalStateService implements TerminalManager.TerminalLifecycleLi
 
         private synchronized TerminalPanelState closeTerminalPane() {
             bottomPanelMode = "none";
+            return snapshot();
+        }
+
+        private synchronized TerminalPanelState openWatchesPane() {
+            bottomPanelMode = "watches";
+            return snapshot();
+        }
+
+        private synchronized TerminalPanelState closeWatchesPane() {
+            if ("watches".equals(bottomPanelMode))
+                bottomPanelMode = "none";
             return snapshot();
         }
 

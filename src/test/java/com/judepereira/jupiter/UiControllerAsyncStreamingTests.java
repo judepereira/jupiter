@@ -49,6 +49,7 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import com.judepereira.jupiter.watch.WatchService;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -341,7 +342,8 @@ public class UiControllerAsyncStreamingTests {
                 contextCompactionService, null, mock(CommandStreamService.class),
                 new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
                 null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
+                mock(ManualGitPullCoordinator.class), appStateService.activityCoordinator(), mock(WatchService.class),
+                "0.0.1-SNAPSHOT", System.getProperty("user.home"));
 
         for (int i = 1; i <= 7; i++) {
             Model model = new ConcurrentModel();
@@ -525,7 +527,8 @@ public class UiControllerAsyncStreamingTests {
                 contextCompactionService, null, mock(CommandStreamService.class),
                 new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
                 null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
+                mock(ManualGitPullCoordinator.class), appStateService.activityCoordinator(), mock(WatchService.class),
+                "0.0.1-SNAPSHOT", System.getProperty("user.home"));
 
         Model sendModel = new ConcurrentModel();
         ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);

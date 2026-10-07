@@ -173,3 +173,73 @@
     display: flex;
     height: 100%;
 }
+
+.watches-history {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 2px 2px 8px;
+    scrollbar-color: var(--terminal-control-border) transparent;
+}
+
+.watch-run {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 12px;
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    border-left: 3px solid var(--terminal-control-border);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(15, 23, 42, 0.12);
+}
+
+.watch-run.error {
+    border-left-color: #f87171;
+}
+.watch-run.cancelled {
+    border-left-color: #fbbf24;
+}
+.watch-run-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.watch-run-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.watch-run-time {
+    color: var(--muted);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+.watch-status,
+.watch-actionable {
+    width: fit-content;
+    padding: 2px 7px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+.watch-actionable {
+    color: #86efac;
+}
+.watch-run-error {
+    grid-column: 1 / -1;
+    margin: 2px 0 0;
+    color: #fca5a5;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+.watch-history-empty {
+    margin: 0;
+    padding: 18px 4px;
+    color: var(--muted);
+}

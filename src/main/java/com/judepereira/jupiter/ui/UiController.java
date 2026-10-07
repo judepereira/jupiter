@@ -42,6 +42,9 @@ import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
 import com.judepereira.jupiter.ui.ChatPresentationService.ToolCallView;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
+import com.judepereira.jupiter.watch.WatchService;
+import com.judepereira.jupiter.watch.WatchService.Enablement;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.BufferedReader;
 import java.io.File;
@@ -106,6 +109,8 @@ public class UiController {
     private final HttpAuthProperties httpAuthProperties;
     private final GitAutoUpdateService gitAutoUpdateService;
     private final ManualGitPullCoordinator manualGitPullCoordinator;
+    private final SessionActivityCoordinator activityCoordinator;
+    private final WatchService watchService;
     private final String appVersion;
     private final String userHome;
 
@@ -128,8 +133,8 @@ public class UiController {
             McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
             ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
             HttpAuthProperties httpAuthProperties, GitAutoUpdateService gitAutoUpdateService,
-            ManualGitPullCoordinator manualGitPullCoordinator,
-            @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion,
+            ManualGitPullCoordinator manualGitPullCoordinator, SessionActivityCoordinator activityCoordinator,
+            WatchService watchService, @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion,
             @Value("${user.home}") String userHome) {
         this.harness = harness;
         this.agentProperties = agentProperties;
@@ -157,6 +162,8 @@ public class UiController {
         this.httpAuthProperties = httpAuthProperties;
         this.gitAutoUpdateService = gitAutoUpdateService;
         this.manualGitPullCoordinator = manualGitPullCoordinator;
+        this.activityCoordinator = activityCoordinator;
+        this.watchService = watchService;
         this.appVersion = appVersion;
         this.userHome = userHome;
     }
@@ -206,10 +213,6 @@ public class UiController {
                 throw new IllegalArgumentException(
                         "That model is no longer available. Choose an available model in Settings.");
             }
-            if (view.activeSession() != null
-                    && activeStreamRegistryService.hasActiveStreamForSession(view.activeSession().id())) {
-                throw new IllegalStateException("A chat stream is already active for the current session");
-            }
             shellRefresh = view.activeSession() == null;
             if (shellRefresh) {
                 session = appStateService.ensureChatSession(agentProperties.getWorkspaceRoot());
@@ -225,36 +228,42 @@ public class UiController {
             ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(),
                     selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name(),
                     implicitModel && modelResolution.fallback() ? modelResolution.preferredModelId() : null);
-            Optional<ChatMessageView> summaryMessage = contextCompactionService.compactIfNeeded(session.id(),
-                    selected.selectedAgent(), selected.selectedModel(), selected.selectedThinking(), workspaceRoot,
-                    user);
-            summaryMessage.ifPresent(summary -> newChatMessages.add(toChatMessage(summary)));
-            QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId,
-                    assistantId, user, metadata);
-            newChatMessages.add(toChatMessage(queued.userMessage()));
-            newChatMessages.add(toChatMessage(queued.assistantMessage()));
-
-            List<Message> conversationHistory = new ArrayList<>(appStateService.buildConversationHistory(session.id()));
-            CancellationToken cancellationToken = new CancellationToken();
-            ActiveStream activeStream = ActiveStream.create(new PendingStream(session.id(), workspaceRoot,
-                    new AgentTurnRequest(null, conversationHistory, workspaceRoot, selected.selectedAgent().id(),
-                            implicitModel ? null : selected.selectedModel().id(), selected.selectedThinking(),
-                            session.id(), cancellationToken)),
-                    cancellationToken);
-            activeStreams.put(assistantId, activeStream);
-            try {
-                activeStreamRegistryService.register(assistantId, session.id(), workspaceRoot);
-                appStateService.publishWorkspaceRailRefresh();
-            } catch (RuntimeException e) {
-                activeStreams.remove(assistantId, activeStream);
-                activeStreamRegistryService.unregister(assistantId);
-                throw e;
-            } catch (Exception e) {
-                activeStreams.remove(assistantId, activeStream);
-                activeStreamRegistryService.unregister(assistantId);
-                throw new IllegalStateException("Failed to queue active stream", e);
-            }
-
+            final SessionView admittedSession = session;
+            final ChatSelection admittedSelection = selected;
+            final String admittedWorkspaceRoot = workspaceRoot;
+            final String admittedUser = user;
+            activityCoordinator.withLock(session.id(), () -> {
+                if (activeStreamRegistryService.hasActiveStreamForSession(admittedSession.id())) {
+                    throw new IllegalStateException("A chat stream is already active for the current session");
+                }
+                Optional<ChatMessageView> summaryMessage = contextCompactionService.compactIfNeeded(
+                        admittedSession.id(), admittedSelection.selectedAgent(), admittedSelection.selectedModel(),
+                        admittedSelection.selectedThinking(), admittedWorkspaceRoot, admittedUser);
+                summaryMessage.ifPresent(summary -> newChatMessages.add(toChatMessage(summary)));
+                QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(admittedSession.id(),
+                        userId, assistantId, admittedUser, metadata);
+                newChatMessages.add(toChatMessage(queued.userMessage()));
+                newChatMessages.add(toChatMessage(queued.assistantMessage()));
+                List<Message> conversationHistory = new ArrayList<>(
+                        appStateService.buildConversationHistory(admittedSession.id()));
+                CancellationToken cancellationToken = new CancellationToken();
+                ActiveStream activeStream = ActiveStream.create(
+                        new PendingStream(admittedSession.id(), admittedWorkspaceRoot,
+                                new AgentTurnRequest(null, conversationHistory, admittedWorkspaceRoot,
+                                        admittedSelection.selectedAgent().id(),
+                                        implicitModel ? null : admittedSelection.selectedModel().id(),
+                                        admittedSelection.selectedThinking(), admittedSession.id(), cancellationToken)),
+                        cancellationToken);
+                activeStreams.put(assistantId, activeStream);
+                try {
+                    activeStreamRegistryService.register(assistantId, admittedSession.id(), admittedWorkspaceRoot);
+                    appStateService.publishWorkspaceRailRefresh();
+                } catch (RuntimeException e) {
+                    activeStreams.remove(assistantId, activeStream);
+                    activeStreamRegistryService.unregister(assistantId);
+                    throw e;
+                }
+            });
             view = appStateService.loadViewData();
         }
 
@@ -369,6 +378,55 @@ public class UiController {
         } catch (Throwable t) {
             active.started().set(false);
             listenerStartFailed(active, assistantId, new RuntimeException(t), emitter);
+        }
+    }
+
+    /** Starts a registered stream without requiring a browser SSE connection. */
+    public void startRegisteredStream(String assistantId) {
+        ActiveStream active = activeStreams.get(assistantId);
+        if (active == null || !active.started().compareAndSet(false, true)) {
+            throw new IllegalStateException("Active stream is not available: " + assistantId);
+        }
+        startActiveStream(assistantId, active, null);
+    }
+
+    public void discardRegisteredStream(String assistantId) {
+        if (assistantId == null) {
+            return;
+        }
+        ActiveStream active = activeStreams.remove(assistantId);
+        if (active != null) {
+            active.cancellationToken().cancel();
+        }
+        activeStreamRegistryService.unregister(assistantId);
+    }
+
+    /**
+     * Queues and registers a normal chat stream; callers own the admission guard.
+     */
+    public String prepareRegisteredStream(long sessionId, String workspaceRoot, AgentDefinition agent,
+            CommandDefinition command) {
+        AgentModelResolutionService.ModelResolution model = agentModelResolutionService.resolve(agent);
+        String assistantId = UUID.randomUUID().toString();
+        String userId = UUID.randomUUID().toString();
+        ChatMessageMetadata metadata = new ChatMessageMetadata(agent.id(), agent.name(), model.model().id(),
+                agent.defaultThinkingLevel().name(), model.fallback() ? model.preferredModelId() : null);
+        appStateService.appendWatchGeneratedTurn(sessionId, userId, assistantId, command.body(), metadata);
+        CancellationToken cancellationToken = new CancellationToken();
+        List<Message> history = new ArrayList<>(appStateService.buildConversationHistory(sessionId));
+        ActiveStream active = ActiveStream.create(
+                new PendingStream(sessionId, workspaceRoot, new AgentTurnRequest(null, history, workspaceRoot,
+                        agent.id(), null, agent.defaultThinkingLevel(), sessionId, cancellationToken)),
+                cancellationToken);
+        activeStreams.put(assistantId, active);
+        try {
+            activeStreamRegistryService.register(assistantId, sessionId, workspaceRoot);
+            appStateService.publishWorkspaceRailRefresh();
+            return assistantId;
+        } catch (RuntimeException e) {
+            activeStreams.remove(assistantId, active);
+            activeStreamRegistryService.unregister(assistantId);
+            throw e;
         }
     }
 
@@ -556,7 +614,9 @@ public class UiController {
     }
 
     private void detachEmitter(ActiveStream active, SseEmitter emitter) {
-        active.emitters().remove(emitter);
+        if (emitter != null) {
+            active.emitters().remove(emitter);
+        }
     }
 
     private void sendToolCallSnapshot(ActiveStream active, String assistantId, SseEmitter emitter) {
@@ -882,6 +942,16 @@ public class UiController {
         return "fragments/review :: panel";
     }
 
+    @PostMapping("/ui/panel/height")
+    public String resizeBottomPanel(@RequestParam("height") int height, Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeSession() != null) {
+            appStateService.updateWatchPanelState(view.activeSession().id(),
+                    appStateService.watchPanelState(view.activeSession().id()).open(), height);
+        }
+        return "";
+    }
+
     @PostMapping("/ui/panel/terminal")
     public String openTerminalPanel(Model model) {
         AppStateView view = appStateService.loadViewData();
@@ -896,12 +966,49 @@ public class UiController {
                     terminalStateService.registerTerminal(view.activeWorkspace().id(), terminal);
                 }
                 terminalStateService.openTerminalPane(view.activeWorkspace().id());
+                if (view.activeSession() != null) {
+                    var watch = appStateService.watchPanelState(view.activeSession().id());
+                    appStateService.updateWatchPanelState(view.activeSession().id(), false, watch.height());
+                }
             }
             view = appStateService.loadViewData();
         }
         populateProjectModel(model, view);
         populateSessionModel(model, view);
         return "fragments/terminal :: panel";
+    }
+
+    @PostMapping("/ui/panel/watches")
+    public String openWatchesPanel(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        if (view.activeSession() != null) {
+            var state = terminalStateService.snapshot(view.activeWorkspace().id());
+            boolean open = !appStateService.watchPanelState(view.activeSession().id()).open();
+            if (open) {
+                terminalStateService.closeTerminalPane(view.activeWorkspace().id());
+                terminalStateService.openWatchesPane(view.activeWorkspace().id());
+            } else {
+                terminalStateService.closeWatchesPane(view.activeWorkspace().id());
+            }
+            appStateService.updateWatchPanelState(view.activeSession().id(), open,
+                    appStateService.watchPanelState(view.activeSession().id()).height());
+            view = appStateService.loadViewData();
+        }
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        if (view.activeSession() != null)
+            model.addAttribute("watchRuns", watchService.latestRuns(view.activeSession().id()));
+        return "fragments/watches :: panel";
+    }
+
+    @GetMapping("/ui/panel/watches/refresh")
+    public String refreshWatchesPanel(Model model) {
+        AppStateView view = appStateService.loadViewData();
+        populateProjectModel(model, view);
+        populateSessionModel(model, view);
+        if (view.activeSession() != null)
+            model.addAttribute("watchRuns", watchService.latestRuns(view.activeSession().id()));
+        return "fragments/watches :: panel";
     }
 
     @PostMapping("/ui/terminal/new")
@@ -1009,7 +1116,93 @@ public class UiController {
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
         populateSettingsModel(model);
+        if (view.activeProject() != null)
+            populateWatchModel(model, view, null, null, null);
         return "fragments/projects :: settingsModal";
+    }
+
+    private void populateWatchModel(Model model, AppStateView view, Long projectId, Long workspaceId, Long sessionId) {
+        var project = view.activeProject();
+        var workspaces = appStateService.listProjectWorkspaces(project.id());
+        var selectedWorkspace = workspaces.stream().filter(w -> workspaceId != null && w.id() == workspaceId)
+                .findFirst()
+                .orElseGet(() -> workspaces.stream()
+                        .filter(w -> view.activeWorkspace() != null && w.id() == view.activeWorkspace().id())
+                        .findFirst().orElse(workspaces.getFirst()));
+        var sessions = appStateService.listVisiblePrimarySessions(selectedWorkspace.id());
+        var selectedSession = sessions.stream().filter(s -> sessionId != null && s.id() == sessionId).findFirst()
+                .orElseGet(() -> sessions.stream()
+                        .filter(s -> view.activeSession() != null && s.id() == view.activeSession().id()).findFirst()
+                        .orElse(sessions.getFirst()));
+        model.addAttribute("watchDefinitions", watchService.listDefinitions(project.id()));
+        model.addAttribute("watchAgents", agentDefinitionService.listPrimaryAgents());
+        model.addAttribute("watchWorkspaces", workspaces);
+        model.addAttribute("watchSessions", sessions);
+        model.addAttribute("watchWorkspaceId", selectedWorkspace.id());
+        model.addAttribute("watchSessionId", selectedSession.id());
+        model.addAttribute("watchCommands", commandCatalogService.list(Path.of(selectedWorkspace.path())).stream()
+                .filter(c -> c.type() == CommandCatalogService.CommandKind.PROMPT).toList());
+        model.addAttribute("watchEnablements", watchService.listEnablements(selectedSession.id()));
+        model.addAttribute("watchRuns", watchService.latestRuns(selectedSession.id()));
+    }
+
+    @GetMapping("/ui/settings/watches/select")
+    public String selectWatchSession(@RequestParam long projectId, @RequestParam long workspaceId,
+            @RequestParam long sessionId, Model model) {
+        var view = appStateService.loadViewData();
+        if (view.activeProject() == null || view.activeProject().id() != projectId)
+            throw new IllegalArgumentException("Invalid project");
+        populateWatchModel(model, view, projectId, workspaceId, sessionId);
+        return "fragments/projects :: settingsWatches";
+    }
+
+    @PostMapping("/ui/settings/watches/create")
+    public String createWatch(@RequestParam String name, @RequestParam String prompt, @RequestParam int intervalSeconds,
+            @RequestParam String evaluatorAgentId, @RequestParam String actionAgentId,
+            @RequestParam String actionCommandId, @RequestParam long workspaceId, @RequestParam long sessionId,
+            Model model) {
+        AppStateView view = appStateService.loadViewData();
+        watchService.create(view.activeProject().id(), name, prompt, intervalSeconds, evaluatorAgentId, actionAgentId,
+                actionCommandId);
+        populateWatchModel(model, view, null, workspaceId, sessionId);
+        return "fragments/projects :: settingsWatches";
+    }
+
+    private void populateWatchModel(Model model, AppStateView view) {
+        populateWatchModel(model, view, null, null, null);
+    }
+
+    @PostMapping("/ui/settings/watches/{id}")
+    public String updateWatch(@PathVariable long id, @RequestParam String name, @RequestParam String prompt,
+            @RequestParam int intervalSeconds, @RequestParam String evaluatorAgentId,
+            @RequestParam String actionAgentId, @RequestParam String actionCommandId, Model model) {
+        var existing = watchService.listDefinitions(appStateService.loadViewData().activeProject().id()).stream()
+                .filter(w -> w.id() == id).findFirst().orElseThrow();
+        watchService.update(new WatchService.Definition(id, existing.projectId(), name, prompt, intervalSeconds,
+                evaluatorAgentId, actionAgentId, actionCommandId, existing.configVersion()));
+        populateWatchModel(model, appStateService.loadViewData());
+        return "fragments/projects :: settingsWatches";
+    }
+
+    @PostMapping("/ui/settings/watches/{id}/delete")
+    public String deleteWatch(@PathVariable long id, Model model) {
+        watchService.delete(id);
+        AppStateView view = appStateService.loadViewData();
+        populateWatchModel(model, view);
+        return "fragments/projects :: settingsWatches";
+    }
+
+    @PostMapping("/ui/settings/watches/{watchId}/sessions/{sessionId}/toggle")
+    public String toggleWatch(@PathVariable long watchId, @PathVariable long sessionId, Model model) {
+        var enabled = watchService.listEnablements(sessionId).stream().filter(e -> e.watchId() == watchId).findFirst()
+                .map(Enablement::enabled).orElse(false);
+        if (enabled)
+            watchService.disable(watchId, sessionId);
+        else
+            watchService.enable(watchId, sessionId);
+        AppStateView view = appStateService.loadViewData();
+        populateWatchModel(model, view);
+        return "fragments/projects :: settingsWatches";
     }
 
     private void populateSettingsModel(Model model) {
@@ -1576,6 +1769,13 @@ public class UiController {
         TerminalPanelState terminalState = view.activeWorkspace() == null
                 ? new TerminalPanelState("none", List.of(), null, false)
                 : terminalStateService.snapshot(view.activeWorkspace().id());
+        WatchPanelState watchPanel = session == null
+                ? new WatchPanelState(false, 320)
+                : appStateService.watchPanelState(session.id());
+        if (watchPanel.open() && !terminalState.bottomPanelOpen()) {
+            terminalState = new TerminalPanelState("watches", terminalState.terminalTabs(),
+                    terminalState.activeTerminal(), false);
+        }
         if (session == null) {
             model.addAttribute("chatMessages", List.of());
             model.addAttribute("subagentView", false);
@@ -1616,6 +1816,8 @@ public class UiController {
         model.addAttribute("bottomPanelOpen", terminalState.bottomPanelOpen());
         model.addAttribute("terminalPanelOpen", terminalState.bottomPanelOpen());
         model.addAttribute("panelMode", terminalState.bottomPanelMode());
+        model.addAttribute("watchPanelOpen", watchPanel.open());
+        model.addAttribute("bottomPanelHeight", watchPanel.height());
     }
 
     private void populateChatModel(Model model, List<ChatMessageView> chatMessages, boolean subagentView,

@@ -102,6 +102,14 @@
     border-radius: 8px;
 }
 
+.settings-form textarea[name="prompt"] {
+    min-height: 110px;
+    width: 100%;
+    resize: vertical;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
 .settings-command-form {
     display: flex;
     flex-direction: column;

@@ -3,6 +3,7 @@ package com.judepereira.jupiter.agent.harness;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import java.util.List;
+import java.util.Set;
 import lombok.Getter;
 
 @Getter
@@ -15,10 +16,18 @@ public class AgentTurnRequest {
     private final ThinkingLevel thinkingLevel;
     private final Long sessionId;
     private final CancellationToken cancellationToken;
+    private final Set<String> allowedTools;
 
     public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
             String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,
             CancellationToken cancellationToken) {
+        this(systemPrompt, conversationHistory, workspaceRoot, agentId, modelId, thinkingLevel, sessionId,
+                cancellationToken, null);
+    }
+
+    public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
+            String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,
+            CancellationToken cancellationToken, Set<String> allowedTools) {
         this.systemPrompt = systemPrompt;
         this.conversationHistory = List.copyOf(conversationHistory);
         this.workspaceRoot = workspaceRoot;
@@ -27,5 +36,6 @@ public class AgentTurnRequest {
         this.thinkingLevel = thinkingLevel;
         this.sessionId = sessionId;
         this.cancellationToken = cancellationToken;
+        this.allowedTools = allowedTools == null ? null : Set.copyOf(allowedTools);
     }
 }
