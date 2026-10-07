@@ -4,7 +4,7 @@ scripts to run as root or as the user.
 Pull the latest published immutable release image:
 
 ```bash
-docker pull judepereira/jupiter:2026.09.29.1
+docker pull judepereira/jupiter:2026.10.02.1
 ```
 
 Generate an encryption key:
@@ -25,7 +25,7 @@ docker run --rm \
   -e JUPITER_ENCRYPTION_KEY="$JUPITER_ENCRYPTION_KEY" \
   -v "$HOME/.jupiter:/home/jupiter/.jupiter" \
   -v "$HOME/developer:/home/jupiter/developer" \ # Replace developer with the dir where all your projects are checked out
-  judepereira/jupiter:2026.09.29.1
+  judepereira/jupiter:2026.10.02.1
 ```
 
 Open `http://localhost:7272`, choose [**Open Project**](Projects), and select a repository under
@@ -35,11 +35,11 @@ To update Jupiter, pull the latest image and restart the container with the same
 mount:
 
 ```bash
-docker pull judepereira/jupiter:2026.09.29.1
+docker pull judepereira/jupiter:2026.10.02.1
 ```
 
-The `latest` tag follows the current main branch; use the immutable `YYYY.MM.DD.N` release tag above for recommended deployments.
-Use a release tag when you need a fixed version.
+The `latest` tag follows the current main branch; use the immutable `YYYY.MM.DD.N` release tag above for recommended
+deployments. Use a release tag when you need a fixed version.
 
 **Important:** Use your own network sandbox for now. A built-in one will be shipped soon!
 
