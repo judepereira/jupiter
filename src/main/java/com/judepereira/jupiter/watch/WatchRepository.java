@@ -120,10 +120,11 @@ public class WatchRepository {
         return jdbc.query(
                 "SELECT id,watch_id,session_id,started_at,finished_at,status,actionable,dispatched,error,watch_name FROM watch_runs WHERE session_id=:s ORDER BY started_at DESC LIMIT 100",
                 p().addValue("s", sessionId),
-                (r, n) -> new WatchService.Run(r.getLong(1), r.getLong(2), r.getLong(3), r.getTimestamp(4).toInstant(),
-                        r.getTimestamp(5) == null ? null : r.getTimestamp(5).toInstant(), r.getString(6),
-                        r.getObject(7) == null ? null : r.getBoolean(7), r.getBoolean(8), dec("error", r.getString(9)),
-                        dec("watch_name", r.getString(10))));
+                (r, n) -> new WatchService.Run(r.getLong(1),
+                        r.getObject(2) == null ? null : ((Number) r.getObject(2)).longValue(), r.getLong(3),
+                        r.getTimestamp(4).toInstant(), r.getTimestamp(5) == null ? null : r.getTimestamp(5).toInstant(),
+                        r.getString(6), r.getObject(7) == null ? null : r.getBoolean(7), r.getBoolean(8),
+                        dec("error", r.getString(9)), dec("watch_name", r.getString(10))));
     }
     void activity(long sessionId) {
         jdbc.update(

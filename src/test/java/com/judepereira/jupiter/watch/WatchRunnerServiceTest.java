@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.watch;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -7,8 +8,10 @@ import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
+import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
+import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.SessionDetailView;
@@ -21,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class WatchRunnerServiceTest {
     private final WatchRepository repository = mock(WatchRepository.class);
@@ -79,6 +83,20 @@ class WatchRunnerServiceTest {
         verify(harness, timeout(1000)).runTurn(any());
         verify(repository, timeout(1000)).finishRun(eq(41L), eq("NONACTIONABLE"), eq(false), any(),
                 nullable(String.class), eq(false), isNull());
+    }
+
+    @Test
+    void evaluatorReceivesWorkspaceWatchDefinitionAndStrictJsonInstructionAsUserPrompt() throws Exception {
+        when(repository.startRun(any(), eq(9L), any(), eq(0L))).thenReturn(Optional.of(44L));
+        when(harness.runTurn(any())).thenReturn(new AgentTurnResult("{\"actionable\":false}", List.of()));
+
+        runner.tick(Instant.parse("2026-01-01T00:01:00Z"));
+
+        var request = ArgumentCaptor.forClass(AgentTurnRequest.class);
+        verify(harness, timeout(1000)).runTurn(request.capture());
+        var message = request.getValue().getConversationHistory().getFirst();
+        assertThat(message.getRole()).isEqualTo(Message.Role.USER);
+        assertThat(message.getContent()).contains("Return exactly JSON, no markdown", definition.prompt());
     }
 
     @Test

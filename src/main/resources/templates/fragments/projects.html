@@ -444,7 +444,9 @@
                         <option th:each="c : ${watchCommands}" th:value="${c.id()}" th:text="${c.name()}"></option>
                     </select></label
                 >
-                <button class="btn btn-primary" type="submit">Create watch</button>
+                <button class="btn btn-primary" type="submit" th:disabled="${watchSessionId == null}">
+                    Create watch
+                </button>
             </form>
             <form
                 class="settings-form"
@@ -477,6 +479,9 @@
                     </select></label
                 >
             </form>
+            <p class="settings-help-text" th:if="${#lists.isEmpty(watchSessions)}">
+                No visible primary sessions exist in this workspace. Create a session before enabling watches.
+            </p>
             <div th:each="w : ${watchDefinitions}" class="settings-command-card">
                 <details>
                     <summary>
@@ -542,9 +547,11 @@
                     <input
                         class="form-check-input"
                         type="checkbox"
-                        th:checked="${watchEnablements.?[watchId() == w.id() and enabled()].size() > 0}"
+                        th:checked="${watchEnablementsBySession[s.id].?[watchId() == w.id() and enabled()].size() > 0}"
+                        th:disabled="${watchSessionId == null}"
+                        th:id="${'watch-' + w.id() + '-' + s.id}"
                         th:attr="hx-post=@{/ui/settings/watches/{watchId}/sessions/{sessionId}/toggle(watchId=${w.id()},sessionId=${s.id})}, hx-target='#settings-watches', hx-swap='outerHTML'"
-                    ><label th:text="${s.name}"></label>
+                    ><label th:for="${'watch-' + w.id() + '-' + s.id}" th:text="${s.name}"></label>
                 </div>
             </div>
         </section>
@@ -587,6 +594,7 @@
                         <button
                             class="nav-link"
                             id="settings-watches-tab"
+                            th:if="${activeProject != null}"
                             data-bs-toggle="pill"
                             data-bs-target="#settings-watches"
                             type="button"
@@ -1285,6 +1293,7 @@
     <th:block th:replace="~{fragments/projects :: workspaceRail}"></th:block>
     <th:block th:if="${includeChatContainer}" th:replace="~{fragments/chat :: chat}"></th:block>
     <th:block th:replace="~{fragments/review :: panel}"></th:block>
-    <th:block th:replace="~{fragments/terminal :: panel}"></th:block>
+    <th:block th:if="${bottomPanelMode == 'watches'}" th:replace="~{fragments/watches :: panel}"></th:block>
+    <th:block th:unless="${bottomPanelMode == 'watches'}" th:replace="~{fragments/terminal :: panel}"></th:block>
     <th:block th:replace="~{fragments/projects :: modalClose}"></th:block>
 </th:block>

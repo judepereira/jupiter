@@ -8,4 +8,5 @@ A watch is not active until it is enabled for a specific visible primary session
 independently, including inactive sessions. A watch only evaluates while the session has qualifying activity from the
 same agent and within the 72-hour activity window; automatic evaluation does not extend that window. The WATCHES
 bottom-bar button shows the latest 100 persisted runs for the current session, including status, timestamps, errors, and
-actionable results. Only PROMPT actions are accepted; slash commands and automatic actions are not supported.
+actionable results. Only PROMPT actions are accepted. PROMPT actions support the `agent` automatic action and the `/`
+slash command. Direct SCRIPT commands and arbitrary action text are not supported.

@@ -7,6 +7,7 @@ import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.CancellationToken;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.harness.StreamCancelledException;
+import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
@@ -171,9 +172,10 @@ public class WatchRunnerService {
             String root = state.loadSessionDetail(session).workspaceRoot();
             String prompt = "Inspect the workspace using read-only tools and evaluate this watch. Return exactly JSON, no markdown: {\"actionable\":true|false}. Watch: "
                     + definition.prompt();
-            var result = harness.runTurn(new AgentTurnRequest(prompt, List.of(), root, evaluator.id(), null,
-                    evaluator.defaultThinkingLevel(), session, job.token,
-                    Set.of("list_files", "read_file", "search_code", "display_image")));
+            var result = harness.runTurn(
+                    new AgentTurnRequest(null, List.of(new Message(Message.Role.USER, prompt, null, null, null)), root,
+                            evaluator.id(), null, evaluator.defaultThinkingLevel(), session, job.token,
+                            Set.of("list_files", "read_file", "search_code", "display_image")));
             job.token.throwIfCancelled();
             String output = result.getFinalText();
             if (!watches.parseActionable(output)) {

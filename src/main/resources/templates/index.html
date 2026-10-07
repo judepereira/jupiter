@@ -114,7 +114,12 @@
             </aside>
 
             <!-- bottom panel content -->
-            <div id="bottom-panel" th:replace="~{fragments/terminal :: panel}">Loading terminal...</div>
+            <th:block th:if="${bottomPanelMode == 'watches'}">
+                <div id="bottom-panel" th:replace="~{fragments/watches :: panel}">Loading watches...</div>
+            </th:block>
+            <th:block th:unless="${bottomPanelMode == 'watches'}">
+                <div id="bottom-panel" th:replace="~{fragments/terminal :: panel}">Loading terminal...</div>
+            </th:block>
         </div>
 
         <div id="system-balloon-root" aria-live="polite" aria-atomic="false"></div>

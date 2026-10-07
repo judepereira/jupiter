@@ -7,8 +7,10 @@ import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.command.CommandCatalogService;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.LongConsumer;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +43,7 @@ public class WatchService {
     public record Enablement(long watchId, long sessionId, boolean enabled, long activityGeneration,
             Instant lastEvaluationStartedAt) {
     }
-    public record Run(long id, long watchId, long sessionId, Instant startedAt, Instant finishedAt, String status,
+    public record Run(long id, Long watchId, long sessionId, Instant startedAt, Instant finishedAt, String status,
             Boolean actionable, boolean dispatched, String error, String watchName) {
     }
 
@@ -73,8 +75,10 @@ public class WatchService {
     }
     @Transactional
     public void delete(long id) {
+        Set<Long> sessionIds = new LinkedHashSet<>(
+                repository.enablementsForWatch(id).stream().map(Enablement::sessionId).toList());
         repository.delete(id);
-        notifyChange(id);
+        sessionIds.forEach(sessionId -> changeListeners.forEach(listener -> listener.accept(sessionId)));
     }
     @Transactional
     public void enable(long watchId, long sessionId) {

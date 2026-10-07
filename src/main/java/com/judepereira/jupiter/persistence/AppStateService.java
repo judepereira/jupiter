@@ -642,7 +642,8 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.agentName(),
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
-                assistantMetadata == null ? null : assistantMetadata.preferredModelId(), null, null, now);
+                assistantMetadata == null ? null : assistantMetadata.preferredModelId(), null, null, now,
+                watchGenerated);
         repository.clearSessionDraft(sessionId);
         return new QueuedChatTurn(
                 new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, null, List.of(), null),

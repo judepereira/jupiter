@@ -943,13 +943,13 @@ public class UiController {
     }
 
     @PostMapping("/ui/panel/height")
-    public String resizeBottomPanel(@RequestParam("height") int height, Model model) {
+    public ResponseEntity<Void> resizeBottomPanel(@RequestParam("height") int height) {
         AppStateView view = appStateService.loadViewData();
         if (view.activeSession() != null) {
             appStateService.updateWatchPanelState(view.activeSession().id(),
                     appStateService.watchPanelState(view.activeSession().id()).open(), height);
         }
-        return "";
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/ui/panel/terminal")
@@ -1126,24 +1126,34 @@ public class UiController {
         var workspaces = appStateService.listProjectWorkspaces(project.id());
         var selectedWorkspace = workspaces.stream().filter(w -> workspaceId != null && w.id() == workspaceId)
                 .findFirst()
-                .orElseGet(() -> workspaces.stream()
+                .or(() -> workspaces.stream()
                         .filter(w -> view.activeWorkspace() != null && w.id() == view.activeWorkspace().id())
-                        .findFirst().orElse(workspaces.getFirst()));
-        var sessions = appStateService.listVisiblePrimarySessions(selectedWorkspace.id());
+                        .findFirst())
+                .orElseGet(() -> workspaces.isEmpty() ? null : workspaces.getFirst());
+        var sessions = selectedWorkspace == null
+                ? List.<SessionView>of()
+                : appStateService.listVisiblePrimarySessions(selectedWorkspace.id());
         var selectedSession = sessions.stream().filter(s -> sessionId != null && s.id() == sessionId).findFirst()
-                .orElseGet(() -> sessions.stream()
-                        .filter(s -> view.activeSession() != null && s.id() == view.activeSession().id()).findFirst()
-                        .orElse(sessions.getFirst()));
+                .or(() -> sessions.stream()
+                        .filter(s -> view.activeSession() != null && s.id() == view.activeSession().id()).findFirst())
+                .orElse(null);
         model.addAttribute("watchDefinitions", watchService.listDefinitions(project.id()));
         model.addAttribute("watchAgents", agentDefinitionService.listPrimaryAgents());
         model.addAttribute("watchWorkspaces", workspaces);
         model.addAttribute("watchSessions", sessions);
-        model.addAttribute("watchWorkspaceId", selectedWorkspace.id());
-        model.addAttribute("watchSessionId", selectedSession.id());
-        model.addAttribute("watchCommands", commandCatalogService.list(Path.of(selectedWorkspace.path())).stream()
-                .filter(c -> c.type() == CommandCatalogService.CommandKind.PROMPT).toList());
-        model.addAttribute("watchEnablements", watchService.listEnablements(selectedSession.id()));
-        model.addAttribute("watchRuns", watchService.latestRuns(selectedSession.id()));
+        model.addAttribute("watchWorkspaceId", selectedWorkspace == null ? null : selectedWorkspace.id());
+        model.addAttribute("watchSessionId", selectedSession == null ? null : selectedSession.id());
+        model.addAttribute("watchCommands",
+                selectedWorkspace == null
+                        ? List.of()
+                        : commandCatalogService.list(Path.of(selectedWorkspace.path())).stream()
+                                .filter(c -> c.type() == CommandCatalogService.CommandKind.PROMPT).toList());
+        model.addAttribute("watchEnablements",
+                selectedSession == null ? List.of() : watchService.listEnablements(selectedSession.id()));
+        model.addAttribute("watchEnablementsBySession", sessions.stream()
+                .collect(Collectors.toMap(SessionView::id, session -> watchService.listEnablements(session.id()))));
+        model.addAttribute("watchRuns",
+                selectedSession == null ? List.of() : watchService.latestRuns(selectedSession.id()));
     }
 
     @GetMapping("/ui/settings/watches/select")
@@ -1794,6 +1804,7 @@ public class UiController {
             model.addAttribute("bottomPanelOpen", terminalState.bottomPanelOpen());
             model.addAttribute("terminalPanelOpen", terminalState.bottomPanelOpen());
             model.addAttribute("panelMode", terminalState.bottomPanelMode());
+            model.addAttribute("watchRuns", List.of());
             return;
         }
 
@@ -1818,6 +1829,7 @@ public class UiController {
         model.addAttribute("panelMode", terminalState.bottomPanelMode());
         model.addAttribute("watchPanelOpen", watchPanel.open());
         model.addAttribute("bottomPanelHeight", watchPanel.height());
+        model.addAttribute("watchRuns", watchService.latestRuns(session.id()));
     }
 
     private void populateChatModel(Model model, List<ChatMessageView> chatMessages, boolean subagentView,
@@ -1862,7 +1874,10 @@ public class UiController {
     }
 
     private void populateShellUpdates(Model model, AppStateView view) {
-        model.addAttribute("terminalOob", true);
+        // Shell swaps must refresh the panel target whenever a workspace exists,
+        // including its closed state.
+        model.addAttribute("terminalOob", view.activeWorkspace() != null);
+        model.addAttribute("watchPanelOob", view.activeWorkspace() != null);
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);

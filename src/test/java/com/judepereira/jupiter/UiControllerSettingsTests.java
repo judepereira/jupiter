@@ -58,6 +58,48 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class UiControllerSettingsTests {
 
     @Test
+    public void settingsModalAfterClosingLastSessionKeepsDefinitionsAndEmptySessionData(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+
+        context.appStateService().closeSession(sessionId);
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().settingsModal(model)).isEqualTo("fragments/projects :: settingsModal");
+        assertThat(model.getAttribute("watchSessionId")).isNull();
+        assertThat(model.getAttribute("watchEnablements")).isEqualTo(List.of());
+        assertThat(model.getAttribute("watchRuns")).isEqualTo(List.of());
+    }
+
+    @Test
+    public void resizeBottomPanelReturnsNoContentAndPersistsHeight(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+
+        assertThat(context.controller().resizeBottomPanel(420).getStatusCode().value()).isEqualTo(204);
+        assertThat(context.appStateService().watchPanelState(sessionId).height()).isEqualTo(420);
+
+        context.appStateService().closeSession(sessionId);
+        assertThat(context.controller().resizeBottomPanel(420).getStatusCode().value()).isEqualTo(204);
+    }
+
+    @Test
+    public void indexRestoresWatchesModeAndRuns(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+        context.appStateService().updateWatchPanelState(sessionId, true, 420);
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().index(model)).isEqualTo("index");
+        assertThat(model.getAttribute("bottomPanelMode")).isEqualTo("watches");
+        assertThat(model.getAttribute("watchRuns")).isNotNull().isEqualTo(List.of());
+        assertThat(model.getAttribute("bottomPanelHeight")).isEqualTo(420);
+    }
+
+    @Test
     public void settingsModalIncludesActiveProjectAndWorkspaceInitCommands(@TempDir Path workspaceRoot) {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
