@@ -4,11 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.judepereira.jupiter.agent.catalog.AgentDefinition;
-import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
-import com.judepereira.jupiter.agent.catalog.AgentMode;
-import com.judepereira.jupiter.agent.catalog.ModelDefinition;
-import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
+import com.judepereira.jupiter.agent.catalog.*;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
@@ -215,8 +211,8 @@ public class UiControllerSubagentChatTests {
         controller.loadPrimaryChat(model);
 
         assertThat(((AgentDefinition) model.getAttribute("selectedAgent")).id()).isEqualTo("engineer");
-        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
-        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.MEDIUM);
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-6.1-sol");
+        assertThat(((ThinkingLevel) model.getAttribute("selectedThinking"))).isEqualTo(ThinkingLevel.HIGH);
         assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(false);
     }
 
