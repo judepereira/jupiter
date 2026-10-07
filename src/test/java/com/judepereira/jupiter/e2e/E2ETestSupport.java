@@ -61,6 +61,64 @@ abstract class E2ETestSupport {
         return sharedBrowser().newContext(options);
     }
 
+    /**
+     * Installs before navigation so requests started while the initial page loads
+     * are observed. The tracker is deliberately a Set: HTMX events bubble, and the
+     * same request can be reported more than once when its source is removed.
+     */
+    static void installHtmxSettlingTracker(Page page) {
+        page.addInitScript("""
+                (() => {
+                    if (window.__jupiterHtmxRequests !== undefined) return;
+                    const requests = new Set();
+                    window.__jupiterHtmxRequests = requests;
+                    document.addEventListener('htmx:beforeRequest', event => {
+                        const xhr = event.detail?.xhr;
+                        if (xhr) requests.add(xhr);
+                    }, true);
+                    document.addEventListener('htmx:afterRequest', event => {
+                        const xhr = event.detail?.xhr;
+                        if (xhr) requests.delete(xhr);
+                    }, true);
+                })();
+                """);
+    }
+
+    static void settlePage(Page page) {
+        page.waitForFunction("""
+                () => new Promise((resolve, reject) => {
+                    if (!(window.__jupiterHtmxRequests instanceof Set)) {
+                        reject(new Error('HTMX settling tracker was not installed'));
+                        return;
+                    }
+                    const requests = window.__jupiterHtmxRequests;
+                    const deadline = performance.now() + 10000;
+                    const isBusy = () => requests.size !== 0
+                            || document.querySelector(
+                                    '[class~="htmx-request"], [class~="htmx-swapping"], [class~="htmx-settling"]')
+                                    !== null;
+                    const check = () => {
+                        if (performance.now() >= deadline) {
+                            reject(new Error('Timed out waiting for HTMX to settle'));
+                            return;
+                        }
+                        if (isBusy()) {
+                            setTimeout(check, 25);
+                            return;
+                        }
+                        requestAnimationFrame(() => requestAnimationFrame(() => {
+                            if (isBusy()) {
+                                check();
+                            } else {
+                                resolve(true);
+                            }
+                        }));
+                    };
+                    check();
+                })
+                """, null, new Page.WaitForFunctionOptions().setTimeout(11000));
+    }
+
     static final class SharedBrowserExtension implements BeforeAllCallback {
         @Override
         public void beforeAll(ExtensionContext context) {
