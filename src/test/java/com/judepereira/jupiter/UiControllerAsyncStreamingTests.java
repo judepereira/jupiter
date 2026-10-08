@@ -62,6 +62,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -789,6 +790,10 @@ public class UiControllerAsyncStreamingTests {
 
     @Test
     public void stopChatCancelsInFlightStreamAndPersistsStoppedAssistantMessage(@TempDir Path tmp) throws Exception {
+        CountDownLatch partialPublished = new CountDownLatch(1);
+        CountDownLatch cancellationWait = new CountDownLatch(1);
+        AtomicReference<Thread> runner = new AtomicReference<>();
+        AtomicBoolean cancellationObserved = new AtomicBoolean();
         CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
@@ -800,14 +805,16 @@ public class UiControllerAsyncStreamingTests {
 
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
-                listener.onTextDelta("partial ");
-                while (request.getCancellationToken() != null && !request.getCancellationToken().isCancelled()) {
-                    try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
+                runner.set(Thread.currentThread());
+                try {
+                    listener.onTextDelta("partial ");
+                    partialPublished.countDown();
+                    // stopChat interrupts this wait after cancelling the request token.
+                    cancellationWait.await();
+                } catch (InterruptedException e) {
+                    cancellationObserved.set(request.getCancellationToken().isCancelled());
+                    Thread.currentThread().interrupt();
+                    throw new StreamCancelledException();
                 }
                 throw new StreamCancelledException();
             }
@@ -824,10 +831,27 @@ public class UiControllerAsyncStreamingTests {
         var emitter = ctrl.streamChat(assistantId);
         assertThat(emitter).isNotNull();
 
-        Model stopModel = new ConcurrentModel();
-        String view = ctrl.stopChat(assistantId, stopModel);
-        assertThat(view).isEqualTo("fragments/chat :: chat");
+        boolean stopped = false;
+        try {
+            assertThat(partialPublished.await(5, TimeUnit.SECONDS)).isTrue();
 
+            Model stopModel = new ConcurrentModel();
+            String view = ctrl.stopChat(assistantId, stopModel);
+            stopped = true;
+            assertThat(view).isEqualTo("fragments/chat :: chat");
+        } finally {
+            if (!stopped) {
+                ctrl.stopChat(assistantId, new ConcurrentModel());
+            }
+            Thread streamRunner = runner.get();
+            if (streamRunner != null) {
+                streamRunner.join(TimeUnit.SECONDS.toMillis(5));
+                assertThat(streamRunner.isAlive()).as("stream runner should terminate after stopChat cancellation")
+                        .isFalse();
+            }
+        }
+
+        assertThat(cancellationObserved).isTrue();
         TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
         Model after = new ConcurrentModel();
