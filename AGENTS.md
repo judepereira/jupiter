@@ -112,19 +112,6 @@ implementation details.
   policies, no-op cases, failures, deduplication, and recovery transitions without requiring the external environment.
 - When a targeted test passes, run the full test suite afterward.
 
-### Documentation screenshot benchmark
-
-Run the image-composition benchmark (without Playwright or output files) with:
-
-`./mvnw -Dtest=BrowserScreenshotBenchmarkTest -Ddocumentation.screenshot.benchmark=true test`
-
-It defaults to one desktop (3900x2232) and one mobile (1206x2532) image per measurement; override desktop count with
-`-Ddocumentation.screenshot.benchmark.desktop-images=N`. The OpenPnP OpenCV test jar bundles native libraries for Linux
-ARMv7/ARMv8/x86_64, macOS ARMv8/x86_64, and Windows x86_32/x86_64, and loads the matching library locally. OpenCV uses
-float alpha throughout the blur, so final rounding can differ slightly from the legacy `ConvolveOp` implementation;
-regression tests allow the measured two-level maximum difference. Do not check in benchmark logs or generated
-screenshots. The output location remains the test-only `documentation.screenshots.output` property.
-
 ### Documentation and wiki policy
 
 - Documentation screenshot image files must not be regenerated locally; CI handles regeneration for consistency.

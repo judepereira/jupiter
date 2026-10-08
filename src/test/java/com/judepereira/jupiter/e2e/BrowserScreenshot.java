@@ -117,7 +117,7 @@ public final class BrowserScreenshot {
     }
 
     /** Blurs only the alpha channel; RGB must remain transparent black. */
-    static BufferedImage blurShadowAlpha(BufferedImage image, double sigma) {
+    private static BufferedImage blurShadowAlpha(BufferedImage image, double sigma) {
         int width = image.getWidth();
         int height = image.getHeight();
         float[] alpha = new float[width * height];
