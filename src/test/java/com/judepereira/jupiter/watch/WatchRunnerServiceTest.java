@@ -19,8 +19,10 @@ import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -131,6 +133,64 @@ class WatchRunnerServiceTest {
         runner.tick(Instant.parse("2026-01-01T00:01:00Z"));
         verify(repository, timeout(1000)).finishRun(eq(43L), eq("FAILED"), isNull(), eq("not json"),
                 nullable(String.class), eq(false), isNull());
+    }
+
+    @Test
+    void harnessCancellationExceptionFinishesRunAsCancelled() throws Exception {
+        when(repository.startRun(any(), eq(9L), any(), eq(0L))).thenReturn(Optional.of(45L));
+        when(harness.runTurn(any())).thenThrow(new CancellationException("cancelled"));
+
+        runner.tick(Instant.parse("2026-01-01T00:01:00Z"));
+
+        verify(repository, timeout(1000)).finishRun(eq(45L), eq("CANCELLED"), isNull(), isNull(),
+                eq("Evaluator cancelled"), eq(false), isNull());
+    }
+
+    @Test
+    void unexpectedRuntimeFailureFinishesRunAsFailed() throws Exception {
+        when(repository.startRun(any(), eq(9L), any(), eq(0L))).thenReturn(Optional.of(46L));
+        when(harness.runTurn(any())).thenThrow(new IllegalStateException("provider down"));
+
+        runner.tick(Instant.parse("2026-01-01T00:01:00Z"));
+
+        verify(repository, timeout(1000)).finishRun(eq(46L), eq("FAILED"), isNull(), isNull(),
+                contains("provider down"), eq(false), isNull());
+    }
+
+    @Test
+    void cancelledEvaluationReleasesPermitForNextEvaluation() throws Exception {
+        when(repository.startRun(any(), eq(9L), any(), anyLong())).thenReturn(Optional.of(47L), Optional.of(48L));
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicBoolean first = new AtomicBoolean(true);
+        when(harness.runTurn(any())).thenAnswer(invocation -> {
+            if (first.getAndSet(false)) {
+                entered.countDown();
+                release.await(2, TimeUnit.SECONDS);
+                throw new CancellationException();
+            }
+            return new AgentTurnResult("{\"actionable\":false}", List.of());
+        });
+
+        runner.tick(Instant.parse("2026-01-01T00:01:00Z"));
+        assertThat(entered.await(1, TimeUnit.SECONDS)).isTrue();
+        coordinator.recordInteractiveActivity(9);
+        release.countDown();
+        verify(repository, timeout(1000)).finishRun(eq(47L), eq("CANCELLED"), any(), any(), any(), eq(false), isNull());
+
+        when(watches.qualifyingActivity(9)).thenReturn(Optional.of(Instant.parse("2026-01-02T00:00:00Z")));
+        when(repository.enablement(7, 9)).thenReturn(Optional.of(new WatchService.Enablement(7, 9, true, 1, null)));
+        when(watches.listEnablements(9)).thenReturn(List.of(new WatchService.Enablement(7, 9, true, 1, null)));
+        when(harness.runTurn(any())).thenReturn(new AgentTurnResult("{\"actionable\":false}", List.of()));
+        runner.tick(Instant.parse("2026-01-02T00:01:00Z"));
+        verify(repository, timeout(1000)).finishRun(eq(48L), eq("NONACTIONABLE"), eq(false), any(), any(), eq(false),
+                isNull());
+    }
+
+    @Test
+    void dormantBoundaryDoesNotStartEvaluation() {
+        runner.tick(Instant.parse("2026-01-04T00:00:00Z"));
+        verify(repository, never()).startRun(any(), anyLong(), any(), anyLong());
     }
 
     @Test

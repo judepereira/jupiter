@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.agent.harness;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Test;
@@ -214,6 +216,40 @@ public class CodingAgentHarnessFakeModelTest {
         assertEquals("write_file", res.getTraces().get(0).getToolName());
         // file created in workspace
         assertTrue(Files.exists(tmp.resolve("x.txt")));
+    }
+
+    @Test
+    public void watchAllowedToolsExposeOnlyReadOnlyToolsAndRejectExplicitUnknownTool(@TempDir Path tmp) {
+        List<List<ToolDefinition>> offered = new ArrayList<>();
+        SequenceModel model = new SequenceModel(List.of(
+                new ModelResponse(null, new ToolCall(null, "write_file", Map.of("path", "blocked", "content", "x")),
+                        ModelResponseMetadata.empty(), null),
+                new ModelResponse("done", null, ModelResponseMetadata.empty(), null))) {
+            @Override
+            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+                    Consumer<String> onDelta) {
+                offered.add(List.copyOf(tools));
+                return chat(conversation, tools);
+            }
+        };
+        AgentProperties props = new AgentProperties();
+        props.setMaxIterations(2);
+        props.setWorkspaceRoot(tmp.toString());
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), new ToolRegistry(), props, null, null,
+                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector());
+
+        var result = harness.runTurn(new AgentTurnRequest(null,
+                List.of(new Message(Message.Role.USER, "inspect", null, null, null)), tmp.toString(), null, null, null,
+                null, null, Set.of("list_files", "read_file", "search_code", "display_image")));
+
+        assertThat(offered).allSatisfy(tools -> assertThat(tools).extracting(ToolDefinition::getName)
+                .doesNotContain("write_file", "run_command"));
+        assertThat(result.getTraces()).singleElement().satisfies(trace -> {
+            assertThat(trace.getToolName()).isEqualTo("write_file");
+            assertThat(trace.isSuccess()).isFalse();
+        });
     }
 
     @Test

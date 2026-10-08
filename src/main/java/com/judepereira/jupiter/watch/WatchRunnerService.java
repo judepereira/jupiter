@@ -22,11 +22,13 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -137,7 +139,7 @@ public class WatchRunnerService {
                     jobs.remove(key, job);
                     return;
                 }
-                job.runId = run.get();
+                job.runId.set(run.get());
                 captured[0] = job;
             });
         } catch (RuntimeException e) {
@@ -150,13 +152,16 @@ public class WatchRunnerService {
             return;
         }
         try {
-            job.future = executor.submit(() -> {
-                job.thread = Thread.currentThread();
+            job.timeout.set(timeouts.schedule(() -> cancelJob(job), MAX_EVALUATION.toSeconds(), TimeUnit.SECONDS));
+            executor.submit(() -> {
+                job.thread.set(Thread.currentThread());
                 evaluate(key, job, definition, session);
             });
-            job.timeout = timeouts.schedule(() -> cancelJob(job), MAX_EVALUATION.toSeconds(), TimeUnit.SECONDS);
         } catch (RuntimeException e) {
-            repository.finishRun(job.runId, "FAILED", null, null, e.toString(), false, null);
+            ScheduledFuture<?> timeout = job.timeout.getAndSet(null);
+            if (timeout != null)
+                timeout.cancel(false);
+            repository.finishRun(job.runId.get(), "FAILED", null, null, e.toString(), false, null);
             jobs.remove(key, job);
             permits.release();
             throw e;
@@ -179,12 +184,12 @@ public class WatchRunnerService {
             job.token.throwIfCancelled();
             String output = result.getFinalText();
             if (!watches.parseActionable(output)) {
-                repository.finishRun(job.runId, "FAILED", null, output,
+                repository.finishRun(job.runId.get(), "FAILED", null, output,
                         "Evaluator did not return strict actionable JSON", false, null);
                 return;
             }
             if (!watches.actionableValue(output)) {
-                repository.finishRun(job.runId, "NONACTIONABLE", false, output, null, false, null);
+                repository.finishRun(job.runId.get(), "NONACTIONABLE", false, output, null, false, null);
                 return;
             }
             var current = repository.definitionFor(definition.id()).orElse(null);
@@ -196,23 +201,25 @@ public class WatchRunnerService {
                     ? actions.start(session, command, definition.actionAgentId(), job.activityVersion,
                             () -> isStillEligible(job, definition, session,
                                     repository.definitionFor(definition.id()).orElse(null)),
-                            job.runId)
+                            job.runId.get())
                     : Optional.<String>empty();
-            repository.finishRun(job.runId, chat.isPresent() ? "DISPATCHED" : "CANCELLED", true, output,
+            repository.finishRun(job.runId.get(), chat.isPresent() ? "DISPATCHED" : "CANCELLED", true, output,
                     chat.isEmpty() ? "Admission rejected" : null, chat.isPresent(), chat.orElse(null));
         } catch (StreamCancelledException e) {
-            repository.finishRun(job.runId, "CANCELLED", null, null, "Evaluator cancelled", false, null);
+            repository.finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
+        } catch (CancellationException e) {
+            repository.finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
         } catch (Exception e) {
-            if (e instanceof InterruptedException || e instanceof CancellationException || job.token.isCancelled()
-                    || Thread.currentThread().isInterrupted()) {
-                repository.finishRun(job.runId, "CANCELLED", null, null, "Evaluator cancelled", false, null);
+            if (job.token.isCancelled() || Thread.currentThread().isInterrupted()) {
+                repository.finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
                 return;
             }
-            log.error("Watch evaluator failed for run {}", job.runId, e);
-            repository.finishRun(job.runId, "FAILED", null, null, e.toString(), false, null);
+            log.error("Watch evaluator failed for run {}", job.runId.get(), e);
+            repository.finishRun(job.runId.get(), "FAILED", null, null, e.toString(), false, null);
         } finally {
-            if (job.timeout != null)
-                job.timeout.cancel(false);
+            ScheduledFuture<?> timeout = job.timeout.getAndSet(null);
+            if (timeout != null)
+                timeout.cancel(false);
             permits.release();
             jobs.remove(key, job);
         }
@@ -230,8 +237,9 @@ public class WatchRunnerService {
 
     private void cancelJob(Job job) {
         job.token.cancel();
-        if (job.thread != null)
-            job.thread.interrupt();
+        Thread thread = job.thread.get();
+        if (thread != null)
+            thread.interrupt();
     }
     private void cancelSession(long session) {
         jobs.forEach((key, job) -> {
@@ -255,10 +263,9 @@ public class WatchRunnerService {
         final long generation;
         final Instant activityTimestamp;
         final long activityVersion;
-        volatile long runId;
-        volatile Future<?> future;
-        volatile Future<?> timeout;
-        volatile Thread thread;
+        final AtomicLong runId = new AtomicLong();
+        final AtomicReference<ScheduledFuture<?>> timeout = new AtomicReference<>();
+        final AtomicReference<Thread> thread = new AtomicReference<>();
         Job(CancellationToken token, int configVersion, long generation, Instant activityTimestamp,
                 long activityVersion) {
             this.token = token;
