@@ -39,6 +39,7 @@ import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import com.judepereira.jupiter.watch.SessionActivityCoordinator;
 import com.judepereira.jupiter.watch.WatchService;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -149,6 +150,44 @@ public class UiControllerSettingsTests {
         Assertions.assertThatThrownBy(() -> context.controller().selectWatchSession(999, 1, 1, new ConcurrentModel()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid project");
         verify(context.watchService(), never()).listDefinitions(Mockito.anyLong());
+    }
+
+    @Test
+    public void selectingWatchWorkspaceAndSessionOnlyChangesSettingsSelection(@TempDir Path workspaceRoot)
+            throws Exception {
+        initGitRepo(workspaceRoot);
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        var before = context.appStateService().loadViewData();
+        var alternateWorkspace = context.appStateService().createWorkspace(before.activeProject().id(), "feature",
+                true);
+        long alternateSessionId = context.appStateService().listVisiblePrimarySessions(alternateWorkspace.id())
+                .getFirst().id();
+        context.appStateService().activateWorkspace(before.activeWorkspace().id());
+        when(context.watchService().listDefinitions(before.activeProject().id())).thenReturn(List.of());
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().selectWatchSession(before.activeProject().id(), alternateWorkspace.id(),
+                alternateSessionId, model)).isEqualTo("fragments/projects :: settingsWatches");
+
+        assertThat(model.getAttribute("watchWorkspaceId")).isEqualTo(alternateWorkspace.id());
+        assertThat(model.getAttribute("watchSessionId")).isEqualTo(alternateSessionId);
+        assertThat(context.appStateService().loadViewData().activeWorkspace().id())
+                .isEqualTo(before.activeWorkspace().id());
+        assertThat(context.appStateService().loadViewData().activeSession().id())
+                .isEqualTo(before.activeSession().id());
+    }
+
+    @Test
+    public void togglingMissingWatchEnablementEnablesWatch(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+        when(context.watchService().listEnablements(sessionId)).thenReturn(List.of());
+
+        assertThat(context.controller().toggleWatch(7, sessionId, new ConcurrentModel()))
+                .isEqualTo("fragments/projects :: settingsWatches");
+        verify(context.watchService()).enable(7, sessionId);
     }
 
     @Test
@@ -505,6 +544,19 @@ public class UiControllerSettingsTests {
         assertThat(context.controller().deleteCommand("to-delete", new ConcurrentModel()))
                 .isEqualTo("fragments/projects :: settingsCommands");
         assertThat(context.commandCatalogService().listCustom()).isEmpty();
+    }
+
+    private static void initGitRepo(Path root) throws Exception {
+        Process process = new ProcessBuilder("git", "init").directory(root.toFile()).start();
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        Files.writeString(root.resolve(".gitignore"), "");
+        process = new ProcessBuilder("git", "add", ".").directory(root.toFile()).start();
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        process = new ProcessBuilder("git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m",
+                "initial").directory(root.toFile()).start();
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
     }
 
     private static TestContext newContext(Path workspaceRoot) {
