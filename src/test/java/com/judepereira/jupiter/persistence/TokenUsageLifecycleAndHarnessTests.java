@@ -86,7 +86,7 @@ class TokenUsageLifecycleAndHarnessTests {
                 new ModelResponse("final response", null, metadata(15, 6, 21), null)));
         CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, properties,
                 new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
                 appStateService, tokenUsageService, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
@@ -94,7 +94,7 @@ class TokenUsageLifecycleAndHarnessTests {
 
         AgentTurnRequest request = new AgentTurnRequest("system",
                 List.of(new Message(Message.Role.USER, "user", null, null, null)), workspacePath.toString(), null,
-                "openai/gpt-5.6-sol", null, sessionId, null);
+                "openai/gpt-5.6-sol", null, sessionId, null, null);
         assertThat(harness.runTurn(request).getFinalText()).isEqualTo("final response");
 
         assertThat(tokenUsageService.findFacts(usageKey))

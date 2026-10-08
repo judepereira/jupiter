@@ -17,6 +17,7 @@ import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponseMetadata;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter.persistence.Persistence.AgentModelPreference;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileView;
@@ -51,6 +52,33 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 public class AppStateServicePersistenceTests {
+
+    @Test
+    public void agentModelPreferencesPersistAndReset() {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        var service = context.service();
+        service.upsertAgentModelPreference(new AgentModelPreference(" agent-a ", "model-x", "high"));
+
+        assertThat(service.findAgentModelPreference("agent-a"))
+                .contains(new AgentModelPreference("agent-a", "model-x", "HIGH"));
+        assertThat(service.listAgentModelPreferences())
+                .containsExactly(new AgentModelPreference("agent-a", "model-x", "HIGH"));
+
+        service.upsertAgentModelPreference(new AgentModelPreference("agent-a", null, null));
+        assertThat(service.listAgentModelPreferences()).isEmpty();
+        service.upsertAgentModelPreference(new AgentModelPreference("agent-a", "model-y", null));
+        service.resetAgentModelPreference("agent-a");
+        assertThat(service.findAgentModelPreference("agent-a")).isEmpty();
+    }
+
+    @Test
+    public void agentModelPreferencesRejectInvalidThinkingLevel() {
+        var service = TestAppStateSupport.appStateService();
+        assertThatThrownBy(
+                () -> service.upsertAgentModelPreference(new AgentModelPreference("agent-a", null, "extreme")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 
     @Test
     public void autoGitUpdateDefaultsOnAndCanBeUpdated() {

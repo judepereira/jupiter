@@ -11,7 +11,9 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceService;
 import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
+import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
@@ -74,7 +76,9 @@ class UiControllerSystemBalloonTests {
         ModelCatalogService modelCatalogService = ModelCatalogTestSupport.modelCatalogService();
         return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
                 new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                ModelCatalogTestSupport.resolutionService(modelCatalogService), null, null, null, balloonService,
+                ModelCatalogTestSupport.resolutionService(modelCatalogService),
+                ModelCatalogTestSupport.preferenceResolver(modelCatalogService), mock(AgentPreferenceService.class),
+                null, null, mock(ProviderAvailabilityService.class), balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(),

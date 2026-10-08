@@ -17,6 +17,7 @@ import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateRepository;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.Persistence.AgentModelPreference;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
@@ -31,8 +32,11 @@ import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -136,6 +140,43 @@ public class UiControllerSubagentChatTests {
     }
 
     @Test
+    public void validInvocationMetadataOverridesSavedAgentPreference(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        appStateService.upsertAgentModelPreference(new AgentModelPreference("engineer", "openai/gpt-5.6-terra", "LOW"));
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "task",
+                new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-5.6-sol", "HIGH", null));
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        controller.loadPrimaryChat(model);
+
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-sol");
+        assertThat(model.getAttribute("selectedThinking")).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(true);
+    }
+
+    @Test
+    public void invalidInvocationMetadataFallsBackToSavedAgentPreferenceFieldsIndependently(
+            @TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        appStateService.upsertAgentModelPreference(new AgentModelPreference("engineer", "openai/gpt-5.6-terra", "LOW"));
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "task",
+                new ChatMessageMetadata("engineer", "Engineer", "unknown/model", "not-a-level", null));
+
+        UiController controller = controller(appStateService, workspaceRoot);
+        Model model = new ConcurrentModel();
+        controller.loadPrimaryChat(model);
+
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-5.6-terra");
+        assertThat(model.getAttribute("selectedThinking")).isEqualTo(ThinkingLevel.LOW);
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(false);
+    }
+
+    @Test
     public void indexRestoresLatestInvocationConfiguration(@TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
@@ -216,7 +257,89 @@ public class UiControllerSubagentChatTests {
         assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(false);
     }
 
+    @Test
+    public void savedThinkingOverridesBundledThinkingForAgentDefaultsAndSelection(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        appStateService.upsertAgentModelPreference(new AgentModelPreference("engineer", null, "HIGH"));
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "task",
+                new ChatMessageMetadata("engineer", "Engineer", null, null, null));
+
+        Model model = new ConcurrentModel();
+        controller(appStateService, workspaceRoot).loadPrimaryChat(model);
+
+        assertThat(((Map<?, ?>) model.getAttribute("agentDefaultThinking")).get("engineer")).isEqualTo("HIGH");
+        assertThat(model.getAttribute("selectedThinking")).isEqualTo(ThinkingLevel.HIGH);
+    }
+
+    @Test
+    public void unavailableSavedDefaultRemainsSelectedAndRenderedOnce(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        appStateService.upsertAgentModelPreference(new AgentModelPreference("engineer", "openai/gpt-6.1-sol", "HIGH"));
+
+        Model model = new ConcurrentModel();
+        controller(appStateService, workspaceRoot, unavailableOpenAiProviders()).loadPrimaryChat(model);
+
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-6.1-sol");
+        assertThat((List<ModelDefinition>) model.getAttribute("models")).extracting(ModelDefinition::id)
+                .contains("openai/gpt-6.1-sol").doesNotHaveDuplicates();
+        assertThat(((Map<?, ?>) model.getAttribute("unavailableModels")).get("openai/gpt-6.1-sol")).isEqualTo(true);
+        assertThat((List<ModelDefinition>) model.getAttribute("models")).extracting(ModelDefinition::provider)
+                .contains("anthropic");
+    }
+
+    @Test
+    public void rememberedDisconnectedCatalogModelRemainsExplicitSelection(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "task",
+                new ChatMessageMetadata("engineer", "Engineer", "openai/gpt-6.1-sol", "HIGH", null));
+
+        Model model = new ConcurrentModel();
+        controller(appStateService, workspaceRoot, unavailableOpenAiProviders()).loadPrimaryChat(model);
+
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("openai/gpt-6.1-sol");
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(true);
+    }
+
+    @Test
+    public void rememberedAvailableSelectionOverridesUnavailableSavedDefault(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        appStateService.upsertAgentModelPreference(new AgentModelPreference("engineer", "openai/gpt-6.1-sol", "HIGH"));
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        appStateService.appendUserMessageAndPendingAssistant(sessionId, "user", "assistant", "task",
+                new ChatMessageMetadata("engineer", "Engineer", "anthropic/claude-opus-5", "LOW", null));
+
+        Model model = new ConcurrentModel();
+        controller(appStateService, workspaceRoot, unavailableOpenAiProviders()).loadPrimaryChat(model);
+
+        assertThat(((ModelDefinition) model.getAttribute("selectedModel")).id()).isEqualTo("anthropic/claude-opus-5");
+        assertThat(model.getAttribute("selectedModelExplicit")).isEqualTo(true);
+    }
+
+    private static ProviderAvailabilityService availableProviders() {
+        ProviderAvailabilityService availability = mock(ProviderAvailabilityService.class);
+        Mockito.when(availability.isAvailable(ArgumentMatchers.anyString())).thenReturn(true);
+        return availability;
+    }
+
+    private static ProviderAvailabilityService unavailableOpenAiProviders() {
+        ProviderAvailabilityService availability = mock(ProviderAvailabilityService.class);
+        Mockito.when(availability.isAvailable("openai")).thenReturn(false);
+        Mockito.when(availability.isAvailable("anthropic")).thenReturn(true);
+        return availability;
+    }
+
     private static UiController controller(AppStateService appStateService, Path workspaceRoot) {
+        return controller(appStateService, workspaceRoot, availableProviders());
+    }
+
+    private static UiController controller(AppStateService appStateService, Path workspaceRoot,
+            ProviderAvailabilityService availabilityForController) {
         AgentProperties props = new AgentProperties();
         props.setWorkspaceRoot(workspaceRoot.toString());
         TerminalManager terminalManager = mock(TerminalManager.class);
@@ -231,8 +354,16 @@ public class UiControllerSubagentChatTests {
         var contextCompactionService = TestAppStateSupport.contextCompactionService(appStateService);
         var openAiOAuthService = new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(),
                 HttpClient.newHttpClient(), mock(AppStateRepository.class), null);
+        var availability = availabilityForController;
+        var modelPicker = new ModelPickerService(
+                new ModelPreferencesService(mock(AppStateRepository.class), modelCatalog), availability,
+                agentDefinitionService, modelCatalog);
         return new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog), null, null, null, balloonService,
+                new AgentModelResolutionService(modelCatalog, availability),
+                new AgentPreferenceResolver(appStateService, modelCatalog, availability,
+                        new AgentModelResolutionService(modelCatalog, availability)),
+                null, modelPicker, new ModelPreferencesService(mock(AppStateRepository.class), modelCatalog),
+                availability, balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,

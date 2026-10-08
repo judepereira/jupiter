@@ -38,3 +38,4 @@ encryption key:
 docker pull judepereira/jupiter:2026.10.02.1
 ```
 
+See [Advanced Configuration](Advanced-Configuration) for more ways to configure Jupiter.
