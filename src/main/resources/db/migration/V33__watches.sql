@@ -29,9 +29,12 @@ CREATE TABLE watch_enablements (
 );
 CREATE INDEX idx_watch_enablements_session ON watch_enablements(session_id);
 
+ALTER TABLE sessions ADD COLUMN watch_panel_open INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sessions ADD COLUMN watch_panel_height INTEGER NOT NULL DEFAULT 320;
+
 CREATE TABLE watch_runs (
     id INTEGER PRIMARY KEY,
-    watch_id INTEGER NOT NULL,
+    watch_id INTEGER NULL,
     session_id INTEGER NOT NULL,
     started_at TIMESTAMP NOT NULL,
     finished_at TIMESTAMP NULL,
@@ -45,7 +48,10 @@ CREATE TABLE watch_runs (
     action_command_id TEXT NOT NULL,
     output TEXT NULL,
     error TEXT NULL,
-    FOREIGN KEY (watch_id) REFERENCES watch_definitions(id) ON DELETE CASCADE,
+    watch_name TEXT NOT NULL DEFAULT 'Deleted watch',
+    chat_id TEXT NULL,
+    FOREIGN KEY (watch_id) REFERENCES watch_definitions(id) ON DELETE SET NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_watch_runs_session_started ON watch_runs(session_id, started_at DESC);
+CREATE INDEX idx_watch_enablements_enabled ON watch_enablements(enabled);

@@ -18,25 +18,27 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 class WatchRepositoryIntegrationTest {
     @Test
-    void v37PreservesEncryptedRunSnapshotColumnsWhenMigratingFromV36() throws Exception {
+    void v33CreatesFinalWatchSchemaFromV32AndPreservesExistingData() throws Exception {
         DataSource dataSource = SQLiteTestSupport
-                .fileBackedDataSource(Files.createTempDirectory("watch-v36-").resolve("state.db"));
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("36").load().migrate();
+                .fileBackedDataSource(Files.createTempDirectory("watch-v32-").resolve("state.db"));
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("32").load().migrate();
         var jdbc = new JdbcTemplate(dataSource);
         jdbc.update(
                 "INSERT INTO projects(id,name,normalized_path,display_order,created_at) VALUES(1,'p','/p',1,CURRENT_TIMESTAMP)");
         jdbc.update("INSERT INTO workspaces(id,project_id,name,normalized_path,position) VALUES(1,1,'w','/w',1)");
         jdbc.update("INSERT INTO sessions(id,workspace_id,name,position) VALUES(1,1,'s',1)");
+
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+
+        assertThat(jdbc.queryForObject("SELECT watch_panel_open FROM sessions WHERE id=1", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT watch_panel_height FROM sessions WHERE id=1", Integer.class))
+                .isEqualTo(320);
         jdbc.update(
                 "INSERT INTO watch_definitions(id,project_id,name,prompt,interval_seconds,evaluator_agent_id,action_agent_id,action_command_id,created_at,updated_at) VALUES(999,1,'w','p',60,'e','a','c',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
-        jdbc.execute("PRAGMA foreign_keys = OFF");
         jdbc.update("INSERT INTO watch_runs(id,watch_id,session_id,started_at,status,config_version,prompt,"
                 + "evaluator_agent_id,action_agent_id,action_command_id,output,error,watch_name,chat_id) "
                 + "VALUES(77,999,1,'2026-01-01T00:00:00Z','FAILED',4,'cipher-p','cipher-e','cipher-a',"
                 + "'cipher-c','cipher-o','cipher-x','Legacy watch','chat-77')");
-        jdbc.execute("PRAGMA foreign_keys = ON");
-
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
 
         var row = jdbc.queryForMap("SELECT watch_id,config_version,prompt,output,error,watch_name,chat_id "
                 + "FROM watch_runs WHERE id=77");
@@ -44,6 +46,10 @@ class WatchRepositoryIntegrationTest {
                 .containsEntry("prompt", "cipher-p").containsEntry("output", "cipher-o")
                 .containsEntry("error", "cipher-x").containsEntry("watch_name", "Legacy watch")
                 .containsEntry("chat_id", "chat-77");
+
+        jdbc.update("DELETE FROM watch_definitions WHERE id=999");
+        assertThat(jdbc.queryForObject("SELECT watch_id FROM watch_runs WHERE id=77", Integer.class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM watch_runs WHERE id=77", Integer.class)).isEqualTo(1);
     }
 
     @Test
