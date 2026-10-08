@@ -9,13 +9,22 @@ import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
-import java.awt.image.ConvolveOp;
-import java.awt.image.Kernel;
+import java.awt.image.DataBufferInt;
+import nu.pattern.OpenCV;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
 
 /**
  * Composes a browser-style frame around a captured viewport for documentation.
  */
 public final class BrowserScreenshot {
+
+    static {
+        OpenCV.loadLocally();
+    }
 
     static final double FRAME_SCALE = 3.0;
     static final int CHROME_HEIGHT = scale(70);
@@ -98,7 +107,7 @@ public final class BrowserScreenshot {
         } finally {
             graphics.dispose();
         }
-        BufferedImage blurred = blur(shadow, sigma);
+        BufferedImage blurred = blurShadowAlpha(shadow, sigma);
         Graphics2D destination = result.createGraphics();
         try {
             destination.drawImage(blurred, 0, 0, null);
@@ -107,44 +116,36 @@ public final class BrowserScreenshot {
         }
     }
 
-    private static BufferedImage blur(BufferedImage image, double sigma) {
-        int radius = (int) Math.ceil(3 * sigma);
-        int size = radius * 2 + 1;
-        float[] values = new float[size];
-        float total = 0;
-        for (int i = 0; i < size; i++) {
-            int distance = i - radius;
-            values[i] = (float) Math.exp(-(distance * distance) / (2.0 * sigma * sigma));
-            total += values[i];
-        }
-        for (int i = 0; i < size; i++) {
-            values[i] /= total;
+    /** Blurs only the alpha channel; RGB must remain transparent black. */
+    private static BufferedImage blurShadowAlpha(BufferedImage image, double sigma) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        float[] alpha = new float[width * height];
+        int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+        for (int i = 0; i < pixels.length; i++) {
+            alpha[i] = pixels[i] >>> 24;
         }
 
-        // ConvolveOp zero-fills the destination edge, so guard the source with a full
-        // kernel radius.
-        BufferedImage padded = new BufferedImage(image.getWidth() + radius * 2, image.getHeight() + radius * 2,
-                BufferedImage.TYPE_INT_ARGB);
-        Graphics2D paddingGraphics = padded.createGraphics();
+        Mat source = new Mat(height, width, CvType.CV_32FC1);
+        Mat blurred = new Mat();
         try {
-            paddingGraphics.drawImage(image, radius, radius, null);
+            source.put(0, 0, alpha);
+            int radius = (int) Math.ceil(3 * sigma);
+            Imgproc.GaussianBlur(source, blurred, new Size(radius * 2 + 1, radius * 2 + 1), sigma, sigma,
+                    Core.BORDER_CONSTANT);
+            blurred.get(0, 0, alpha);
         } finally {
-            paddingGraphics.dispose();
+            source.release();
+            blurred.release();
         }
-        BufferedImage horizontal = new BufferedImage(padded.getWidth(), padded.getHeight(),
-                BufferedImage.TYPE_INT_ARGB);
-        new ConvolveOp(new Kernel(size, 1, values), ConvolveOp.EDGE_ZERO_FILL, null).filter(padded, horizontal);
-        BufferedImage vertical = new BufferedImage(padded.getWidth(), padded.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        new ConvolveOp(new Kernel(1, size, values), ConvolveOp.EDGE_ZERO_FILL, null).filter(horizontal, vertical);
 
-        BufferedImage cropped = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        Graphics2D cropGraphics = cropped.createGraphics();
-        try {
-            cropGraphics.drawImage(vertical, -radius, -radius, null);
-        } finally {
-            cropGraphics.dispose();
+        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        int[] resultPixels = ((DataBufferInt) result.getRaster().getDataBuffer()).getData();
+        for (int i = 0; i < resultPixels.length; i++) {
+            int value = Math.clamp(Math.round(alpha[i]), 0, 255);
+            resultPixels[i] = value << 24;
         }
-        return cropped;
+        return result;
     }
 
     private static int scale(double value) {
