@@ -89,8 +89,6 @@ function syncChatDefaults(form) {
     const resolvedModel = agentOption.dataset.defaultModel;
     if (resolvedModel && Array.from(modelSelect.options).some((option) => option.value === resolvedModel)) {
         modelSelect.value = resolvedModel;
-    } else {
-        modelSelect.selectedIndex = -1;
     }
     thinkingSelect.value = agentOption.dataset.defaultThinking;
     form.dataset.modelExplicit = "0";

@@ -129,6 +129,9 @@ public final class Persistence {
             String subagentCompletedScript, int timeoutSeconds) {
     }
 
+    public record AgentModelPreference(String agentId, String modelId, String thinkingLevel) {
+    }
+
     public record LifecycleHookContext(long sessionId, String projectName, String workspaceName, String sessionName,
             Map<String, String> projectEnvironmentVariables) {
     }

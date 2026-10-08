@@ -9,6 +9,9 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceResolver;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceService;
+import com.judepereira.jupiter.agent.catalog.ModelCatalogService;
 import com.judepereira.jupiter.agent.catalog.ModelPickerService;
 import com.judepereira.jupiter.agent.catalog.ModelPreferencesService;
 import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
@@ -587,12 +590,18 @@ public class UiControllerSettingsTests {
         ModelPreferencesService modelPreferencesService = Mockito.mock(ModelPreferencesService.class);
         ProviderAvailabilityService providerAvailabilityService = Mockito.mock(ProviderAvailabilityService.class);
         WatchService watchService = Mockito.mock(WatchService.class);
+        ModelCatalogService modelCatalogService = ModelCatalogTestSupport.modelCatalogService();
+        AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper());
+        AgentPreferenceResolver preferenceResolver = new AgentPreferenceResolver(appStateService, modelCatalogService,
+                providerAvailabilityService, ModelCatalogTestSupport.resolutionService(modelCatalogService));
+        AgentPreferenceService agentPreferenceService = Mockito.mock(AgentPreferenceService.class);
+
         return new TestContext(appStateService, tokenUsageService, openAiOAuthService, mcpRuntimeManager,
                 gitAutoUpdateService, executor, modelPreferencesService, providerAvailabilityService,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService,
-                        new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
-                        ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
-                        Mockito.mock(ModelPickerService.class), modelPreferencesService, providerAvailabilityService,
+                new UiController(mock(CodingAgentHarness.class), properties, appStateService, agentDefinitionService,
+                        modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService),
+                        preferenceResolver, agentPreferenceService, Mockito.mock(ModelPickerService.class),
+                        modelPreferencesService, providerAvailabilityService,
                         new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                         new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                                 (emitter, eventName, data) -> emitter

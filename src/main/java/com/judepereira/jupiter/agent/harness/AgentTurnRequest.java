@@ -1,5 +1,6 @@
 package com.judepereira.jupiter.agent.harness;
 
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceResolver;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import java.util.List;
@@ -17,17 +18,33 @@ public class AgentTurnRequest {
     private final Long sessionId;
     private final CancellationToken cancellationToken;
     private final Set<String> allowedTools;
+    private final AgentPreferenceResolver.Resolution preferenceSnapshot;
 
     public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
             String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,
             CancellationToken cancellationToken) {
         this(systemPrompt, conversationHistory, workspaceRoot, agentId, modelId, thinkingLevel, sessionId,
-                cancellationToken, null);
+                cancellationToken, null, null);
     }
 
     public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
             String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,
             CancellationToken cancellationToken, Set<String> allowedTools) {
+        this(systemPrompt, conversationHistory, workspaceRoot, agentId, modelId, thinkingLevel, sessionId,
+                cancellationToken, allowedTools, null);
+    }
+
+    public static AgentTurnRequest withPreferenceSnapshot(String systemPrompt, List<Message> conversationHistory,
+            String workspaceRoot, String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,
+            CancellationToken cancellationToken, AgentPreferenceResolver.Resolution preferenceSnapshot) {
+        return new AgentTurnRequest(systemPrompt, conversationHistory, workspaceRoot, agentId, modelId, thinkingLevel,
+                sessionId, cancellationToken, null, preferenceSnapshot);
+    }
+
+    public AgentTurnRequest(String systemPrompt, List<Message> conversationHistory, String workspaceRoot,
+            String agentId, String modelId, ThinkingLevel thinkingLevel, Long sessionId,
+            CancellationToken cancellationToken, Set<String> allowedTools,
+            AgentPreferenceResolver.Resolution preferenceSnapshot) {
         this.systemPrompt = systemPrompt;
         this.conversationHistory = List.copyOf(conversationHistory);
         this.workspaceRoot = workspaceRoot;
@@ -37,5 +54,6 @@ public class AgentTurnRequest {
         this.sessionId = sessionId;
         this.cancellationToken = cancellationToken;
         this.allowedTools = allowedTools == null ? null : Set.copyOf(allowedTools);
+        this.preferenceSnapshot = preferenceSnapshot;
     }
 }

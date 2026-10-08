@@ -89,6 +89,8 @@ public class UiController {
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
     private final AgentModelResolutionService agentModelResolutionService;
+    private final AgentPreferenceResolver agentPreferenceResolver;
+    private final AgentPreferenceService agentPreferenceService;
     private final ModelPickerService modelPickerService;
     private final ModelPreferencesService modelPreferencesService;
     private final ProviderAvailabilityService providerAvailabilityService;
@@ -123,7 +125,8 @@ public class UiController {
     @Autowired
     public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
             AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-            AgentModelResolutionService agentModelResolutionService, ModelPickerService modelPickerService,
+            AgentModelResolutionService agentModelResolutionService, AgentPreferenceResolver agentPreferenceResolver,
+            AgentPreferenceService agentPreferenceService, ModelPickerService modelPickerService,
             ModelPreferencesService modelPreferencesService, ProviderAvailabilityService providerAvailabilityService,
             SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
             ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
@@ -142,6 +145,8 @@ public class UiController {
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
         this.agentModelResolutionService = agentModelResolutionService;
+        this.agentPreferenceResolver = agentPreferenceResolver;
+        this.agentPreferenceService = agentPreferenceService;
         this.modelPickerService = modelPickerService;
         this.modelPreferencesService = modelPreferencesService;
         this.providerAvailabilityService = providerAvailabilityService;
@@ -195,9 +200,12 @@ public class UiController {
 
         if (message != null && !message.isBlank()) {
             boolean implicitModel = modelId == null || modelId.isBlank();
-            AgentModelResolutionService.ModelResolution modelResolution = implicitModel
-                    ? agentModelResolutionService.resolve(selected.selectedAgent())
-                    : new AgentModelResolutionService.ModelResolution(null, selected.selectedModel());
+            AgentPreferenceResolver.Resolution preferenceSnapshot = agentPreferenceResolver.resolve(
+                    selected.selectedAgent(), implicitModel ? null : modelId,
+                    thinkingLevel == null || thinkingLevel.isBlank() ? null : ThinkingLevel.fromValue(thinkingLevel),
+                    !implicitModel);
+            AgentModelResolutionService.ModelResolution modelResolution = new AgentModelResolutionService.ModelResolution(
+                    preferenceSnapshot.preferredModelId(), preferenceSnapshot.model());
             // Use the queue-time executable model for validation and compaction, but keep
             // the
             // request implicit so the harness resolves availability again at execution
@@ -247,13 +255,14 @@ public class UiController {
                 List<Message> conversationHistory = new ArrayList<>(
                         appStateService.buildConversationHistory(admittedSession.id()));
                 CancellationToken cancellationToken = new CancellationToken();
-                ActiveStream activeStream = ActiveStream.create(
-                        new PendingStream(admittedSession.id(), admittedWorkspaceRoot,
-                                new AgentTurnRequest(null, conversationHistory, admittedWorkspaceRoot,
-                                        admittedSelection.selectedAgent().id(),
+                ActiveStream activeStream = ActiveStream
+                        .create(new PendingStream(admittedSession.id(), admittedWorkspaceRoot,
+                                AgentTurnRequest.withPreferenceSnapshot(null, conversationHistory,
+                                        admittedWorkspaceRoot, admittedSelection.selectedAgent().id(),
                                         implicitModel ? null : admittedSelection.selectedModel().id(),
-                                        admittedSelection.selectedThinking(), admittedSession.id(), cancellationToken)),
-                        cancellationToken);
+                                        admittedSelection.selectedThinking(), admittedSession.id(), cancellationToken,
+                                        preferenceSnapshot)),
+                                cancellationToken);
                 activeStreams.put(assistantId, activeStream);
                 try {
                     activeStreamRegistryService.register(assistantId, admittedSession.id(), admittedWorkspaceRoot);
@@ -262,8 +271,13 @@ public class UiController {
                     activeStreams.remove(assistantId, activeStream);
                     activeStreamRegistryService.unregister(assistantId);
                     throw e;
+                } catch (Exception e) {
+                    activeStreams.remove(assistantId, activeStream);
+                    activeStreamRegistryService.unregister(assistantId);
+                    throw new IllegalStateException("Failed to queue active stream", e);
                 }
             });
+
             view = appStateService.loadViewData();
         }
 
@@ -514,9 +528,11 @@ public class UiController {
 
                 AgentDefinition requestAgent = resolveRequestAgent(currentRequest);
                 ModelDefinition requestModel = resolveRequestModel(currentRequest, requestAgent);
-                ThinkingLevel requestThinking = currentRequest.getThinkingLevel() != null
-                        ? currentRequest.getThinkingLevel()
-                        : (requestAgent == null ? null : requestAgent.defaultThinkingLevel());
+                ThinkingLevel requestThinking = currentRequest.getPreferenceSnapshot() != null
+                        ? currentRequest.getPreferenceSnapshot().thinkingLevel()
+                        : (currentRequest.getThinkingLevel() != null
+                                ? currentRequest.getThinkingLevel()
+                                : (requestAgent == null ? null : requestAgent.defaultThinkingLevel()));
 
                 Optional<ChatMessageView> summary = contextCompactionService.compactIfNeeded(
                         currentRequest.getSessionId(), requestAgent, requestModel, requestThinking,
@@ -1227,6 +1243,36 @@ public class UiController {
         model.addAttribute("externalCommands",
                 commandCatalogService.list(workspace).stream().filter(command -> !command.editable()).toList());
         populateSettingsModels(model);
+        model.addAttribute("agentPreferences", agentPreferenceService.list());
+    }
+
+    @PostMapping("/ui/settings/agents/save")
+    public String saveAgentPreference(@RequestParam String agentId,
+            @RequestParam(value = "modelId", required = false) String modelId,
+            @RequestParam(value = "thinkingLevel", required = false) String thinkingLevel, Model model) {
+        try {
+            agentPreferenceService.save(agentId, modelId, thinkingLevel);
+        } catch (IllegalArgumentException e) {
+            populateSettingsModel(model);
+            model.addAttribute("agentPreferenceError", e.getMessage());
+            model.addAttribute("agentPreferenceSubmittedAgentId", agentId);
+            model.addAttribute("agentPreferenceSubmittedModelId", modelId == null ? "" : modelId);
+            model.addAttribute("agentPreferenceSubmittedThinkingLevel", thinkingLevel == null ? "" : thinkingLevel);
+            return "fragments/projects :: settingsAgents";
+        }
+        populateSettingsModel(model);
+        model.addAttribute("agentPreferenceSuccess", "Agent defaults saved.");
+        populateChatControlsOob(model);
+        return "fragments/projects :: settingsAgentsOobResponse";
+    }
+
+    @PostMapping("/ui/settings/agents/reset")
+    public String resetAgentPreference(@RequestParam String agentId, Model model) {
+        agentPreferenceService.reset(agentId);
+        populateSettingsModel(model);
+        model.addAttribute("agentPreferenceSuccess", "Agent defaults reset to built-in values.");
+        populateChatControlsOob(model);
+        return "fragments/projects :: settingsAgentsOobResponse";
     }
 
     private void populateChatControlsOob(Model model) {
@@ -1935,8 +1981,6 @@ public class UiController {
         if (detail == null) {
             return null;
         }
-        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-        ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
         ChatMessageView newestAssistant = detail.chatMessages().stream()
                 .filter(message -> "assistant".equals(message.role())).reduce((first, second) -> second).orElse(null);
         if (newestAssistant == null || newestAssistant.metadata() == null) {
@@ -1944,7 +1988,8 @@ public class UiController {
         }
         ChatMessageMetadata metadata = newestAssistant.metadata();
         AgentDefinition selectedAgent = agentDefinitionService.resolveOrDefault(metadata.agentId());
-        ModelDefinition selectedModel = resolveAgentModel(selectedAgent);
+        AgentPreferenceResolver.Resolution selectedDefaults = resolveAgentPreferenceForDisplay(selectedAgent);
+        ModelDefinition selectedModel = selectedDefaults.model();
         boolean explicitModel = false;
         if (metadata.modelId() != null && !metadata.modelId().isBlank()) {
             try {
@@ -1954,7 +1999,7 @@ public class UiController {
                 log.warn("Ignoring unknown persisted model '{}' while restoring session", metadata.modelId());
             }
         }
-        ThinkingLevel selectedThinking = selectedAgent.defaultThinkingLevel();
+        ThinkingLevel selectedThinking = selectedDefaults.thinkingLevel();
         if (metadata.thinkingLevel() != null && !metadata.thinkingLevel().isBlank()) {
             try {
                 selectedThinking = ThinkingLevel.fromValue(metadata.thinkingLevel());
@@ -1963,8 +2008,10 @@ public class UiController {
                         metadata.thinkingLevel());
             }
         }
+        AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
+        AgentPreferenceResolver.Resolution defaultResolved = resolveAgentPreferenceForDisplay(defaultAgent);
         return new ChatSelection(selectedAgent, selectedModel, selectedThinking, explicitModel, defaultAgent,
-                defaultModel, defaultAgent.defaultThinkingLevel());
+                defaultResolved.model(), defaultResolved.thinkingLevel());
     }
 
     private void populateChatControlsModel(Model model, ChatSelection selection) {
@@ -1974,28 +2021,39 @@ public class UiController {
                 ? modelCatalogService.list()
                 : modelPickerService.listPickerModels();
         Map<String, String> agentDefaultModels = new LinkedHashMap<>();
+        Map<String, String> agentDefaultThinking = new LinkedHashMap<>();
+        Map<String, Boolean> unavailableModels = new LinkedHashMap<>();
+        Map<String, ModelDefinition> renderedModels = new LinkedHashMap<>();
         agents.forEach(agent -> {
-            try {
-                ModelDefinition defaultModel = resolveAgentModel(agent);
-                if (defaultModel != null) {
-                    agentDefaultModels.put(agent.id(), defaultModel.id());
-                }
-            } catch (IllegalStateException ignored) {
-                // Keep an unavailable agent visibly unselected rather than choosing a
-                // selected model.
+            AgentPreferenceResolver.Resolution resolved = resolveAgentPreferenceForDisplay(agent);
+            if (resolved.model() != null) {
+                agentDefaultModels.put(agent.id(), resolved.model().id());
+                renderedModels.put(resolved.model().id(), resolved.model());
+                unavailableModels.put(resolved.model().id(),
+                        !providerAvailabilityService.isAvailable(resolved.model().provider()));
+            }
+            if (resolved.thinkingLevel() != null) {
+                agentDefaultThinking.put(agent.id(), resolved.thinkingLevel().name());
             }
         });
-        model.addAttribute("agentDefaultModels", agentDefaultModels);
-        model.addAttribute("models", pickerModels);
-        model.addAttribute("pickerEmpty", pickerModels.isEmpty());
+        Map<String, ModelDefinition> uniqueRenderedModels = new LinkedHashMap<>();
+        pickerModels.forEach(modelDef -> uniqueRenderedModels.put(modelDef.id(), modelDef));
+        renderedModels.forEach(uniqueRenderedModels::putIfAbsent);
         ModelDefinition renderedModel = selection.selectedModel();
         boolean explicitModel = selection.explicitModel();
-        String renderedModelId = renderedModel == null ? null : renderedModel.id();
-        if (renderedModelId != null
-                && pickerModels.stream().noneMatch(candidate -> candidate.id().equals(renderedModelId))) {
-            renderedModel = resolveAgentModel(selection.selectedAgent());
-            explicitModel = false;
+        if (renderedModel != null) {
+            // A catalog-known session model may be disconnected or no longer configured in
+            // the picker, but it is still the user's remembered selection.
+            uniqueRenderedModels.putIfAbsent(renderedModel.id(), renderedModel);
+            unavailableModels.putIfAbsent(renderedModel.id(),
+                    !providerAvailabilityService.isAvailable(renderedModel.provider()));
         }
+        List<ModelDefinition> renderedPickerModels = new ArrayList<>(uniqueRenderedModels.values());
+        model.addAttribute("agentDefaultModels", agentDefaultModels);
+        model.addAttribute("agentDefaultThinking", agentDefaultThinking);
+        model.addAttribute("models", renderedPickerModels);
+        model.addAttribute("unavailableModels", unavailableModels);
+        model.addAttribute("pickerEmpty", renderedPickerModels.isEmpty());
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
         model.addAttribute("defaultModel", selection.defaultModel());
@@ -2008,17 +2066,17 @@ public class UiController {
 
     private ChatSelection defaultChatSelection() {
         AgentDefinition defaultAgent = agentDefinitionService.defaultAgent();
-        ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
-        return new ChatSelection(defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel(), false, defaultAgent,
-                defaultModel, defaultAgent.defaultThinkingLevel());
+        AgentPreferenceResolver.Resolution resolved = resolveAgentPreferenceForDisplay(defaultAgent);
+        return new ChatSelection(defaultAgent, resolved.model(), resolved.thinkingLevel(), false, defaultAgent,
+                resolved.model(), resolved.thinkingLevel());
     }
 
-    private ModelDefinition resolveAgentModel(AgentDefinition agent) {
-        try {
-            return agentModelResolutionService.resolve(agent).model();
-        } catch (IllegalStateException e) {
-            return null;
-        }
+    private AgentPreferenceResolver.Resolution resolveAgentPreference(AgentDefinition agent) {
+        return agentPreferenceResolver.resolve(agent, null, null, false);
+    }
+
+    private AgentPreferenceResolver.Resolution resolveAgentPreferenceForDisplay(AgentDefinition agent) {
+        return agentPreferenceResolver.resolveForDisplay(agent);
     }
 
     private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {
@@ -2026,15 +2084,16 @@ public class UiController {
         AgentDefinition selectedAgent = agentId == null || agentId.isBlank()
                 ? defaultAgent
                 : agentDefinitionService.getRequired(agentId);
+        AgentPreferenceResolver.Resolution resolved = resolveAgentPreferenceForDisplay(selectedAgent);
         ModelDefinition selectedModel = modelId == null || modelId.isBlank()
-                ? resolveAgentModel(selectedAgent)
+                ? resolved.model()
                 : modelCatalogService.getRequired(modelId);
         ThinkingLevel selectedThinking = thinkingLevel == null || thinkingLevel.isBlank()
-                ? selectedAgent.defaultThinkingLevel()
+                ? resolved.thinkingLevel()
                 : ThinkingLevel.fromValue(thinkingLevel);
-        ModelDefinition defaultModel = resolveAgentModel(defaultAgent);
+        ModelDefinition defaultModel = resolveAgentPreferenceForDisplay(defaultAgent).model();
         return new ChatSelection(selectedAgent, selectedModel, selectedThinking, modelId != null && !modelId.isBlank(),
-                defaultAgent, defaultModel, defaultAgent.defaultThinkingLevel());
+                defaultAgent, defaultModel, resolveAgentPreferenceForDisplay(defaultAgent).thinkingLevel());
     }
 
     private void populateWorkspaceCloseModel(Model model, AppStateService.WorkspaceCloseInspection inspection) {
@@ -2162,6 +2221,9 @@ public class UiController {
     }
 
     private ModelDefinition resolveRequestModel(AgentTurnRequest request, AgentDefinition agent) {
+        if (request.getPreferenceSnapshot() != null) {
+            return request.getPreferenceSnapshot().model();
+        }
         String requestedModelId = request.getModelId();
         if (requestedModelId == null || requestedModelId.isBlank()) {
             return agent == null

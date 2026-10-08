@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceService;
+import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
@@ -131,8 +133,9 @@ class UiControllerInvalidCheckoutBranchTests {
             SystemBalloonService balloonService) {
         return new UiController(mock(CodingAgentHarness.class), agentProperties(projectRoot), appStateService,
                 new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
-                null, balloonService,
+                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
+                mock(AgentPreferenceService.class), null, null, mock(ProviderAvailabilityService.class), balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),

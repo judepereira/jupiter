@@ -15,12 +15,32 @@ class AppStateSchemaMigrationTests {
     void v31RemovesAnthropicOAuthColumnsButKeepsOpenAiOAuthColumns() throws Exception {
         var dataSource = SQLiteTestSupport
                 .fileBackedDataSource(Files.createTempDirectory("jupiter-schema-").resolve("app-state.db"));
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+        Flyway flyway = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load();
+        flyway.migrate();
 
         Set<String> columns = new HashSet<>(new JdbcTemplate(dataSource).query("PRAGMA table_info(app_state)",
                 (rs, rowNum) -> rs.getString("name")));
         assertThat(columns).doesNotContain("anthropic_access_token", "anthropic_refresh_token", "anthropic_expires_at",
                 "anthropic_scopes", "anthropic_account_json").contains("openai_access_token", "openai_refresh_token",
                         "openai_expires_at", "openai_id_token", "openai_account_id");
+    }
+
+    @Test
+    void upgradeFromMainV31HistoryCreatesAgentPreferencesAtV32() throws Exception {
+        var dataSource = SQLiteTestSupport
+                .fileBackedDataSource(Files.createTempDirectory("jupiter-schema-").resolve("app-state.db"));
+        Flyway flyway = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("31")
+                .load();
+        flyway.migrate();
+        assertThat(new JdbcTemplate(dataSource)
+                .queryForObject("SELECT version FROM flyway_schema_history WHERE version = '31'", String.class))
+                .isEqualTo("31");
+
+        flyway = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load();
+        flyway.migrate();
+
+        assertThat(new JdbcTemplate(dataSource).queryForObject(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_model_preferences'",
+                String.class)).isEqualTo("agent_model_preferences");
     }
 }

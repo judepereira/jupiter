@@ -59,14 +59,12 @@ class UiControllerDisplayImageTests {
         var skillComponents = SkillTestSupport.defaultComponents();
         var promptComposer = new SystemPromptComposer(skillComponents.renderer());
         UiController controller = new UiController(
-                new CodingAgentHarness(null, null, new AgentProperties(), null, null,
-                        ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null,
-                        null, null, promptComposer, skillComponents.discovery(), skillComponents.resolver(),
+                new CodingAgentHarness(null, null, new AgentProperties(), null, null, null, null, null, null,
+                        promptComposer, skillComponents.discovery(), skillComponents.resolver(),
                         skillComponents.injector()),
                 new AgentProperties(), appStateService, new AgentDefinitionService(new ObjectMapper()),
-                ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()), null, null,
-                null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                ModelCatalogTestSupport.modelCatalogService(), null, null, null, null, null, null,
+                new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),

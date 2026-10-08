@@ -38,12 +38,19 @@ model request fails, Jupiter will retry the turn with the next preference. This 
 outages.
 
 An explicit model selection is strict: if that provider or model is unavailable, the turn fails instead of silently
-switching models.
+switching models. A saved agent override is also strict and is never silently replaced by a bundled model. If its model
+is stale or unavailable, Settings identifies the problem so it can be corrected or reset. The Agents settings form
+accepts any eligible configured text-and-tools model, not only bundled model IDs. Agent-default turns may use the next
+bundled preference when a provider is unavailable, including when it disconnects after the turn is queued; strict saved
+or explicit selections still fail. Queued preferences and the thinking level are frozen, while bundled provider fallback
+still applies; changing saved preferences does not rewrite an in-flight turn.
 
 ## Thinking Level
 
 The composer lets you choose a thinking level for a primary turn. Supported models receive that level when the request
-is sent. Without an explicit override, the selected agent's configured defaults apply.
+is sent. A remembered session selection is restored when its saved metadata is valid; otherwise, new sessions and
+missing or invalid metadata use the saved agent defaults. The controls remain safe to render when a provider is
+disconnected.
 
 ## Treat Provider Credentials as Secrets
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
+import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.persistence.Persistence.*;
@@ -392,6 +393,84 @@ public class AppStateService {
         repository.updateAppState(workspace.projectId(), workspace.id(), forkedSessionId);
         applicationEventPublisher.publishEvent(new WorkspaceRailRefreshEvent());
         return forkedSessionId;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Persistence.AgentModelPreference> listAgentModelPreferences() {
+        return repository.listAgentModelPreferences();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Persistence.AgentModelPreference> findAgentModelPreference(String agentId) {
+        return repository.findAgentModelPreference(normalizeRequired(agentId, "agentId"));
+    }
+
+    @Transactional
+    public void upsertAgentModelPreference(Persistence.AgentModelPreference preference) {
+        var normalized = normalizePreference(preference);
+        if (normalized.modelId() == null && normalized.thinkingLevel() == null) {
+            repository.deleteAgentModelPreference(normalized.agentId());
+        } else {
+            repository.upsertAgentModelPreference(normalized);
+        }
+    }
+
+    @Transactional
+    public void resetAgentModelPreference(String agentId) {
+        repository.deleteAgentModelPreference(normalizeRequired(agentId, "agentId"));
+    }
+
+    @Transactional
+    public void replaceAgentModelPreferences(List<Persistence.AgentModelPreference> preferences) {
+        Objects.requireNonNull(preferences, "preferences");
+        var normalized = new ArrayList<Persistence.AgentModelPreference>();
+        for (var preference : preferences) {
+            Objects.requireNonNull(preference, "preference");
+            var normalizedPreference = normalizePreference(preference);
+            String agentId = normalizedPreference.agentId();
+            String modelId = normalizedPreference.modelId();
+            String thinkingLevel = normalizedPreference.thinkingLevel();
+            if (modelId == null && thinkingLevel == null) {
+                continue;
+            }
+            if (thinkingLevel != null) {
+                try {
+                    ThinkingLevel.fromValue(thinkingLevel);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid thinking level: " + thinkingLevel, e);
+                }
+                thinkingLevel = thinkingLevel.trim().toUpperCase(Locale.ROOT);
+            }
+            normalized.add(new Persistence.AgentModelPreference(agentId, modelId, thinkingLevel));
+        }
+        repository.replaceAgentModelPreferences(normalized);
+    }
+
+    private Persistence.AgentModelPreference normalizePreference(Persistence.AgentModelPreference preference) {
+        Objects.requireNonNull(preference, "preference");
+        String agentId = normalizeRequired(preference.agentId(), "agentId");
+        String modelId = normalizeOptional(preference.modelId());
+        String thinkingLevel = normalizeOptional(preference.thinkingLevel());
+        if (thinkingLevel != null) {
+            try {
+                thinkingLevel = ThinkingLevel.fromValue(thinkingLevel).name();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid thinking level: " + thinkingLevel, e);
+            }
+        }
+        return new Persistence.AgentModelPreference(agentId, modelId, thinkingLevel);
+    }
+
+    private String normalizeRequired(String value, String name) {
+        String normalized = normalizeOptional(value);
+        if (normalized == null) {
+            throw new IllegalArgumentException(name + " is required");
+        }
+        return normalized;
+    }
+
+    private String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public Persistence.LifecycleHookSettings loadLifecycleHookSettings() {

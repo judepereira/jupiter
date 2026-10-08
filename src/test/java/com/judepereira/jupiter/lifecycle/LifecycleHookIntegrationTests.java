@@ -129,7 +129,9 @@ class LifecycleHookIntegrationTests {
             return result;
         });
         SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()),
-                provider(harness), hooks);
+                provider(harness), ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                hooks);
         service.runTask(request(parentSessionId, workspaceRoot));
 
         var order = inOrder(appStateService, hooks);
@@ -150,7 +152,9 @@ class LifecycleHookIntegrationTests {
         Files.writeString(workspaceRoot.resolve("changed.txt"), "changed");
 
         SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()),
-                provider(harness), hooks);
+                provider(harness), ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                hooks);
         var result = service.runTask(request(parentSessionId, workspaceRoot));
 
         assertThat(result.success()).isFalse();
@@ -173,7 +177,9 @@ class LifecycleHookIntegrationTests {
             return result;
         });
         SubagentTaskService successService = new SubagentTaskService(appStateService, definitions,
-                provider(successHarness), successHooks);
+                provider(successHarness), ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                successHooks);
         var success = successService.runTask(request(parentSessionId, workspaceRoot));
         assertThat(success.success()).isTrue();
         verify(successHooks).dispatch(eq(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED), eq(parentSessionId));
@@ -185,6 +191,8 @@ class LifecycleHookIntegrationTests {
             throw new IllegalStateException("child failed");
         });
         SubagentTaskService errorService = new SubagentTaskService(appStateService, definitions, provider(errorHarness),
+                ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
                 errorHooks);
         var error = errorService.runTask(request(parentSessionId, workspaceRoot));
         assertThat(error.success()).isFalse();
@@ -200,7 +208,9 @@ class LifecycleHookIntegrationTests {
             throw new StreamCancelledException();
         });
         SubagentTaskService service = new SubagentTaskService(appStateService, definitions(subagent()),
-                provider(harness), hooks);
+                provider(harness), ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                hooks);
 
         var result = service.runTask(request(parentSessionId, workspaceRoot));
 
@@ -239,7 +249,7 @@ class LifecycleHookIntegrationTests {
     }
 
     private static AgentDefinition subagent() {
-        return new AgentDefinition("worker", "Worker", "", "worker prompt", AgentMode.SUBAGENT, "openai/gpt-5.5",
+        return new AgentDefinition("worker", "Worker", "", "worker prompt", AgentMode.SUBAGENT, "openai/gpt-5.6-sol",
                 ThinkingLevel.LOW, null, true, true, List.of());
     }
 

@@ -245,10 +245,15 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
             page.locator("#project-modal").waitFor();
             page.getByRole(AriaRole.BUTTON,
                     new Page.GetByRoleOptions().setName(sampleProject.getFileName().toString()).setExact(true)).click();
-            page.locator("#project-name-input").fill("Sample Service");
-            page.waitForFunction("expected => document.querySelector('#project-path-input')?.value === expected",
-                    sampleProject.toAbsolutePath().normalize().toString());
             settlePage(page);
+            String expectedPath = sampleProject.toAbsolutePath().normalize().toString();
+            page.waitForFunction("expected => document.querySelector('#project-path-input')?.value === expected",
+                    expectedPath);
+            String expectedProjectName = sampleProject.getFileName().toString();
+            page.waitForFunction("expected => document.querySelector('#project-name-input')?.value === expected",
+                    expectedProjectName);
+            page.locator("#project-name-input").fill("Sample Service");
+            page.waitForFunction("() => document.querySelector('#project-name-input')?.value === 'Sample Service'");
         });
     }
 
@@ -438,6 +443,7 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
 
     private static void preparePage(Page page, RunningApp app, Fixture fixture, double expectedDpr) {
         page.clock().setFixedTime(FIXED_BROWSER_TIME);
+        installHtmxSettlingTracker(page);
         page.navigate(app.baseUrl());
         page.locator("#chat-container[data-session-id='" + fixture.activeSessionId() + "']").waitFor();
         page.locator(".project-tab-group.active .project-tab-label").waitFor();
@@ -458,12 +464,9 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
         settlePage(page);
     }
 
-    private static void settlePage(Page page) {
-        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
-    }
-
     private static void captureViewport(Page page, Path output, int cssWidth, int cssHeight, double dpr)
             throws IOException {
+        settlePage(page);
         byte[] screenshot = page
                 .screenshot(new Page.ScreenshotOptions().setFullPage(false).setScale(ScreenshotScale.DEVICE));
 

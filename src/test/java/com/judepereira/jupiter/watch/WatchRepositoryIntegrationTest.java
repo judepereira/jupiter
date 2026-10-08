@@ -18,10 +18,10 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 class WatchRepositoryIntegrationTest {
     @Test
-    void v36PreservesEncryptedRunSnapshotColumnsWhenMigratingFromV35() throws Exception {
+    void v37PreservesEncryptedRunSnapshotColumnsWhenMigratingFromV36() throws Exception {
         DataSource dataSource = SQLiteTestSupport
-                .fileBackedDataSource(Files.createTempDirectory("watch-v35-").resolve("state.db"));
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("35").load().migrate();
+                .fileBackedDataSource(Files.createTempDirectory("watch-v36-").resolve("state.db"));
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("36").load().migrate();
         var jdbc = new JdbcTemplate(dataSource);
         jdbc.update(
                 "INSERT INTO projects(id,name,normalized_path,display_order,created_at) VALUES(1,'p','/p',1,CURRENT_TIMESTAMP)");
