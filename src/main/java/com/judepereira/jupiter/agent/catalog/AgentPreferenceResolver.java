@@ -66,6 +66,32 @@ public class AgentPreferenceResolver {
     }
 
     /**
+     * Revalidates a queued snapshot without rereading durable preferences. A
+     * non-strict snapshot may move to the bundled fallback if its provider
+     * disconnected after queueing; strict snapshots are never substituted.
+     */
+    public Resolution revalidateSnapshot(AgentDefinition agent, Resolution snapshot) {
+        if (snapshot == null || snapshot.model() == null) {
+            return snapshot;
+        }
+        if (snapshot.strictModel()) {
+            if (!availability.isAvailable(snapshot.model().provider())) {
+                throw new IllegalStateException(
+                        "Selected strict model provider is unavailable: " + snapshot.model().id());
+            }
+            return snapshot;
+        }
+        if (availability.isAvailable(snapshot.model().provider())) {
+            return snapshot;
+        }
+        if (agent == null) {
+            throw new IllegalStateException("Selected model provider is unavailable: " + snapshot.model().id());
+        }
+        AgentModelResolutionService.ModelResolution fallback = modelResolutionService.resolve(agent);
+        return new Resolution(fallback.model(), snapshot.preferredModelId(), snapshot.thinkingLevel(), false);
+    }
+
+    /**
      * Resolves the catalog preference for rendering controls without requiring a
      * provider.
      */

@@ -41,3 +41,9 @@ The composer lets you pick the agent, model, and thinking level for a turn. With
 override, the selected agent's configured defaults apply. Settings → Agents lets you override model and thinking level
 independently for every primary agent and subagent; reset restores the bundled defaults. Agent descriptions are shown
 beside each setting so the role is clear.
+
+Saved model overrides are strict: if the remembered provider or model is unavailable, the turn fails with an explicit
+error rather than silently falling back. A saved thinking level is independent of the model and remains the agent's
+remembered choice. Switching to another agent and back restores that saved agent selection. Once a turn is queued, its
+agent, saved preferences, and thinking choice are frozen for that turn; bundled provider fallback still applies if the
+selected bundled provider becomes unavailable.

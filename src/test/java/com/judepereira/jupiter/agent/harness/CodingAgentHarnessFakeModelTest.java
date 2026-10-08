@@ -1,12 +1,20 @@
 package com.judepereira.jupiter.agent.harness;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceResolver;
+import com.judepereira.jupiter.agent.catalog.AgentPreferenceResolver.Resolution;
+import com.judepereira.jupiter.agent.catalog.ModelDefinition;
+import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
+import com.judepereira.jupiter.agent.llm.AgentModelOptions;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
@@ -51,6 +59,67 @@ public class CodingAgentHarnessFakeModelTest {
                 return new ModelResponse("", null, ModelResponseMetadata.empty(), null);
             return seq.get(idx++);
         }
+    }
+
+    @Test
+    public void runTurn_revalidatesSnapshotAndPublishesResolvedModelMetadata(@TempDir Path tmp) {
+        var catalog = ModelCatalogTestSupport.modelCatalogService();
+        var resolver = mock(AgentPreferenceResolver.class);
+        var queuedModel = catalog.getRequired("openai/gpt-5.6-sol");
+        var fallbackModel = catalog.getRequired("openai/gpt-5.6-terra");
+        var resolution = new Resolution(queuedModel, "preferred/model", ThinkingLevel.HIGH, false);
+        var revalidated = new Resolution(fallbackModel, "preferred/model", ThinkingLevel.HIGH, false);
+        when(resolver.revalidateSnapshot(null, resolution)).thenReturn(revalidated);
+        var optionsSeen = new ArrayList<AgentModelOptions>();
+        AgentModelClient client = new AgentModelClient() {
+            @Override
+            public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
+                return new ModelResponse("done", null, ModelResponseMetadata.empty(), null);
+            }
+
+            @Override
+            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+                    AgentModelOptions options, Consumer<String> onDelta) {
+                optionsSeen.add(options);
+                return new ModelResponse("done", null, ModelResponseMetadata.empty(), null);
+            }
+        };
+        AgentProperties props = new AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        props.setMaxIterations(1);
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(client), new ToolRegistry(), props, null,
+                catalog, resolver, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector());
+        List<String> resolved = new ArrayList<>();
+        List<AgentTurnRequest> requests = new ArrayList<>();
+        AgentStreamListener listener = new AgentStreamListener() {
+            @Override
+            public void onModelResolved(String preferredModelId, ModelDefinition actual) {
+                resolved.add(preferredModelId + ":" + actual.id());
+            }
+
+            @Override
+            public List<Message> onBeforeModelRequest(AgentTurnRequest request, List<Message> conversation) {
+                requests.add(request);
+                return conversation;
+            }
+        };
+
+        var result = harness.runTurnStreaming(
+                new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)), null,
+                        null, null, null, null, null, resolution),
+                listener);
+
+        assertEquals("done", result.getFinalText());
+        assertEquals(List.of("preferred/model:openai/gpt-5.6-terra"), resolved);
+        assertEquals(1, optionsSeen.size());
+        assertEquals("openai/gpt-5.6-terra", optionsSeen.getFirst().modelId());
+        assertEquals(ThinkingLevel.HIGH, optionsSeen.getFirst().thinkingLevel());
+        assertEquals("openai/gpt-5.6-terra", requests.getFirst().getPreferenceSnapshot().model().id());
+        assertEquals(ThinkingLevel.HIGH, requests.getFirst().getPreferenceSnapshot().thinkingLevel());
+        verify(resolver).revalidateSnapshot(null, resolution);
     }
 
     @Test

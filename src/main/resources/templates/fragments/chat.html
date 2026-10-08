@@ -52,7 +52,7 @@
                             th:each="agent : ${agents}"
                             th:value="${agent.id}"
                             th:selected="${selectedAgent != null and selectedAgent.id == agent.id}"
-                            th:attr="data-description=${agent.description}, data-default-model=${agentDefaultModels != null ? agentDefaultModels[agent.id] : null}, data-default-thinking=${agent.defaultThinkingLevel}, title=${agent.description}"
+                            th:attr="data-description=${agent.description}, data-default-model=${agentDefaultModels != null ? agentDefaultModels[agent.id] : null}, data-default-thinking=${agentDefaultThinking != null ? agentDefaultThinking[agent.id] : agent.defaultThinkingLevel}, title=${agent.description}"
                             th:text="${agent.name + ' — ' + agent.description}"
                         ></option>
                     </select>
@@ -74,7 +74,7 @@
                             th:each="modelDef : ${models}"
                             th:value="${modelDef.id}"
                             th:selected="${selectedModel != null and selectedModel.id == modelDef.id}"
-                            th:text="${modelDef.displayName + ' — ' + modelDef.provider}"
+                            th:text="${(unavailableModels != null and (unavailableModels[modelDef.id] ?: false) ? 'Unavailable: ' : '') + modelDef.displayName + ' — ' + modelDef.provider}"
                         ></option>
                     </select>
                 </label>

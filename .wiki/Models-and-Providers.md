@@ -40,7 +40,10 @@ outages.
 An explicit model selection is strict: if that provider or model is unavailable, the turn fails instead of silently
 switching models. A saved agent override is also strict and is never silently replaced by a bundled model. If its model
 is stale or unavailable, Settings identifies the problem so it can be corrected or reset. The Agents settings form
-accepts any eligible configured text-and-tools model, not only bundled model IDs.
+accepts any eligible configured text-and-tools model, not only bundled model IDs. Agent-default turns may use the next
+bundled preference when a provider is unavailable, including when it disconnects after the turn is queued; strict saved
+or explicit selections still fail. Queued preferences and the thinking level are frozen, while bundled provider fallback
+still applies; changing saved preferences does not rewrite an in-flight turn.
 
 ## Thinking Level
 

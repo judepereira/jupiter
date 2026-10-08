@@ -89,6 +89,7 @@ public class CodingAgentHarness {
         SkillCatalog skillCatalog = skillDiscoveryService.discover(workspace);
         AgentDefinition agent = resolveAgent(request);
         AgentPreferenceResolver.Resolution selectedResolution = resolvePreferences(request, agent);
+        AgentTurnRequest effectiveRequest = withPreferenceSnapshot(request, selectedResolution);
         ModelDefinition selectedModel = selectedResolution.model();
         if (selectedModel != null) {
             listener.onModelResolved(selectedResolution.preferredModelId(), selectedModel);
@@ -134,7 +135,8 @@ public class CodingAgentHarness {
         try {
             for (int i = 0; i < max; i++) {
                 throwIfCancelled(cancellationToken);
-                List<Message> preparedConversation = listener.onBeforeModelRequest(request, List.copyOf(convo));
+                List<Message> preparedConversation = listener.onBeforeModelRequest(effectiveRequest,
+                        List.copyOf(convo));
                 if (preparedConversation == null) {
                     throw new IllegalStateException("Listener returned null conversation before model request");
                 }
@@ -276,6 +278,13 @@ public class CodingAgentHarness {
         return "tool-" + iteration + "-" + toolIndex;
     }
 
+    private static AgentTurnRequest withPreferenceSnapshot(AgentTurnRequest request,
+            AgentPreferenceResolver.Resolution resolution) {
+        return new AgentTurnRequest(request.getSystemPrompt(), request.getConversationHistory(),
+                request.getWorkspaceRoot(), request.getAgentId(), request.getModelId(), request.getThinkingLevel(),
+                request.getSessionId(), request.getCancellationToken(), resolution);
+    }
+
     private AgentDefinition resolveAgent(AgentTurnRequest request) {
         if (agentDefinitionService == null) {
             return null;
@@ -288,17 +297,18 @@ public class CodingAgentHarness {
 
     private AgentPreferenceResolver.Resolution resolvePreferences(AgentTurnRequest request, AgentDefinition agent) {
         if (request.getPreferenceSnapshot() != null) {
-            return request.getPreferenceSnapshot();
+            return agentPreferenceResolver.revalidateSnapshot(agent, request.getPreferenceSnapshot());
         }
+        String requestedModelId = request.getModelId();
+        boolean explicitModel = requestedModelId != null && !requestedModelId.isBlank();
         if (agent == null) {
-            ModelDefinition model = request.getModelId() == null
-                    ? modelCatalogService.getRequired(props.getModel())
-                    : modelCatalogService.getRequired(request.getModelId());
-            return new AgentPreferenceResolver.Resolution(model, request.getModelId(), request.getThinkingLevel(),
-                    request.getModelId() != null);
+            ModelDefinition model = modelCatalogService
+                    .getRequired(explicitModel ? requestedModelId : props.getModel());
+            return new AgentPreferenceResolver.Resolution(model, explicitModel ? requestedModelId : model.id(),
+                    request.getThinkingLevel(), explicitModel);
         }
-        return agentPreferenceResolver.resolve(agent, request.getModelId(), request.getThinkingLevel(),
-                request.getModelId() != null && !request.getModelId().isBlank());
+        return agentPreferenceResolver.resolve(agent, explicitModel ? requestedModelId : null,
+                request.getThinkingLevel(), explicitModel);
     }
 
     private String resolveSystemPrompt(AgentTurnRequest request, AgentDefinition agent, SkillCatalog catalog) {

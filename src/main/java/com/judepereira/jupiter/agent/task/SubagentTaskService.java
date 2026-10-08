@@ -88,14 +88,15 @@ public class SubagentTaskService {
         }
 
         SubagentTaskStreamListener sink = listener == null ? SubagentTaskStreamListener.noop() : listener;
+        AgentPreferenceResolver.Resolution preference = preferenceResolver.resolve(subagent, null, null, false);
         long childSessionId = appStateService.createHiddenSubagentSession(request.parentSessionId(),
                 request.parentToolCallId(), subagent);
         sink.onStarted(new SubagentTaskStarted(childSessionId, request.parentSessionId(), request.parentToolCallId(),
                 subagent.id(), subagent.name(), request.requestSummary(), request.task()));
 
         String userPrompt = buildUserPrompt(request.task(), request.expectedOutput());
-        ChatMessageMetadata assistantMetadata = new ChatMessageMetadata(subagent.id(), subagent.name(), null,
-                subagent.defaultThinkingLevel().name(), null);
+        ChatMessageMetadata assistantMetadata = new ChatMessageMetadata(subagent.id(), subagent.name(),
+                preference.model().id(), preference.thinkingLevel().name(), null);
         var queued = appStateService.appendUserMessageAndPendingAssistant(childSessionId, null, null, userPrompt,
                 assistantMetadata);
         String assistantPublicId = queued.assistantMessage().id();
@@ -110,10 +111,8 @@ public class SubagentTaskService {
             CodingAgentHarness harness = harnessProvider.getObject();
             AgentTurnRequest childRequest = new AgentTurnRequest(subagent.systemPrompt(),
                     appStateService.buildConversationHistory(childSessionId), request.workspaceRoot(), subagent.id(),
-                    null, subagent.defaultThinkingLevel(), childSessionId, request.cancellationToken(),
-                    preferenceResolver == null
-                            ? null
-                            : preferenceResolver.resolve(subagent, null, subagent.defaultThinkingLevel(), false));
+                    preference.model().id(), preference.thinkingLevel(), childSessionId, request.cancellationToken(),
+                    preference);
 
             AgentTurnResult result = harness.runTurnStreaming(childRequest, new AgentStreamListener() {
                 private final StringBuilder accumulated = new StringBuilder();

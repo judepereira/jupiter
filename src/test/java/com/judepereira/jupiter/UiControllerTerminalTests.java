@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
@@ -410,7 +411,8 @@ public class UiControllerTerminalTests {
                     new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
                     ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
                     ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null,
-                    null, null, null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+                    null, null, mock(ProviderAvailabilityService.class),
+                    new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                     new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                             (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                     appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,

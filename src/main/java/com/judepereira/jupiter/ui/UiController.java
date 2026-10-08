@@ -1799,28 +1799,39 @@ public class UiController {
                 ? modelCatalogService.list()
                 : modelPickerService.listPickerModels();
         Map<String, String> agentDefaultModels = new LinkedHashMap<>();
+        Map<String, String> agentDefaultThinking = new LinkedHashMap<>();
+        Map<String, Boolean> unavailableModels = new LinkedHashMap<>();
+        Map<String, ModelDefinition> renderedModels = new LinkedHashMap<>();
         agents.forEach(agent -> {
-            try {
-                ModelDefinition defaultModel = resolveAgentModelForDisplay(agent);
-                if (defaultModel != null) {
-                    agentDefaultModels.put(agent.id(), defaultModel.id());
-                }
-            } catch (IllegalStateException ignored) {
-                // Keep an unavailable agent visibly unselected rather than choosing a
-                // selected model.
+            AgentPreferenceResolver.Resolution resolved = resolveAgentPreferenceForDisplay(agent);
+            if (resolved.model() != null) {
+                agentDefaultModels.put(agent.id(), resolved.model().id());
+                renderedModels.put(resolved.model().id(), resolved.model());
+                unavailableModels.put(resolved.model().id(),
+                        !providerAvailabilityService.isAvailable(resolved.model().provider()));
+            }
+            if (resolved.thinkingLevel() != null) {
+                agentDefaultThinking.put(agent.id(), resolved.thinkingLevel().name());
             }
         });
-        model.addAttribute("agentDefaultModels", agentDefaultModels);
-        model.addAttribute("models", pickerModels);
-        model.addAttribute("pickerEmpty", pickerModels.isEmpty());
+        Map<String, ModelDefinition> uniqueRenderedModels = new LinkedHashMap<>();
+        pickerModels.forEach(modelDef -> uniqueRenderedModels.put(modelDef.id(), modelDef));
+        renderedModels.forEach(uniqueRenderedModels::putIfAbsent);
         ModelDefinition renderedModel = selection.selectedModel();
         boolean explicitModel = selection.explicitModel();
-        String renderedModelId = renderedModel == null ? null : renderedModel.id();
-        if (renderedModelId != null
-                && pickerModels.stream().noneMatch(candidate -> candidate.id().equals(renderedModelId))) {
-            renderedModel = resolveAgentModelForDisplay(selection.selectedAgent());
-            explicitModel = false;
+        if (renderedModel != null) {
+            // A catalog-known session model may be disconnected or no longer configured in
+            // the picker, but it is still the user's remembered selection.
+            uniqueRenderedModels.putIfAbsent(renderedModel.id(), renderedModel);
+            unavailableModels.putIfAbsent(renderedModel.id(),
+                    !providerAvailabilityService.isAvailable(renderedModel.provider()));
         }
+        List<ModelDefinition> renderedPickerModels = new ArrayList<>(uniqueRenderedModels.values());
+        model.addAttribute("agentDefaultModels", agentDefaultModels);
+        model.addAttribute("agentDefaultThinking", agentDefaultThinking);
+        model.addAttribute("models", renderedPickerModels);
+        model.addAttribute("unavailableModels", unavailableModels);
+        model.addAttribute("pickerEmpty", renderedPickerModels.isEmpty());
         model.addAttribute("thinkingLevels", List.of(ThinkingLevel.values()));
         model.addAttribute("defaultAgent", selection.defaultAgent());
         model.addAttribute("defaultModel", selection.defaultModel());
@@ -1844,10 +1855,6 @@ public class UiController {
 
     private AgentPreferenceResolver.Resolution resolveAgentPreferenceForDisplay(AgentDefinition agent) {
         return agentPreferenceResolver.resolveForDisplay(agent);
-    }
-
-    private ModelDefinition resolveAgentModelForDisplay(AgentDefinition agent) {
-        return resolveAgentPreferenceForDisplay(agent).model();
     }
 
     private ChatSelection resolveChatSelection(String agentId, String modelId, String thinkingLevel) {

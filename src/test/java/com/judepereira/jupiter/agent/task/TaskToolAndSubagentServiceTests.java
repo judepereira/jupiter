@@ -30,6 +30,7 @@ import com.judepereira.jupiter.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.agent.tools.impl.TaskTool;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.Persistence.AgentModelPreference;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.Persistence.SubagentSessionDetailView;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
@@ -58,7 +59,7 @@ public class TaskToolAndSubagentServiceTests {
         ModelDefinition originalModel = new ModelDefinition("openai/original", "Original", "openai", "original", true,
                 true, 1000, 100, null, null, null, null, null, List.of("text"), List.of("text"));
         AgentPreferenceResolver resolver = mock(AgentPreferenceResolver.class);
-        when(resolver.resolve(subagent, null, subagent.defaultThinkingLevel(), false)).thenReturn(
+        when(resolver.resolve(subagent, null, null, false)).thenReturn(
                 new AgentPreferenceResolver.Resolution(originalModel, originalModel.id(), ThinkingLevel.HIGH, true));
         List<AgentTurnRequest> requests = new ArrayList<>();
         CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
@@ -87,7 +88,51 @@ public class TaskToolAndSubagentServiceTests {
         assertThat(request.getPreferenceSnapshot().model().id()).isEqualTo("openai/original");
         assertThat(request.getPreferenceSnapshot().thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
         assertThat(request.getPreferenceSnapshot().strictModel()).isTrue();
-        verify(resolver).resolve(subagent, null, subagent.defaultThinkingLevel(), false);
+        verify(resolver).resolve(subagent, null, null, false);
+    }
+
+    @Test
+    public void savedThinkingOverrideReachesChildRequestAndAssistantMetadata(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long parentSessionId = appStateService.loadViewData().activeSession().id();
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "prompt", AgentMode.SUBAGENT,
+                "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true, List.of());
+        appStateService.upsertAgentModelPreference(new AgentModelPreference(subagent.id(), null, "high"));
+        var resolver = ModelCatalogTestSupport.preferenceResolver(appStateService,
+                ModelCatalogTestSupport.modelCatalogService());
+        List<AgentTurnRequest> requests = new ArrayList<>();
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+                requests.add(request);
+                var result = new AgentTurnResult("done", List.of());
+                listener.onComplete(result);
+                return result;
+            }
+        };
+        var result = new TaskTool(agentService(subagent),
+                new SubagentTaskService(appStateService, agentService(subagent), childHarnessProvider(harness),
+                        resolver, null))
+                .execute(
+                        Map.of("agentId", "engineer", "requestSummary", "inspect", "task", "inspect", "expectedOutput",
+                                "done"),
+                        new ToolExecutionContext(workspaceRoot, false, false, 30, parentSessionId, "tool",
+                                AgentMode.AGENT, "tool", Map.of(), Set.of(), ToolProgressSink.noop(), null));
+        assertThat(requests).singleElement().satisfies(request -> {
+            assertThat(request.getThinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
+            assertThat(request.getPreferenceSnapshot().thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
+        });
+        var childId = (Long) result.getMachine().get("subagentSessionId");
+        assertThat(appStateService.loadSubagentSessionDetail(childId).sessionDetail().chatMessages())
+                .anySatisfy(message -> {
+                    if (message.metadata() != null) {
+                        assertThat(message.metadata().thinkingLevel()).isEqualTo("HIGH");
+                    }
+                });
     }
 
     @Test
@@ -121,7 +166,9 @@ public class TaskToolAndSubagentServiceTests {
         };
 
         SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService,
-                childHarnessProvider(childHarness), null, null);
+                childHarnessProvider(childHarness), ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         ToolExecutionResult result = taskTool.execute(
@@ -176,7 +223,9 @@ public class TaskToolAndSubagentServiceTests {
         CodingAgentHarness childHarness = realHarness(model, workspaceRoot);
 
         SubagentTaskService service = new SubagentTaskService(appStateService, definitions,
-                childHarnessProvider(childHarness), null, null);
+                childHarnessProvider(childHarness), ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                null);
         TaskTool taskTool = new TaskTool(definitions, service);
 
         var firstResult = taskTool.execute(
@@ -217,8 +266,9 @@ public class TaskToolAndSubagentServiceTests {
         };
         props.setModel("openai/gpt-5.6-sol");
         return new CodingAgentHarness(factory, new ToolRegistry(), props, null,
-                ModelCatalogTestSupport.modelCatalogService(), null, null, null, null,
-                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                ModelCatalogTestSupport.modelCatalogService(),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null, null,
+                null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.components(workspace).discovery(), SkillTestSupport.defaultComponents().resolver(),
                 SkillTestSupport.defaultComponents().injector());
     }
@@ -234,7 +284,8 @@ public class TaskToolAndSubagentServiceTests {
                 List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
         SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService,
-                childHarnessProvider(null), null, null);
+                childHarnessProvider(null),
+                ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         ToolExecutionResult result = taskTool
@@ -250,10 +301,13 @@ public class TaskToolAndSubagentServiceTests {
     @Test
     public void taskToolSchemaRequiresRequestSummary() {
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent system prompt",
-                AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+                AgentMode.SUBAGENT, "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true,
+                List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
         TaskTool taskTool = new TaskTool(agentDefinitionService,
-                new SubagentTaskService(null, agentDefinitionService, childHarnessProvider(null), null, null));
+                new SubagentTaskService(null, agentDefinitionService, childHarnessProvider(null),
+                        ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
+                        null));
 
         var schema = taskTool.definition().getSchema();
         assertThat(schema.properties()).extracting(ToolParameter::name).contains("agentId", "requestSummary", "task",
@@ -268,7 +322,8 @@ public class TaskToolAndSubagentServiceTests {
         long parentSessionId = appStateService.loadViewData().activeSession().id();
 
         AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "Subagent system prompt",
-                AgentMode.SUBAGENT, "openai/gpt-5.5", ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file"));
+                AgentMode.SUBAGENT, "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true,
+                List.of("write_file"));
         AgentDefinitionService agentDefinitionService = agentService(subagent);
 
         CodingAgentHarness childHarness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
@@ -289,7 +344,9 @@ public class TaskToolAndSubagentServiceTests {
         };
 
         SubagentTaskService service = new SubagentTaskService(appStateService, agentDefinitionService,
-                childHarnessProvider(childHarness), null, null);
+                childHarnessProvider(childHarness), ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                null);
         TaskTool taskTool = new TaskTool(agentDefinitionService, service);
 
         List<String> events = new ArrayList<>();

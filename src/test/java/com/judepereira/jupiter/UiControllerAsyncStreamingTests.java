@@ -8,6 +8,7 @@ import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
+import com.judepereira.jupiter.agent.catalog.ProviderAvailabilityService;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.agent.config.AgentProperties;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
@@ -336,7 +337,8 @@ public class UiControllerAsyncStreamingTests {
         };
         UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.resolutionService(modelCatalog),
-                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null, null,
+                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
+                mock(ProviderAvailabilityService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
@@ -521,7 +523,8 @@ public class UiControllerAsyncStreamingTests {
 
         UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.resolutionService(modelCatalog),
-                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null, null,
+                ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
+                mock(ProviderAvailabilityService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),

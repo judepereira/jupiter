@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
+import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageMetadata;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
@@ -68,6 +69,30 @@ public class ChatTemplateRenderTest {
         String arbitraryFallbackHtml = engine.process("fragments/chat", context);
         assertThat(arbitraryFallbackHtml).doesNotContain("data-default-model=");
         assertThat(arbitraryFallbackHtml).contains("value=\"anthropic/claude-sonnet-5\"", "selected=\"selected\"");
+    }
+
+    @Test
+    void chatFragmentRendersUnavailableRememberedModelExactlyOnce() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("shellRefresh", false);
+        context.setVariable("subagentView", false);
+        context.setVariable("agents", List.of());
+        var disconnected = new ModelDefinition("disconnected", "Disconnected", "anthropic", "disconnected", true, true,
+                100, 20, null, null, null, null, null, List.of("text"), List.of("text"));
+        context.setVariable("models", List.of(disconnected));
+        context.setVariable("unavailableModels", Map.of("disconnected", true));
+        context.setVariable("pickerEmpty", false);
+        context.setVariable("selectedModel", disconnected);
+        context.setVariable("selectedModelExplicit", true);
+        context.setVariable("thinkingLevels", List.of(ThinkingLevel.values()));
+        context.setVariable("selectedThinking", ThinkingLevel.HIGH);
+
+        String html = engine.process("fragments/chat", context);
+
+        assertThat(html).contains("value=\"disconnected\"");
+        assertThat(html.indexOf("value=\"disconnected\"")).isEqualTo(html.lastIndexOf("value=\"disconnected\""));
+        assertThat(html).contains("Unavailable: Disconnected");
     }
 
     @Test

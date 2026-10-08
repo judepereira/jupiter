@@ -113,6 +113,45 @@ class AgentPreferenceResolverTest {
     }
 
     @Test
+    void revalidateNonStrictDisconnectedSnapshotUsesBundledFallbackAndPreservesMetadata() {
+        var snapshot = new AgentPreferenceResolver.Resolution(configured, "preferred", ThinkingLevel.HIGH, false);
+        when(availability.isAvailable("anthropic")).thenReturn(false);
+        when(fallback.resolve(agent))
+                .thenReturn(new AgentModelResolutionService.ModelResolution("configured", bundled));
+
+        var result = resolver.revalidateSnapshot(agent, snapshot);
+
+        assertThat(result.model()).isSameAs(bundled);
+        assertThat(result.preferredModelId()).isEqualTo("preferred");
+        assertThat(result.thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(result.strictModel()).isFalse();
+    }
+
+    @Test
+    void revalidateStrictDisconnectedSnapshotFails() {
+        var snapshot = new AgentPreferenceResolver.Resolution(configured, configured.id(), ThinkingLevel.HIGH, true);
+        when(availability.isAvailable("anthropic")).thenReturn(false);
+
+        assertThatThrownBy(() -> resolver.revalidateSnapshot(agent, snapshot)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("strict model provider is unavailable");
+    }
+
+    @Test
+    void revalidateDoesNotRereadSavedPreferences() {
+        var snapshot = new AgentPreferenceResolver.Resolution(configured, "preferred", ThinkingLevel.HIGH, false);
+        when(availability.isAvailable("anthropic")).thenReturn(false);
+        when(fallback.resolve(agent))
+                .thenReturn(new AgentModelResolutionService.ModelResolution("configured", bundled));
+        when(state.findAgentModelPreference("agent"))
+                .thenReturn(Optional.of(new AgentModelPreference("agent", "configured", "LOW")));
+
+        var result = resolver.revalidateSnapshot(agent, snapshot);
+
+        assertThat(result.thinkingLevel()).isEqualTo(ThinkingLevel.HIGH);
+        assertThat(result.preferredModelId()).isEqualTo("preferred");
+    }
+
+    @Test
     void staleSavedModelIsNotSilentlyReplaced() {
         when(state.findAgentModelPreference("agent"))
                 .thenReturn(Optional.of(new AgentModelPreference("agent", "stale", null)));
