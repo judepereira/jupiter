@@ -25,7 +25,7 @@ PS - the mobile interface looks like [this](https://github.com/judepereira/jupit
 Pull the latest published immutable release image:
 
 ```bash
-docker pull judepereira/jupiter:2026.10.02.1
+docker pull judepereira/jupiter:2026.10.10.1
 ```
 
 Generate an encryption key:
@@ -46,7 +46,7 @@ docker run --rm \
   -e JUPITER_ENCRYPTION_KEY="$JUPITER_ENCRYPTION_KEY" \
   -v "$HOME/.jupiter:/home/jupiter/.jupiter" \
   -v "$HOME/developer:/home/jupiter/developer" \ # Replace developer with the dir where all your projects are checked out
-  judepereira/jupiter:2026.10.02.1
+  judepereira/jupiter:2026.10.10.1
 ```
 
 Open `http://localhost:7272`, choose **Open Project**, and select a repository under `/home/jupiter/developer`.
@@ -55,7 +55,7 @@ To update Jupiter, pull the latest image and restart the container with the same
 mount:
 
 ```bash
-docker pull judepereira/jupiter:2026.10.02.1
+docker pull judepereira/jupiter:2026.10.10.1
 ```
 
 The `latest` tag follows the current main branch; use the immutable `YYYY.MM.DD.N` release tag above for recommended

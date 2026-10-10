@@ -35,7 +35,7 @@ Pull the latest published immutable release image, and restart Jupiter with the 
 encryption key:
 
 ```bash
-docker pull judepereira/jupiter:2026.10.02.1
+docker pull judepereira/jupiter:2026.10.10.1
 ```
 
 See [Advanced Configuration](Advanced-Configuration) for more ways to configure Jupiter.
