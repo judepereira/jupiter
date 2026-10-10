@@ -61,8 +61,9 @@ class AnthropicAgentModelClientTests {
                 s.request(Long.MAX_VALUE);
             }
             public void onNext(ByteBuffer b) {
-                while (b.hasRemaining())
+                while (b.hasRemaining()) {
                     bytes.write(b.get());
+                }
             }
             public void onError(Throwable t) {
             }
@@ -214,8 +215,9 @@ class AnthropicAgentModelClientTests {
                 s.request(Long.MAX_VALUE);
             }
             public void onNext(ByteBuffer b) {
-                while (b.hasRemaining())
+                while (b.hasRemaining()) {
                     bytes.write(b.get());
+                }
             }
             public void onError(Throwable t) {
             }

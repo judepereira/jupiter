@@ -6,7 +6,9 @@ import { isStopRequestInFlight, setStopRequestInFlight } from "./state.js";
 let bindPendingStreamsHook = () => {};
 
 function configureChatStreamControls(config) {
-    if (!config) return;
+    if (!config) {
+        return;
+    }
     if (typeof config.bindPendingStreams === "function") {
         bindPendingStreamsHook = config.bindPendingStreams;
     }
@@ -14,9 +16,13 @@ function configureChatStreamControls(config) {
 
 function activePrimaryPendingAssistantRow() {
     try {
-        if (getCurrentOpenSubagentSessionId()) return null;
+        if (getCurrentOpenSubagentSessionId()) {
+            return null;
+        }
         const list = document.getElementById("chat-messages-list");
-        if (!list) return null;
+        if (!list) {
+            return null;
+        }
         return list.querySelector('li[data-role="assistant"][data-pending="true"][data-stream-url]');
     } catch (_) {
         return null;
@@ -27,7 +33,9 @@ function updateChatSendButtonState() {
     try {
         const form = document.getElementById("chat-send-form");
         const button = document.getElementById("chat-send-btn");
-        if (!form || !button) return;
+        if (!form || !button) {
+            return;
+        }
         const activeRow = activePrimaryPendingAssistantRow();
         const running = Boolean(activeRow);
         form.dataset.chatRunning = running ? "true" : "false";
@@ -51,7 +59,9 @@ function updateChatSendButtonState() {
 
 function replaceChatContainerFromHtml(html) {
     try {
-        if (!html) return;
+        if (!html) {
+            return;
+        }
         const template = document.createElement("template");
         template.innerHTML = html.trim();
         const incoming = template.content.querySelector("#chat-container");
@@ -71,9 +81,13 @@ function replaceChatContainerFromHtml(html) {
 
 function requestStopActiveChat() {
     try {
-        if (isStopRequestInFlight()) return;
+        if (isStopRequestInFlight()) {
+            return;
+        }
         const row = activePrimaryPendingAssistantRow();
-        if (!row || !row.dataset || !row.dataset.id) return;
+        if (!row || !row.dataset || !row.dataset.id) {
+            return;
+        }
         setStopRequestInFlight(true);
         updateChatSendButtonState();
         const body = new URLSearchParams();
@@ -84,7 +98,9 @@ function requestStopActiveChat() {
             body: body.toString(),
         })
             .then((response) => {
-                if (!response.ok) throw new Error("Stop request failed");
+                if (!response.ok) {
+                    throw new Error("Stop request failed");
+                }
                 return response.text();
             })
             .then(replaceChatContainerFromHtml)
@@ -101,16 +117,24 @@ function requestStopActiveChat() {
 
 function getLiveChatRow(assistantId) {
     try {
-        if (!assistantId) return null;
+        if (!assistantId) {
+            return null;
+        }
         const list = document.getElementById("chat-messages-list");
-        if (!list) return null;
+        if (!list) {
+            return null;
+        }
         const candidates = Array.from(list.querySelectorAll('li[data-id="' + assistantId + '"]'));
         const visibleCandidates = candidates.filter(
             (row) => row && row.getClientRects && row.getClientRects().length > 0,
         );
         const visiblePendingCandidates = visibleCandidates.filter((row) => row.dataset.pending === "true");
-        if (visiblePendingCandidates.length > 0) return visiblePendingCandidates[0];
-        if (visibleCandidates.length > 0) return visibleCandidates[0];
+        if (visiblePendingCandidates.length > 0) {
+            return visiblePendingCandidates[0];
+        }
+        if (visibleCandidates.length > 0) {
+            return visibleCandidates[0];
+        }
         const pendingCandidates = candidates.filter((row) => row.dataset.pending === "true");
         return pendingCandidates[0] || candidates[0] || null;
     } catch (_) {

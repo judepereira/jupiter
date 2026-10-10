@@ -406,8 +406,9 @@ public class AppStateRepository {
     @Transactional
     public void initializeSelectedModelIds(String provider, Collection<String> modelIds) {
         var ids = modelIds.stream().distinct().toList();
-        if (ids.isEmpty())
+        if (ids.isEmpty()) {
             return;
+        }
 
         var values = new StringBuilder("SELECT :modelId0 AS model_id");
         var params = new MapSqlParameterSource("provider", provider).addValue("modelId0", ids.get(0));
@@ -1275,10 +1276,12 @@ public class AppStateRepository {
                         try {
                             JsonNode json = objectMapper.readTree(args);
                             JsonNode value = json.path("requestSummary");
-                            if (value.isMissingNode() || value.isNull() || value.asText().isEmpty())
+                            if (value.isMissingNode() || value.isNull() || value.asText().isEmpty()) {
                                 value = json.path("task");
-                            if (!value.isMissingNode() && !value.isNull())
+                            }
+                            if (!value.isMissingNode() && !value.isNull()) {
                                 summary = value.asText().substring(0, Math.min(500, value.asText().length()));
+                            }
                         } catch (JsonProcessingException e) {
                             // SQLite json_valid previously made malformed arguments project as no summary.
                             summary = null;

@@ -185,12 +185,14 @@ class JupiterStartupIntegrationTests {
         Process process = null;
         try {
             process = launchWithoutWaitingRaw(input, home, port, log);
-            if (!process.waitFor(STARTUP_TIMEOUT.toSeconds(), TimeUnit.SECONDS))
+            if (!process.waitFor(STARTUP_TIMEOUT.toSeconds(), TimeUnit.SECONDS)) {
                 fail("Jupiter did not fail within timeout");
+            }
             return new StartupResult(process.exitValue(), readLog(log));
         } finally {
-            if (process != null)
+            if (process != null) {
                 destroy(process);
+            }
         }
     }
 

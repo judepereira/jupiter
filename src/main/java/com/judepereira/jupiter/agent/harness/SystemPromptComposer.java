@@ -34,10 +34,12 @@ public class SystemPromptComposer {
         String resolvedWorkspaceRoot = requireNonBlank(workspaceRoot, "workspace root");
         String renderedCatalog = skillCatalogRenderer.render(catalog);
         List<String> sections = new ArrayList<>(List.of(defaultPrompt));
-        if (appendage != null && !appendage.isBlank())
+        if (appendage != null && !appendage.isBlank()) {
             sections.add(appendage);
-        if (!renderedCatalog.isBlank())
+        }
+        if (!renderedCatalog.isBlank()) {
             sections.add(renderedCatalog);
+        }
         sections.add(buildEnvAppendage(resolvedWorkspaceRoot));
         return String.join("\n\n", sections);
     }

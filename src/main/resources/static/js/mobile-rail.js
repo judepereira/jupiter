@@ -23,7 +23,9 @@ if (!window.__mobileLeftRailControllerBound) {
     }
 
     function openMobileLeftRail() {
-        if (!isMobilePhoneViewport()) return;
+        if (!isMobilePhoneViewport()) {
+            return;
+        }
         document.body.classList.add("mobile-left-rail-open");
         syncAppSwitcherState();
     }
@@ -38,7 +40,9 @@ if (!window.__mobileLeftRailControllerBound) {
     }
 
     function toggleMobileLeftRail() {
-        if (!isMobilePhoneViewport()) return;
+        if (!isMobilePhoneViewport()) {
+            return;
+        }
         if (isMobileLeftRailOpen()) {
             closeMobileLeftRail();
         } else {
@@ -55,20 +59,26 @@ if (!window.__mobileLeftRailControllerBound) {
         (event) => {
             const switcher = event.target && event.target.closest ? event.target.closest(".app-switcher") : null;
             if (switcher) {
-                if (!isMobilePhoneViewport()) return;
+                if (!isMobilePhoneViewport()) {
+                    return;
+                }
                 event.preventDefault();
                 toggleMobileLeftRail();
                 return;
             }
 
-            if (!isMobilePhoneViewport() || !isMobileLeftRailOpen()) return;
+            if (!isMobilePhoneViewport() || !isMobileLeftRailOpen()) {
+                return;
+            }
             if (isLeftRailInteractiveTarget(event.target)) {
                 closeMobileLeftRail();
                 return;
             }
 
             const rail = document.getElementById("left-rail");
-            if (rail && rail.contains(event.target)) return;
+            if (rail && rail.contains(event.target)) {
+                return;
+            }
             closeMobileLeftRail();
         },
         true,
@@ -119,7 +129,9 @@ if (!window.__mobileLeftRailControllerBound) {
 
     function triggerReviewToggle() {
         const button = document.getElementById("toggle-review-rail-btn");
-        if (button) button.click();
+        if (button) {
+            button.click();
+        }
     }
 
     document.addEventListener(
@@ -131,10 +143,16 @@ if (!window.__mobileLeftRailControllerBound) {
                 return;
             }
 
-            if (!isMobilePhoneViewport() || !document.body.classList.contains("mobile-review-open")) return;
-            if (isReviewInteractiveTarget(event.target)) return;
+            if (!isMobilePhoneViewport() || !document.body.classList.contains("mobile-review-open")) {
+                return;
+            }
+            if (isReviewInteractiveTarget(event.target)) {
+                return;
+            }
             const reviewPanel = getReviewPanel();
-            if (reviewPanel && reviewPanel.contains(event.target)) return;
+            if (reviewPanel && reviewPanel.contains(event.target)) {
+                return;
+            }
             triggerReviewToggle();
         },
         true,

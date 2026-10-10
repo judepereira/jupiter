@@ -69,16 +69,22 @@ abstract class E2ETestSupport {
     static void installHtmxSettlingTracker(Page page) {
         page.addInitScript("""
                 (() => {
-                    if (window.__jupiterHtmxRequests !== undefined) return;
+                    if (window.__jupiterHtmxRequests !== undefined) {
+                        return;
+                    }
                     const requests = new Set();
                     window.__jupiterHtmxRequests = requests;
                     document.addEventListener('htmx:beforeRequest', event => {
                         const xhr = event.detail?.xhr;
-                        if (xhr) requests.add(xhr);
+                        if (xhr) {
+                            requests.add(xhr);
+                        }
                     }, true);
                     document.addEventListener('htmx:afterRequest', event => {
                         const xhr = event.detail?.xhr;
-                        if (xhr) requests.delete(xhr);
+                        if (xhr) {
+                            requests.delete(xhr);
+                        }
                     }, true);
                 })();
                 """);

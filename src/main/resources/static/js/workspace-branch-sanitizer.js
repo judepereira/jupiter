@@ -15,7 +15,9 @@ function sanitizeBranchName(value) {
 
 function sanitizeInput(input) {
     const form = input.closest("form");
-    if (!isCreateMode(form)) return;
+    if (!isCreateMode(form)) {
+        return;
+    }
     const sanitized = sanitizeBranchName(input.value);
     if (input.value !== sanitized) {
         input.value = sanitized;
@@ -25,7 +27,9 @@ function sanitizeInput(input) {
 function initWorkspaceBranchSanitizer(root) {
     const scope = root || document;
     scope.querySelectorAll("[data-workspace-branch-name]").forEach((input) => {
-        if (input.dataset.workspaceBranchSanitizerBound === "1") return;
+        if (input.dataset.workspaceBranchSanitizerBound === "1") {
+            return;
+        }
         input.dataset.workspaceBranchSanitizerBound = "1";
         input.addEventListener("input", () => sanitizeInput(input));
         input.addEventListener("change", () => sanitizeInput(input));
@@ -34,14 +38,20 @@ function initWorkspaceBranchSanitizer(root) {
 
 document.addEventListener("input", (event) => {
     const input = event.target && event.target.closest ? event.target.closest("[data-workspace-branch-name]") : null;
-    if (input) sanitizeInput(input);
+    if (input) {
+        sanitizeInput(input);
+    }
 });
 document.addEventListener("change", (event) => {
     const mode = event.target && event.target.closest ? event.target.closest("[data-workspace-branch-mode]") : null;
-    if (!mode || mode.value !== "create") return;
+    if (!mode || mode.value !== "create") {
+        return;
+    }
     const form = mode.closest("form");
     const input = form && form.querySelector("[data-workspace-branch-name]");
-    if (input) sanitizeInput(input);
+    if (input) {
+        sanitizeInput(input);
+    }
 });
 document.body.addEventListener("htmx:afterSwap", (event) => initWorkspaceBranchSanitizer(event.target), true);
 initWorkspaceBranchSanitizer(document);

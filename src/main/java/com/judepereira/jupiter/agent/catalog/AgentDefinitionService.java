@@ -261,8 +261,9 @@ public class AgentDefinitionService {
     }
 
     private static List<String> parseModels(String value, String agentId) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalStateException("model is required for agent: " + agentId);
+        }
         var ids = Arrays.stream(value.split(",", -1)).map(String::trim).toList();
         if (ids.stream().anyMatch(String::isBlank) || ids.stream().distinct().count() != ids.size()) {
             throw new IllegalStateException("model must contain non-blank, unique ids for agent: " + agentId);

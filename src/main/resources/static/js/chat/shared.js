@@ -42,7 +42,9 @@ export function getCurrentOpenSubagentSessionId() {
 
 export function processHtmxElement(element) {
     try {
-        if (!element || (element.dataset && element.dataset.htmxProcessed === "true")) return;
+        if (!element || (element.dataset && element.dataset.htmxProcessed === "true")) {
+            return;
+        }
         if (window.htmx && typeof window.htmx.process === "function") {
             window.htmx.process(element);
         }
@@ -53,7 +55,9 @@ export function processHtmxElement(element) {
 export function focusChatInput(preferredTextarea) {
     try {
         const textarea = preferredTextarea && preferredTextarea.isConnected ? preferredTextarea : getChatTextarea();
-        if (!textarea) return;
+        if (!textarea) {
+            return;
+        }
         try {
             textarea.focus({ preventScroll: true });
         } catch (_) {
@@ -67,7 +71,9 @@ export function getActiveChatSessionId() {
         const form = getChatComposerForm();
         const fromForm =
             form && form.dataset && form.dataset.sessionId != null ? String(form.dataset.sessionId).trim() : "";
-        if (fromForm) return fromForm;
+        if (fromForm) {
+            return fromForm;
+        }
         const container = document.getElementById("chat-container");
         return container && container.dataset && container.dataset.sessionId != null
             ? String(container.dataset.sessionId).trim()
@@ -84,8 +90,14 @@ export function isDraftSaveRequestPath(path) {
 
 export function shouldFlushDraftBeforeRequest(path) {
     const value = String(path || "");
-    if (!value) return false;
-    if (value.includes("/ui/chat/send")) return false;
-    if (isDraftSaveRequestPath(value)) return false;
+    if (!value) {
+        return false;
+    }
+    if (value.includes("/ui/chat/send")) {
+        return false;
+    }
+    if (isDraftSaveRequestPath(value)) {
+        return false;
+    }
     return /\/ui\/(chat\/primary|chat\/subagent\/|projects|workspaces|sessions)\b/.test(value);
 }

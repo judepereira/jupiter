@@ -36,7 +36,9 @@ export function invalidateChatDraftAutosaveState() {
 }
 
 export function syncChatDraftAutosaveStateFromTextarea(textarea, isFreshComposer) {
-    if (!textarea) return;
+    if (!textarea) {
+        return;
+    }
     const sessionId = getActiveChatSessionId();
     const value = textarea.value || "";
     if (isFreshComposer || chatDraftAutosaveState.sessionId !== sessionId) {
@@ -50,7 +52,9 @@ export function syncChatDraftAutosaveStateFromTextarea(textarea, isFreshComposer
 export function sendChatDraftSave(value, options) {
     const textarea = getChatTextarea();
     const sessionId = getActiveChatSessionId();
-    if (!textarea || !sessionId) return Promise.resolve(false);
+    if (!textarea || !sessionId) {
+        return Promise.resolve(false);
+    }
 
     const draft = String(value != null ? value : "");
     const useBeacon = !!(options && options.useBeacon);
@@ -58,15 +62,26 @@ export function sendChatDraftSave(value, options) {
     const clearEpochAtSend = chatDraftAutosaveState.clearEpoch;
     const requestBody = new URLSearchParams({ draft: draft });
     const url = getDraftSaveUrl(sessionId);
-    if (!url) return Promise.resolve(false);
-    if (chatDraftAutosaveState.lastSavedValue === draft && chatDraftAutosaveState.inFlightValue == null)
+    if (!url) {
         return Promise.resolve(false);
-    if (chatDraftAutosaveState.inFlightValue === draft) return Promise.resolve(false);
+    }
+    if (chatDraftAutosaveState.lastSavedValue === draft && chatDraftAutosaveState.inFlightValue == null) {
+        return Promise.resolve(false);
+    }
+    if (chatDraftAutosaveState.inFlightValue === draft) {
+        return Promise.resolve(false);
+    }
 
     const commitSavedValue = () => {
-        if (chatDraftAutosaveState.clearEpoch !== clearEpochAtSend) return;
-        if (chatDraftAutosaveState.sessionId !== sessionId) return;
-        if (chatDraftAutosaveState.inFlightValue !== draft) return;
+        if (chatDraftAutosaveState.clearEpoch !== clearEpochAtSend) {
+            return;
+        }
+        if (chatDraftAutosaveState.sessionId !== sessionId) {
+            return;
+        }
+        if (chatDraftAutosaveState.inFlightValue !== draft) {
+            return;
+        }
         chatDraftAutosaveState.lastSavedValue = draft;
         chatDraftAutosaveState.inFlightValue = null;
         if (chatDraftAutosaveState.pendingValue !== draft) {
@@ -91,7 +106,9 @@ export function sendChatDraftSave(value, options) {
         credentials: "same-origin",
     })
         .then((response) => {
-            if (!response.ok) throw new Error("Failed to save chat draft");
+            if (!response.ok) {
+                throw new Error("Failed to save chat draft");
+            }
             commitSavedValue();
             return true;
         })
@@ -107,7 +124,9 @@ export function sendChatDraftSave(value, options) {
 export function drainChatDraftSave(options) {
     const textarea = getChatTextarea();
     const sessionId = getActiveChatSessionId();
-    if (!textarea || !sessionId) return Promise.resolve(false);
+    if (!textarea || !sessionId) {
+        return Promise.resolve(false);
+    }
 
     const value =
         chatDraftAutosaveState.pendingValue != null
@@ -133,7 +152,9 @@ export function drainChatDraftSave(options) {
 export function scheduleChatDraftSave(value) {
     const textarea = getChatTextarea();
     const sessionId = getActiveChatSessionId();
-    if (!textarea || !sessionId) return;
+    if (!textarea || !sessionId) {
+        return;
+    }
 
     const draft = String(value != null ? value : textarea.value || "");
     const clearEpochAtSchedule = chatDraftAutosaveState.clearEpoch;
@@ -144,7 +165,9 @@ export function scheduleChatDraftSave(value) {
     }
     chatDraftAutosaveState.timerId = window.setTimeout(() => {
         chatDraftAutosaveState.timerId = null;
-        if (chatDraftAutosaveState.clearEpoch !== clearEpochAtSchedule) return;
+        if (chatDraftAutosaveState.clearEpoch !== clearEpochAtSchedule) {
+            return;
+        }
         drainChatDraftSave({ keepalive: false, useBeacon: false });
     }, 500);
 }
@@ -152,7 +175,9 @@ export function scheduleChatDraftSave(value) {
 export function flushChatDraftSave(options) {
     const textarea = getChatTextarea();
     const sessionId = getActiveChatSessionId();
-    if (!textarea || !sessionId) return Promise.resolve(false);
+    if (!textarea || !sessionId) {
+        return Promise.resolve(false);
+    }
 
     const value = textarea.value || "";
     chatDraftAutosaveState.sessionId = sessionId;

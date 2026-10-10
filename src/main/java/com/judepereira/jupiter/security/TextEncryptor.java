@@ -38,8 +38,9 @@ public class TextEncryptor {
     }
 
     public String encrypt(String plaintext, String aad) {
-        if (plaintext == null)
+        if (plaintext == null) {
             return null;
+        }
         try {
             byte[] nonce = new byte[NONCE_SIZE];
             random.nextBytes(nonce);
@@ -55,14 +56,17 @@ public class TextEncryptor {
     }
 
     public String decrypt(String value, String aad) {
-        if (value == null)
+        if (value == null) {
             return null;
-        if (!value.startsWith(PREFIX))
+        }
+        if (!value.startsWith(PREFIX)) {
             throw new EncryptionException("Malformed encrypted value");
+        }
         try {
             byte[] packed = Base64.getDecoder().decode(value.substring(PREFIX.length()));
-            if (packed.length < NONCE_SIZE + 16)
+            if (packed.length < NONCE_SIZE + 16) {
                 throw new EncryptionException("Malformed encrypted value");
+            }
             Cipher cipher = Cipher.getInstance(CIPHER);
             cipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(TAG_SIZE_BITS, packed, 0, NONCE_SIZE));
             cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
@@ -73,8 +77,9 @@ public class TextEncryptor {
     }
 
     public String blindIndex(String value, String domain) {
-        if (value == null)
+        if (value == null) {
             return null;
+        }
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(hmacKey);

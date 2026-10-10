@@ -23,7 +23,9 @@ let resizeChatTextarea = () => {};
 let bindPendingStreams = () => {};
 
 export function configureCommandPicker(config) {
-    if (!config) return;
+    if (!config) {
+        return;
+    }
     if (typeof config.resizeChatTextarea === "function") {
         resizeChatTextarea = config.resizeChatTextarea;
     }
@@ -41,11 +43,15 @@ function getCommandModalRoot() {
 }
 
 export function closeCommandPicker() {
-    if (!commandPickerState.open) return;
+    if (!commandPickerState.open) {
+        return;
+    }
     commandPickerState.openRequestId++;
     const textarea = commandPickerState.textarea;
     const root = getCommandModalRoot();
-    if (root) root.innerHTML = "";
+    if (root) {
+        root.innerHTML = "";
+    }
     commandPickerState.open = false;
     commandPickerState.textarea = null;
     if (commandPickerState.repositionHandler) {
@@ -74,7 +80,9 @@ function fetchCommandCatalog() {
         cache: "no-store",
         headers: { "HX-Request": "true" },
     }).then((response) => {
-        if (!response.ok) throw new Error("Failed to load command catalog");
+        if (!response.ok) {
+            throw new Error("Failed to load command catalog");
+        }
         return response.json();
     });
 }
@@ -83,7 +91,9 @@ function commandMatchesQuery(command, query) {
     const normalized = String(query || "")
         .trim()
         .toLowerCase();
-    if (!normalized || normalized === "/") return true;
+    if (!normalized || normalized === "/") {
+        return true;
+    }
     return ("/" + String(command && command.id ? command.id : "").toLowerCase()).startsWith(normalized);
 }
 
@@ -101,8 +111,12 @@ function escapeHtml(value) {
 }
 
 function requestCommandPickerPosition() {
-    if (!commandPickerState.open) return;
-    if (commandPickerState.positionFrame != null) return;
+    if (!commandPickerState.open) {
+        return;
+    }
+    if (commandPickerState.positionFrame != null) {
+        return;
+    }
     commandPickerState.positionFrame = requestAnimationFrame(() => {
         commandPickerState.positionFrame = null;
         positionCommandPicker();
@@ -113,7 +127,9 @@ function positionCommandPicker() {
     const modal = commandPickerState.modal;
     const card = commandPickerState.card;
     const textarea = commandPickerState.textarea;
-    if (!modal || !card || !textarea) return;
+    if (!modal || !card || !textarea) {
+        return;
+    }
 
     const rect = textarea.getBoundingClientRect();
     const viewportPadding = 16;
@@ -137,7 +153,9 @@ function positionCommandPicker() {
 function renderCommandPickerList() {
     const list = commandPickerState.list;
     const input = commandPickerState.input;
-    if (!list || !input) return;
+    if (!list || !input) {
+        return;
+    }
 
     const query = input.value || "/";
     commandPickerState.query = query;
@@ -206,7 +224,9 @@ function insertCommandText(textarea, text) {
 
 function appendChatHtml(html) {
     const list = document.getElementById("chat-messages-list");
-    if (!list || !html) return;
+    if (!list || !html) {
+        return;
+    }
     list.insertAdjacentHTML("beforeend", html);
     try {
         renderAllChatMarkdown(list);
@@ -218,7 +238,9 @@ function appendChatHtml(html) {
 }
 
 function executeCommand(command) {
-    if (!command) return;
+    if (!command) {
+        return;
+    }
     const textarea = commandPickerState.textarea || document.getElementById("chat-input");
     if (String(command.type || command.kind || "").toLowerCase() === "prompt") {
         if (textarea) {
@@ -240,7 +262,9 @@ function executeCommand(command) {
         headers: { "HX-Request": "true" },
     })
         .then((response) => {
-            if (!response.ok) throw new Error("Command execution failed");
+            if (!response.ok) {
+                throw new Error("Command execution failed");
+            }
             return response.text();
         })
         .then((html) => appendChatHtml(html))
@@ -250,7 +274,9 @@ function executeCommand(command) {
 function executeCommandAtIndex(index) {
     const commands = filteredCommands(commandPickerState.input ? commandPickerState.input.value : "/");
     const command = commands[index] || commands[0];
-    if (!command) return;
+    if (!command) {
+        return;
+    }
     commandPickerState.activeIndex = Math.max(0, commands.indexOf(command));
     renderCommandPickerList();
     executeCommand(command);
@@ -258,7 +284,9 @@ function executeCommandAtIndex(index) {
 
 export function openCommandPicker(textarea, query) {
     const root = getCommandModalRoot();
-    if (!root) return;
+    if (!root) {
+        return;
+    }
     const requestId = ++commandPickerState.openRequestId;
     const value = query || textarea.value || "/";
     commandPickerState.open = true;
@@ -287,8 +315,14 @@ export function openCommandPicker(textarea, query) {
     commandPickerState.card = root.querySelector(".command-modal-card");
     commandPickerState.input = root.querySelector(".command-modal-input");
     commandPickerState.list = root.querySelector(".command-modal-list");
-    if (!commandPickerState.input || !commandPickerState.list || !commandPickerState.modal || !commandPickerState.card)
+    if (
+        !commandPickerState.input ||
+        !commandPickerState.list ||
+        !commandPickerState.modal ||
+        !commandPickerState.card
+    ) {
         return;
+    }
     positionCommandPicker();
     scheduleChatDraftSave(value);
     commandPickerState.input.value = value;
@@ -302,7 +336,9 @@ export function openCommandPicker(textarea, query) {
     };
 
     const reposition = () => {
-        if (!commandPickerState.open) return;
+        if (!commandPickerState.open) {
+            return;
+        }
         requestCommandPickerPosition();
     };
 
@@ -317,7 +353,9 @@ export function openCommandPicker(textarea, query) {
     commandPickerState.repositionHandler = reposition;
     commandPickerState.input.addEventListener("input", renderCommandPickerList);
     commandPickerState.input.addEventListener("keydown", (event) => {
-        if (event.isComposing) return;
+        if (event.isComposing) {
+            return;
+        }
         if (event.key === "Escape") {
             event.preventDefault();
             closeCommandPicker();
@@ -341,9 +379,13 @@ export function openCommandPicker(textarea, query) {
 
     commandPickerState.list.addEventListener("click", (event) => {
         const item = event.target && event.target.closest ? event.target.closest(".command-modal-item") : null;
-        if (!item) return;
+        if (!item) {
+            return;
+        }
         const index = Array.prototype.indexOf.call(commandPickerState.list.children, item);
-        if (index < 0) return;
+        if (index < 0) {
+            return;
+        }
         executeCommandAtIndex(index);
     });
 
@@ -353,7 +395,9 @@ export function openCommandPicker(textarea, query) {
 
     fetchCommandCatalog()
         .then((catalog) => {
-            if (!commandPickerState.open || commandPickerState.openRequestId !== requestId) return;
+            if (!commandPickerState.open || commandPickerState.openRequestId !== requestId) {
+                return;
+            }
             commandPickerState.catalog = Array.isArray(catalog) ? catalog : [];
             renderCommandPickerList();
         })

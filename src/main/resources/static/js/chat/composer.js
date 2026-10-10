@@ -25,7 +25,9 @@ function isMobileChatViewport() {
 }
 
 export function configureChatComposer(config) {
-    if (!config) return;
+    if (!config) {
+        return;
+    }
     if (typeof config.activePrimaryPendingAssistantRow === "function") {
         chatComposerConfig.activePrimaryPendingAssistantRow = config.activePrimaryPendingAssistantRow;
     }
@@ -38,13 +40,19 @@ export function configureChatComposer(config) {
 }
 
 function bindChatControlSwapHooks() {
-    if (htmxControlSwapHooksBound) return;
+    if (htmxControlSwapHooksBound) {
+        return;
+    }
     htmxControlSwapHooksBound = true;
     const afterSwap = (event) => {
         const target = event.detail?.target;
-        if (target?.id !== "chat-controls") return;
+        if (target?.id !== "chat-controls") {
+            return;
+        }
         const form = document.getElementById("chat-send-form");
-        if (form) bindChatControlListeners(form);
+        if (form) {
+            bindChatControlListeners(form);
+        }
     };
     // OOB swaps have their own lifecycle; keep this generic so settings and other refreshes share it.
     document.body.addEventListener("htmx:afterSwap", afterSwap, true);
@@ -52,7 +60,9 @@ function bindChatControlSwapHooks() {
 }
 
 function bindChatDraftFlushListeners() {
-    if (chatDraftFlushBound) return;
+    if (chatDraftFlushBound) {
+        return;
+    }
     chatDraftFlushBound = true;
 
     document.body.addEventListener(
@@ -64,7 +74,9 @@ function bindChatDraftFlushListeners() {
                     invalidateChatDraftAutosaveState();
                     return;
                 }
-                if (!shouldFlushDraftBeforeRequest(path)) return;
+                if (!shouldFlushDraftBeforeRequest(path)) {
+                    return;
+                }
                 flushChatDraftSave({ keepalive: true, useBeacon: true });
             } catch (_) {}
         },
@@ -73,7 +85,9 @@ function bindChatDraftFlushListeners() {
 }
 
 function getChatSelectOption(select) {
-    if (!select) return null;
+    if (!select) {
+        return null;
+    }
     return select.options ? select.options[select.selectedIndex] : null;
 }
 
@@ -81,10 +95,14 @@ function syncChatDefaults(form) {
     const agentSelect = form && form.querySelector("#chat-agent-select");
     const modelSelect = form && form.querySelector("#chat-model-select");
     const thinkingSelect = form && form.querySelector("#chat-thinking-select");
-    if (!agentSelect || !modelSelect || !thinkingSelect) return;
+    if (!agentSelect || !modelSelect || !thinkingSelect) {
+        return;
+    }
 
     const agentOption = getChatSelectOption(agentSelect);
-    if (!agentOption || !agentOption.dataset) return;
+    if (!agentOption || !agentOption.dataset) {
+        return;
+    }
 
     const resolvedModel = agentOption.dataset.defaultModel;
     if (resolvedModel && Array.from(modelSelect.options).some((option) => option.value === resolvedModel)) {
@@ -95,9 +113,13 @@ function syncChatDefaults(form) {
 }
 
 function bindChatControlListeners(form) {
-    if (!form) return;
+    if (!form) {
+        return;
+    }
     const controls = form.querySelector("#chat-controls");
-    if (!controls) return;
+    if (!controls) {
+        return;
+    }
     const initialExplicit = controls.dataset.modelExplicit;
     form.dataset.modelExplicit = initialExplicit === "true" ? "1" : initialExplicit || "0";
     if (form.dataset.chatControlsBound !== "1") {
@@ -106,13 +128,17 @@ function bindChatControlListeners(form) {
             const agentOption = getChatSelectOption(form.querySelector("#chat-agent-select"));
             const modelSelect = form.querySelector("#chat-model-select");
             const parameters = event.detail && event.detail.parameters;
-            if (!parameters || !agentOption || !modelSelect) return;
+            if (!parameters || !agentOption || !modelSelect) {
+                return;
+            }
             if (agentOption.dataset.defaultModel === modelSelect.value && form.dataset.modelExplicit !== "1") {
                 delete parameters.modelId;
             }
         });
     }
-    if (controls.dataset.chatControlsBound === "1") return;
+    if (controls.dataset.chatControlsBound === "1") {
+        return;
+    }
     controls.dataset.chatControlsBound = "1";
 
     const agentSelect = form.querySelector("#chat-agent-select");
@@ -120,18 +146,24 @@ function bindChatControlListeners(form) {
     modelSelect?.addEventListener("change", () => {
         form.dataset.modelExplicit = "1";
     });
-    if (!agentSelect) return;
+    if (!agentSelect) {
+        return;
+    }
 
     agentSelect.addEventListener("change", () => syncChatDefaults(form));
 }
 
 function bindChatSubmitStopListener(form) {
-    if (!form || form.dataset.chatStopBound === "1") return;
+    if (!form || form.dataset.chatStopBound === "1") {
+        return;
+    }
     form.dataset.chatStopBound = "1";
     form.addEventListener(
         "submit",
         (event) => {
-            if (!chatComposerConfig.activePrimaryPendingAssistantRow()) return;
+            if (!chatComposerConfig.activePrimaryPendingAssistantRow()) {
+                return;
+            }
             event.preventDefault();
             event.stopPropagation();
             chatComposerConfig.requestStopActiveChat();
@@ -141,7 +173,9 @@ function bindChatSubmitStopListener(form) {
 }
 
 export function resizeChatTextarea(textarea) {
-    if (!textarea) return;
+    if (!textarea) {
+        return;
+    }
     textarea.style.height = "auto";
     const sh = textarea.scrollHeight;
     textarea.style.height = sh + "px";
@@ -161,7 +195,9 @@ export function resizeChatTextarea(textarea) {
 }
 
 function insertChatTextareaNewline(textarea) {
-    if (!textarea) return;
+    if (!textarea) {
+        return;
+    }
     const start = typeof textarea.selectionStart === "number" ? textarea.selectionStart : textarea.value.length;
     const end = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : textarea.value.length;
     if (typeof textarea.setRangeText === "function") {
@@ -178,20 +214,30 @@ function insertChatTextareaNewline(textarea) {
 }
 
 function bindHtmxAfterOnLoadListener() {
-    if (htmxAfterOnLoadBound) return;
+    if (htmxAfterOnLoadBound) {
+        return;
+    }
     htmxAfterOnLoadBound = true;
     document.body.addEventListener(
         "htmx:afterOnLoad",
         function (evt) {
             try {
                 const detail = evt && evt.detail;
-                if (!detail || !detail.xhr) return;
+                if (!detail || !detail.xhr) {
+                    return;
+                }
                 const path = detail.path || (detail.xhr && detail.xhr.responseURL) || "";
-                if (!path) return;
-                if (!path.includes("/ui/chat/send")) return;
+                if (!path) {
+                    return;
+                }
+                if (!path.includes("/ui/chat/send")) {
+                    return;
+                }
 
                 const textarea = document.getElementById("chat-input");
-                if (!textarea) return;
+                if (!textarea) {
+                    return;
+                }
                 textarea.value = "";
                 textarea.dataset.chatSlashRestoredValue = "";
                 resizeChatTextarea(textarea);
@@ -207,7 +253,9 @@ export function initChatComposer() {
         bindChatControlSwapHooks();
         const form = document.getElementById("chat-send-form");
         const textarea = document.getElementById("chat-input");
-        if (!form || !textarea) return;
+        if (!form || !textarea) {
+            return;
+        }
 
         const isFreshComposer = textarea.dataset.chatBound !== "1";
         syncChatDraftAutosaveStateFromTextarea(textarea, isFreshComposer);
@@ -223,8 +271,12 @@ export function initChatComposer() {
                     return;
                 }
                 const isEnter = e.key === "Enter" || e.keyCode === 13;
-                if (!isEnter) return;
-                if (e.isComposing) return;
+                if (!isEnter) {
+                    return;
+                }
+                if (e.isComposing) {
+                    return;
+                }
 
                 if (e.altKey || isMobileChatViewport()) {
                     e.preventDefault();
@@ -249,19 +301,29 @@ export function initChatComposer() {
             });
             textarea.addEventListener("keydown", onKeyDown);
             textarea.addEventListener("beforeinput", (event) => {
-                if (isCommandPickerOpen()) return;
-                if (textarea.selectionStart !== 0 || textarea.selectionEnd !== 0 || textarea.value) return;
-                if (event.inputType !== "insertText" || event.data !== "/") return;
+                if (isCommandPickerOpen()) {
+                    return;
+                }
+                if (textarea.selectionStart !== 0 || textarea.selectionEnd !== 0 || textarea.value) {
+                    return;
+                }
+                if (event.inputType !== "insertText" || event.data !== "/") {
+                    return;
+                }
                 event.preventDefault();
                 openCommandPicker(textarea, "/");
             });
             textarea.addEventListener("input", () => {
-                if (isCommandPickerOpen()) return;
+                if (isCommandPickerOpen()) {
+                    return;
+                }
                 if (!textarea.value.startsWith("/")) {
                     textarea.dataset.chatSlashRestoredValue = "";
                     return;
                 }
-                if (textarea.dataset.chatSlashRestoredValue === textarea.value) return;
+                if (textarea.dataset.chatSlashRestoredValue === textarea.value) {
+                    return;
+                }
                 openCommandPicker(textarea, textarea.value);
             });
             bindHtmxAfterOnLoadListener();

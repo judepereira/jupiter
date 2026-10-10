@@ -13,7 +13,9 @@ import {
 let chatHtmxListenersBound = false;
 
 function bindChatHtmxLifecycleListeners() {
-    if (chatHtmxListenersBound) return;
+    if (chatHtmxListenersBound) {
+        return;
+    }
     chatHtmxListenersBound = true;
 
     document.body.addEventListener(

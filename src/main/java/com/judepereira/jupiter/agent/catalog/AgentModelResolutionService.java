@@ -16,8 +16,9 @@ public class AgentModelResolutionService {
     public ModelResolution resolve(AgentDefinition agent) {
         for (String id : agent.modelIds()) {
             ModelDefinition model = catalog.getRequired(id);
-            if (availability.isAvailable(model.provider()))
+            if (availability.isAvailable(model.provider())) {
                 return new ModelResolution(agent.defaultModel(), model);
+            }
         }
         throw new IllegalStateException("No configured provider is available for agent '" + agent.id() + "'");
     }
