@@ -29,3 +29,18 @@ confirmation before forced worktree removal.
 You can pull manually, or enable automatic fast-forward-only updates. See [Git Updates](Git-Updates). This is
 recommended for the main branch checked out in the default workspace, so that new branches begin their life with the
 most up-to-date version of main/master/develop.
+
+## Automatic commit attribution
+
+Ordinary `git commit` commands through `/usr/bin/git` in the Jupiter container append this trailer:
+
+```text
+Co-authored-by: Jupiter IDE <340693705+jupiter-ide@users.noreply.github.com>
+```
+
+This applies to agent and terminal commands. It does not change the author or committer, or alter existing hooks. Git's
+native `addIfDifferent` deduplication checks the final trailer block, not arbitrary occurrences in the message body.
+
+The wrapper does not apply when invoking the real Git binary or helpers directly, using a Git alias/internal operation,
+or running Git outside the container. Merge, cherry-pick, and rebase operations do not become attributed just because
+they may create commits internally. `--fixup` modes can rewrite commit messages and omit the trailer.

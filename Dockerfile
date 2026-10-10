@@ -33,7 +33,11 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
 
 FROM eclipse-temurin:25-jre AS runtime
 
-RUN     apt update && apt install -y git git-lfs ripgrep && apt-get clean && rm -rf /var/cache/apt/lists
+RUN     apt update && apt install -y git git-lfs ripgrep && \
+        dpkg-divert --local --rename --add --divert /usr/bin/git.real /usr/bin/git && \
+        apt-get clean && rm -rf /var/cache/apt/lists
+
+COPY --chmod=0755 git-wrapper.sh /usr/bin/git
 
 RUN     userdel ubuntu || true
 RUN     groupdel ubuntu || true
