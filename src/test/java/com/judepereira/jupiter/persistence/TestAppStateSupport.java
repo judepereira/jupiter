@@ -112,10 +112,15 @@ public final class TestAppStateSupport {
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties,
             ModelCatalogService modelCatalogService) {
-        return controller(harness, properties, modelCatalogService, null);
+        return controllerContext(harness, properties, modelCatalogService, null).controller();
     }
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties,
+            ModelCatalogService modelCatalogService, LifecycleHookService lifecycleHookService) {
+        return controllerContext(harness, properties, modelCatalogService, lifecycleHookService).controller();
+    }
+
+    public static ControllerTestContext controllerContext(CodingAgentHarness harness, AgentProperties properties,
             ModelCatalogService modelCatalogService, LifecycleHookService lifecycleHookService) {
         TerminalManager terminalManager = mock(TerminalManager.class);
         AtomicInteger sequence = new AtomicInteger();
@@ -141,8 +146,9 @@ public final class TestAppStateSupport {
         resolver.setTemplateMode(TemplateMode.HTML);
         resolver.setCacheable(false);
         templateEngine.setTemplateResolver(resolver);
-        return new UiController(harness, properties, appStateService, new AgentDefinitionService(new ObjectMapper()),
-                modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService),
+        UiController controller = new UiController(harness, properties, appStateService,
+                new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
+                ModelCatalogTestSupport.resolutionService(modelCatalogService),
                 ModelCatalogTestSupport.preferenceResolver(modelCatalogService), mock(AgentPreferenceService.class),
                 null, null, mock(ProviderAvailabilityService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -158,6 +164,10 @@ public final class TestAppStateSupport {
                 new ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
                 lifecycleHookService, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
                 mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
+        return new ControllerTestContext(controller, appStateService);
+    }
+
+    public record ControllerTestContext(UiController controller, AppStateService service) {
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller,
