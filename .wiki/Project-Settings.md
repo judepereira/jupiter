@@ -1,5 +1,7 @@
 Project settings define how a repository should behave once a workspace is created.
 
+The **Watches** tab configures project-owned checks and explicitly enables them per visible primary session.
+
 ![Project settings](images/project-settings.png)
 
 ## Workspace Initialization

@@ -10,6 +10,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.persistence.Persistence.*;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,9 +43,14 @@ public class AppStateService {
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final ActiveStreamRegistryService activeStreamRegistryService;
+    private final SessionActivityCoordinator activityCoordinator;
 
     public ActiveStreamRegistryService activeStreamRegistryService() {
         return activeStreamRegistryService;
+    }
+
+    public SessionActivityCoordinator activityCoordinator() {
+        return activityCoordinator;
     }
 
     @Transactional(readOnly = true)
@@ -517,6 +523,18 @@ public class AppStateService {
     }
 
     @Transactional(readOnly = true)
+    public List<SessionView> listVisiblePrimarySessions(long workspaceId) {
+        return repository.listVisiblePrimarySessionsByWorkspace(workspaceId).stream().map(this::toSessionView).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkspaceView> listProjectWorkspaces(long projectId) {
+        Set<Long> activeSessionIds = activeStreamRegistryService.activeSessionIdsSnapshot();
+        return repository.listWorkspacesByProject(projectId).stream()
+                .map(workspace -> toWorkspaceView(workspace, activeSessionIds)).toList();
+    }
+
+    @Transactional(readOnly = true)
     public Optional<SessionView> findMostRecentlyOpenedVisiblePrimarySession(long workspaceId) {
         return repository.findMostRecentlyOpenedVisiblePrimarySession(workspaceId).map(this::toSessionView);
     }
@@ -664,12 +682,25 @@ public class AppStateService {
     @Transactional
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId,
             String assistantPublicId, String userText) {
-        return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText, null);
+        return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText, null, false);
+    }
+
+    public QueuedChatTurn appendWatchGeneratedTurn(long sessionId, String userPublicId, String assistantPublicId,
+            String userText, ChatMessageMetadata assistantMetadata) {
+        return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText,
+                assistantMetadata, true);
     }
 
     @Transactional
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId,
             String assistantPublicId, String userText, ChatMessageMetadata assistantMetadata) {
+        return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText,
+                assistantMetadata, false);
+    }
+
+    @Transactional
+    private QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId,
+            String assistantPublicId, String userText, ChatMessageMetadata assistantMetadata, boolean watchGenerated) {
         if (userText == null) {
             throw new IllegalStateException("User text is required");
         }
@@ -679,7 +710,10 @@ public class AppStateService {
         String userId = publicId(userPublicId);
         String assistantId = publicId(assistantPublicId);
         repository.insertConversationMessage(sessionId, userId, "user", turnId, userSequence, userText, null, null,
-                true, true, false, now);
+                true, true, false, null, null, null, null, null, null, null, now, watchGenerated);
+        if (!watchGenerated) {
+            activityCoordinator.recordUserActivity(sessionId, userId);
+        }
         long assistantSequence = repository.nextMessageSequence(sessionId);
         repository.insertConversationMessage(sessionId, assistantId, "assistant", turnId, assistantSequence,
                 "Thinking…", null, null, true, false, true,
@@ -687,7 +721,8 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.agentName(),
                 assistantMetadata == null ? null : assistantMetadata.modelId(),
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
-                assistantMetadata == null ? null : assistantMetadata.preferredModelId(), null, null, now);
+                assistantMetadata == null ? null : assistantMetadata.preferredModelId(), null, null, now,
+                watchGenerated);
         repository.clearSessionDraft(sessionId);
         return new QueuedChatTurn(
                 new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, null, List.of(), null),
@@ -826,6 +861,7 @@ public class AppStateService {
                 "Tool call did not complete before assistant completion");
         repository.updateMessageToolCalls(assistantMessage.id(), null);
         repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true, now);
+        activityCoordinator.recordAssistantActivity(sessionId, assistantPublicId);
         markUnreadIfInactive(sessionId);
         return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
     }
@@ -868,6 +904,17 @@ public class AppStateService {
     }
 
     @Transactional
+    public WatchPanelState watchPanelState(long sessionId) {
+        var session = repository.findSession(sessionId);
+        return new WatchPanelState(session.watchPanelOpen(), session.watchPanelHeight());
+    }
+
+    public WatchPanelState updateWatchPanelState(long sessionId, boolean open, int height) {
+        int clampedHeight = Math.max(160, Math.min(height, 2000));
+        repository.updateWatchPanelState(sessionId, open, clampedHeight);
+        return new WatchPanelState(open, clampedHeight);
+    }
+
     public boolean toggleReviewPanel(long sessionId) {
         var session = repository.findSession(sessionId);
         boolean open = !session.reviewPanelOpen();

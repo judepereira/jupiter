@@ -126,7 +126,9 @@ public class CodingAgentHarness {
         long projectId = resolveProjectId(request.getSessionId());
         McpProjectToolSnapshot mcpSnapshot = resolveMcpSnapshot(projectId);
 
-        Set<String> allowedTools = resolveAllowedTools(agent);
+        Set<String> allowedTools = request.getAllowedTools() == null
+                ? resolveAllowedTools(agent)
+                : Set.copyOf(request.getAllowedTools());
         List<ToolDefinition> defs = resolveToolDefinitions(allowedTools, mcpSnapshot);
 
         StringBuilder accumulated = new StringBuilder();
@@ -280,7 +282,7 @@ public class CodingAgentHarness {
 
     private static AgentTurnRequest withPreferenceSnapshot(AgentTurnRequest request,
             AgentPreferenceResolver.Resolution resolution) {
-        return new AgentTurnRequest(request.getSystemPrompt(), request.getConversationHistory(),
+        return AgentTurnRequest.withPreferenceSnapshot(request.getSystemPrompt(), request.getConversationHistory(),
                 request.getWorkspaceRoot(), request.getAgentId(), request.getModelId(), request.getThinkingLevel(),
                 request.getSessionId(), request.getCancellationToken(), resolution);
     }

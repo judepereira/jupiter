@@ -14,7 +14,9 @@ import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.Persistence.SessionDetailView;
 import com.judepereira.jupiter.persistence.Persistence.SessionView;
+import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -26,9 +28,18 @@ class CommandControllerTests {
     private final CommandCatalogService commandCatalogService = mock(CommandCatalogService.class);
     private final CommandStreamService commandStreamService = mock(CommandStreamService.class);
     private final AppStateService appStateService = mock(AppStateService.class);
+    private final ActiveStreamRegistryService activeStreams = new ActiveStreamRegistryService();
     private final ChatPresentationService chatPresentationService = new ChatPresentationService();
+    private final SessionActivityCoordinator activityCoordinator = mock(SessionActivityCoordinator.class);
+    {
+        when(appStateService.activeStreamRegistryService()).thenReturn(activeStreams);
+        doAnswer(invocation -> {
+            ((Runnable) invocation.getArgument(1)).run();
+            return null;
+        }).when(activityCoordinator).withLock(anyLong(), any(Runnable.class));
+    }
     private final CommandController controller = new CommandController(commandCatalogService, commandStreamService,
-            appStateService, chatPresentationService);
+            appStateService, chatPresentationService, activityCoordinator);
 
     @Test
     void catalogWithoutActiveSessionUsesNoWorkspace() {

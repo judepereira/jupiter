@@ -2,6 +2,7 @@
     th:fragment="panel"
     id="bottom-panel"
     class="main-panel bottom-panel terminal-panel"
+    th:style="'--terminal-panel-height: ' + ${bottomPanelHeight} + 'px'"
     th:classappend="${bottomPanelMode != 'terminal'} ? 'closed' : ''"
     th:attr="hx-swap-oob=${terminalOob} ? 'outerHTML' : null"
 >

@@ -405,6 +405,159 @@
     </div>
 </th:block>
 
+<th:block th:fragment="settingsWatches">
+    <div id="settings-watches" class="tab-pane fade" role="tabpanel" aria-labelledby="settings-watches-tab">
+        <section class="settings-section">
+            <div class="settings-section-header">
+                <h3>Watches</h3>
+                <p class="settings-help-text">Project-owned checks run only for explicitly enabled sessions.</p>
+            </div>
+            <form
+                class="settings-form"
+                hx-post="/ui/settings/watches/create"
+                hx-target="#settings-watches"
+                hx-swap="outerHTML"
+            >
+                <input type="hidden" name="workspaceId" th:value="${watchWorkspaceId}">
+                <input type="hidden" name="sessionId" th:value="${watchSessionId}">
+                <input name="name" placeholder="Name" required>
+                <textarea name="prompt" placeholder="What should be checked?" required></textarea>
+                <label
+                    >Interval
+                    <input name="intervalSeconds" type="number" min="60" max="86400" value="3600" required></label
+                >
+                <label
+                    >Evaluator
+                    <select name="evaluatorAgentId" required>
+                        <option th:each="a : ${watchAgents}" th:value="${a.id()}" th:text="${a.name()}"></option>
+                    </select></label
+                >
+                <label
+                    >Action agent
+                    <select name="actionAgentId" required>
+                        <option th:each="a : ${watchAgents}" th:value="${a.id()}" th:text="${a.name()}"></option>
+                    </select></label
+                >
+                <label
+                    >Action
+                    <select name="actionCommandId" required>
+                        <option th:each="c : ${watchCommands}" th:value="${c.id()}" th:text="${c.name()}"></option>
+                    </select></label
+                >
+                <button class="btn btn-primary" type="submit" th:disabled="${watchSessionId == null}">
+                    Create watch
+                </button>
+            </form>
+            <form
+                class="settings-form"
+                hx-get="/ui/settings/watches/select"
+                hx-target="#settings-watches"
+                hx-swap="outerHTML"
+                th:if="${activeProject != null}"
+            >
+                <input type="hidden" name="projectId" th:value="${activeProject.id}">
+                <label
+                    >Workspace
+                    <select name="workspaceId" onchange="this.form.requestSubmit()">
+                        <option
+                            th:each="workspace : ${watchWorkspaces}"
+                            th:value="${workspace.id}"
+                            th:text="${workspace.name}"
+                            th:selected="${workspace.id == watchWorkspaceId}"
+                        ></option>
+                    </select></label
+                >
+                <label
+                    >Session
+                    <select name="sessionId" onchange="this.form.requestSubmit()">
+                        <option
+                            th:each="watchSession : ${watchSessions}"
+                            th:value="${watchSession.id}"
+                            th:text="${watchSession.name}"
+                            th:selected="${watchSession.id == watchSessionId}"
+                        ></option>
+                    </select></label
+                >
+            </form>
+            <p class="settings-help-text" th:if="${#lists.isEmpty(watchSessions)}">
+                No visible primary sessions exist in this workspace. Create a session before enabling watches.
+            </p>
+            <div th:each="w : ${watchDefinitions}" class="settings-command-card">
+                <details>
+                    <summary>
+                        <strong th:text="${w.name()}"></strong>
+                        <span th:text="${w.intervalSeconds() + ' seconds'}"></span>
+                    </summary>
+                    <form
+                        class="settings-form"
+                        th:attr="hx-post=@{/ui/settings/watches/{id}(id=${w.id()})}"
+                        hx-target="#settings-watches"
+                        hx-swap="outerHTML"
+                    >
+                        <input type="hidden" name="workspaceId" th:value="${watchWorkspaceId}">
+                        <input type="hidden" name="sessionId" th:value="${watchSessionId}">
+                        <input name="name" th:value="${w.name()}" required>
+                        <textarea name="prompt" th:text="${w.prompt()}" required></textarea>
+                        <input
+                            name="intervalSeconds"
+                            type="number"
+                            min="60"
+                            max="86400"
+                            th:value="${w.intervalSeconds()}"
+                            required
+                        >
+                        <select name="evaluatorAgentId">
+                            <option
+                                th:each="a : ${watchAgents}"
+                                th:value="${a.id()}"
+                                th:text="${a.name()}"
+                                th:selected="${a.id() == w.evaluatorAgentId()}"
+                            ></option>
+                        </select>
+                        <select name="actionAgentId">
+                            <option
+                                th:each="a : ${watchAgents}"
+                                th:value="${a.id()}"
+                                th:text="${a.name()}"
+                                th:selected="${a.id() == w.actionAgentId()}"
+                            ></option>
+                        </select>
+                        <select name="actionCommandId">
+                            <option
+                                th:each="c : ${watchCommands}"
+                                th:value="${c.id()}"
+                                th:text="${c.name()}"
+                                th:selected="${c.id() == w.actionCommandId()}"
+                            ></option>
+                        </select>
+                        <button class="btn btn-primary" type="submit">Save</button>
+                    </form>
+                </details>
+                <form
+                    th:attr="hx-post=@{/ui/settings/watches/{id}/delete(id=${w.id()})}"
+                    hx-target="#settings-watches"
+                    hx-swap="outerHTML"
+                >
+                    <input type="hidden" name="workspaceId" th:value="${watchWorkspaceId}">
+                    <input type="hidden" name="sessionId" th:value="${watchSessionId}">
+                    <button class="btn btn-link text-danger" type="submit">Delete</button>
+                </form>
+                <div class="settings-help-text" th:text="${w.prompt()}"></div>
+                <div th:each="s : ${watchSessions}" class="form-check">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        th:checked="${watchEnablementsBySession[s.id].?[watchId() == w.id() and enabled()].size() > 0}"
+                        th:disabled="${watchSessionId == null}"
+                        th:id="${'watch-' + w.id() + '-' + s.id}"
+                        th:attr="hx-post=@{/ui/settings/watches/{watchId}/sessions/{sessionId}/toggle(watchId=${w.id()},sessionId=${s.id})}, hx-target='#settings-watches', hx-swap='outerHTML'"
+                    ><label th:for="${'watch-' + w.id() + '-' + s.id}" th:text="${s.name}"></label>
+                </div>
+            </div>
+        </section>
+    </div>
+</th:block>
+
 <th:block
     th:fragment="settingsModal"
     th:with="workspaceInitCommandsValue=${activeProject == null or activeProject.workspaceInitCommands == null ? '' : activeProject.workspaceInitCommands}, commandEnvironmentAllowlistValue=${activeProject == null or activeProject.commandEnvironmentAllowlist == null ? '' : activeProject.commandEnvironmentAllowlist}, environmentVariablesValue=${activeProject == null or activeProject.environmentVariables == null ? T(java.util.List).of() : activeProject.environmentVariables}, visibleProjectsValue=${visibleProjects == null ? (projects == null ? T(java.util.List).of() : projects) : visibleProjects}, mcpServersValue=${mcpServers == null ? T(java.util.List).of() : mcpServers}, lifecycleHookSettingsValue=${lifecycleHookSettings == null ? null : lifecycleHookSettings}"
@@ -437,6 +590,19 @@
                             aria-selected="true"
                         >
                             Current Project
+                        </button>
+                        <button
+                            class="nav-link"
+                            id="settings-watches-tab"
+                            th:if="${activeProject != null}"
+                            data-bs-toggle="pill"
+                            data-bs-target="#settings-watches"
+                            type="button"
+                            role="tab"
+                            aria-controls="settings-watches"
+                            aria-selected="false"
+                        >
+                            Watches
                         </button>
                         <button
                             class="nav-link"
@@ -541,6 +707,10 @@
 
                 <div class="col-12 col-md-9 overflow-scroll h-100">
                     <div class="tab-content settings-tab-content">
+                        <th:block
+                            th:if="${activeProject != null}"
+                            th:replace="~{fragments/projects :: settingsWatches}"
+                        ></th:block>
                         <div
                             th:if="${activeProject != null}"
                             class="tab-pane fade show active"
@@ -1148,7 +1318,8 @@
     <th:block th:replace="~{fragments/projects :: workspaceRail}"></th:block>
     <th:block th:if="${includeChatContainer}" th:replace="~{fragments/chat :: chat}"></th:block>
     <th:block th:replace="~{fragments/review :: panel}"></th:block>
-    <th:block th:replace="~{fragments/terminal :: panel}"></th:block>
+    <th:block th:if="${bottomPanelMode == 'watches'}" th:replace="~{fragments/watches :: panel}"></th:block>
+    <th:block th:unless="${bottomPanelMode == 'watches'}" th:replace="~{fragments/terminal :: panel}"></th:block>
     <th:block th:replace="~{fragments/projects :: modalClose}"></th:block>
 </th:block>
 

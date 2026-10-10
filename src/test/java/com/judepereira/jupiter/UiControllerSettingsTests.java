@@ -40,6 +40,9 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
+import com.judepereira.jupiter.watch.WatchService;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -57,6 +60,151 @@ import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public class UiControllerSettingsTests {
+
+    @Test
+    public void settingsModalAfterClosingLastSessionKeepsDefinitionsAndEmptySessionData(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+
+        context.appStateService().closeSession(sessionId);
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().settingsModal(model)).isEqualTo("fragments/projects :: settingsModal");
+        assertThat(model.getAttribute("watchSessionId")).isNull();
+        assertThat(model.getAttribute("watchEnablements")).isEqualTo(List.of());
+        assertThat(model.getAttribute("watchRuns")).isEqualTo(List.of());
+    }
+
+    @Test
+    public void resizeBottomPanelReturnsNoContentAndPersistsHeight(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+
+        assertThat(context.controller().resizeBottomPanel(420).getStatusCode().value()).isEqualTo(204);
+        assertThat(context.appStateService().watchPanelState(sessionId).height()).isEqualTo(420);
+
+        context.appStateService().closeSession(sessionId);
+        assertThat(context.controller().resizeBottomPanel(420).getStatusCode().value()).isEqualTo(204);
+    }
+
+    @Test
+    public void indexRestoresWatchesModeAndRuns(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+        context.appStateService().updateWatchPanelState(sessionId, true, 420);
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().index(model)).isEqualTo("index");
+        assertThat(model.getAttribute("bottomPanelMode")).isEqualTo("watches");
+        assertThat(model.getAttribute("watchRuns")).isNotNull().isEqualTo(List.of());
+        assertThat(model.getAttribute("bottomPanelHeight")).isEqualTo(420);
+    }
+
+    @Test
+    public void watchesPanelTogglesStateAndLoadsRuns(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+        when(context.watchService().latestRuns(sessionId)).thenReturn(List.of());
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().openWatchesPanel(model)).isEqualTo("fragments/watches :: panel");
+        assertThat(context.appStateService().watchPanelState(sessionId).open()).isTrue();
+        assertThat(model.getAttribute("watchRuns")).isEqualTo(List.of());
+
+        context.controller().openWatchesPanel(new ConcurrentModel());
+        assertThat(context.appStateService().watchPanelState(sessionId).open()).isFalse();
+        verify(context.watchService(), times(5)).latestRuns(sessionId);
+    }
+
+    @Test
+    public void watchCrudEndpointsDelegateProjectAndDefinitionValues(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long projectId = context.appStateService().loadViewData().activeProject().id();
+        long workspaceId = context.appStateService().loadViewData().activeWorkspace().id();
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+        var definition = new WatchService.Definition(7, projectId, "old", "old prompt", 30, "eval", "action", "command",
+                4);
+        when(context.watchService().listDefinitions(projectId)).thenReturn(List.of(definition));
+
+        assertThat(context.controller().createWatch("new", "prompt", 60, "eval-2", "action-2", "command-2", workspaceId,
+                sessionId, new ConcurrentModel())).isEqualTo("fragments/projects :: settingsWatches");
+        verify(context.watchService()).create(projectId, "new", "prompt", 60, "eval-2", "action-2", "command-2");
+
+        assertThat(context.controller().updateWatch(7, "updated", "updated prompt", 90, "eval-3", "action-3",
+                "command-3", new ConcurrentModel())).isEqualTo("fragments/projects :: settingsWatches");
+        verify(context.watchService()).update(new WatchService.Definition(7, projectId, "updated", "updated prompt", 90,
+                "eval-3", "action-3", "command-3", 4));
+
+        assertThat(context.controller().deleteWatch(7, new ConcurrentModel()))
+                .isEqualTo("fragments/projects :: settingsWatches");
+        verify(context.watchService()).delete(7);
+    }
+
+    @Test
+    public void selectingWatchSessionRejectsAnotherProject(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+
+        Assertions.assertThatThrownBy(() -> context.controller().selectWatchSession(999, 1, 1, new ConcurrentModel()))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid project");
+        verify(context.watchService(), never()).listDefinitions(Mockito.anyLong());
+    }
+
+    @Test
+    public void selectingWatchWorkspaceAndSessionOnlyChangesSettingsSelection(@TempDir Path workspaceRoot)
+            throws Exception {
+        initGitRepo(workspaceRoot);
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        var before = context.appStateService().loadViewData();
+        var alternateWorkspace = context.appStateService().createWorkspace(before.activeProject().id(), "feature",
+                true);
+        long alternateSessionId = context.appStateService().listVisiblePrimarySessions(alternateWorkspace.id())
+                .getFirst().id();
+        context.appStateService().activateWorkspace(before.activeWorkspace().id());
+        when(context.watchService().listDefinitions(before.activeProject().id())).thenReturn(List.of());
+
+        ConcurrentModel model = new ConcurrentModel();
+        assertThat(context.controller().selectWatchSession(before.activeProject().id(), alternateWorkspace.id(),
+                alternateSessionId, model)).isEqualTo("fragments/projects :: settingsWatches");
+
+        assertThat(model.getAttribute("watchWorkspaceId")).isEqualTo(alternateWorkspace.id());
+        assertThat(model.getAttribute("watchSessionId")).isEqualTo(alternateSessionId);
+        assertThat(context.appStateService().loadViewData().activeWorkspace().id())
+                .isEqualTo(before.activeWorkspace().id());
+        assertThat(context.appStateService().loadViewData().activeSession().id())
+                .isEqualTo(before.activeSession().id());
+    }
+
+    @Test
+    public void togglingMissingWatchEnablementEnablesWatch(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+        when(context.watchService().listEnablements(sessionId)).thenReturn(List.of());
+
+        assertThat(context.controller().toggleWatch(7, sessionId, new ConcurrentModel()))
+                .isEqualTo("fragments/projects :: settingsWatches");
+        verify(context.watchService()).enable(7, sessionId);
+    }
+
+    @Test
+    public void togglingWatchUsesCurrentEnablement(@TempDir Path workspaceRoot) {
+        TestContext context = newContext(workspaceRoot);
+        context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
+        long sessionId = context.appStateService().loadViewData().activeSession().id();
+        when(context.watchService().listEnablements(sessionId))
+                .thenReturn(List.of(new WatchService.Enablement(7, sessionId, true, 1, null)));
+
+        assertThat(context.controller().toggleWatch(7, sessionId, new ConcurrentModel()))
+                .isEqualTo("fragments/projects :: settingsWatches");
+        verify(context.watchService()).disable(7, sessionId);
+    }
 
     @Test
     public void settingsModalIncludesActiveProjectAndWorkspaceInitCommands(@TempDir Path workspaceRoot) {
@@ -401,6 +549,19 @@ public class UiControllerSettingsTests {
         assertThat(context.commandCatalogService().listCustom()).isEmpty();
     }
 
+    private static void initGitRepo(Path root) throws Exception {
+        Process process = new ProcessBuilder("git", "init").directory(root.toFile()).start();
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        Files.writeString(root.resolve(".gitignore"), "");
+        process = new ProcessBuilder("git", "add", ".").directory(root.toFile()).start();
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        process = new ProcessBuilder("git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m",
+                "initial").directory(root.toFile()).start();
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+    }
+
     private static TestContext newContext(Path workspaceRoot) {
         return newContext(workspaceRoot, new QueuedExecutor(), workspaceRoot.resolve("commands"));
     }
@@ -428,11 +589,13 @@ public class UiControllerSettingsTests {
                 System.getProperty("user.home"));
         ModelPreferencesService modelPreferencesService = Mockito.mock(ModelPreferencesService.class);
         ProviderAvailabilityService providerAvailabilityService = Mockito.mock(ProviderAvailabilityService.class);
+        WatchService watchService = Mockito.mock(WatchService.class);
         ModelCatalogService modelCatalogService = ModelCatalogTestSupport.modelCatalogService();
         AgentDefinitionService agentDefinitionService = new AgentDefinitionService(new ObjectMapper());
         AgentPreferenceResolver preferenceResolver = new AgentPreferenceResolver(appStateService, modelCatalogService,
                 providerAvailabilityService, ModelCatalogTestSupport.resolutionService(modelCatalogService));
         AgentPreferenceService agentPreferenceService = Mockito.mock(AgentPreferenceService.class);
+
         return new TestContext(appStateService, tokenUsageService, openAiOAuthService, mcpRuntimeManager,
                 gitAutoUpdateService, executor, modelPreferencesService, providerAvailabilityService,
                 new UiController(mock(CodingAgentHarness.class), properties, appStateService, agentDefinitionService,
@@ -447,15 +610,16 @@ public class UiControllerSettingsTests {
                         openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService),
                         tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager,
                         new ChatPresentationService(), null, null, new HttpAuthProperties(), gitAutoUpdateService,
-                        coordinator, "test", System.getProperty("user.home")),
-                commandCatalogService);
+                        coordinator, Mockito.mock(SessionActivityCoordinator.class), watchService, "test",
+                        System.getProperty("user.home")),
+                commandCatalogService, watchService);
     }
 
     private record TestContext(AppStateService appStateService, TokenUsageService tokenUsageService,
             OpenAiOAuthService openAiOAuthService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
             GitAutoUpdateService gitAutoUpdateService, QueuedExecutor executor,
             ModelPreferencesService modelPreferencesService, ProviderAvailabilityService providerAvailabilityService,
-            UiController controller, CommandCatalogService commandCatalogService) {
+            UiController controller, CommandCatalogService commandCatalogService, WatchService watchService) {
     }
 
     private static final class QueuedExecutor extends AbstractExecutorService {

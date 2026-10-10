@@ -836,6 +836,22 @@ public class AppStateRepository {
                 """, new MapSqlParameterSource("sessionId", sessionId), this::mapConversationMessage);
     }
 
+    List<SessionRow> listVisiblePrimarySessionsByWorkspace(long workspaceId) {
+        return jdbc.query("""
+                SELECT s.*,
+                       EXISTS(
+                           SELECT 1 FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE
+                           AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2
+                               WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE)
+                           AND m.pending = TRUE
+                       ) AS in_progress
+                FROM sessions s
+                WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND s.parent_session_id IS NULL
+                ORDER BY s.position ASC
+                """, new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
+    }
+
     List<SessionRow> listSessionsByWorkspace(long workspaceId) {
         return jdbc.query(
                 """
@@ -846,7 +862,7 @@ public class AppStateRepository {
                                    WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2 WHERE m2.session_id = s.id AND m2.role = 'assistant' AND m2.show_in_chat = TRUE) AND m.pending = TRUE
                                ) AS in_progress
                         FROM sessions s
-                        WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE
+                        WHERE s.workspace_id = :workspaceId AND s.hidden = FALSE AND s.parent_session_id IS NULL
                         ORDER BY s.position ASC
                         """,
                 new MapSqlParameterSource("workspaceId", workspaceId), this::mapSession);
@@ -985,8 +1001,8 @@ public class AppStateRepository {
             String parentToolCallId, String subagentAgentId, String subagentAgentName, Long parentAssistantMessageId) {
         return insertAndReturnId(
                 """
-                        INSERT INTO sessions (workspace_id, name, position, review_panel_open, review_source, selected_changed_file_id, chat_draft, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, session_usage_key, created_at, last_opened_at)
-                        VALUES (:workspaceId, :name, :position, :reviewPanelOpen, :reviewSource, :selectedChangedFileId, :chatDraft, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :sessionUsageKey, :createdAt, :lastOpenedAt)
+                        INSERT INTO sessions (workspace_id, name, position, review_panel_open, watch_panel_open, watch_panel_height, review_source, selected_changed_file_id, chat_draft, hidden, parent_session_id, parent_tool_call_id, subagent_agent_id, subagent_agent_name, parent_assistant_message_id, session_usage_key, created_at, last_opened_at)
+                        VALUES (:workspaceId, :name, :position, :reviewPanelOpen, 0, 320, :reviewSource, :selectedChangedFileId, :chatDraft, :hidden, :parentSessionId, :parentToolCallId, :subagentAgentId, :subagentAgentName, :parentAssistantMessageId, :sessionUsageKey, :createdAt, :lastOpenedAt)
                         """,
                 params -> params.addValue("workspaceId", workspaceId)
                         .addValue("chatDraft", enc("sessions", "chat_draft", ""))
@@ -1005,6 +1021,12 @@ public class AppStateRepository {
         jdbc.update("UPDATE sessions SET last_opened_at = :lastOpenedAt WHERE id = :sessionId",
                 new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("lastOpenedAt",
                         Timestamp.from(now)));
+    }
+
+    void updateWatchPanelState(long sessionId, boolean open, int height) {
+        jdbc.update("UPDATE sessions SET watch_panel_open = :open, watch_panel_height = :height WHERE id = :sessionId",
+                new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("open", open).addValue("height",
+                        height));
     }
 
     void updateSessionUnread(long sessionId, boolean unread) {
@@ -1093,11 +1115,21 @@ public class AppStateRepository {
             String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel,
             boolean pending, String agentId, String agentName, String modelId, String thinkingLevel,
             String preferredModelId, Long compactedThroughTurnId, Instant completedAt, Instant now) {
+        return insertConversationMessage(sessionId, publicId, role, turnId, sequence, content, toolCallId,
+                toolCallsJson, showInChat, includeInModel, pending, agentId, agentName, modelId, thinkingLevel,
+                preferredModelId, compactedThroughTurnId, completedAt, now, false);
+    }
+
+    long insertConversationMessage(long sessionId, String publicId, String role, long turnId, long sequence,
+            String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel,
+            boolean pending, String agentId, String agentName, String modelId, String thinkingLevel,
+            String preferredModelId, Long compactedThroughTurnId, Instant completedAt, Instant now,
+            boolean watchGenerated) {
         return insertAndReturnId(
                 """
                         INSERT INTO conversation_messages
-                        (session_id, public_id, role, turn_id, sequence, content, tool_call_id, tool_calls_json, show_in_chat, include_in_model, pending, agent_id, agent_name, model_id, thinking_level, preferred_model_id, compacted_through_turn_id, completed_at, created_at)
-                        VALUES (:sessionId, :publicId, :role, :turnId, :sequence, :content, :toolCallId, :toolCallsJson, :showInChat, :includeInModel, :pending, :agentId, :agentName, :modelId, :thinkingLevel, :preferredModelId, :compactedThroughTurnId, :completedAt, :createdAt)
+                        (session_id, public_id, role, turn_id, sequence, content, tool_call_id, tool_calls_json, show_in_chat, include_in_model, pending, agent_id, agent_name, model_id, thinking_level, preferred_model_id, compacted_through_turn_id, completed_at, created_at, watch_generated)
+                        VALUES (:sessionId, :publicId, :role, :turnId, :sequence, :content, :toolCallId, :toolCallsJson, :showInChat, :includeInModel, :pending, :agentId, :agentName, :modelId, :thinkingLevel, :preferredModelId, :compactedThroughTurnId, :completedAt, :createdAt, :watchGenerated)
                         """,
                 params -> params.addValue("sessionId", sessionId).addValue("publicId", publicId).addValue("role", role)
                         .addValue("turnId", turnId).addValue("sequence", sequence)
@@ -1114,7 +1146,7 @@ public class AppStateRepository {
                                 enc("conversation_messages", "preferred_model_id", preferredModelId))
                         .addValue("compactedThroughTurnId", compactedThroughTurnId)
                         .addValue("completedAt", completedAt == null ? null : Timestamp.from(completedAt))
-                        .addValue("createdAt", Timestamp.from(now)));
+                        .addValue("createdAt", Timestamp.from(now)).addValue("watchGenerated", watchGenerated));
     }
 
     void updateMessageMetadata(long messageId, String modelId, String preferredModelId) {
@@ -1497,10 +1529,10 @@ public class AppStateRepository {
         Long selectedChangedFileId = nullableLong(rs, "selected_changed_file_id");
         return new SessionRow(rs.getLong("id"), rs.getLong("workspace_id"),
                 dec("sessions", "name", rs.getString("name")), rs.getLong("position"),
-                rs.getBoolean("review_panel_open"), Persistence.ReviewSource.valueOf(rs.getString("review_source")),
-                selectedChangedFileId, dec("sessions", "chat_draft", rs.getString("chat_draft")),
-                rs.getBoolean("unread"), rs.getBoolean("hidden"), nullableLong(rs, "parent_session_id"),
-                rs.getString("parent_tool_call_id"),
+                rs.getBoolean("review_panel_open"), rs.getBoolean("watch_panel_open"), rs.getInt("watch_panel_height"),
+                Persistence.ReviewSource.valueOf(rs.getString("review_source")), selectedChangedFileId,
+                dec("sessions", "chat_draft", rs.getString("chat_draft")), rs.getBoolean("unread"),
+                rs.getBoolean("hidden"), nullableLong(rs, "parent_session_id"), rs.getString("parent_tool_call_id"),
                 dec("sessions", "subagent_agent_id", rs.getString("subagent_agent_id")),
                 dec("sessions", "subagent_agent_name", rs.getString("subagent_agent_name")),
                 nullableLong(rs, "parent_assistant_message_id"), timestampToInstant(rs.getTimestamp("created_at")),
@@ -1592,10 +1624,10 @@ public class AppStateRepository {
             String environmentVariables) {
     }
     record SessionRow(long id, long workspaceId, String name, long position, boolean reviewPanelOpen,
-            Persistence.ReviewSource reviewSource, Long selectedChangedFileId, String chatDraft, boolean unread,
-            boolean hidden, Long parentSessionId, String parentToolCallId, String subagentAgentId,
-            String subagentAgentName, Long parentAssistantMessageId, Instant createdAt, Instant lastOpenedAt,
-            boolean inProgress) {
+            boolean watchPanelOpen, int watchPanelHeight, Persistence.ReviewSource reviewSource,
+            Long selectedChangedFileId, String chatDraft, boolean unread, boolean hidden, Long parentSessionId,
+            String parentToolCallId, String subagentAgentId, String subagentAgentName, Long parentAssistantMessageId,
+            Instant createdAt, Instant lastOpenedAt, boolean inProgress) {
     }
     record ConversationMessageRow(long id, long sessionId, String publicId, String role, long turnId, long sequence,
             String content, String toolCallId, String toolCallsJson, boolean showInChat, boolean includeInModel,

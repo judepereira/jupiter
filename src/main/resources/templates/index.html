@@ -94,6 +94,15 @@
                 <div th:replace="~{fragments/panel :: panel(panelName='bottom-rail')}">Bottom rail</div>
                 <div id="bottom-rail-panel" class="rail-panel-placeholder"><!-- popout target --></div>
                 <button
+                    id="toggle-watches-rail-btn"
+                    class="rail-btn"
+                    hx-post="/ui/panel/watches"
+                    hx-target="#bottom-panel"
+                    hx-swap="outerHTML"
+                >
+                    <i class="bi bi-eye" aria-label="Open watches panel" title="Open watches panel"></i>
+                </button>
+                <button
                     id="toggle-terminal-rail-btn"
                     class="rail-btn"
                     hx-post="/ui/panel/terminal"
@@ -105,7 +114,12 @@
             </aside>
 
             <!-- bottom panel content -->
-            <div id="bottom-panel" th:replace="~{fragments/terminal :: panel}">Loading terminal...</div>
+            <th:block th:if="${bottomPanelMode == 'watches'}">
+                <div id="bottom-panel" th:replace="~{fragments/watches :: panel}">Loading watches...</div>
+            </th:block>
+            <th:block th:unless="${bottomPanelMode == 'watches'}">
+                <div id="bottom-panel" th:replace="~{fragments/terminal :: panel}">Loading terminal...</div>
+            </th:block>
         </div>
 
         <div id="system-balloon-root" aria-live="polite" aria-atomic="false"></div>

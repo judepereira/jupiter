@@ -43,6 +43,9 @@ import com.judepereira.jupiter.ui.ChatToolCallHtmlService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
+import com.judepereira.jupiter.watch.WatchRepository;
+import com.judepereira.jupiter.watch.WatchService;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -95,15 +98,20 @@ public final class TestAppStateSupport {
 
         Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
         SQLiteTestSupport.assertWalAndForeignKeysEnabled(dataSource);
-        AppStateRepository repository = new AppStateRepository(new NamedParameterJdbcTemplate(dataSource),
-                TestEncryptionSupport.encryptor(), new ObjectMapper());
+        NamedParameterJdbcTemplate jdbc = new NamedParameterJdbcTemplate(dataSource);
+        var encryptor = TestEncryptionSupport.encryptor();
+        AppStateRepository repository = new AppStateRepository(jdbc, encryptor, new ObjectMapper());
+        SessionActivityCoordinator activityCoordinator = new SessionActivityCoordinator(activeStreamRegistryService,
+                new WatchRepository(jdbc, encryptor));
         AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher,
-                activeStreamRegistryService);
-        return new AppStateTestContext(service, repository, activeStreamRegistryService, dataSource);
+                activeStreamRegistryService, activityCoordinator);
+        return new AppStateTestContext(service, repository, activeStreamRegistryService, activityCoordinator,
+                dataSource);
     }
 
     public record AppStateTestContext(AppStateService service, AppStateRepository repository,
-            ActiveStreamRegistryService activeStreamRegistryService, DataSource dataSource) {
+            ActiveStreamRegistryService activeStreamRegistryService, SessionActivityCoordinator activityCoordinator,
+            DataSource dataSource) {
     }
 
     public static UiController controller(CodingAgentHarness harness, AgentProperties properties) {
@@ -157,7 +165,8 @@ public final class TestAppStateSupport {
                 mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
                 new ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
                 lifecycleHookService, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
+                mock(ManualGitPullCoordinator.class), context.activityCoordinator(), mock(WatchService.class),
+                "0.0.1-SNAPSHOT", System.getProperty("user.home"));
     }
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller,
