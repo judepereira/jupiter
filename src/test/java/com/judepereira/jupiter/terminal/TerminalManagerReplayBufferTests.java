@@ -7,8 +7,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -21,62 +19,18 @@ public class TerminalManagerReplayBufferTests {
     @Test
     public void attachReplaysBufferedOutputToNewSession() throws Exception {
         TerminalManager manager = new TerminalManager(new ObjectMapper(), List.of(), new RuntimeEnvironment(Map.of()));
-        Object runtime = newRuntime(manager);
+        TerminalManager.TerminalRuntime runtime = manager.new TerminalRuntime("terminal-1", "Terminal 1", null);
 
-        invoke(runtime, "appendOutput", "hello from replay");
+        runtime.appendOutput("hello from replay");
 
         WebSocketSession session = mock(WebSocketSession.class);
         when(session.isOpen()).thenReturn(true);
 
-        invoke(runtime, "attach", session);
+        runtime.attach(session);
 
         var captor = ArgumentCaptor.forClass(TextMessage.class);
         verify(session).sendMessage(captor.capture());
         assertThat(captor.getValue().getPayload()).contains("hello from replay", "\"type\":\"output\"");
     }
 
-    private static Object newRuntime(TerminalManager manager) throws Exception {
-        Class<?> runtimeClass = null;
-        for (Class<?> nested : TerminalManager.class.getDeclaredClasses()) {
-            if ("TerminalRuntime".equals(nested.getSimpleName())) {
-                runtimeClass = nested;
-                break;
-            }
-        }
-        if (runtimeClass == null) {
-            throw new IllegalStateException("TerminalRuntime not found");
-        }
-
-        for (Constructor<?> constructor : runtimeClass.getDeclaredConstructors()) {
-            constructor.setAccessible(true);
-            if (constructor.getParameterCount() == 4) {
-                return constructor.newInstance(manager, "terminal-1", "Terminal 1", null);
-            }
-            if (constructor.getParameterCount() == 3) {
-                return constructor.newInstance("terminal-1", "Terminal 1", null);
-            }
-        }
-
-        throw new IllegalStateException("Unsupported TerminalRuntime constructor");
-    }
-
-    private static void invoke(Object target, String methodName, Object argument) throws Exception {
-        Method method = null;
-        for (Method candidate : target.getClass().getDeclaredMethods()) {
-            if (!candidate.getName().equals(methodName) || candidate.getParameterCount() != 1) {
-                continue;
-            }
-            Class<?> parameterType = candidate.getParameterTypes()[0];
-            if (argument == null || parameterType.isInstance(argument)
-                    || parameterType.isAssignableFrom(argument.getClass())) {
-                method = candidate;
-                break;
-            }
-        }
-        if (method == null) {
-            throw new IllegalStateException("Method not found: " + methodName);
-        }
-        method.setAccessible(true);
-        method.invoke(target, argument);
-    }
 }

@@ -109,8 +109,8 @@ public class UiControllerAsyncStreamingTests {
         List<?> msgs = (List<?>) ((ConcurrentModel) model).getAttribute("chatMessages");
         assertThat(msgs).isNotEmpty();
         // last message should be pending assistant
-        Object last = msgs.get(msgs.size() - 1);
-        assertThat(last.toString()).contains("Thinking");
+        ChatPresentationService.ChatMessage last = (ChatPresentationService.ChatMessage) msgs.get(msgs.size() - 1);
+        assertThat(last.text()).contains("Thinking");
 
         // harness should NOT have been called during send
         assertThat(runCalled.get()).isFalse();
@@ -120,7 +120,8 @@ public class UiControllerAsyncStreamingTests {
         // model should include only the newly created rows for append responses
         List<?> newRows = (List<?>) ((ConcurrentModel) model).getAttribute("newChatMessages");
         assertThat(newRows).isNotNull();
-        assertThat(newRows.stream().anyMatch(o -> o.toString().contains("Thinking"))).isTrue();
+        assertThat(newRows.stream().map(ChatPresentationService.ChatMessage.class::cast)
+                .anyMatch(message -> message.text().contains("Thinking"))).isTrue();
         Boolean hasPending = (Boolean) ((ConcurrentModel) model).getAttribute("hasPending");
         assertThat(hasPending).isTrue();
     }
@@ -591,20 +592,8 @@ public class UiControllerAsyncStreamingTests {
         assertThat(newRows1.size()).isGreaterThanOrEqualTo(1);
 
         List<?> msgs = (List<?>) ((ConcurrentModel) m1).getAttribute("chatMessages");
-        Object last = msgs.get(msgs.size() - 1);
-        String assistantId = null;
-        try {
-            var cls = last.getClass();
-            var f = cls.getDeclaredField("id");
-            f.setAccessible(true);
-            assistantId = (String) f.get(last);
-        } catch (Exception e) {
-            String s = last.toString();
-            int i = s.indexOf("id=");
-            if (i >= 0) {
-                assistantId = s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
-            }
-        }
+        ChatPresentationService.ChatMessage last = (ChatPresentationService.ChatMessage) msgs.get(msgs.size() - 1);
+        String assistantId = last.id();
         assertThat(assistantId).isNotNull();
         final String finalAssistantId = assistantId;
 
@@ -618,51 +607,15 @@ public class UiControllerAsyncStreamingTests {
         ctrl.index(m2);
         List<?> after = (List<?>) ((ConcurrentModel) m2).getAttribute("chatMessages");
         // find assistant by id
-        Object found = after.stream().filter(o -> {
-            try {
-                var cls = o.getClass();
-                var f = cls.getDeclaredField("id");
-                f.setAccessible(true);
-                return finalAssistantId.equals((String) f.get(o));
-            } catch (Exception e) {
-                return o.toString().contains(finalAssistantId);
-            }
-        }).findFirst().orElse(null);
+        ChatPresentationService.ChatMessage found = after.stream().map(ChatPresentationService.ChatMessage.class::cast)
+                .filter(message -> finalAssistantId.equals(message.id())).findFirst().orElse(null);
         assertThat(found).isNotNull();
-        // inspect text and pending
-        String text = null;
-        boolean pending = true;
-        try {
-            var cls = found.getClass();
-            var ft = cls.getDeclaredField("text");
-            ft.setAccessible(true);
-            text = (String) ft.get(found);
-            var fp = cls.getDeclaredField("pending");
-            fp.setAccessible(true);
-            pending = fp.getBoolean(found);
-        } catch (Exception e) {
-            String s = found.toString();
-            int ti = s.indexOf("text=");
-            if (ti >= 0) {
-                text = s.substring(ti + 5).replaceAll("[,}].*$", "\"").replaceAll("\"", "\"");
-            }
-        }
-        assertThat(text).isEqualTo("hello world\nnext");
-        assertThat(pending).isFalse();
+        assertThat(found.text()).isEqualTo("hello world\nnext");
+        assertThat(found.pending()).isFalse();
 
-        // final assistant message should include toolCalls list when present (none in
-        // this fake), but ensure field exists via reflection
-        Object foundMsg = found;
-        try {
-            var cls = foundMsg.getClass();
-            var f = cls.getDeclaredField("toolCalls");
-            f.setAccessible(true);
-            Object tc = f.get(foundMsg);
-            // allow null or empty list here; assert extraction is robust
-            assertThat(tc == null || (tc instanceof List<?>)).isTrue();
-        } catch (NoSuchFieldException nsf) {
-            // ignore: some toString-based fallbacks may not expose fields
-        }
+        // This fake produces no tool calls; verify the accessor exposes an empty
+        // collection.
+        assertThat(found.toolCalls()).isEmpty();
     }
 
     @Test
@@ -691,21 +644,8 @@ public class UiControllerAsyncStreamingTests {
         Model model = new ConcurrentModel();
         ctrl.sendMessage("go", model, null);
         List<?> msgs = (List<?>) ((ConcurrentModel) model).getAttribute("chatMessages");
-        Object last = msgs.get(msgs.size() - 1);
-
-        String assistantId = null;
-        try {
-            var cls = last.getClass();
-            var f = cls.getDeclaredField("id");
-            f.setAccessible(true);
-            assistantId = (String) f.get(last);
-        } catch (Exception e) {
-            String s = last.toString();
-            int i = s.indexOf("id=");
-            if (i >= 0) {
-                assistantId = s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
-            }
-        }
+        ChatPresentationService.ChatMessage last = (ChatPresentationService.ChatMessage) msgs.get(msgs.size() - 1);
+        String assistantId = last.id();
         assertThat(assistantId).isNotNull();
         final String finalAssistantId = assistantId;
 
@@ -715,36 +655,14 @@ public class UiControllerAsyncStreamingTests {
         Model afterModel = new ConcurrentModel();
         ctrl.index(afterModel);
         List<?> after = (List<?>) ((ConcurrentModel) afterModel).getAttribute("chatMessages");
-        Object found = after.stream().filter(o -> {
-            try {
-                var cls = o.getClass();
-                var f = cls.getDeclaredField("id");
-                f.setAccessible(true);
-                return finalAssistantId.equals((String) f.get(o));
-            } catch (Exception e) {
-                return o.toString().contains(finalAssistantId);
-            }
-        }).findFirst().orElse(null);
+        ChatPresentationService.ChatMessage found = after.stream().map(ChatPresentationService.ChatMessage.class::cast)
+                .filter(message -> finalAssistantId.equals(message.id())).findFirst().orElse(null);
 
         assertThat(found).isNotNull();
-
-        String text = null;
-        try {
-            var cls = found.getClass();
-            var f = cls.getDeclaredField("text");
-            f.setAccessible(true);
-            text = (String) f.get(found);
-        } catch (Exception e) {
-            String s = found.toString();
-            int i = s.indexOf("text=");
-            if (i >= 0) {
-                text = s.substring(i + 5).replaceAll(",.*$", "");
-            }
-        }
-
-        assertThat(text).contains("You exceeded your current quota, please check your plan and billing details.");
-        assertThat(text).doesNotContain("insufficient_quota");
-        assertThat(text).doesNotContain("\"error\"");
+        assertThat(found.text())
+                .contains("You exceeded your current quota, please check your plan and billing details.");
+        assertThat(found.text()).doesNotContain("insufficient_quota");
+        assertThat(found.text()).doesNotContain("\"error\"");
     }
 
     @Test
@@ -867,21 +785,9 @@ public class UiControllerAsyncStreamingTests {
         assertThat(((ChatPresentationService.ChatMessage) assistant).pending()).isFalse();
         assertThat(((ChatPresentationService.ChatMessage) assistant).text()).isEqualTo("partial\n\nAction Interrupted");
     }
-    private static String assistantId(ConcurrentModel model) throws Exception {
+    private static String assistantId(ConcurrentModel model) {
         List<?> msgs = (List<?>) model.getAttribute("chatMessages");
-        Object last = msgs.get(msgs.size() - 1);
-        try {
-            var cls = last.getClass();
-            var f = cls.getDeclaredField("id");
-            f.setAccessible(true);
-            return (String) f.get(last);
-        } catch (Exception e) {
-            String s = last.toString();
-            int i = s.indexOf("id=");
-            if (i >= 0) {
-                return s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
-            }
-            throw e;
-        }
+        ChatPresentationService.ChatMessage last = (ChatPresentationService.ChatMessage) msgs.get(msgs.size() - 1);
+        return last.id();
     }
 }
