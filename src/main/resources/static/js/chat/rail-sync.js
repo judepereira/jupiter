@@ -6,9 +6,15 @@ export function syncFaviconWithRail() {
         const topbarLogo = document.getElementById("topbar-logo");
         const base = unreadDotPresent ? "/favicon-complete" : "/favicon";
         const source32 = base + "-32x32.png";
-        if (favicon32) favicon32.setAttribute("href", source32);
-        if (favicon16) favicon16.setAttribute("href", base + "-16x16.png");
-        if (topbarLogo) topbarLogo.setAttribute("src", source32);
+        if (favicon32) {
+            favicon32.setAttribute("href", source32);
+        }
+        if (favicon16) {
+            favicon16.setAttribute("href", base + "-16x16.png");
+        }
+        if (topbarLogo) {
+            topbarLogo.setAttribute("src", source32);
+        }
     } catch (error) {
         console.error(error);
     }
@@ -16,15 +22,21 @@ export function syncFaviconWithRail() {
 
 export function refreshWorkspaceRail() {
     const rail = document.getElementById("workspace-session-rail");
-    if (!rail) return;
+    if (!rail) {
+        return;
+    }
     fetch("/ui/workspaces/rail", { headers: { "HX-Request": "true" } })
         .then((response) => {
-            if (!response.ok) throw new Error("Workspace rail refresh failed");
+            if (!response.ok) {
+                throw new Error("Workspace rail refresh failed");
+            }
             return response.text();
         })
         .then((html) => {
             rail.outerHTML = html;
-            if (window.htmx) window.htmx.process(document.getElementById("workspace-session-rail"));
+            if (window.htmx) {
+                window.htmx.process(document.getElementById("workspace-session-rail"));
+            }
             syncFaviconWithRail();
         })
         .catch((error) => {
@@ -33,12 +45,16 @@ export function refreshWorkspaceRail() {
 }
 
 export function initWorkspaceRailSync() {
-    if (window.__workspaceRailRefreshSource) return window.__workspaceRailRefreshSource;
+    if (window.__workspaceRailRefreshSource) {
+        return window.__workspaceRailRefreshSource;
+    }
 
     let workspaceRailRefreshTimer = null;
 
     const scheduleWorkspaceRailRefresh = () => {
-        if (workspaceRailRefreshTimer) return;
+        if (workspaceRailRefreshTimer) {
+            return;
+        }
         workspaceRailRefreshTimer = window.setTimeout(() => {
             workspaceRailRefreshTimer = null;
             refreshWorkspaceRail();

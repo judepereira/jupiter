@@ -55,8 +55,9 @@ public class CodingAgentHarnessFakeModelTest {
 
         @Override
         public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
-            if (idx >= seq.size())
+            if (idx >= seq.size()) {
                 return new ModelResponse("", null, ModelResponseMetadata.empty(), null);
+            }
             return seq.get(idx++);
         }
     }

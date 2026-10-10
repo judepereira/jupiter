@@ -9,7 +9,9 @@ if (root && !window.__systemBalloonSource) {
         const value = String(type || "")
             .trim()
             .toLowerCase();
-        if (value === "error" || value === "success" || value === "warning") return value;
+        if (value === "error" || value === "success" || value === "warning") {
+            return value;
+        }
         return "info";
     }
 
@@ -19,12 +21,16 @@ if (root && !window.__systemBalloonSource) {
 
     function removeBalloon(id, animate) {
         const entry = balloons.get(id);
-        if (!entry) return;
+        if (!entry) {
+            return;
+        }
         balloons.delete(id);
         clearTimeout(entry.timer);
 
         const node = entry.node;
-        if (!node || !node.isConnected) return;
+        if (!node || !node.isConnected) {
+            return;
+        }
         if (!animate) {
             node.remove();
             return;
@@ -39,13 +45,17 @@ if (root && !window.__systemBalloonSource) {
         const excess = children.length - MAX_VISIBLE;
         for (let i = 0; i < excess; i++) {
             const oldest = children[children.length - 1 - i];
-            if (!oldest) break;
+            if (!oldest) {
+                break;
+            }
             removeBalloon(oldest.dataset.balloonId, true);
         }
     }
 
     function createBalloon(payload) {
-        if (!payload || payload.id == null) return;
+        if (!payload || payload.id == null) {
+            return;
+        }
 
         const id = String(payload.id);
         removeBalloon(id, false);

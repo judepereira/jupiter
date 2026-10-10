@@ -105,31 +105,37 @@ public class AnthropicAgentModelClient implements AgentModelClient {
                     case "content_block_start" -> {
                         int index = requiredIndex(node);
                         JsonNode block = node.path("content_block");
-                        if (!block.isObject())
+                        if (!block.isObject()) {
                             throw new IllegalStateException("Anthropic content block is missing");
+                        }
                         StreamingBlock state = new StreamingBlock((ObjectNode) block.deepCopy());
-                        if (activeBlocks.put(index, state) != null)
+                        if (activeBlocks.put(index, state) != null) {
                             throw new IllegalStateException("Anthropic content block index started twice: " + index);
-                        if ("tool_use".equals(value(block, "type")))
+                        }
+                        if ("tool_use".equals(value(block, "type"))) {
                             startTool(tool, value(block, "id"), value(block, "name"));
+                        }
                     }
                     case "content_block_delta" -> {
                         int index = requiredIndex(node);
                         StreamingBlock state = activeBlocks.get(index);
-                        if (state == null)
+                        if (state == null) {
                             throw new IllegalStateException(
                                     "Anthropic delta for unknown content block index: " + index);
+                        }
                         JsonNode delta = node.path("delta");
                         String deltaType = value(delta, "type");
-                        if (deltaType == null)
+                        if (deltaType == null) {
                             throw new IllegalStateException("Anthropic content block delta is missing its type");
+                        }
                         switch (deltaType) {
                             case "text_delta" -> {
                                 String part = value(delta, "text");
                                 text.append(part);
                                 state.block.put("text", state.block.path("text").asText("") + part);
-                                if (onText != null)
+                                if (onText != null) {
                                     onText.accept(part);
+                                }
                             }
                             case "input_json_delta" -> state.json.append(value(delta, "partial_json"));
                             case "thinking_delta" -> state.block.put("thinking",
@@ -147,8 +153,9 @@ public class AnthropicAgentModelClient implements AgentModelClient {
                     case "content_block_stop" -> {
                         int index = requiredIndex(node);
                         StreamingBlock state = activeBlocks.remove(index);
-                        if (state == null)
+                        if (state == null) {
                             throw new IllegalStateException("Anthropic content block stopped without start: " + index);
+                        }
                         if ("tool_use".equals(value(state.block, "type"))) {
                             state.block.set("input", mapper.valueToTree(parseObject(state.json.toString())));
                             tool.args = state.block.get("input");
@@ -156,8 +163,9 @@ public class AnthropicAgentModelClient implements AgentModelClient {
                         completedBlocks.put(index, state.block);
                     }
                     case "message_stop" -> {
-                        if (!activeBlocks.isEmpty())
+                        if (!activeBlocks.isEmpty()) {
                             throw new IllegalStateException("Anthropic message stopped with unfinished content blocks");
+                        }
                         return response(text.toString(), tool, null, usage, id, model, stopReason,
                                 new ArrayList<>(completedBlocks.values()));
                     }
@@ -199,13 +207,15 @@ public class AnthropicAgentModelClient implements AgentModelClient {
 
     private HttpRequest request(JsonNode body) {
         String apiKey = properties.effectiveApiKey();
-        if (apiKey == null)
+        if (apiKey == null) {
             throw new IllegalStateException("Anthropic API key is required");
+        }
         var builder = HttpRequest.newBuilder(URI.create(properties.getBaseUrl())).header("x-api-key", apiKey)
                 .header("anthropic-version", properties.getVersion()).header("Content-Type", "application/json")
                 .timeout(properties.getRequestTimeout());
-        if (properties.getBeta() != null && !properties.getBeta().isBlank())
+        if (properties.getBeta() != null && !properties.getBeta().isBlank()) {
             builder.header("anthropic-beta", properties.getBeta().trim());
+        }
         return builder.POST(HttpRequest.BodyPublishers.ofString(body.toString())).build();
     }
 
@@ -290,21 +300,25 @@ public class AnthropicAgentModelClient implements AgentModelClient {
     private JsonNode schema(ToolSchema schema) {
         ObjectNode node = mapper.createObjectNode();
         node.put("type", "object");
-        if (schema.description() != null)
+        if (schema.description() != null) {
             node.put("description", schema.description());
+        }
         var properties = node.putObject("properties");
-        for (ToolParameter parameter : schema.properties())
+        for (ToolParameter parameter : schema.properties()) {
             properties.set(parameter.name(), parameter(parameter));
+        }
         node.set("required", mapper.valueToTree(schema.required()));
-        if (schema.additionalProperties() != null)
+        if (schema.additionalProperties() != null) {
             node.put("additionalProperties", schema.additionalProperties());
+        }
         return node;
     }
 
     private JsonNode parameter(ToolParameter parameter) {
         ObjectNode node = mapper.createObjectNode();
-        if (parameter.description() != null)
+        if (parameter.description() != null) {
             node.put("description", parameter.description());
+        }
         node.put("type", switch (parameter) {
             case ToolParameter.StringParameter ignored -> "string";
             case ToolParameter.IntegerParameter ignored -> "integer";
@@ -330,8 +344,9 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         List<JsonNode> blocks = new ArrayList<>();
         for (JsonNode block : node.path("content")) {
             blocks.add(block.deepCopy());
-            if ("text".equals(value(block, "type")))
+            if ("text".equals(value(block, "type"))) {
                 text.append(value(block, "text"));
+            }
             if ("tool_use".equals(value(block, "type"))) {
                 startTool(tool, value(block, "id"), value(block, "name"));
                 tool.args = block.path("input");
@@ -419,10 +434,12 @@ public class AnthropicAgentModelClient implements AgentModelClient {
         private Integer out;
 
         private void read(JsonNode node) {
-            if (node.has("input_tokens"))
+            if (node.has("input_tokens")) {
                 in = node.get("input_tokens").asInt();
-            if (node.has("output_tokens"))
+            }
+            if (node.has("output_tokens")) {
                 out = node.get("output_tokens").asInt();
+            }
         }
     }
 }

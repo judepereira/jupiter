@@ -32,8 +32,9 @@ public class ProviderConnectedEventListener {
     }
 
     private void initializeIfConnected(String provider) {
-        if (availability.isAvailable(provider))
+        if (availability.isAvailable(provider)) {
             initializeProvider(provider);
+        }
     }
 
     private void initializeProvider(String provider) {

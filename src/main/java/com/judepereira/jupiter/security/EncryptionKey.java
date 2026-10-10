@@ -43,8 +43,9 @@ public record EncryptionKey(byte[] bytes) {
 
     private static boolean isBlank(byte[] value) {
         for (byte character : value) {
-            if (character != ' ' && character != '\t' && character != '\n' && character != '\r' && character != '\f')
+            if (character != ' ' && character != '\t' && character != '\n' && character != '\r' && character != '\f') {
                 return false;
+            }
         }
         return true;
     }

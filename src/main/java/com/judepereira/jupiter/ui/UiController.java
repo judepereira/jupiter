@@ -1090,10 +1090,12 @@ public class UiController {
     @PostMapping("/ui/settings/models")
     public String replaceSelectedModels(@RequestParam String provider,
             @RequestParam(value = "modelId", required = false) List<String> modelIds, Model model) {
-        if (!modelCatalogService.hasProviderModel(provider))
+        if (!modelCatalogService.hasProviderModel(provider)) {
             throw new IllegalArgumentException("Unsupported model provider: " + provider);
-        if (!providerAvailabilityService.isAvailable(provider))
+        }
+        if (!providerAvailabilityService.isAvailable(provider)) {
             throw new IllegalArgumentException("Model provider is not connected: " + provider);
+        }
         if (modelIds == null || modelIds.isEmpty()) {
             populateSettingsModel(model);
             model.addAttribute("modelSelectionError", "Select at least one model before saving.");

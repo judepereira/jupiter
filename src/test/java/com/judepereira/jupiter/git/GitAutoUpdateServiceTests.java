@@ -431,10 +431,12 @@ class GitAutoUpdateServiceTests {
                         if ("rev-parse".equals(command.get(1)) && "HEAD".equals(command.getLast())) {
                             return headLookups++ == 0 ? success(before) : success(after);
                         }
-                        if ("rev-list".equals(command.get(1)))
+                        if ("rev-list".equals(command.get(1))) {
                             return count;
-                        if ("log".equals(command.get(1)))
+                        }
+                        if ("log".equals(command.get(1))) {
                             return subject;
+                        }
                         return switch (command.get(1)) {
                             case "symbolic-ref" -> success("main");
                             case "rev-parse" -> success("origin/main");

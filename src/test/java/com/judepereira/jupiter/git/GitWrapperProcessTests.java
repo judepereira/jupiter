@@ -184,8 +184,9 @@ class GitWrapperProcessTests {
         }
         String git(String... args) throws Exception {
             Result result = invoke(args);
-            if (result.exitCode != 0)
+            if (result.exitCode != 0) {
                 throw new AssertionError("git " + List.of(args) + " exited " + result.exitCode + ": " + result.output);
+            }
             return result.output;
         }
         Result invoke(String... args) throws Exception {

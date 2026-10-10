@@ -601,8 +601,9 @@ public class UiControllerAsyncStreamingTests {
         } catch (Exception e) {
             String s = last.toString();
             int i = s.indexOf("id=");
-            if (i >= 0)
+            if (i >= 0) {
                 assistantId = s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
+            }
         }
         assertThat(assistantId).isNotNull();
         final String finalAssistantId = assistantId;
@@ -701,8 +702,9 @@ public class UiControllerAsyncStreamingTests {
         } catch (Exception e) {
             String s = last.toString();
             int i = s.indexOf("id=");
-            if (i >= 0)
+            if (i >= 0) {
                 assistantId = s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
+            }
         }
         assertThat(assistantId).isNotNull();
         final String finalAssistantId = assistantId;
@@ -735,8 +737,9 @@ public class UiControllerAsyncStreamingTests {
         } catch (Exception e) {
             String s = found.toString();
             int i = s.indexOf("text=");
-            if (i >= 0)
+            if (i >= 0) {
                 text = s.substring(i + 5).replaceAll(",.*$", "");
+            }
         }
 
         assertThat(text).contains("You exceeded your current quota, please check your plan and billing details.");
@@ -875,8 +878,9 @@ public class UiControllerAsyncStreamingTests {
         } catch (Exception e) {
             String s = last.toString();
             int i = s.indexOf("id=");
-            if (i >= 0)
+            if (i >= 0) {
                 return s.substring(i + 3).replaceAll("[^a-zA-Z0-9-]", "");
+            }
             throw e;
         }
     }

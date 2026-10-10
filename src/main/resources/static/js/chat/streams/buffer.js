@@ -26,13 +26,19 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
     }
 
     function wasNearBottom() {
-        if (!canAccessActiveHistory()) return false;
+        if (!canAccessActiveHistory()) {
+            return false;
+        }
         try {
             const history = document.getElementById("chat-history");
-            if (!history) return false;
+            if (!history) {
+                return false;
+            }
             const max = history.scrollHeight - history.clientHeight;
             const cur = history.scrollTop;
-            if (!Number.isFinite(max) || !Number.isFinite(cur)) return false;
+            if (!Number.isFinite(max) || !Number.isFinite(cur)) {
+                return false;
+            }
             return max - cur <= 96;
         } catch (_) {
             return false;
@@ -46,7 +52,9 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
     }
 
     function bindHistoryScrollListener() {
-        if (!canAccessActiveHistory()) return;
+        if (!canAccessActiveHistory()) {
+            return;
+        }
         try {
             streamHistoryEl = document.getElementById("chat-history");
             if (streamHistoryEl && streamHistoryEl.addEventListener) {
@@ -67,7 +75,9 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
 
     function flushInner() {
         const textSpan = currentTextSpan();
-        if (!textSpan) return;
+        if (!textSpan) {
+            return;
+        }
         if (buffer.length === 0) {
             rafPending = false;
             if (flushTimer) {
@@ -108,10 +118,14 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
         flushInner();
         if (stickBeforeFlush) {
             requestAnimationFrame(() => {
-                if (!canAccessActiveHistory()) return;
+                if (!canAccessActiveHistory()) {
+                    return;
+                }
                 try {
                     const history = document.getElementById("chat-history");
-                    if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
+                    if (history) {
+                        history.scrollTop = history.scrollHeight - history.clientHeight;
+                    }
                     shouldStickToBottom = true;
                 } catch (_) {}
             });
@@ -119,7 +133,9 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
     }
 
     function scheduleFlush() {
-        if (rafPending || flushTimer) return;
+        if (rafPending || flushTimer) {
+            return;
+        }
         const now = Date.now();
         if (lastFlushTime === 0) {
             flushBuffer();
@@ -133,7 +149,9 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
         }
         flushTimer = setTimeout(() => {
             flushTimer = null;
-            if (rafPending) return;
+            if (rafPending) {
+                return;
+            }
             rafPending = true;
             requestAnimationFrame(flushBuffer);
         }, FLUSH_INTERVAL_MS - elapsed);

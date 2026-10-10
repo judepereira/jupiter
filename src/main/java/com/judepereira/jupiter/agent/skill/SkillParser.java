@@ -25,29 +25,36 @@ public final class SkillParser {
 
     public ParseResult parse(Path skillFile, SkillScope scope) {
         try {
-            if (Files.isSymbolicLink(skillFile))
+            if (Files.isSymbolicLink(skillFile)) {
                 return ParseResult.error(skillFile, "SKILL.md must not be a symbolic link");
+            }
             Path lexicalDirectory = skillFile.toAbsolutePath().normalize().getParent();
-            if (lexicalDirectory == null || Files.isSymbolicLink(lexicalDirectory))
+            if (lexicalDirectory == null || Files.isSymbolicLink(lexicalDirectory)) {
                 return ParseResult.error(skillFile, "skill directory must not be a symbolic link");
-            if (!Files.isRegularFile(skillFile, LinkOption.NOFOLLOW_LINKS))
+            }
+            if (!Files.isRegularFile(skillFile, LinkOption.NOFOLLOW_LINKS)) {
                 return ParseResult.error(skillFile, "SKILL.md is not a regular file");
+            }
             Path canonicalFile = skillFile.toRealPath();
-            if (!canonicalFile.getParent().equals(lexicalDirectory))
+            if (!canonicalFile.getParent().equals(lexicalDirectory)) {
                 return ParseResult.error(skillFile, "skill directory must not escape skills root");
-            if (!"SKILL.md".equals(canonicalFile.getFileName().toString()))
+            }
+            if (!"SKILL.md".equals(canonicalFile.getFileName().toString())) {
                 return ParseResult.error(skillFile, "path must name SKILL.md");
+            }
             byte[] bytes;
             try (InputStream input = Files.newInputStream(canonicalFile, LinkOption.NOFOLLOW_LINKS)) {
                 bytes = input.readNBytes(MAX_BYTES + 1);
             }
-            if (bytes.length > MAX_BYTES)
+            if (bytes.length > MAX_BYTES) {
                 return ParseResult.error(skillFile, "file exceeds 256 KiB");
+            }
             String text = decode(bytes);
             String yaml = frontmatter(text);
             JsonNode metadata = YAML.readTree(yaml);
-            if (metadata == null || !metadata.isObject())
+            if (metadata == null || !metadata.isObject()) {
                 return ParseResult.error(skillFile, "frontmatter must be a YAML object");
+            }
             JsonNode nameNode = metadata.get("name");
             JsonNode descriptionNode = metadata.get("description");
             if (nameNode == null || !nameNode.isTextual() || !NAME.matcher(nameNode.textValue()).matches()) {
@@ -79,19 +86,23 @@ public final class SkillParser {
     }
 
     private static String frontmatter(String text) throws IOException {
-        if (!(text.startsWith("---\n") || text.startsWith("---\r\n")))
+        if (!(text.startsWith("---\n") || text.startsWith("---\r\n"))) {
             throw new IOException("opening --- is required");
+        }
         int start = text.indexOf('\n') + 1;
         int position = start;
         while (position <= text.length()) {
             int end = text.indexOf('\n', position);
-            if (end < 0)
+            if (end < 0) {
                 end = text.length();
+            }
             String line = text.substring(position, end);
-            if ("---".equals(line) || "---\r".equals(line))
+            if ("---".equals(line) || "---\r".equals(line)) {
                 return text.substring(start, position);
-            if (end == text.length())
+            }
+            if (end == text.length()) {
                 break;
+            }
             position = end + 1;
         }
         throw new IOException("closing --- is required");

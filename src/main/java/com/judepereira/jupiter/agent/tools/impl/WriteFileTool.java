@@ -33,8 +33,9 @@ public class WriteFileTool implements AgentTool {
         }
         String rel = (String) args.get("path");
         String content = (String) args.get("content");
-        if (rel == null || content == null)
+        if (rel == null || content == null) {
             return new ToolExecutionResult(false, "missing path or content", Map.of());
+        }
         Path p = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), rel);
         Files.createDirectories(p.getParent());
         Files.write(p, content.getBytes(StandardCharsets.UTF_8));

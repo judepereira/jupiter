@@ -2,10 +2,14 @@ import { renderChatMarkdown } from "../markdown.js";
 
 function parseStreamPayload(e) {
     const raw = e && e.data ? e.data : "";
-    if (!raw) return { text: "" };
+    if (!raw) {
+        return { text: "" };
+    }
     try {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") return parsed;
+        if (parsed && typeof parsed === "object") {
+            return parsed;
+        }
     } catch (_) {}
     return { text: raw };
 }
@@ -17,13 +21,19 @@ function handleContextCompaction(
     wasNearBottom,
     isStreamSessionActive = () => true,
 ) {
-    if (!isStreamSessionActive()) return;
+    if (!isStreamSessionActive()) {
+        return;
+    }
     const id = payload && payload.id != null ? String(payload.id) : "";
     const text = payload && payload.text != null ? String(payload.text) : "";
-    if (!id || !text) return;
+    if (!id || !text) {
+        return;
+    }
 
     Array.from(list.querySelectorAll("li[data-id]")).forEach((item) => {
-        if (item.dataset.id === id) item.remove();
+        if (item.dataset.id === id) {
+            item.remove();
+        }
     });
 
     const compactedRow = document.createElement("li");
@@ -51,9 +61,13 @@ function handleContextCompaction(
 
     if (shouldStickToBottom() || wasNearBottom()) {
         requestAnimationFrame(() => {
-            if (!isStreamSessionActive()) return;
+            if (!isStreamSessionActive()) {
+                return;
+            }
             const history = document.getElementById("chat-history");
-            if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
+            if (history) {
+                history.scrollTop = history.scrollHeight - history.clientHeight;
+            }
         });
     }
 }

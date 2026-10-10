@@ -131,18 +131,20 @@ implementation details.
 
 ## Coding guidelines
 
-1. Keep business rules and state transitions in backend services. Treat frontend code as a thin rendering and
+1. Always use braces for Java and JavaScript control-flow bodies, even when the body is a single statement. This applies
+   to production code, tests, and executable embedded scripts; conventional `else if` chains are allowed.
+2. Keep business rules and state transitions in backend services. Treat frontend code as a thin rendering and
    interaction layer; do not duplicate server-owned state or add frontend-only fallbacks for backend behavior.
-2. Fail loudly and observably: log errors and communicate them through the canonical user-visible path. Do not silently
+3. Fail loudly and observably: log errors and communicate them through the canonical user-visible path. Do not silently
    retry, swallow errors, or add fallback paths that obscure failures.
-3. Use lombok and Java records wherever possible
-4. When adding browser/frontend library assets (for example xterm, marked, DOMPurify), use WebJars instead of external
+4. Use lombok and Java records wherever possible
+5. When adding browser/frontend library assets (for example xterm, marked, DOMPurify), use WebJars instead of external
    CDN URLs
-5. Never use reflection in tests; open production visibility appropriately, preferably package-private, when tests need
+6. Never use reflection in tests; open production visibility appropriately, preferably package-private, when tests need
    access.
-6. Always run all tests after targeted tests pass
-7. Always run `./mvnw spotless:apply` before committing.
-8. Prefer one constructor per production class. Do not add constructor overloads for defaults, optional dependencies,
+7. Always run all tests after targeted tests pass
+8. Always run `./mvnw spotless:apply` before committing.
+9. Prefer one constructor per production class. Do not add constructor overloads for defaults, optional dependencies,
    compatibility, test setup, or convenience. Use a record's canonical constructor; keep test defaults in test fixtures;
    use a named static factory for genuinely distinct construction semantics; use a parameter object or builder when
    direct construction becomes unclear. An overload is allowed only when required by a framework or external

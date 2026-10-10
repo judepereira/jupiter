@@ -119,8 +119,9 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
             for (String expectedOption : expected) {
                 String[] parts = expectedOption.split("\\|", 2);
                 assertThat(options.evaluateAll("options => options.map(o => o.value)").toString()).contains(parts[0]);
-                if (parts.length == 2)
+                if (parts.length == 2) {
                     assertThat(options.allTextContents().toString()).contains(parts[1]);
+                }
             }
         }
     }

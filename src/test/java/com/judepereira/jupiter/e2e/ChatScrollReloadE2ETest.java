@@ -134,18 +134,18 @@ class ChatScrollReloadE2ETest extends E2ETestSupport {
                         async () => {
                             const history = document.getElementById('chat-history');
                             const list = document.getElementById('chat-messages-list');
-                            if (!history || !list || history.scrollHeight <= history.clientHeight) return false;
+                            if (!history || !list || history.scrollHeight <= history.clientHeight) { return false; }
                             let previousSignature = '';
                             let stableFrames = 0;
                             for (let frame = 0; frame < 60; frame++) {
                                 await new Promise(resolve => requestAnimationFrame(resolve));
-                                if (!history.isConnected || !list.isConnected || history.scrollHeight <= history.clientHeight) return false;
+                                if (!history.isConnected || !list.isConnected || history.scrollHeight <= history.clientHeight) { return false; }
                                 const max = history.scrollHeight - history.clientHeight;
                                 const signature = [history.scrollHeight, history.clientHeight, list.getBoundingClientRect().height].join(':');
                                 const atBottom = Math.abs(history.scrollTop - max) <= 1;
                                 stableFrames = signature === previousSignature && atBottom ? stableFrames + 1 : 0;
                                 previousSignature = signature;
-                                if (stableFrames >= 3) return true;
+                                if (stableFrames >= 3) { return true; }
                             }
                             return false;
                         }
