@@ -48,11 +48,14 @@ public class ManualGitPullCoordinator {
             }
             executor.submit(() -> run(workspaceId, workspace));
             return DispatchResult.ACCEPTED;
-        } catch (Throwable failure) {
+        } catch (RuntimeException failure) {
             activePulls.remove(workspaceId);
             log.error("Manual Git pull could not be queued for workspace {}", workspaceId, failure);
             systemBalloonService.publishError("Git Pull", "Git pull could not be started: " + message(failure));
             return DispatchResult.FAILED;
+        } catch (Error failure) {
+            activePulls.remove(workspaceId);
+            throw failure;
         }
     }
 
@@ -67,9 +70,12 @@ public class ManualGitPullCoordinator {
                 case SKIPPED -> systemBalloonService.publishWarning("Git Pull", result.message());
                 case FAILED -> systemBalloonService.publishError("Git Pull", result.message());
             }
-        } catch (Throwable failure) {
+        } catch (RuntimeException failure) {
             log.error("Unexpected manual Git pull failure for workspace {}", workspace.id(), failure);
             systemBalloonService.publishError("Git Pull", "Git pull failed: " + message(failure));
+        } catch (Error failure) {
+            log.error("Fatal manual Git pull error for workspace {}", workspace.id(), failure);
+            throw failure;
         } finally {
             activePulls.remove(workspaceId);
         }

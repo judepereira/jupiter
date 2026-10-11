@@ -100,9 +100,9 @@ public class CommandStreamService {
         } catch (Exception e) {
             active.started().set(false);
             fail(active, assistantId, e);
-        } catch (Throwable t) {
-            active.started().set(false);
-            fail(active, assistantId, new RuntimeException(t));
+        } catch (Error error) {
+            cleanupAfterFatalError(active, assistantId, error);
+            throw error;
         }
     }
 
@@ -157,6 +157,9 @@ public class CommandStreamService {
             stopActiveStream(assistantId, active, accumulated.toString());
         } catch (Exception e) {
             fail(active, assistantId, e);
+        } catch (Error error) {
+            cleanupAfterFatalError(active, assistantId, error);
+            throw error;
         }
     }
 
@@ -195,6 +198,41 @@ public class CommandStreamService {
                         : Map.of("message", normalizeMessage(e), "completedTs", failedMessage.completedTs()));
         finish(active, assistantId, new AtomicBoolean());
         log.error("Command stream failed for assistant {}", assistantId, e);
+    }
+
+    private void cleanupAfterFatalError(ActiveCommandStream active, String assistantId, Error primaryError) {
+        active.started().set(false);
+        active.finished().set(true);
+        active.completed().set(true);
+        activeStreams.remove(assistantId, active);
+        try {
+            activeStreamRegistryService.unregister(assistantId);
+        } catch (RuntimeException | Error cleanupFailure) {
+            addSuppressed(primaryError, cleanupFailure);
+        }
+        try {
+            active.cancellationToken().cancel();
+            Thread runner = active.runner().getAndSet(null);
+            if (runner != null && runner != Thread.currentThread()) {
+                runner.interrupt();
+            }
+        } catch (RuntimeException | Error cleanupFailure) {
+            addSuppressed(primaryError, cleanupFailure);
+        }
+        for (SseEmitter emitter : active.emitters()) {
+            try {
+                emitter.complete();
+            } catch (RuntimeException | Error cleanupFailure) {
+                addSuppressed(primaryError, cleanupFailure);
+            }
+        }
+        active.emitters().clear();
+    }
+
+    private void addSuppressed(Error primaryError, Throwable cleanupFailure) {
+        if (cleanupFailure != primaryError) {
+            primaryError.addSuppressed(cleanupFailure);
+        }
     }
 
     private String normalizeMessage(Exception e) {

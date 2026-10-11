@@ -375,9 +375,9 @@ public class UiController {
         } catch (Exception e) {
             active.started().set(false);
             listenerStartFailed(active, assistantId, e, emitter);
-        } catch (Throwable t) {
-            active.started().set(false);
-            listenerStartFailed(active, assistantId, new RuntimeException(t), emitter);
+        } catch (Error error) {
+            cleanupAfterFatalError(active, assistantId, error);
+            throw error;
         }
     }
 
@@ -531,9 +531,57 @@ public class UiController {
                 listener.onComplete(result);
             }
         } catch (StreamCancelledException e) {
-            listener.onError(e);
+            try {
+                listener.onError(e);
+            } catch (Error error) {
+                cleanupAfterFatalError(active, assistantId, error);
+                throw error;
+            }
         } catch (Exception e) {
-            listener.onError(e);
+            try {
+                listener.onError(e);
+            } catch (Error error) {
+                cleanupAfterFatalError(active, assistantId, error);
+                throw error;
+            }
+        } catch (Error error) {
+            cleanupAfterFatalError(active, assistantId, error);
+            throw error;
+        }
+    }
+
+    private void cleanupAfterFatalError(ActiveStream active, String assistantId, Error primaryError) {
+        active.started().set(false);
+        active.finished().set(true);
+        active.completed().set(true);
+        activeStreams.remove(assistantId, active);
+        try {
+            activeStreamRegistryService.unregister(assistantId);
+        } catch (RuntimeException | Error cleanupFailure) {
+            addSuppressed(primaryError, cleanupFailure);
+        }
+        try {
+            active.cancellationToken().cancel();
+            Thread runner = active.runner().getAndSet(null);
+            if (runner != null && runner != Thread.currentThread()) {
+                runner.interrupt();
+            }
+        } catch (RuntimeException | Error cleanupFailure) {
+            addSuppressed(primaryError, cleanupFailure);
+        }
+        for (SseEmitter emitter : active.emitters()) {
+            try {
+                emitter.complete();
+            } catch (RuntimeException | Error cleanupFailure) {
+                addSuppressed(primaryError, cleanupFailure);
+            }
+        }
+        active.emitters().clear();
+    }
+
+    private void addSuppressed(Error primaryError, Throwable cleanupFailure) {
+        if (cleanupFailure != primaryError) {
+            primaryError.addSuppressed(cleanupFailure);
         }
     }
 
@@ -594,7 +642,7 @@ public class UiController {
         }
         try {
             lifecycleHookService.dispatch(event, sessionId);
-        } catch (Throwable e) {
+        } catch (RuntimeException e) {
             log.warn("Failed to dispatch lifecycle hook: event={}, sessionId={}", event, sessionId, e);
         }
     }

@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.git;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 import com.judepereira.jupiter.persistence.AppStateService;
@@ -10,6 +11,9 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
@@ -59,6 +63,38 @@ class ManualGitPullCoordinatorTests {
     }
 
     @Test
+    void dispatchLoadErrorReleasesActiveKeyAndPropagatesSameError() {
+        Fixture f = fixture();
+        AssertionError fatal = new AssertionError("load failed");
+        doThrow(fatal).when(f.app).loadAutoGitUpdateWorkspace(7);
+
+        assertThatThrownBy(() -> f.coordinator.dispatch(7)).isSameAs(fatal);
+        assertThat(f.coordinator.isPulling(7)).isFalse();
+        verifyNoInteractions(f.balloon);
+
+        doReturn(new Persistence.WorkspaceView(7, "Alpha", "/repo", false, Persistence.RailStatus.NONE)).when(f.app)
+                .loadAutoGitUpdateWorkspace(7);
+        assertThat(f.coordinator.dispatch(7)).isEqualTo(ManualGitPullCoordinator.DispatchResult.ACCEPTED);
+    }
+
+    @Test
+    void workerErrorIsCapturedBySubmittedFutureAndDedupKeyIsReleasedWithoutBalloon() throws Exception {
+        Fixture f = fixture();
+        AssertionError fatal = new AssertionError("worker failed");
+        doThrow(fatal).when(f.git).updateWorkspaceManually(7);
+
+        f.coordinator.dispatch(7);
+        Future<?> future = f.executor.lastSubmitted;
+        f.executor.runNext();
+
+        assertThatThrownBy(future::get).isInstanceOf(ExecutionException.class).extracting(Throwable::getCause)
+                .isSameAs(fatal);
+        assertThat(f.coordinator.isPulling(7)).isFalse();
+        assertThat(f.coordinator.dispatch(7)).isEqualTo(ManualGitPullCoordinator.DispatchResult.ACCEPTED);
+        verifyNoInteractions(f.balloon);
+    }
+
+    @Test
     void nullWorkspaceResetsStatusAndPublishesErrorWithoutQueuingWork() {
         Fixture f = fixture();
         when(f.app.loadAutoGitUpdateWorkspace(7)).thenReturn(null);
@@ -76,6 +112,8 @@ class ManualGitPullCoordinatorTests {
         assertThat(f.coordinator.dispatch(7)).isEqualTo(ManualGitPullCoordinator.DispatchResult.FAILED);
         assertThat(f.coordinator.isPulling(7)).isFalse();
         verify(f.balloon).publishError(eq("Git Pull"), contains("Git pull could not be started"));
+        f.executor.reject = false;
+        assertThat(f.coordinator.dispatch(7)).isEqualTo(ManualGitPullCoordinator.DispatchResult.ACCEPTED);
     }
 
     private static Fixture fixture() {
@@ -101,12 +139,20 @@ class ManualGitPullCoordinatorTests {
         private final Queue<Runnable> tasks = new ArrayDeque<>();
         private boolean shutdown;
         private boolean reject;
+        private Future<?> lastSubmitted;
         @Override
         public void execute(Runnable command) {
             if (reject) {
                 throw new IllegalStateException("rejected");
             }
             tasks.add(command);
+        }
+        @Override
+        public Future<?> submit(Runnable task) {
+            FutureTask<Void> future = new FutureTask<>(task, null);
+            lastSubmitted = future;
+            execute(future);
+            return future;
         }
         @Override
         public void shutdown() {

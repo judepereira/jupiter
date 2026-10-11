@@ -1,7 +1,9 @@
 package com.judepereira.jupiter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
@@ -36,6 +38,7 @@ import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.config.HttpAuthProperties;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.git.ManualGitPullCoordinator;
+import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateRepository;
 import com.judepereira.jupiter.persistence.AppStateService;
@@ -552,6 +555,80 @@ public class UiControllerAsyncStreamingTests {
         assertThat(second).anyMatch(row -> row.contains("ASSISTANT:"));
         assertThat(appStateService.loadViewData().activeSessionDetail().chatMessages().stream()
                 .map(ChatMessageView::text).toList()).contains("compact summary");
+    }
+
+    @Test
+    public void lifecycleDispatchRuntimeExceptionDoesNotPreventSuccessfulCompletion() throws Exception {
+        LifecycleHookService hooks = mock(LifecycleHookService.class);
+        doThrow(new IllegalStateException("hook dispatch failed")).when(hooks)
+                .dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, 1L);
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+                return new AgentTurnResult("finished", List.of());
+            }
+        };
+        var props = new AgentProperties();
+        props.setWorkspaceRoot(".");
+        var context = TestAppStateSupport.controllerContext(harness, props,
+                ModelCatalogTestSupport.modelCatalogService(), hooks);
+        Model model = new ConcurrentModel();
+        context.controller().sendMessage("go", model, null);
+        String assistantId = assistantId((ConcurrentModel) model);
+        context.controller().streamChat(assistantId);
+
+        var message = TestAppStateSupport.awaitAssistantCompletion(context.controller(), assistantId);
+        assertThat(message.text()).isEqualTo("finished");
+        assertThat(message.pending()).isFalse();
+        assertThat(context.service().activeStreamRegistryService().hasActiveStreamForAssistantId(assistantId))
+                .isFalse();
+        verify(hooks).dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, 1L);
+    }
+
+    @Test
+    public void lifecycleDispatchErrorCleansUpStreamWithoutFailingAssistant() throws Exception {
+        LifecycleHookService hooks = mock(LifecycleHookService.class);
+        AssertionError fatal = new AssertionError("hook dispatch fatal");
+        doThrow(fatal).when(hooks).dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, 1L);
+        CountDownLatch streamRunnerFinished = new CountDownLatch(1);
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+                try {
+                    listener.onComplete(new AgentTurnResult("finished", List.of()));
+                    return new AgentTurnResult("finished", List.of());
+                } finally {
+                    streamRunnerFinished.countDown();
+                }
+            }
+        };
+        var props = new AgentProperties();
+        props.setWorkspaceRoot(".");
+        var context = TestAppStateSupport.controllerContext(harness, props,
+                ModelCatalogTestSupport.modelCatalogService(), hooks);
+        Model model = new ConcurrentModel();
+        context.controller().sendMessage("go", model, null);
+        String assistantId = assistantId((ConcurrentModel) model);
+        context.controller().streamChat(assistantId);
+
+        assertThat(streamRunnerFinished.await(5, TimeUnit.SECONDS)).isTrue();
+        TestAppStateSupport.awaitAssistantCompletion(context.controller(), assistantId);
+        Model afterModel = new ConcurrentModel();
+        context.controller().index(afterModel);
+        List<?> after = (List<?>) ((ConcurrentModel) afterModel).getAttribute("chatMessages");
+        ChatPresentationService.ChatMessage message = after.stream()
+                .map(ChatPresentationService.ChatMessage.class::cast)
+                .filter(candidate -> assistantId.equals(candidate.id())).findFirst().orElseThrow();
+        assertThat(message.text()).isEqualTo("finished");
+        assertThat(context.service().activeStreamRegistryService().hasActiveStreamForAssistantId(assistantId))
+                .isFalse();
+        verify(hooks).dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, 1L);
     }
 
     @Test

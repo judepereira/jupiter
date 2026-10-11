@@ -82,14 +82,26 @@ public class LifecycleHookService {
                 executor.submit(() -> {
                     try {
                         result.complete(run(event, script, context, settings.timeoutSeconds()));
-                    } catch (Throwable failure) {
+                    } catch (Exception failure) {
                         log.error("Lifecycle action failed: event={}, sessionId={}, reason={}", event, sessionId,
                                 failure.getClass().getSimpleName());
-                        systemBalloonService.publishError("Lifecycle action failed",
-                                "The configured lifecycle action could not be executed for session " + sessionId + ".");
-                        result.complete(new HookExecutionResult(event, HookStatus.LAUNCH_FAILED, null, 0, 0));
+                        try {
+                            systemBalloonService.publishError("Lifecycle action failed",
+                                    "The configured lifecycle action could not be executed for session " + sessionId
+                                            + ".");
+                        } finally {
+                            result.complete(new HookExecutionResult(event, HookStatus.LAUNCH_FAILED, null, 0, 0));
+                        }
+                    } catch (Error failure) {
+                        result.completeExceptionally(failure);
+                        log.error("Lifecycle action terminated with an error: event={}, sessionId={}, reason={}", event,
+                                sessionId, failure.getClass().getSimpleName());
+                        throw failure;
                     }
                 });
+            } catch (Error failure) {
+                result.completeExceptionally(failure);
+                throw failure;
             } catch (RuntimeException failure) {
                 activeTasks.remove(result);
                 log.error("Lifecycle action could not be queued: event={}, sessionId={}, reason={}", event, sessionId,

@@ -28,9 +28,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
+@Log4j2
 @Service
 public class SubagentTaskService {
 
@@ -240,7 +242,9 @@ public class SubagentTaskService {
         }
         try {
             lifecycleHookService.dispatch(event, sessionId);
-        } catch (Throwable ignored) {
+        } catch (RuntimeException failure) {
+            log.warn("Failed to dispatch subagent lifecycle hook: event={}, sessionId={}, reason={}", event, sessionId,
+                    failure.getClass().getSimpleName());
         }
     }
 

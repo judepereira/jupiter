@@ -4,6 +4,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
+import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -91,6 +92,31 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
         }
     }
 
+    @PreDestroy
+    public synchronized void close() {
+        Throwable cleanupFailure = null;
+        for (ProjectRuntime runtime : runtimes.values()) {
+            try {
+                runtime.close();
+            } catch (RuntimeException | Error failure) {
+                if (cleanupFailure == null) {
+                    cleanupFailure = failure;
+                } else if (cleanupFailure != failure) {
+                    cleanupFailure.addSuppressed(failure);
+                }
+            }
+        }
+        runtimes.clear();
+        projectToolFingerprints.clear();
+        reloadingProjects.clear();
+        if (cleanupFailure instanceof RuntimeException runtimeFailure) {
+            throw runtimeFailure;
+        }
+        if (cleanupFailure instanceof Error error) {
+            throw error;
+        }
+    }
+
     @Override
     public void onStatusChanged(long serverId, McpRuntimeEvents.ConnectionStatus status, String message) {
         ProjectRuntime runtime = findRuntime(serverId);
@@ -129,22 +155,37 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
 
         private void reload(List<McpServerView> servers) {
             Map<Long, McpProjectMcpServerRuntime> next = new LinkedHashMap<>();
+            List<McpProjectMcpServerRuntime> newlyCreated = new ArrayList<>();
             Map<String, String> env = appStateService.loadProjectEnvironmentVariables(projectId);
-            for (McpServerView server : servers) {
-                McpProjectMcpServerRuntime runtime = byServerId.get(server.id());
-                if (runtime == null) {
-                    runtime = McpProjectMcpServerRuntime.connect(server, env, templateResolver, clientFactory,
-                            McpProjectMcpServerRuntimeManager.this);
-                } else {
-                    runtime.updateProjectEnvironmentVariables(env);
-                    runtime.reconnect();
+            try {
+                for (McpServerView server : servers) {
+                    McpProjectMcpServerRuntime runtime = byServerId.get(server.id());
+                    if (runtime == null) {
+                        runtime = McpProjectMcpServerRuntime.connect(server, env, templateResolver, clientFactory,
+                                McpProjectMcpServerRuntimeManager.this);
+                        newlyCreated.add(runtime);
+                    } else {
+                        runtime.updateProjectEnvironmentVariables(env);
+                        runtime.reconnect();
+                    }
+                    next.put(server.id(), runtime);
                 }
-                next.put(server.id(), runtime);
-            }
-            for (Map.Entry<Long, McpProjectMcpServerRuntime> entry : byServerId.entrySet()) {
-                if (!next.containsKey(entry.getKey())) {
-                    entry.getValue().close();
+                for (Map.Entry<Long, McpProjectMcpServerRuntime> entry : byServerId.entrySet()) {
+                    if (!next.containsKey(entry.getKey())) {
+                        entry.getValue().close();
+                    }
                 }
+            } catch (RuntimeException | Error failure) {
+                for (McpProjectMcpServerRuntime runtime : newlyCreated) {
+                    try {
+                        runtime.close();
+                    } catch (RuntimeException | Error cleanupFailure) {
+                        if (cleanupFailure != failure) {
+                            failure.addSuppressed(cleanupFailure);
+                        }
+                    }
+                }
+                throw failure;
             }
             byServerId.clear();
             byServerId.putAll(next);
@@ -193,10 +234,22 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
         }
 
         private void close() {
+            RuntimeException cleanupFailure = null;
             for (McpProjectMcpServerRuntime runtime : byServerId.values()) {
-                runtime.close();
+                try {
+                    runtime.close();
+                } catch (RuntimeException failure) {
+                    if (cleanupFailure == null) {
+                        cleanupFailure = failure;
+                    } else if (cleanupFailure != failure) {
+                        cleanupFailure.addSuppressed(failure);
+                    }
+                }
             }
             byServerId.clear();
+            if (cleanupFailure != null) {
+                throw cleanupFailure;
+            }
         }
     }
 }
