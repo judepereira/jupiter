@@ -101,6 +101,26 @@ class WatchRepositoryIntegrationTest {
     }
 
     @Test
+    void watchGeneratedTurnPreservesEncryptedDraftUntilInteractiveTurn() {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        context.service().addOrReopenProject("P", "/tmp/" + UUID.randomUUID());
+        long session = context.service().loadViewData().activeSession().id();
+        String draft = "unsent secret";
+        context.service().updateSessionDraft(session, draft);
+
+        context.service().appendWatchGeneratedTurn(session, "watch-user", "watch-assistant", "action", null);
+
+        assertThat(context.service().loadSessionDetail(session).chatDraft()).isEqualTo(draft);
+        String rawDraft = new JdbcTemplate(context.dataSource())
+                .queryForObject("SELECT chat_draft FROM sessions WHERE id = ?", String.class, session);
+        assertThat(rawDraft).doesNotContain(draft);
+
+        context.service().appendUserMessageAndPendingAssistant(session, "user", "assistant", "normal turn");
+        assertThat(context.service().loadSessionDetail(session).chatDraft()).isEmpty();
+    }
+
+    @Test
     void watchGeneratedTurnDoesNotBecomeQualifyingActivity() {
         var context = TestAppStateSupport.appStateContext(event -> {
         });

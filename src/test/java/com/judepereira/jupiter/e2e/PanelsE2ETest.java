@@ -2,6 +2,7 @@ package com.judepereira.jupiter.e2e;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
@@ -9,6 +10,7 @@ import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
@@ -82,7 +84,38 @@ class PanelsE2ETest extends E2ETestSupport {
 
             page.locator("#toggle-terminal-rail-btn").click();
 
+            assertThat(page.locator("#bottom-panel")).hasCount(1);
             assertThat(page.locator("#bottom-panel")).not().isVisible();
+            assertThat(page.locator("#bottom-panel .terminal-shell")).hasCount(0);
+        }
+    }
+
+    @Test
+    void activatingCurrentWorkspaceCollapsesTerminalPanel(@TempDir Path tempDir) throws Exception {
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        try (RunningApp app = startApp(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
+            page.locator("#toggle-terminal-rail-btn").click();
+            assertTerminalPanelVisible(page);
+
+            long workspaceId = app.context().getBean(AppStateService.class).loadViewData().activeWorkspace().id();
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/workspaces/" + workspaceId + "/collapse")
+                            && response.status() == 200,
+                    () -> page.locator("[hx-post='/ui/workspaces/" + workspaceId + "/collapse']").click());
+
+            assertThat(page.locator("#bottom-panel")).hasCount(1);
+            assertThat(page.locator("#bottom-panel")).not().isVisible();
+            assertThat(page.locator("#bottom-panel .terminal-shell")).hasCount(0);
+            assertNull(app.context().getBean(AppStateService.class).loadViewData().activeWorkspace());
         }
     }
 

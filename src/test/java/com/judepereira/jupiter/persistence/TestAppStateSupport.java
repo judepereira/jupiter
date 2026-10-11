@@ -58,6 +58,8 @@ import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.thymeleaf.spring6.SpringTemplateEngine;
@@ -104,7 +106,8 @@ public final class TestAppStateSupport {
         SessionActivityCoordinator activityCoordinator = new SessionActivityCoordinator(activeStreamRegistryService,
                 new WatchRepository(jdbc, encryptor));
         AppStateService service = new AppStateService(repository, new ObjectMapper(), applicationEventPublisher,
-                activeStreamRegistryService, activityCoordinator);
+                activeStreamRegistryService, activityCoordinator,
+                new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
         return new AppStateTestContext(service, repository, activeStreamRegistryService, activityCoordinator,
                 dataSource);
     }

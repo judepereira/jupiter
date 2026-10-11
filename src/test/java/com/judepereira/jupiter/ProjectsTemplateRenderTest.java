@@ -73,6 +73,37 @@ public class ProjectsTemplateRenderTest {
     }
 
     @Test
+    public void shellUpdatesRenderExactlyTheSelectedBottomPanel() {
+        SpringTemplateEngine engine = engine();
+
+        for (String mode : List.of("watches", "terminal", "none")) {
+            WebContext context = webContext();
+            context.setVariable("bottomPanelMode", mode);
+            context.setVariable("includeChatContainer", false);
+            context.setVariable("watchPanelOpen", mode.equals("watches"));
+            context.setVariable("bottomPanelOpen", mode.equals("terminal"));
+            context.setVariable("terminalTabs", List.of());
+            context.setVariable("activeTerminal", null);
+            context.setVariable("watchRuns", List.of());
+            context.setVariable("watchPanelOob", false);
+            context.setVariable("terminalOob", false);
+            context.setVariable("reviewPanelOpen", false);
+            context.setVariable("reviewOob", false);
+            context.setVariable("changedFiles", List.of());
+            context.setVariable("selectedFile", null);
+            context.setVariable("projects", List.of());
+            context.setVariable("workspaces", List.of());
+            context.setVariable("sessions", List.of());
+            context.setVariable("activeSession", null);
+
+            String html = engine.process(
+                    new TemplateSpec("fragments/projects", Set.of("shellUpdates"), TemplateMode.HTML, null), context);
+            assertThat(html.split("id=\\\"bottom-panel\\\"", -1)).hasSize(2);
+            assertThat(html).contains(mode.equals("watches") ? "watches-panel" : "terminal-panel");
+        }
+    }
+
+    @Test
     public void watchesPanelDefaultsClosedWhenOpenStateIsMissing() {
         SpringTemplateEngine engine = engine();
         WebContext context = webContext();

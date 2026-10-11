@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.e2e;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
@@ -53,6 +54,10 @@ class AutonomousWatchE2ETest extends E2ETestSupport {
             openProject(page, "Alpha", project);
             long sessionId = app.context().getBean(AppStateService.class).loadViewData().activeSession().id();
             page.locator("#chat-input").fill("unsent draft stays here");
+            page.evaluate(
+                    "async () => { const autosave = await import('/js/chat/draft-autosave.js'); await autosave.flushChatDraftSave({useBeacon: false, keepalive: false}); }");
+            assertEquals("unsent draft stays here",
+                    app.context().getBean(AppStateService.class).loadSessionDetail(sessionId).chatDraft());
             assertTrue((Boolean) page.evaluate("() => !!window.__workspaceRailRefreshSource"),
                     "rail EventSource was not initialized");
 
@@ -60,9 +65,9 @@ class AutonomousWatchE2ETest extends E2ETestSupport {
                     "Browser regression action", CommandKind.PROMPT, "Autonomous watch action for browser regression",
                     null, null);
             UiController uiController = app.context().getBean(UiController.class);
-            String assistantId = uiController.prepareRegisteredStream(sessionId, project.toString(),
+            UiController.RegisteredStream handle = uiController.prepareRegisteredStream(sessionId, project.toString(),
                     app.context().getBean(AgentDefinitionService.class).getRequired("plan"), command);
-            uiController.startRegisteredStream(assistantId);
+            uiController.startRegisteredStream(handle);
 
             try {
                 assertThat(page.locator("#chat-messages-list")).containsText(command.body());
@@ -71,6 +76,9 @@ class AutonomousWatchE2ETest extends E2ETestSupport {
                 TestAppConfig.awaitStarted();
                 TestAppConfig.release();
                 assertThat(page.locator("#chat-messages-list")).containsText("Deterministic autonomous reply");
+                page.reload();
+                page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+                assertThat(page.locator("#chat-input")).hasValue("unsent draft stays here");
             } catch (AssertionError failure) {
                 System.err.println("chat DOM: " + page.locator("#chat-messages-list").innerHTML());
                 System.err.println("chat dataset: "

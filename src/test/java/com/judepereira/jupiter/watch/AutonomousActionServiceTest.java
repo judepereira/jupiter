@@ -65,7 +65,9 @@ class AutonomousActionServiceTest {
         var context = context();
         long session = session(context);
         var ui = mock(UiController.class);
-        when(ui.prepareRegisteredStream(any(Long.class), anyString(), any(), any())).thenReturn("assistant");
+        when(ui.prepareRegisteredStream(any(Long.class), anyString(), any(), any()))
+                .thenReturn(new UiController.RegisteredStream("assistant", () -> {
+                }));
         var service = service(context, ui, new AgentDefinitionService(new ObjectMapper()));
         int before = context.service().loadSessionDetail(session).chatMessages().size();
         assertThat(service.start(session, COMMAND, "plan", 0, () -> true, 999999L)).isEmpty();
@@ -80,11 +82,13 @@ class AutonomousActionServiceTest {
         var context = context();
         long session = session(context);
         var ui = mock(UiController.class);
-        when(ui.prepareRegisteredStream(any(Long.class), anyString(), any(), any())).thenReturn("assistant");
+        when(ui.prepareRegisteredStream(any(Long.class), anyString(), any(), any()))
+                .thenReturn(new UiController.RegisteredStream("assistant", () -> {
+                }));
         var service = service(context, ui, new AgentDefinitionService(new ObjectMapper()));
         long run = run(context, session);
         assertThat(service.start(session, COMMAND, "plan", 0, () -> true, run)).contains("assistant");
-        verify(ui).startRegisteredStream("assistant");
+        verify(ui).startRegisteredStream(any(UiController.RegisteredStream.class));
         assertThat(new WatchRepository(new NamedParameterJdbcTemplate(context.dataSource()),
                 TestEncryptionSupport.encryptor()).runs(session)).singleElement()
                 .extracting(WatchService.Run::dispatched).isEqualTo(true);
@@ -96,8 +100,11 @@ class AutonomousActionServiceTest {
         var context = context();
         long session = session(context);
         var ui = mock(UiController.class);
-        when(ui.prepareRegisteredStream(any(Long.class), anyString(), any(), any())).thenReturn("assistant");
-        Mockito.doThrow(new IllegalStateException("boom")).when(ui).startRegisteredStream("assistant");
+        when(ui.prepareRegisteredStream(any(Long.class), anyString(), any(), any()))
+                .thenReturn(new UiController.RegisteredStream("assistant", () -> {
+                }));
+        Mockito.doThrow(new IllegalStateException("boom")).when(ui)
+                .startRegisteredStream(any(UiController.RegisteredStream.class));
         var service = service(context, ui, new AgentDefinitionService(new ObjectMapper()));
         assertThatThrownBy(() -> service.start(session, COMMAND, "plan", 0, () -> true, run(context, session)))
                 .isInstanceOf(IllegalStateException.class);

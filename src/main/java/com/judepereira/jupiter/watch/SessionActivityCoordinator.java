@@ -7,6 +7,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongConsumer;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -77,10 +78,17 @@ public class SessionActivityCoordinator {
     }
 
     public void withLock(long sessionId, Runnable action) {
+        withLock(sessionId, () -> {
+            action.run();
+            return null;
+        });
+    }
+
+    public <T> T withLock(long sessionId, Supplier<T> action) {
         ReentrantLock lock = locks.computeIfAbsent(sessionId, ignored -> new ReentrantLock());
         lock.lock();
         try {
-            action.run();
+            return action.get();
         } finally {
             lock.unlock();
         }

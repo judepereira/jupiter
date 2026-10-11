@@ -81,6 +81,10 @@ public class WatchRunnerService {
         if (shuttingDown.get())
             return;
         jobs.forEach((key, job) -> {
+            if (activeStreams.hasActiveStreamForSession(key.sessionId)) {
+                cancelJob(job);
+                return;
+            }
             var activity = watches.qualifyingActivity(key.sessionId);
             var enablement = repository.enablement(key.watchId, key.sessionId).orElse(null);
             var current = repository.definitionFor(key.watchId).orElse(null);
@@ -92,9 +96,12 @@ public class WatchRunnerService {
         });
         var candidates = new ArrayList<Candidate>();
         for (long session : repository.enabledSessions()) {
+            if (activeStreams.hasActiveStreamForSession(session)) {
+                cancelSession(session);
+                continue;
+            }
             var activity = watches.qualifyingActivity(session);
-            if (activity.isEmpty() || !now.isBefore(activity.get().plus(DORMANT))
-                    || activeStreams.hasActiveStreamForSession(session)) {
+            if (activity.isEmpty() || !now.isBefore(activity.get().plus(DORMANT))) {
                 cancelSession(session);
                 continue;
             }

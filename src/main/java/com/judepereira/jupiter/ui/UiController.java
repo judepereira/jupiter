@@ -398,10 +398,35 @@ public class UiController {
     /** Starts a registered stream without requiring a browser SSE connection. */
     public void startRegisteredStream(String assistantId) {
         ActiveStream active = activeStreams.get(assistantId);
-        if (active == null || !active.started().compareAndSet(false, true)) {
+        if (active == null) {
             throw new IllegalStateException("Active stream is not available: " + assistantId);
         }
-        startActiveStream(assistantId, active, null);
+        activateRegisteredStream(assistantId, active);
+    }
+
+    public void startRegisteredStream(RegisteredStream registration) {
+        if (registration == null) {
+            throw new IllegalArgumentException("Registered stream is required");
+        }
+        registration.start().run();
+    }
+
+    private void activateRegisteredStream(String assistantId, ActiveStream active) {
+        if (active.cancellationToken().isCancelled()) {
+            throw new IllegalStateException("Active stream was cancelled: " + assistantId);
+        }
+        if (active.started().compareAndSet(false, true)) {
+            startActiveStream(assistantId, active, null);
+        }
+        if (active.published().compareAndSet(false, true)) {
+            publishRegisteredStreamStarted(active);
+        }
+    }
+
+    private void publishRegisteredStreamStarted(ActiveStream active) {
+        long sessionId = active.pendingStream().sessionId();
+        workspaceRailRefreshService.publishChatTurnStarted(sessionId);
+        appStateService.publishWorkspaceRailRefresh();
     }
 
     public void discardRegisteredStream(String assistantId) {
@@ -418,7 +443,7 @@ public class UiController {
     /**
      * Queues and registers a normal chat stream; callers own the admission guard.
      */
-    public String prepareRegisteredStream(long sessionId, String workspaceRoot, AgentDefinition agent,
+    public RegisteredStream prepareRegisteredStream(long sessionId, String workspaceRoot, AgentDefinition agent,
             CommandDefinition command) {
         AgentModelResolutionService.ModelResolution model = agentModelResolutionService.resolve(agent);
         String assistantId = UUID.randomUUID().toString();
@@ -435,9 +460,7 @@ public class UiController {
         activeStreams.put(assistantId, active);
         try {
             activeStreamRegistryService.register(assistantId, sessionId, workspaceRoot);
-            workspaceRailRefreshService.publishChatTurnStarted(sessionId);
-            appStateService.publishWorkspaceRailRefresh();
-            return assistantId;
+            return new RegisteredStream(assistantId, () -> activateRegisteredStream(assistantId, active));
         } catch (RuntimeException e) {
             activeStreams.remove(assistantId, active);
             activeStreamRegistryService.unregister(assistantId);
@@ -1947,10 +1970,9 @@ public class UiController {
     }
 
     private void populateShellUpdates(Model model, AppStateView view) {
-        // Shell swaps must refresh the panel target whenever a workspace exists,
-        // including its closed state.
-        model.addAttribute("terminalOob", view.activeWorkspace() != null);
-        model.addAttribute("watchPanelOob", view.activeWorkspace() != null);
+        // Shell swaps refresh both panel targets, including their closed state.
+        model.addAttribute("terminalOob", true);
+        model.addAttribute("watchPanelOob", true);
         model.addAttribute("shellRefresh", true);
         model.addAttribute("includeChatContainer", true);
         model.addAttribute("reviewOob", true);
@@ -2492,6 +2514,9 @@ public class UiController {
     public record WorkspaceAction(long id, boolean defaultWorkspace, boolean deletable) {
     }
 
+    public record RegisteredStream(String assistantId, Runnable start) {
+    }
+
     public record Session(long id, String name, boolean unread, RailStatus railStatus) {
 
         public boolean inProgress() {
@@ -2515,12 +2540,13 @@ public class UiController {
     }
 
     private record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters,
-            AtomicBoolean started, AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,
-            CancellationToken cancellationToken, AtomicReference<StringBuilder> accumulatedText) {
+            AtomicBoolean started, AtomicBoolean finished, AtomicBoolean completed, AtomicBoolean published,
+            AtomicReference<Thread> runner, CancellationToken cancellationToken,
+            AtomicReference<StringBuilder> accumulatedText) {
         private static ActiveStream create(PendingStream pendingStream, CancellationToken cancellationToken) {
             return new ActiveStream(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false),
-                    new AtomicBoolean(false), new AtomicBoolean(false), new AtomicReference<>(), cancellationToken,
-                    new AtomicReference<>(new StringBuilder()));
+                    new AtomicBoolean(false), new AtomicBoolean(false), new AtomicBoolean(false),
+                    new AtomicReference<>(), cancellationToken, new AtomicReference<>(new StringBuilder()));
         }
     }
 }

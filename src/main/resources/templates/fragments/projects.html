@@ -1341,8 +1341,12 @@
     <th:block th:replace="~{fragments/projects :: workspaceRail}"></th:block>
     <th:block th:if="${includeChatContainer}" th:replace="~{fragments/chat :: chat}"></th:block>
     <th:block th:replace="~{fragments/review :: panel}"></th:block>
-    <th:block th:if="${bottomPanelMode == 'watches'}" th:replace="~{fragments/watches :: panel}"></th:block>
-    <th:block th:unless="${bottomPanelMode == 'watches'}" th:replace="~{fragments/terminal :: panel}"></th:block>
+    <th:block th:if="${bottomPanelMode == 'watches'}">
+        <th:block th:replace="~{fragments/watches :: panel}"></th:block>
+    </th:block>
+    <th:block th:unless="${bottomPanelMode == 'watches'}">
+        <th:block th:replace="~{fragments/terminal :: panel}"></th:block>
+    </th:block>
     <th:block th:replace="~{fragments/projects :: modalClose}"></th:block>
 </th:block>
 

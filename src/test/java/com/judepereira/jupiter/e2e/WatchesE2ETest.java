@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.e2e;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.persistence.AppStateService;
@@ -187,6 +188,43 @@ class WatchesE2ETest extends E2ETestSupport {
             openProject(page, "Alpha", projectDir);
             page.locator("#toggle-watches-rail-btn").click();
             assertThat(page.locator("#bottom-panel")).isVisible();
+            var watchPanel = page.locator("#bottom-panel");
+            assertThat(watchPanel).containsText("WATCHES");
+            var state = app.context().getBean(AppStateService.class);
+            long originalSessionId = state.loadViewData().activeSession().id();
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New session")).click();
+            page.locator("#session-name-input").fill("Second watch session");
+            page.waitForResponse(response -> response.url().contains("/ui/sessions/add") && response.status() == 200,
+                    () -> page.locator("[data-session-create-form]").evaluate("form => form.requestSubmit()"));
+            long secondSessionId = state.loadViewData().activeSession().id();
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/" + secondSessionId + "/activate")
+                            && response.status() == 200,
+                    () -> page.locator(".session-row").filter(new FilterOptions().setHasText("Second watch session"))
+                            .locator(".session-item").click());
+            assertThat(page.locator("#bottom-panel")).hasCount(1);
+            assertThat(page.locator("#bottom-panel")).hasClass(Pattern.compile(".*closed.*"));
+            assertEquals(secondSessionId, state.loadViewData().activeSession().id());
+            assertThat(page.locator("#bottom-panel")).hasClass(Pattern.compile(".*closed.*"));
+            assertThat(page.locator("#bottom-panel")).not().isVisible();
+            page.waitForResponse(response -> response.url().contains("/ui/panel/watches") && response.status() == 200,
+                    () -> page.locator("#toggle-watches-rail-btn").click());
+            assertThat(page.locator("#bottom-panel")).isVisible();
+            assertThat(page.locator("#bottom-panel")).containsText("WATCHES");
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/" + originalSessionId + "/activate")
+                            && response.status() == 200,
+                    () -> page.locator(".session-item[hx-post='/ui/sessions/" + originalSessionId + "/activate']")
+                            .click());
+            assertThat(page.locator("#bottom-panel")).isVisible();
+            assertThat(page.locator("#bottom-panel")).containsText("WATCHES");
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/sessions/" + secondSessionId + "/activate")
+                            && response.status() == 200,
+                    () -> page.locator(".session-item[hx-post='/ui/sessions/" + secondSessionId + "/activate']")
+                            .click());
+            assertThat(page.locator("#bottom-panel")).isVisible();
+            assertThat(page.locator("#bottom-panel")).containsText("WATCHES");
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Close watches panel")).click();
             assertThat(page.locator("#bottom-panel")).hasClass(Pattern.compile(".*closed.*"));
             assertThat(page.locator("#bottom-panel")).not().isVisible();
@@ -194,7 +232,8 @@ class WatchesE2ETest extends E2ETestSupport {
             page.reload();
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
             assertThat(page.locator("#bottom-panel")).hasClass(Pattern.compile(".*closed.*"));
-            page.locator("#toggle-watches-rail-btn").click();
+            page.waitForResponse(response -> response.url().contains("/ui/panel/watches") && response.status() == 200,
+                    () -> page.locator("#toggle-watches-rail-btn").click());
             assertThat(page.locator("#bottom-panel")).isVisible();
             assertThat(page.locator("#bottom-panel")).hasAttribute("hx-trigger", Pattern.compile("every 20s"));
             app.context().getBean(AppStateService.class);

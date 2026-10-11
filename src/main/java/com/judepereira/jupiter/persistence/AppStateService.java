@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +45,7 @@ public class AppStateService {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final ActiveStreamRegistryService activeStreamRegistryService;
     private final SessionActivityCoordinator activityCoordinator;
+    private final TransactionTemplate transactionTemplate;
 
     public ActiveStreamRegistryService activeStreamRegistryService() {
         return activeStreamRegistryService;
@@ -679,27 +681,28 @@ public class AppStateService {
                 .parseCommandEnvironmentAllowlist(repository.findProject(projectId).commandEnvironmentAllowlist());
     }
 
-    @Transactional
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId,
             String assistantPublicId, String userText) {
-        return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText, null, false);
+        return activityCoordinator.withLock(sessionId,
+                () -> transactionTemplate.execute(status -> appendUserMessageAndPendingAssistantInternal(sessionId,
+                        userPublicId, assistantPublicId, userText, null, false)));
     }
 
     public QueuedChatTurn appendWatchGeneratedTurn(long sessionId, String userPublicId, String assistantPublicId,
             String userText, ChatMessageMetadata assistantMetadata) {
-        return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText,
-                assistantMetadata, true);
+        return activityCoordinator.withLock(sessionId,
+                () -> transactionTemplate.execute(status -> appendUserMessageAndPendingAssistantInternal(sessionId,
+                        userPublicId, assistantPublicId, userText, assistantMetadata, true)));
     }
 
-    @Transactional
     public QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId,
             String assistantPublicId, String userText, ChatMessageMetadata assistantMetadata) {
-        return appendUserMessageAndPendingAssistant(sessionId, userPublicId, assistantPublicId, userText,
-                assistantMetadata, false);
+        return activityCoordinator.withLock(sessionId,
+                () -> transactionTemplate.execute(status -> appendUserMessageAndPendingAssistantInternal(sessionId,
+                        userPublicId, assistantPublicId, userText, assistantMetadata, false)));
     }
 
-    @Transactional
-    private QueuedChatTurn appendUserMessageAndPendingAssistant(long sessionId, String userPublicId,
+    private QueuedChatTurn appendUserMessageAndPendingAssistantInternal(long sessionId, String userPublicId,
             String assistantPublicId, String userText, ChatMessageMetadata assistantMetadata, boolean watchGenerated) {
         if (userText == null) {
             throw new IllegalStateException("User text is required");
@@ -723,7 +726,9 @@ public class AppStateService {
                 assistantMetadata == null ? null : assistantMetadata.thinkingLevel(),
                 assistantMetadata == null ? null : assistantMetadata.preferredModelId(), null, null, now,
                 watchGenerated);
-        repository.clearSessionDraft(sessionId);
+        if (!watchGenerated) {
+            repository.clearSessionDraft(sessionId);
+        }
         return new QueuedChatTurn(
                 new ChatMessageView("user", userText, now.toEpochMilli(), false, userId, null, List.of(), null),
                 new ChatMessageView("assistant", "Thinking…", now.toEpochMilli(), true, assistantId, null, List.of(),
@@ -846,24 +851,26 @@ public class AppStateService {
         return toToolCallView(traceRow, toolCallId, sessionId);
     }
 
-    @Transactional
     public ChatMessageView completeAssistantMessage(long sessionId, String assistantPublicId, String finalText,
             List<ToolCallTraceInput> traces) {
-        if (finalText == null) {
-            throw new IllegalStateException("Final assistant text is required");
-        }
-        Instant now = Instant.now();
-        var assistantMessage = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
-        if (!assistantMessage.pending() || !"assistant".equals(assistantMessage.role())) {
-            throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
-        }
-        finalizeIncompleteToolCallTraces(assistantMessage.id(), now,
-                "Tool call did not complete before assistant completion");
-        repository.updateMessageToolCalls(assistantMessage.id(), null);
-        repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true, now);
-        activityCoordinator.recordAssistantActivity(sessionId, assistantPublicId);
-        markUnreadIfInactive(sessionId);
-        return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId), sessionId);
+        return activityCoordinator.withLock(sessionId, () -> transactionTemplate.execute(status -> {
+            if (finalText == null) {
+                throw new IllegalStateException("Final assistant text is required");
+            }
+            Instant now = Instant.now();
+            var assistantMessage = repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId);
+            if (!assistantMessage.pending() || !"assistant".equals(assistantMessage.role())) {
+                throw new IllegalStateException("Assistant message is not pending: " + assistantPublicId);
+            }
+            finalizeIncompleteToolCallTraces(assistantMessage.id(), now,
+                    "Tool call did not complete before assistant completion");
+            repository.updateMessageToolCalls(assistantMessage.id(), null);
+            repository.updateMessageContentAndPending(assistantMessage.id(), finalText, false, true, now);
+            activityCoordinator.recordAssistantActivity(sessionId, assistantPublicId);
+            markUnreadIfInactive(sessionId);
+            return toChatMessageView(repository.findMessageBySessionAndPublicId(sessionId, assistantPublicId),
+                    sessionId);
+        }));
     }
 
     @Transactional

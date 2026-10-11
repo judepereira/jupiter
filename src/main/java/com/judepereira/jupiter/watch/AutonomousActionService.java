@@ -36,7 +36,7 @@ public class AutonomousActionService {
             throw new IllegalArgumentException("Autonomous action agent must be a primary agent: " + actionAgentId);
         }
         String workspaceRoot = appStateService.loadSessionDetail(sessionId).workspaceRoot();
-        String[] assistantId = new String[1];
+        UiController.RegisteredStream[] registration = new UiController.RegisteredStream[1];
         boolean admitted = activityCoordinator.admit(sessionId, expectedActivityVersion, () -> {
             try {
                 Boolean committed = transactionTemplate.execute(status -> {
@@ -44,30 +44,31 @@ public class AutonomousActionService {
                         status.setRollbackOnly();
                         return false;
                     }
-                    assistantId[0] = uiController.prepareRegisteredStream(sessionId, workspaceRoot, agent, command);
-                    if (!repository.markDispatched(runId, assistantId[0])) {
+                    registration[0] = uiController.prepareRegisteredStream(sessionId, workspaceRoot, agent, command);
+                    if (!repository.markDispatched(runId, registration[0].assistantId())) {
                         status.setRollbackOnly();
                         return false;
                     }
                     return true;
                 });
                 if (!Boolean.TRUE.equals(committed)) {
-                    uiController.discardRegisteredStream(assistantId[0]);
-                    assistantId[0] = null;
+                    uiController
+                            .discardRegisteredStream(registration[0] == null ? null : registration[0].assistantId());
+                    registration[0] = null;
                 }
             } catch (RuntimeException failure) {
-                uiController.discardRegisteredStream(assistantId[0]);
+                uiController.discardRegisteredStream(registration[0] == null ? null : registration[0].assistantId());
                 throw failure;
             }
         });
-        if (!admitted || assistantId[0] == null) {
+        if (!admitted || registration[0] == null) {
             return Optional.empty();
         }
         try {
-            uiController.startRegisteredStream(assistantId[0]);
-            return Optional.of(assistantId[0]);
+            uiController.startRegisteredStream(registration[0]);
+            return Optional.of(registration[0].assistantId());
         } catch (RuntimeException failure) {
-            uiController.discardRegisteredStream(assistantId[0]);
+            uiController.discardRegisteredStream(registration[0].assistantId());
             throw failure;
         }
     }
