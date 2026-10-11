@@ -117,9 +117,13 @@ class PanelsE2ETest extends E2ETestSupport {
 
     private void runTerminalCommandAndAssertOutput(Page page) {
         assertThat(page.locator(".terminal-mount .xterm")).isVisible();
-        page.locator(".terminal-mount").click();
-        page.keyboard().type("echo \"hello world\"");
-        page.keyboard().press("Enter");
+        assertThat(page.locator(".terminal-mount .xterm-rows")).containsText("child-project");
+        var input = page.locator(".terminal-mount .xterm-helper-textarea");
+        input.waitFor();
+        input.focus();
+        assertThat(input).isFocused();
+        input.pressSequentially("printf 'hello %s\\n' world");
+        input.press("Enter");
 
         assertThat(page.locator(".terminal-mount .xterm-rows")).containsText("hello world");
     }

@@ -43,7 +43,19 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
             openProject(page, "Alpha", projectDir);
             assertThat(page.locator("#chat-input")).isVisible();
 
+            var overlay = page.locator("#connection-loss-overlay");
+            assertThat(overlay).hasCount(1);
+            assertThat(overlay).isHidden();
+
             int port = app.port();
+            page.route("**/health", route -> route.resume());
+            page.waitForResponse(response -> response.status() == 200 && response.url().endsWith("/health"),
+                    () -> page.evaluate("() => window.__connectionLossMonitor.probeHealth()"));
+            assertThat(overlay).isHidden();
+
+            // Playwright dispatches the queued route while pumping events; blocking
+            // app.close lets the next real request
+            // reach the stopped server and fail with a connection refusal.
             app.close();
             app = null;
 
@@ -53,6 +65,7 @@ class ConnectionLossOverlayE2ETest extends E2ETestSupport {
 
             try (RunningApp restarted = startApp(fakeHome, sqliteDbFile, port, TestAppConfig.class)) {
                 assertThat(restarted.port()).isEqualTo(port);
+                page.unroute("**/health");
                 page.waitForFunction(
                         "() => Number(sessionStorage.getItem('connection-loss-reload-count') || '0') >= 2");
                 page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
