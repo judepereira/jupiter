@@ -24,11 +24,16 @@ const lightTerminalTheme = {
 };
 
 function toWebSocketUrl(rawUrl) {
-    if (!rawUrl) return "";
+    if (!rawUrl) {
+        return "";
+    }
     try {
         const url = new URL(rawUrl, window.location.href);
-        if (url.protocol === "http:") url.protocol = "ws:";
-        else if (url.protocol === "https:") url.protocol = "wss:";
+        if (url.protocol === "http:") {
+            url.protocol = "ws:";
+        } else if (url.protocol === "https:") {
+            url.protocol = "wss:";
+        }
         return url.toString();
     } catch (_) {
         return rawUrl;
@@ -37,7 +42,9 @@ function toWebSocketUrl(rawUrl) {
 
 function disposeMount(mount) {
     const entry = mounts.get(mount);
-    if (!entry) return;
+    if (!entry) {
+        return;
+    }
     mounts.delete(mount);
     try {
         entry.resizeObserver && entry.resizeObserver.disconnect();
@@ -51,7 +58,9 @@ function disposeMount(mount) {
 }
 
 function fitEntry(entry) {
-    if (!entry || !document.contains(entry.mount)) return;
+    if (!entry || !document.contains(entry.mount)) {
+        return;
+    }
     entry.fitAddon.fit();
     const cols = Math.floor(entry.terminal.cols);
     const rows = Math.floor(entry.terminal.rows);
@@ -73,7 +82,9 @@ function scheduleInitialFit(entry) {
 function scheduleInitialFocus(entry) {
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-            if (!mounts.has(entry.mount) || entry.hasFocused) return;
+            if (!mounts.has(entry.mount) || entry.hasFocused) {
+                return;
+            }
             entry.terminal.focus();
             entry.hasFocused = true;
         });
@@ -99,17 +110,23 @@ function syncTerminals() {
 }
 
 function queueSync() {
-    if (syncQueued) return;
+    if (syncQueued) {
+        return;
+    }
     syncQueued = true;
     Promise.resolve().then(() => requestAnimationFrame(syncTerminals));
 }
 
 function initMount(mount) {
-    if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) return;
+    if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) {
+        return;
+    }
 
     const terminalId = mount.dataset.terminalId;
     const wsUrl = toWebSocketUrl(mount.dataset.wsUrl);
-    if (!terminalId || !wsUrl) return;
+    if (!terminalId || !wsUrl) {
+        return;
+    }
 
     const terminal = new window.Terminal({
         cursorBlink: true,
@@ -144,7 +161,9 @@ function initMount(mount) {
     entry.resizeObserver = resizeObserver;
     resizeObserver.observe(mount);
     const bottomPanel = mount.closest(".bottom-panel");
-    if (bottomPanel) resizeObserver.observe(bottomPanel);
+    if (bottomPanel) {
+        resizeObserver.observe(bottomPanel);
+    }
 
     terminal.onData((data) => {
         try {
@@ -157,7 +176,9 @@ function initMount(mount) {
     socket.addEventListener("message", (evt) => {
         try {
             const payload = JSON.parse(evt.data);
-            if (!payload || typeof payload !== "object") return;
+            if (!payload || typeof payload !== "object") {
+                return;
+            }
             if (payload.type === "output" && payload.data != null) {
                 terminal.write(String(payload.data));
             } else if (payload.type === "exit") {
@@ -174,8 +195,12 @@ function initMount(mount) {
         } catch (_) {}
     });
     socket.addEventListener("close", (event) => {
-        if (event && event.wasClean) return;
-        if (expectedClose) return;
+        if (event && event.wasClean) {
+            return;
+        }
+        if (expectedClose) {
+            return;
+        }
         try {
             terminal.writeln("");
             terminal.writeln("[terminal connection error]");
@@ -183,7 +208,9 @@ function initMount(mount) {
         window.__connectionLossMonitor && window.__connectionLossMonitor.transportFailure();
     });
     socket.addEventListener("error", () => {
-        if (expectedClose) return;
+        if (expectedClose) {
+            return;
+        }
         try {
             terminal.writeln("");
             terminal.writeln("[terminal connection error]");

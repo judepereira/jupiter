@@ -14,8 +14,9 @@ public final class SkillInvocationResolver {
     private static final Pattern INVOCATION = Pattern.compile("\\$([a-z0-9][a-z0-9-]{0,63})");
 
     public Resolution resolveExplicit(String userMessage, SkillCatalog catalog) {
-        if (userMessage == null || catalog == null)
+        if (userMessage == null || catalog == null) {
             return new Resolution(List.of(), List.of());
+        }
         var healthy = catalog.skills().stream().collect(Collectors.toMap(SkillDefinition::name, s -> s, (a, b) -> a));
         var broken = catalog.errors().stream().map(SkillLoadError::candidateSkillName)
                 .filter(name -> name != null && name.matches("[a-z0-9][a-z0-9-]{0,63}")).collect(Collectors.toSet());
@@ -25,12 +26,14 @@ public final class SkillInvocationResolver {
         Matcher matcher = INVOCATION.matcher(userMessage);
         while (matcher.find()) {
             String name = matcher.group(1);
-            if (!seen.add(name))
+            if (!seen.add(name)) {
                 continue;
-            if (healthy.containsKey(name))
+            }
+            if (healthy.containsKey(name)) {
                 skills.add(healthy.get(name));
-            else if (broken.contains(name))
+            } else if (broken.contains(name)) {
                 brokenMatches.add(name);
+            }
         }
         return new Resolution(List.copyOf(skills), List.copyOf(brokenMatches));
     }

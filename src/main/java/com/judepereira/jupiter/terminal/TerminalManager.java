@@ -155,7 +155,7 @@ public class TerminalManager {
         void onTerminalExited(String terminalId, int exitCode);
     }
 
-    private final class TerminalRuntime {
+    final class TerminalRuntime {
         private final String terminalId;
         private final String title;
         private final PtyProcess process;
@@ -164,7 +164,7 @@ public class TerminalManager {
         private final Object outputLock = new Object();
         private final StringBuilder outputBuffer = new StringBuilder();
 
-        private TerminalRuntime(String terminalId, String title, PtyProcess process) {
+        TerminalRuntime(String terminalId, String title, PtyProcess process) {
             this.terminalId = terminalId;
             this.title = title;
             this.process = process;
@@ -198,7 +198,7 @@ public class TerminalManager {
             }
         }
 
-        private void attach(WebSocketSession session) {
+        void attach(WebSocketSession session) {
             synchronized (outputLock) {
                 sessions.add(session);
                 if (outputBuffer.length() > 0) {
@@ -253,7 +253,7 @@ public class TerminalManager {
             }
         }
 
-        private void appendOutput(String chunk) {
+        void appendOutput(String chunk) {
             outputBuffer.append(chunk);
             int overflow = outputBuffer.length() - OUTPUT_REPLAY_CAP;
             if (overflow > 0) {

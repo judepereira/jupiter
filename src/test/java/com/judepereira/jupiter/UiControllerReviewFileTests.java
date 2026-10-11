@@ -10,10 +10,10 @@ import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.persistence.Persistence.ChangedFileDraft;
 import com.judepereira.jupiter.persistence.Persistence.ReviewSource;
 import com.judepereira.jupiter.persistence.TestAppStateSupport;
+import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.UiController.ChangedFile;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -31,11 +31,15 @@ public class UiControllerReviewFileTests {
         Files.writeString(workspaceRoot.resolve("alpha.txt"), "alpha\n");
 
         AgentProperties props = new AgentProperties();
-        UiController controller = TestAppStateSupport.controller(new CodingAgentHarness(null, null, props, null, null,
-                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
-                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
-                SkillTestSupport.defaultComponents().injector()), props);
-        AppStateService appStateService = appStateService(controller);
+        TestAppStateSupport.ControllerTestContext context = TestAppStateSupport.controllerContext(
+                new CodingAgentHarness(null, null, props, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector()),
+                props, ModelCatalogTestSupport.modelCatalogService(), null);
+        UiController controller = context.controller();
+        AppStateService appStateService = context.service();
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         AppStateView initialView = appStateService.loadViewData();
@@ -72,11 +76,15 @@ public class UiControllerReviewFileTests {
         Files.writeString(workspaceRoot.resolve("alpha.txt"), "alpha\n");
 
         AgentProperties props = new AgentProperties();
-        UiController controller = TestAppStateSupport.controller(new CodingAgentHarness(null, null, props, null, null,
-                null, null, null, null, new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
-                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
-                SkillTestSupport.defaultComponents().injector()), props);
-        AppStateService appStateService = appStateService(controller);
+        TestAppStateSupport.ControllerTestContext context = TestAppStateSupport.controllerContext(
+                new CodingAgentHarness(null, null, props, null, null, null, null, null, null,
+                        new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                        SkillTestSupport.defaultComponents().discovery(),
+                        SkillTestSupport.defaultComponents().resolver(),
+                        SkillTestSupport.defaultComponents().injector()),
+                props, ModelCatalogTestSupport.modelCatalogService(), null);
+        UiController controller = context.controller();
+        AppStateService appStateService = context.service();
 
         controller.addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         AppStateView initialView = appStateService.loadViewData();
@@ -102,12 +110,6 @@ public class UiControllerReviewFileTests {
         AppStateView reloaded = appStateService.loadViewData();
         assertThat(reloaded.activeSessionDetail().reviewSource()).isEqualTo(ReviewSource.SESSION);
         assertThat(reloaded.activeSessionDetail().selectedFile()).isNull();
-    }
-
-    private static AppStateService appStateService(UiController controller) throws Exception {
-        Field field = UiController.class.getDeclaredField("appStateService");
-        field.setAccessible(true);
-        return (AppStateService) field.get(controller);
     }
 
     private static void initGitRepo(Path workspaceRoot) throws Exception {

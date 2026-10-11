@@ -24,11 +24,17 @@ export function scrollChatToBottom(after) {
     try {
         const history = document.getElementById("chat-history");
         const list = document.getElementById("chat-messages-list");
-        if (!history || !list) return;
+        if (!history || !list) {
+            return;
+        }
         requestAnimationFrame(() => {
             const target = history.scrollHeight - history.clientHeight;
-            if (Number.isFinite(target)) setHistoryScrollTop(history, target);
-            if (typeof after === "function") after();
+            if (Number.isFinite(target)) {
+                setHistoryScrollTop(history, target);
+            }
+            if (typeof after === "function") {
+                after();
+            }
         });
     } catch (_) {}
 }
@@ -43,26 +49,44 @@ function removeInitialImageListeners(state) {
 
 function finishInitialChatScroll() {
     const state = initialChatScroll;
-    if (!state || state.finished) return;
+    if (!state || state.finished) {
+        return;
+    }
     state.finished = true;
-    if (state.rafId != null) cancelAnimationFrame(state.rafId);
-    if (state.timeoutId != null) clearTimeout(state.timeoutId);
-    if (state.resizeObserver) state.resizeObserver.disconnect();
-    if (state.mutationObserver) state.mutationObserver.disconnect();
+    if (state.rafId != null) {
+        cancelAnimationFrame(state.rafId);
+    }
+    if (state.timeoutId != null) {
+        clearTimeout(state.timeoutId);
+    }
+    if (state.resizeObserver) {
+        state.resizeObserver.disconnect();
+    }
+    if (state.mutationObserver) {
+        state.mutationObserver.disconnect();
+    }
     removeInitialImageListeners(state);
-    if (state.interactionCleanup) state.interactionCleanup();
+    if (state.interactionCleanup) {
+        state.interactionCleanup();
+    }
 }
 
 function cancelInitialChatScroll() {
-    if (!initialChatScroll || initialChatScroll.finished) return;
+    if (!initialChatScroll || initialChatScroll.finished) {
+        return;
+    }
     initialChatScroll.cancelled = true;
     finishInitialChatScroll();
 }
 
 function queueInitialChatScroll(resetStability) {
     const state = initialChatScroll;
-    if (!state || state.finished) return;
-    if (resetStability) state.stableFrames = 0;
+    if (!state || state.finished) {
+        return;
+    }
+    if (resetStability) {
+        state.stableFrames = 0;
+    }
     if (state.rafId == null) {
         state.rafId = requestAnimationFrame(runInitialChatScroll);
     }
@@ -70,7 +94,9 @@ function queueInitialChatScroll(resetStability) {
 
 function observeInitialImages(state, list) {
     list.querySelectorAll("img").forEach((image) => {
-        if (state.imageListeners.has(image)) return;
+        if (state.imageListeners.has(image)) {
+            return;
+        }
         const listener = () => queueInitialChatScroll(true);
         state.imageListeners.set(image, listener);
         image.addEventListener("load", listener);
@@ -81,19 +107,27 @@ function observeInitialImages(state, list) {
 function connectInitialChatObservers(state, history, list) {
     if (state.history !== history) {
         state.history = history;
-        if (state.resizeObserver) state.resizeObserver.observe(history);
+        if (state.resizeObserver) {
+            state.resizeObserver.observe(history);
+        }
     }
-    if (state.list === list) return true;
+    if (state.list === list) {
+        return true;
+    }
     if (state.list || (state.initialList && state.initialList !== list)) {
         cancelInitialChatScroll();
         return false;
     }
 
-    if (state.mutationObserver) state.mutationObserver.disconnect();
+    if (state.mutationObserver) {
+        state.mutationObserver.disconnect();
+    }
     removeInitialImageListeners(state);
     state.list = list;
     state.initialList = list;
-    if (state.resizeObserver) state.resizeObserver.observe(list);
+    if (state.resizeObserver) {
+        state.resizeObserver.observe(list);
+    }
     if (state.mutationObserver) {
         state.mutationObserver.observe(list, { childList: true, subtree: true });
     }
@@ -104,7 +138,9 @@ function connectInitialChatObservers(state, history, list) {
 
 function runInitialChatScroll() {
     const state = initialChatScroll;
-    if (!state || state.finished) return;
+    if (!state || state.finished) {
+        return;
+    }
     state.rafId = null;
 
     if (Date.now() >= state.deadline) {
@@ -119,7 +155,9 @@ function runInitialChatScroll() {
         return;
     }
 
-    if (!connectInitialChatObservers(state, history, list)) return;
+    if (!connectInitialChatObservers(state, history, list)) {
+        return;
+    }
     const target = Math.max(0, history.scrollHeight - history.clientHeight);
     setHistoryScrollTop(history, target);
 
@@ -138,7 +176,9 @@ function runInitialChatScroll() {
 }
 
 function bindInitialChatScrollListeners() {
-    if (initialChatScrollListenersBound) return;
+    if (initialChatScrollListenersBound) {
+        return;
+    }
     initialChatScrollListenersBound = true;
 
     initialChatScroll = {
@@ -160,7 +200,9 @@ function bindInitialChatScrollListeners() {
 
     const markUserInteraction = (event) => {
         const target = event && event.target;
-        if (target && target.closest && target.closest("#chat-history")) cancelInitialChatScroll();
+        if (target && target.closest && target.closest("#chat-history")) {
+            cancelInitialChatScroll();
+        }
     };
     document.addEventListener("pointerdown", markUserInteraction, true);
     document.addEventListener("wheel", markUserInteraction, { capture: true, passive: true });
@@ -181,7 +223,9 @@ function bindInitialChatScrollListeners() {
     }
 
     const markPageLoaded = () => {
-        if (!initialChatScroll || initialChatScroll.finished) return;
+        if (!initialChatScroll || initialChatScroll.finished) {
+            return;
+        }
         initialChatScroll.pageLoaded = true;
         queueInitialChatScroll(true);
     };
@@ -222,10 +266,14 @@ export function checkAndMaybeScroll() {
 export function isHistoryNearBottom() {
     try {
         const history = document.getElementById("chat-history");
-        if (!history) return false;
+        if (!history) {
+            return false;
+        }
         const max = history.scrollHeight - history.clientHeight;
         const cur = history.scrollTop;
-        if (!Number.isFinite(max) || !Number.isFinite(cur)) return false;
+        if (!Number.isFinite(max) || !Number.isFinite(cur)) {
+            return false;
+        }
         return max - cur <= 48;
     } catch (_) {
         return false;
@@ -234,9 +282,13 @@ export function isHistoryNearBottom() {
 
 function capturePrimaryChatScrollState() {
     try {
-        if (getCurrentOpenSubagentSessionId()) return;
+        if (getCurrentOpenSubagentSessionId()) {
+            return;
+        }
         const history = document.getElementById("chat-history");
-        if (!history) return;
+        if (!history) {
+            return;
+        }
         const max = Math.max(0, history.scrollHeight - history.clientHeight);
         const scrollTop = history.scrollTop;
         const bottomOffset = Math.max(0, max - scrollTop);
@@ -251,9 +303,13 @@ function capturePrimaryChatScrollState() {
 
 function restorePrimaryChatScrollState() {
     try {
-        if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
+        if (!primaryChatScrollRestorePending || !primaryChatScrollState) {
+            return;
+        }
         const history = document.getElementById("chat-history");
-        if (!history) return;
+        if (!history) {
+            return;
+        }
         requestAnimationFrame(() =>
             requestAnimationFrame(() => {
                 try {
@@ -279,23 +335,33 @@ function isChatContextTransitionPath(path) {
 }
 
 function finishTransitionChatScroll(state) {
-    if (!state || state.finished) return;
+    if (!state || state.finished) {
+        return;
+    }
     state.finished = true;
-    if (state.rafId != null) cancelAnimationFrame(state.rafId);
+    if (state.rafId != null) {
+        cancelAnimationFrame(state.rafId);
+    }
     state.history.removeEventListener("scroll", state.scrollListener);
     state.interactionCleanup();
-    if (transitionChatScroll === state) transitionChatScroll = null;
+    if (transitionChatScroll === state) {
+        transitionChatScroll = null;
+    }
 }
 
 function cancelTransitionChatScroll() {
-    if (transitionChatScroll) finishTransitionChatScroll(transitionChatScroll);
+    if (transitionChatScroll) {
+        finishTransitionChatScroll(transitionChatScroll);
+    }
 }
 
 function syncChatAfterSessionChange() {
     try {
         const list = document.getElementById("chat-messages-list");
         const history = document.getElementById("chat-history");
-        if (!list || !history) return;
+        if (!list || !history) {
+            return;
+        }
         cancelTransitionChatScroll();
         lastMessageCount = list.children ? list.children.length : 0;
         wasNearBottomBeforeSwap = false;
@@ -335,7 +401,9 @@ function syncChatAfterSessionChange() {
 
         const deadline = Date.now() + INITIAL_SCROLL_MAX_MS;
         const settle = () => {
-            if (state.finished || transitionChatScroll !== state) return;
+            if (state.finished || transitionChatScroll !== state) {
+                return;
+            }
             state.rafId = null;
             if (!history.isConnected || !list.isConnected) {
                 finishTransitionChatScroll(state);
@@ -370,7 +438,9 @@ function syncChatAfterSessionChange() {
 }
 
 function bindSubagentScrollListeners() {
-    if (subagentScrollRestoreBound) return;
+    if (subagentScrollRestoreBound) {
+        return;
+    }
     subagentScrollRestoreBound = true;
 
     document.addEventListener(
@@ -399,9 +469,15 @@ function bindSubagentScrollListeners() {
                 const detail = evt && evt.detail;
                 const target = detail && detail.target;
                 const path = getHtmxRequestPath(evt);
-                if (!primaryChatScrollRestorePending || !primaryChatScrollState) return;
-                if (!path.includes("/ui/chat/primary")) return;
-                if (!target || target.id !== "chat-container") return;
+                if (!primaryChatScrollRestorePending || !primaryChatScrollState) {
+                    return;
+                }
+                if (!path.includes("/ui/chat/primary")) {
+                    return;
+                }
+                if (!target || target.id !== "chat-container") {
+                    return;
+                }
                 restorePrimaryChatScrollState();
             } catch (_) {}
         },
@@ -410,15 +486,21 @@ function bindSubagentScrollListeners() {
 }
 
 function bindSessionChangeScrollListeners() {
-    if (sessionChangeScrollRestoreBound) return;
+    if (sessionChangeScrollRestoreBound) {
+        return;
+    }
     sessionChangeScrollRestoreBound = true;
 
     const syncAfterContextTransition = (evt) => {
         try {
             const path = getHtmxRequestPath(evt);
-            if (!isChatContextTransitionPath(path)) return;
+            if (!isChatContextTransitionPath(path)) {
+                return;
+            }
             const container = document.getElementById("chat-container");
-            if (container === lastSettledChatContainer) return;
+            if (container === lastSettledChatContainer) {
+                return;
+            }
             lastSettledChatContainer = container;
             Promise.resolve().then(syncChatAfterSessionChange);
         } catch (_) {}
@@ -430,8 +512,12 @@ function bindSessionChangeScrollListeners() {
 function htmxBeforeSwapListener(evt) {
     try {
         const trg = (evt && evt.detail && evt.detail.target) || evt.target;
-        if (!trg) return;
-        if (trg.id === "chat-container") cancelInitialChatScroll();
+        if (!trg) {
+            return;
+        }
+        if (trg.id === "chat-container") {
+            cancelInitialChatScroll();
+        }
         if (
             trg.id === "chat-history" ||
             trg.id === "chat-messages-list" ||
@@ -449,7 +535,9 @@ function htmxBeforeSwapListener(evt) {
 function htmxChatListener(evt) {
     try {
         const trg = (evt && evt.detail && evt.detail.target) || evt.target;
-        if (!trg) return;
+        if (!trg) {
+            return;
+        }
 
         if (
             trg.id === "chat-history" ||
@@ -472,7 +560,9 @@ function htmxChatListener(evt) {
 }
 
 export function bindAutoScrollListeners() {
-    if (chatAutoScrollBound) return;
+    if (chatAutoScrollBound) {
+        return;
+    }
     chatAutoScrollBound = true;
     document.body.addEventListener("htmx:beforeSwap", htmxBeforeSwapListener, true);
     document.body.addEventListener("htmx:afterSwap", htmxChatListener, true);

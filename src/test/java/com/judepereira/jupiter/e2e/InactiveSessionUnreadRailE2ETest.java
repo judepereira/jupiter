@@ -197,7 +197,7 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
                                 await nextFrame();
 
                                 const maxScrollTop = history.scrollHeight - history.clientHeight;
-                                if (maxScrollTop <= 200) throw new Error('chat history is not scrollable enough');
+                                if (maxScrollTop <= 200) { throw new Error('chat history is not scrollable enough'); }
                                 const targetScrollTop = maxScrollTop / 2;
                                 history.scrollTop = targetScrollTop;
                                 const actualScrollTop = history.scrollTop;

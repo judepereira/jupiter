@@ -31,10 +31,12 @@ public class ProviderAvailabilityService {
 
     public Set<String> availableProviders() {
         Set<String> result = new LinkedHashSet<>();
-        if (isAvailable("openai"))
+        if (isAvailable("openai")) {
             result.add("openai");
-        if (isAvailable("anthropic"))
+        }
+        if (isAvailable("anthropic")) {
             result.add("anthropic");
+        }
         return Collections.unmodifiableSet(result);
     }
 }

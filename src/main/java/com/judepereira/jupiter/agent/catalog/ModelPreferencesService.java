@@ -47,18 +47,21 @@ public class ModelPreferencesService {
     private void replaceSelectedModelIdsInternal(String provider, Collection<String> modelIds, boolean requireOne) {
         var ids = new LinkedHashSet<>(modelIds);
         ids.forEach(id -> validateModel(provider, id));
-        if (requireOne && ids.isEmpty())
+        if (requireOne && ids.isEmpty()) {
             throw new IllegalArgumentException("At least one model must be selected");
+        }
         repository.replaceSelectedModelIds(provider, ids);
     }
 
     private void validateProvider(String provider) {
-        if (provider == null || provider.isBlank() || !catalog.hasProviderModel(provider))
+        if (provider == null || provider.isBlank() || !catalog.hasProviderModel(provider)) {
             throw new IllegalArgumentException("Unsupported model provider: " + provider);
+        }
     }
 
     private void validateModel(String provider, String modelId) {
-        if (modelId == null || !provider.equals(catalog.getRequired(modelId).provider()))
+        if (modelId == null || !provider.equals(catalog.getRequired(modelId).provider())) {
             throw new IllegalArgumentException("Model does not belong to provider: " + modelId);
+        }
     }
 }

@@ -144,8 +144,9 @@ public class OpenAiOAuthService {
         state = new State(null,
                 new Tokens(token.accessToken(), token.refreshToken(), token.idToken(), accountId, expiresAt),
                 "Connected.");
-        if (eventPublisher != null)
+        if (eventPublisher != null) {
             eventPublisher.publishEvent(new ProviderConnectedEvent("openai"));
+        }
         return toView(state);
     }
 

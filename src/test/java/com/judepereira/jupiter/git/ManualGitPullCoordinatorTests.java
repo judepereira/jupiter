@@ -103,8 +103,9 @@ class ManualGitPullCoordinatorTests {
         private boolean reject;
         @Override
         public void execute(Runnable command) {
-            if (reject)
+            if (reject) {
                 throw new IllegalStateException("rejected");
+            }
             tasks.add(command);
         }
         @Override

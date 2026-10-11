@@ -5,17 +5,23 @@ function getEnvScope(node) {
 function appendEnvironmentVariableRow(scope) {
     const template = scope && scope.querySelector ? scope.querySelector("[data-settings-env-template]") : null;
     const list = scope && scope.querySelector ? scope.querySelector("[data-settings-env-vars]") : null;
-    if (!template || !list || !template.content || !template.content.firstElementChild) return;
+    if (!template || !list || !template.content || !template.content.firstElementChild) {
+        return;
+    }
 
     const row = template.content.firstElementChild.cloneNode(true);
     list.appendChild(row);
     const firstInput = row.querySelector("input");
-    if (firstInput) firstInput.focus();
+    if (firstInput) {
+        firstInput.focus();
+    }
 }
 
 function removeEnvironmentVariableRow(button) {
     const row = button && button.closest ? button.closest("[data-settings-env-row]") : null;
-    if (!row) return;
+    if (!row) {
+        return;
+    }
     row.remove();
 }
 
@@ -24,10 +30,14 @@ function handleEnvironmentVariableClick(event) {
         event.target && event.target.closest
             ? event.target.closest("[data-settings-env-add], [data-settings-env-remove]")
             : null;
-    if (!target) return;
+    if (!target) {
+        return;
+    }
 
     const scope = getEnvScope(target);
-    if (!scope) return;
+    if (!scope) {
+        return;
+    }
 
     event.preventDefault();
     if (target.matches("[data-settings-env-add]")) {
@@ -56,36 +66,50 @@ function getMcpHeaderTemplate(server) {
 function appendMcpServer(scope) {
     const template = getMcpServerTemplate(scope);
     const list = getMcpList(scope);
-    if (!template || !list || !template.content || !template.content.firstElementChild) return;
+    if (!template || !list || !template.content || !template.content.firstElementChild) {
+        return;
+    }
 
     const server = template.content.firstElementChild.cloneNode(true);
     list.appendChild(server);
     const input = server.querySelector("[data-mcp-server-name]");
-    if (input) input.focus();
+    if (input) {
+        input.focus();
+    }
 }
 
 function removeMcpServer(button) {
     const server = button && button.closest ? button.closest("[data-settings-mcp-server]") : null;
-    if (!server) return;
+    if (!server) {
+        return;
+    }
     server.remove();
 }
 
 function appendMcpHeader(button) {
     const server = button && button.closest ? button.closest("[data-settings-mcp-server]") : null;
-    if (!server) return;
+    if (!server) {
+        return;
+    }
     const template = getMcpHeaderTemplate(server);
     const list = server.querySelector ? server.querySelector("[data-settings-mcp-header-list]") : null;
-    if (!template || !list || !template.content || !template.content.firstElementChild) return;
+    if (!template || !list || !template.content || !template.content.firstElementChild) {
+        return;
+    }
 
     const row = template.content.firstElementChild.cloneNode(true);
     list.appendChild(row);
     const input = row.querySelector("[data-mcp-server-header-name]");
-    if (input) input.focus();
+    if (input) {
+        input.focus();
+    }
 }
 
 function removeMcpHeader(button) {
     const row = button && button.closest ? button.closest("[data-mcp-server-header-row]") : null;
-    if (!row) return;
+    if (!row) {
+        return;
+    }
     row.remove();
 }
 
@@ -131,10 +155,14 @@ function handleMcpClick(event) {
                   "[data-settings-mcp-add-server], [data-settings-mcp-remove-server], [data-settings-mcp-add-header], [data-settings-mcp-remove-header]",
               )
             : null;
-    if (!target) return;
+    if (!target) {
+        return;
+    }
 
     const scope = getMcpScope(target);
-    if (!scope) return;
+    if (!scope) {
+        return;
+    }
 
     event.preventDefault();
     if (target.matches("[data-settings-mcp-add-server]")) {
@@ -154,9 +182,13 @@ function handleMcpClick(event) {
 
 function handleMcpFormSubmit(event) {
     const form = event.target && event.target.matches ? event.target : null;
-    if (!form || !form.matches("[data-settings-mcp-form]")) return;
+    if (!form || !form.matches("[data-settings-mcp-form]")) {
+        return;
+    }
     const hidden = form.querySelector('input[name="mcpCatalogJson"]');
-    if (hidden) hidden.value = serializeMcpCatalog(form);
+    if (hidden) {
+        hidden.value = serializeMcpCatalog(form);
+    }
 }
 
 document.addEventListener("click", handleEnvironmentVariableClick, true);

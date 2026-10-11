@@ -15,14 +15,22 @@ import {
 function bindPendingStreams() {
     try {
         const list = document.getElementById("chat-messages-list");
-        if (!list) return;
+        if (!list) {
+            return;
+        }
         const rows = list.querySelectorAll('li[data-pending="true"]');
         rows.forEach((row) => {
             const assistantId = row.dataset.id != null ? String(row.dataset.id) : "";
-            if (!assistantId) return;
-            if (row.dataset.streamBound === "1") return;
+            if (!assistantId) {
+                return;
+            }
+            if (row.dataset.streamBound === "1") {
+                return;
+            }
             const url = row.dataset.streamUrl;
-            if (!url) return;
+            if (!url) {
+                return;
+            }
             const existingSource = getPendingStreamSource(assistantId);
             if (existingSource) {
                 try {
@@ -52,21 +60,29 @@ function bindPendingStreams() {
 
             es.addEventListener("tool_call_html", (e) => {
                 try {
-                    if (!isStreamSessionActive()) return;
+                    if (!isStreamSessionActive()) {
+                        return;
+                    }
                     const stick = buffer.shouldStick() || buffer.wasNearBottom();
                     applyToolCallHtmlPatches(e);
                     if (stick) {
                         requestAnimationFrame(() => {
-                            if (!isStreamSessionActive()) return;
+                            if (!isStreamSessionActive()) {
+                                return;
+                            }
                             const history = document.getElementById("chat-history");
-                            if (history) history.scrollTop = history.scrollHeight - history.clientHeight;
+                            if (history) {
+                                history.scrollTop = history.scrollHeight - history.clientHeight;
+                            }
                             buffer.setShouldStickToBottom(true);
                         });
                     }
                 } catch (error) {
                     console.error("Failed to apply tool-call HTML patch", error);
                     const liveRow = currentRow();
-                    if (liveRow) liveRow.title = error instanceof Error ? error.message : String(error);
+                    if (liveRow) {
+                        liveRow.title = error instanceof Error ? error.message : String(error);
+                    }
                     window.__connectionLossMonitor && window.__connectionLossMonitor.transportFailure();
                 }
             });
@@ -80,7 +96,9 @@ function bindPendingStreams() {
                     const payload = parseStreamPayload(e);
                     const st = payload && payload.status != null ? payload.status : e.data || "";
                     const liveRow = currentRow();
-                    if (st && liveRow) liveRow.title = st;
+                    if (st && liveRow) {
+                        liveRow.title = st;
+                    }
                 } catch (_) {}
             });
 

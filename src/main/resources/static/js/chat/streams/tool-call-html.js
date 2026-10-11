@@ -41,7 +41,9 @@ function openDetails(target) {
 function restoreOpenDetails(details) {
     details.forEach((open, id) => {
         const replacement = document.getElementById(id);
-        if (replacement && replacement.tagName === "DETAILS") replacement.open = open;
+        if (replacement && replacement.tagName === "DETAILS") {
+            replacement.open = open;
+        }
     });
 }
 

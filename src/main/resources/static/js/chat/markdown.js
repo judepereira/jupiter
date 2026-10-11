@@ -2,7 +2,9 @@ import { getCurrentOpenSubagentSessionId, processHtmxElement } from "./shared.js
 
 export function getRawChatMarkdown(el) {
     try {
-        if (!el) return "";
+        if (!el) {
+            return "";
+        }
         return el.dataset && el.dataset.rawMarkdown != null ? el.dataset.rawMarkdown : el.textContent || "";
     } catch (_) {
         return "";
@@ -11,8 +13,12 @@ export function getRawChatMarkdown(el) {
 
 export function renderChatMarkdown(el, rawText) {
     try {
-        if (!el) return;
-        if (!el.dataset) el.dataset = {};
+        if (!el) {
+            return;
+        }
+        if (!el.dataset) {
+            el.dataset = {};
+        }
         el.dataset.rawMarkdown = rawText != null ? String(rawText) : "";
 
         if (window.marked && window.DOMPurify) {
@@ -28,8 +34,12 @@ export function renderChatMarkdown(el, rawText) {
                 if (html != null && window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
                     el.innerHTML = window.DOMPurify.sanitize(html);
                     try {
-                        if (el.classList) el.classList.add("markdown-rendered");
-                        if (el.dataset) el.dataset.markdownRendered = "true";
+                        if (el.classList) {
+                            el.classList.add("markdown-rendered");
+                        }
+                        if (el.dataset) {
+                            el.dataset.markdownRendered = "true";
+                        }
                     } catch (_) {}
                     return;
                 }
@@ -37,8 +47,12 @@ export function renderChatMarkdown(el, rawText) {
         }
 
         try {
-            if (el.classList) el.classList.remove("markdown-rendered");
-            if (el.dataset) delete el.dataset.markdownRendered;
+            if (el.classList) {
+                el.classList.remove("markdown-rendered");
+            }
+            if (el.dataset) {
+                delete el.dataset.markdownRendered;
+            }
         } catch (_) {}
         el.textContent = el.dataset.rawMarkdown;
     } catch (_) {}
@@ -48,7 +62,9 @@ export function renderAllChatMarkdown(root) {
     try {
         const base = root || document;
         const msgs = base.querySelectorAll && base.querySelectorAll(".chat-message-text");
-        if (!msgs) return;
+        if (!msgs) {
+            return;
+        }
         msgs.forEach((el) => {
             try {
                 const raw = getRawChatMarkdown(el);
@@ -61,7 +77,9 @@ export function renderAllChatMarkdown(root) {
 function formatChatDuration(startTs, completedTs) {
     const start = Number(startTs);
     const end = Number(completedTs);
-    if (!Number.isFinite(start) || !Number.isFinite(end)) return "";
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+        return "";
+    }
 
     let totalSeconds = Math.max(0, Math.floor((end - start) / 1000));
     const hours = Math.floor(totalSeconds / 3600);
@@ -87,7 +105,9 @@ const chatCompletionDateFormatter = new Intl.DateTimeFormat(undefined, {
 
 function formatChatCompletedTs(completedTs) {
     const completed = new Date(Number(completedTs));
-    if (Number.isNaN(completed.getTime())) return "";
+    if (Number.isNaN(completed.getTime())) {
+        return "";
+    }
 
     const now = new Date();
     const sameDay =
@@ -108,7 +128,9 @@ function formatChatCompletedTs(completedTs) {
 
 function formatChatSubtitle(subtitle) {
     try {
-        if (!subtitle || !subtitle.dataset) return;
+        if (!subtitle || !subtitle.dataset) {
+            return;
+        }
         const metadataParts = [
             subtitle.dataset.agentLabel,
             subtitle.dataset.modelLabel || subtitle.dataset.modelId,
@@ -128,7 +150,9 @@ export function formatAllChatSubtitles(root) {
     try {
         const base = root || document;
         const subtitles = base.querySelectorAll && base.querySelectorAll(".chat-message-subtitle");
-        if (!subtitles) return;
+        if (!subtitles) {
+            return;
+        }
         subtitles.forEach(formatChatSubtitle);
     } catch (_) {}
 }
@@ -174,7 +198,9 @@ function copyChatResponse(text) {
         document.body.appendChild(textarea);
         textarea.focus({ preventScroll: true });
         textarea.select();
-        if (document.execCommand("copy") !== true) throw new Error("document.execCommand('copy') returned false");
+        if (document.execCommand("copy") !== true) {
+            throw new Error("document.execCommand('copy') returned false");
+        }
     } finally {
         textarea.remove();
         try {
@@ -197,24 +223,34 @@ function copyChatResponse(text) {
         } catch (_) {}
         try {
             window.scrollTo(scroll.windowX, scroll.windowY);
-            if (history) history.scrollTo(scroll.historyLeft, scroll.historyTop);
+            if (history) {
+                history.scrollTo(scroll.historyLeft, scroll.historyTop);
+            }
         } catch (_) {}
     }
 }
 
 export function bindChatMessageCopyButtons() {
     try {
-        if (document.body.dataset.chatCopyButtonsBound === "true") return;
+        if (document.body.dataset.chatCopyButtonsBound === "true") {
+            return;
+        }
         document.body.dataset.chatCopyButtonsBound = "true";
         document.body.addEventListener("click", (event) => {
             const button = event.target && event.target.closest && event.target.closest(".chat-message-copy-button");
-            if (!button) return;
+            if (!button) {
+                return;
+            }
             const row = button.closest('li[data-role="assistant"]');
             const message = row && row.querySelector(".chat-message-text");
-            if (!message || button.dataset.copyPending === "true") return;
+            if (!message || button.dataset.copyPending === "true") {
+                return;
+            }
 
             const previousTimer = chatCopyResetTimers.get(button);
-            if (previousTimer) window.clearTimeout(previousTimer);
+            if (previousTimer) {
+                window.clearTimeout(previousTimer);
+            }
             button.dataset.copyPending = "true";
             try {
                 copyChatResponse(getRawChatMarkdown(message));
@@ -241,7 +277,9 @@ export function bindChatMessageCopyButtons() {
 
 function ensureChatMessageCopyButton(row, subtitle) {
     try {
-        if (!row || !subtitle || !row.dataset || row.dataset.role !== "assistant") return;
+        if (!row || !subtitle || !row.dataset || row.dataset.role !== "assistant") {
+            return;
+        }
         if (!subtitle.querySelector(".chat-message-copy-button")) {
             const button = document.createElement("button");
             button.type = "button";
@@ -256,11 +294,17 @@ function ensureChatMessageCopyButton(row, subtitle) {
 
 function ensureChatMessageForkButton(row, subtitle) {
     try {
-        if (!row || !subtitle || !row.dataset || row.dataset.role !== "assistant") return;
-        if (getCurrentOpenSubagentSessionId()) return;
+        if (!row || !subtitle || !row.dataset || row.dataset.role !== "assistant") {
+            return;
+        }
+        if (getCurrentOpenSubagentSessionId()) {
+            return;
+        }
 
         const assistantPublicId = row.dataset.id != null ? String(row.dataset.id).trim() : "";
-        if (!assistantPublicId) return;
+        if (!assistantPublicId) {
+            return;
+        }
 
         ensureChatMessageCopyButton(row, subtitle);
         let button = subtitle.querySelector(".chat-message-fork-button");
@@ -280,7 +324,9 @@ function ensureChatMessageForkButton(row, subtitle) {
 
 export function updateChatRowCompletion(row, completedTs) {
     try {
-        if (!row || !completedTs) return;
+        if (!row || !completedTs) {
+            return;
+        }
         row.dataset.completedTs = String(completedTs);
         ensureChatMessageSubtitle(row, completedTs);
     } catch (_) {}
@@ -288,9 +334,13 @@ export function updateChatRowCompletion(row, completedTs) {
 
 export function ensureChatMessageSubtitle(row, completedTs) {
     try {
-        if (!row || !row.dataset || row.dataset.role !== "assistant") return;
+        if (!row || !row.dataset || row.dataset.role !== "assistant") {
+            return;
+        }
         const completed = completedTs != null ? String(completedTs) : "";
-        if (!completed) return;
+        if (!completed) {
+            return;
+        }
 
         row.dataset.completedTs = completed;
         let subtitle = row.querySelector(".chat-message-subtitle");

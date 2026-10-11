@@ -40,11 +40,13 @@ public class ModelCatalogService {
     }
 
     public ModelDefinition getRequired(String id) {
-        if (id == null || id.isBlank())
+        if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Model id is required");
+        }
         var model = modelsById.get(id);
-        if (model == null)
+        if (model == null) {
             throw new IllegalArgumentException("Unknown model id: " + id);
+        }
         return model;
     }
 
@@ -78,30 +80,36 @@ public class ModelCatalogService {
 
     private static ModelDefinition preferredFamilyModel(ModelDefinition a, ModelDefinition b) {
         int release = compareNullable(a.releaseDate(), b.releaseDate());
-        if (release != 0)
+        if (release != 0) {
             return release > 0 ? a : b;
+        }
         int updated = compareNullable(a.lastUpdated(), b.lastUpdated());
-        if (updated != 0)
+        if (updated != 0) {
             return updated > 0 ? a : b;
+        }
         int canonical = Integer.compare(canonicalScore(a), canonicalScore(b));
-        if (canonical != 0)
+        if (canonical != 0) {
             return canonical < 0 ? a : b;
+        }
         return a.id().compareTo(b.id()) <= 0 ? a : b;
     }
 
     private static int canonicalScore(ModelDefinition model) {
         String value = (model.id() + " " + model.displayName()).toLowerCase(Locale.ROOT);
         int score = 0;
-        if (value.matches(".*(-fast|\\bmini\\b|\\bnano\\b|preview|\\d{4}(?:-\\d{2}-\\d{2}|\\d{4})).*"))
+        if (value.matches(".*(-fast|\\bmini\\b|\\bnano\\b|preview|\\d{4}(?:-\\d{2}-\\d{2}|\\d{4})).*")) {
             score++;
+        }
         return score;
     }
 
     private static int compareNullable(String left, String right) {
-        if (left == null)
+        if (left == null) {
             return right == null ? 0 : -1;
-        if (right == null)
+        }
+        if (right == null) {
             return 1;
+        }
         return left.compareTo(right);
     }
 
@@ -118,8 +126,9 @@ public class ModelCatalogService {
                     }).toList();
             validateModels(allModels);
             var eligible = allModels.stream().filter(ModelCatalogService::eligible).toList();
-            if (eligible.isEmpty())
+            if (eligible.isEmpty()) {
                 throw new IllegalStateException("Model catalog is empty");
+            }
             return eligible;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load model catalog from models.dev: " + url, e);
@@ -128,19 +137,22 @@ public class ModelCatalogService {
 
     private static boolean supportedProvider(String modelKey) {
         int separator = modelKey.indexOf('/');
-        if (separator <= 0)
+        if (separator <= 0) {
             return false;
+        }
         String provider = modelKey.substring(0, separator);
         return "openai".equals(provider) || "anthropic".equals(provider);
     }
 
     private static void validateCatalogEntry(String key, JsonNode node) {
         JsonNode idNode = node.get("id");
-        if (idNode == null || !idNode.isTextual() || idNode.asText().isBlank())
+        if (idNode == null || !idNode.isTextual() || idNode.asText().isBlank()) {
             throw new IllegalStateException("Model id is required");
-        if (!key.equals(idNode.asText()))
+        }
+        if (!key.equals(idNode.asText())) {
             throw new IllegalStateException(
                     "Model catalog key does not match model id: " + key + " != " + idNode.asText());
+        }
     }
 
     private static ModelDefinition toModelDefinition(JsonNode node) {
@@ -156,39 +168,47 @@ public class ModelCatalogService {
     }
 
     private static List<String> textValues(JsonNode node) {
-        if (!node.isArray())
+        if (!node.isArray()) {
             return List.of("text");
+        }
         return StreamSupport.stream(node.spliterator(), false).map(JsonNode::asText).toList();
     }
 
     private static boolean eligible(ModelDefinition m) {
         if (!("openai".equals(m.provider()) || "anthropic".equals(m.provider())) || !m.supportsTools()
-                || !m.inputModalities().contains("text") || !m.outputModalities().contains("text"))
+                || !m.inputModalities().contains("text") || !m.outputModalities().contains("text")) {
             return false;
-        if ("anthropic".equals(m.provider()))
+        }
+        if ("anthropic".equals(m.provider())) {
             return m.id().startsWith("anthropic/claude-");
+        }
         String value = (m.id() + " " + m.displayName()).toLowerCase(Locale.ROOT);
         return OPENAI_SPECIALIZED_TERMS.stream().noneMatch(value::contains);
     }
 
     private static Map<String, ModelDefinition> indexModels(List<ModelDefinition> models) {
         Map<String, ModelDefinition> indexed = new LinkedHashMap<>();
-        for (var model : models)
+        for (var model : models) {
             indexed.put(model.id(), model);
+        }
         return Collections.unmodifiableMap(indexed);
     }
 
     private static void validateModels(List<ModelDefinition> models) {
-        if (models.isEmpty())
+        if (models.isEmpty()) {
             throw new IllegalStateException("Model catalog is empty");
+        }
         Map<String, Boolean> seen = new LinkedHashMap<>();
         for (var model : models) {
-            if (model.id() == null || model.id().isBlank())
+            if (model.id() == null || model.id().isBlank()) {
                 throw new IllegalStateException("Model id is required");
-            if (seen.put(model.id(), true) != null)
+            }
+            if (seen.put(model.id(), true) != null) {
                 throw new IllegalStateException("Duplicate model id: " + model.id());
-            if (model.apiModelId() == null || model.apiModelId().isBlank())
+            }
+            if (model.apiModelId() == null || model.apiModelId().isBlank()) {
                 throw new IllegalStateException("apiModelId is required for model: " + model.id());
+            }
         }
     }
 }

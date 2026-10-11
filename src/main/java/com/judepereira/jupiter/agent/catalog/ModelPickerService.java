@@ -31,15 +31,17 @@ public class ModelPickerService {
     public List<ModelDefinition> listPickerModels() {
         Map<String, ModelDefinition> models = new LinkedHashMap<>();
         for (String provider : List.of("openai", "anthropic")) {
-            if (!availability.isAvailable(provider))
+            if (!availability.isAvailable(provider)) {
                 continue;
+            }
             preferences.selectedModels(provider).forEach(model -> models.putIfAbsent(model.id(), model));
         }
         for (AgentDefinition agent : agentDefinitions.list()) {
             for (String modelId : agent.modelIds()) {
                 ModelDefinition model = catalog.getRequired(modelId);
-                if (availability.isAvailable(model.provider()))
+                if (availability.isAvailable(model.provider())) {
                     models.putIfAbsent(model.id(), model);
+                }
             }
         }
         return List.copyOf(models.values());

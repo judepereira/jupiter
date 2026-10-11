@@ -3,7 +3,9 @@
     const HEALTH_TIMEOUT_MS = 2500;
     const HEALTH_POLL_MS = 2000;
 
-    if (window.__connectionLossMonitor) return;
+    if (window.__connectionLossMonitor) {
+        return;
+    }
 
     const state = {
         overlayVisible: false,
@@ -17,7 +19,9 @@
     };
 
     function getOverlay() {
-        if (state.overlay && document.contains(state.overlay)) return state.overlay;
+        if (state.overlay && document.contains(state.overlay)) {
+            return state.overlay;
+        }
         state.overlay = document.getElementById("connection-loss-overlay");
         state.refreshButton = state.overlay ? state.overlay.querySelector("[data-connection-loss-refresh]") : null;
         if (state.refreshButton && !state.refreshButton.dataset.bound) {
@@ -29,7 +33,9 @@
 
     function setOverlayVisible(visible) {
         const overlay = getOverlay();
-        if (!overlay) return;
+        if (!overlay) {
+            return;
+        }
         state.overlayVisible = Boolean(visible);
         overlay.hidden = !visible;
         overlay.setAttribute("aria-hidden", visible ? "false" : "true");
@@ -53,7 +59,9 @@
     }
 
     async function probeHealth() {
-        if (state.probeInFlight || state.reloadInFlight) return;
+        if (state.probeInFlight || state.reloadInFlight) {
+            return;
+        }
         state.probeInFlight = true;
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
@@ -93,7 +101,9 @@
     }
 
     function reloadPage() {
-        if (state.reloadInFlight) return;
+        if (state.reloadInFlight) {
+            return;
+        }
         state.reloadInFlight = true;
         state.probeShouldReloadOnHealthy = false;
         clearTimer();
@@ -107,7 +117,9 @@
     function transportFailure() {
         state.probeShouldReloadOnHealthy = true;
         setOverlayVisible(true);
-        if (state.probeInFlight) return;
+        if (state.probeInFlight) {
+            return;
+        }
         if (state.overlayVisible) {
             scheduleProbe(0);
             return;
@@ -126,7 +138,9 @@
     window.__connectionLossMonitor = api;
 
     function startInitialProbe() {
-        if (state.initialProbeStarted) return;
+        if (state.initialProbeStarted) {
+            return;
+        }
         state.initialProbeStarted = true;
         getOverlay();
         probeHealth();
@@ -136,7 +150,9 @@
     document.addEventListener("htmx:timeout", transportFailure, true);
 
     window.addEventListener("online", () => {
-        if (state.overlayVisible) probeHealth();
+        if (state.overlayVisible) {
+            probeHealth();
+        }
     });
     if (document.readyState === "complete" || document.readyState === "interactive") {
         startInitialProbe();

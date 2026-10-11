@@ -79,16 +79,18 @@ public class CommandCatalogService {
         try {
             return action.get();
         } finally {
-            if (previous == null)
+            if (previous == null) {
                 activeWorkspace.remove();
-            else
+            } else {
                 activeWorkspace.set(previous);
+            }
         }
     }
 
     private CatalogSnapshot catalogFor(Path workspace) {
-        if (workspace == null)
+        if (workspace == null) {
             return snapshot.get();
+        }
         return loadSnapshot(workspace);
     }
 
@@ -352,20 +354,24 @@ public class CommandCatalogService {
 
     private void scanExternalRoot(Path root, String provider, boolean home, Set<String> ids,
             List<CommandDefinition> all) {
-        if (root == null || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
+        if (root == null || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
             return;
+        }
         try {
             Path canonicalRoot = root.toRealPath();
-            if (!canonicalRoot.equals(root.toAbsolutePath().normalize()))
+            if (!canonicalRoot.equals(root.toAbsolutePath().normalize())) {
                 return;
+            }
             try (var paths = walk(root)) {
                 paths.filter(path -> path.toString().endsWith(".md")).sorted().forEach(path -> {
                     try {
-                        if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                        if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                             return;
+                        }
                         Path real = path.toRealPath();
-                        if (!real.startsWith(canonicalRoot) || real.getParent() == null)
+                        if (!real.startsWith(canonicalRoot) || real.getParent() == null) {
                             return;
+                        }
                         String relative = canonicalRoot.relativize(real).toString().replace('\\', '/');
                         String relativeKey = relative.substring(0, relative.length() - 3);
                         String id;
@@ -405,8 +411,9 @@ public class CommandCatalogService {
     private static CommandDefinition loadExternal(Path path, String id, String provider, boolean home,
             String relativeKey) throws IOException {
         byte[] bytes = Files.readAllBytes(path);
-        if (bytes.length > MAX_EXTERNAL_BYTES)
+        if (bytes.length > MAX_EXTERNAL_BYTES) {
             throw new IOException("file exceeds 256 KiB");
+        }
         String content = decodeUtf8(bytes);
         CommandFrontMatterExtractor.Result parsed = CommandFrontMatterExtractor.extract(content);
         if (parsed.status() == CommandFrontMatterExtractor.Status.UNTERMINATED) {
@@ -421,8 +428,9 @@ public class CommandCatalogService {
                         : idToDisplayName(relativeKey);
         String description = metadata != null && metadata.get("description") != null
                 && metadata.get("description").isTextual() ? metadata.get("description").asText() : null;
-        if (parsed.body().isBlank())
+        if (parsed.body().isBlank()) {
             return null;
+        }
         return new CommandDefinition(id, name, normalizeOptional(description), CommandKind.PROMPT,
                 parsed.body().stripTrailing(), null, null, provider, home ? "home" : "project", path.toString(), false);
     }
@@ -506,22 +514,28 @@ public class CommandCatalogService {
     }
 
     private static void validateCommands(List<CommandDefinition> commands) {
-        if (commands.isEmpty())
+        if (commands.isEmpty()) {
             throw new IllegalStateException("Command catalog is empty");
+        }
         Set<String> ids = new HashSet<>();
         for (CommandDefinition command : commands) {
-            if (command.id() == null || command.id().isBlank() || !ids.add(command.id()))
+            if (command.id() == null || command.id().isBlank() || !ids.add(command.id())) {
                 throw new IllegalStateException("Duplicate command id: " + command.id());
-            if (command.name() == null || command.name().isBlank())
+            }
+            if (command.name() == null || command.name().isBlank()) {
                 throw new IllegalStateException("name is required for command: " + command.id());
-            if (command.type() == null)
+            }
+            if (command.type() == null) {
                 throw new IllegalStateException("type is required for command: " + command.id());
-            if (command.body() == null || command.body().isBlank())
+            }
+            if (command.body() == null || command.body().isBlank()) {
                 throw new IllegalStateException("body is required for command: " + command.id());
+            }
             if (command.type() == CommandKind.SCRIPT && command.timeoutSeconds() != null
-                    && command.timeoutSeconds() <= 0)
+                    && command.timeoutSeconds() <= 0) {
                 throw new IllegalStateException(
                         "timeoutSeconds must be greater than zero for command: " + command.id());
+            }
         }
     }
 
@@ -539,21 +553,27 @@ public class CommandCatalogService {
     }
 
     private static CommandDefinition normalizeAndValidateInput(CommandDefinition input) {
-        if (input == null)
+        if (input == null) {
             throw userError("Command definition is required");
+        }
         String id = normalize(input.id());
-        if (!SAFE_ID.matcher(id).matches())
+        if (!SAFE_ID.matcher(id).matches()) {
             throw userError("Invalid command id: " + input.id());
+        }
         String name = input.name() == null ? null : input.name().trim();
         String body = input.body() == null ? null : input.body().stripTrailing();
-        if (name == null || name.isBlank())
+        if (name == null || name.isBlank()) {
             throw userError("Command name is required");
-        if (input.type() == null)
+        }
+        if (input.type() == null) {
             throw userError("Command type is required");
-        if (body == null || body.isBlank())
+        }
+        if (body == null || body.isBlank()) {
             throw userError("Command body is required");
-        if (input.type() == CommandKind.SCRIPT && input.timeoutSeconds() != null && input.timeoutSeconds() <= 0)
+        }
+        if (input.type() == CommandKind.SCRIPT && input.timeoutSeconds() != null && input.timeoutSeconds() <= 0) {
             throw userError("timeoutSeconds must be greater than zero");
+        }
         return new CommandDefinition(id, name, normalizeOptional(input.description()), input.type(), body,
                 normalizeOptional(input.workingDir()), input.timeoutSeconds());
     }
@@ -562,13 +582,15 @@ public class CommandCatalogService {
         return new CommandMutationException(message);
     }
     private static String normalize(String id) {
-        if (id == null || id.isBlank())
+        if (id == null || id.isBlank()) {
             throw userError("Command id is required");
+        }
         return id.trim();
     }
     private static String resolveId(String source, String id) {
-        if (id != null && !id.isBlank())
+        if (id != null && !id.isBlank()) {
             return id;
+        }
         String filename = source.substring(source.lastIndexOf('/') + 1);
         return filename.endsWith(".md")
                 ? filename.substring(0, filename.length() - 3).replaceFirst("^\\d+-", "")
@@ -625,8 +647,9 @@ public class CommandCatalogService {
 
         @JsonCreator
         public static CommandKind fromValue(String value) {
-            if (value == null || value.isBlank())
+            if (value == null || value.isBlank()) {
                 throw new IllegalArgumentException("type is required");
+            }
             return switch (value.trim().toLowerCase(Locale.ROOT)) {
                 case "prompt" -> PROMPT;
                 case "script" -> SCRIPT;

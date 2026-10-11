@@ -8,7 +8,9 @@
     function render(container) {
         const dataNode = container.querySelector("[data-usage-data]");
         const canvas = container.querySelector("[data-usage-canvas]");
-        if (!dataNode || !canvas || typeof Chart === "undefined") return;
+        if (!dataNode || !canvas || typeof Chart === "undefined") {
+            return;
+        }
         const points = JSON.parse(dataNode.dataset.usageData || "[]");
         const models = [...new Map(points.map((point) => [point.modelKey, point.modelLabel])).entries()];
         const labels = [...new Set(points.map((point) => point.hour))];
@@ -27,7 +29,9 @@
                 stack: "tokens",
             })),
         ];
-        if (chart) chart.destroy();
+        if (chart) {
+            chart.destroy();
+        }
         chart = new Chart(canvas, {
             type: "bar",
             data: { labels, datasets },
@@ -78,11 +82,15 @@
     });
     document.addEventListener("htmx:afterSwap", (event) => {
         const chartContainer = event.target.querySelector?.("[data-settings-usage-chart]");
-        if (chartContainer) render(chartContainer);
+        if (chartContainer) {
+            render(chartContainer);
+        }
     });
     document.addEventListener("click", (event) => {
         const button = event.target.closest?.("[data-usage-range]");
-        if (!button) return;
+        if (!button) {
+            return;
+        }
         const container = button.closest("[data-settings-usage-container]");
         container.dataset.loaded = "true";
         htmx.ajax("GET", "/ui/settings/usage?range=" + button.dataset.usageRange, {

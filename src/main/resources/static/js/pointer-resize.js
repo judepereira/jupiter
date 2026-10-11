@@ -12,15 +12,23 @@ export function createPointerResizeController({
 
     function beginDrag(event) {
         const handle = resolveHandle(event);
-        if (!handle) return;
-        if (event.button != null && event.button !== 0) return;
-        if (!isEnabled(event, handle)) return;
+        if (!handle) {
+            return;
+        }
+        if (event.button != null && event.button !== 0) {
+            return;
+        }
+        if (!isEnabled(event, handle)) {
+            return;
+        }
 
         dragging = true;
         activePointerId = event.pointerId;
         activeHandle = handle;
 
-        if (bodyClass) document.body.classList.add(bodyClass);
+        if (bodyClass) {
+            document.body.classList.add(bodyClass);
+        }
         handle.classList.add(dragClass);
 
         try {
@@ -31,20 +39,25 @@ export function createPointerResizeController({
     }
 
     function moveDrag(event) {
-        if (!dragging || event.pointerId !== activePointerId) return;
+        if (!dragging || event.pointerId !== activePointerId) {
+            return;
+        }
         onMove(event, activeHandle);
     }
 
     function finishDrag(event, force = false) {
-        if (!dragging) return;
+        if (!dragging) {
+            return;
+        }
         if (
             !force &&
             event &&
             event.pointerId != null &&
             activePointerId != null &&
             event.pointerId !== activePointerId
-        )
+        ) {
             return;
+        }
 
         const handle = activeHandle;
         const pointerId = event && event.pointerId != null ? event.pointerId : activePointerId;
@@ -53,7 +66,9 @@ export function createPointerResizeController({
         activePointerId = null;
         activeHandle = null;
 
-        if (bodyClass) document.body.classList.remove(bodyClass);
+        if (bodyClass) {
+            document.body.classList.remove(bodyClass);
+        }
 
         if (handle) {
             handle.classList.remove(dragClass);

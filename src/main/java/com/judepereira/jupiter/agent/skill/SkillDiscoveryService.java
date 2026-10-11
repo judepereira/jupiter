@@ -43,8 +43,9 @@ public final class SkillDiscoveryService {
         try {
             canonicalBase = base.toAbsolutePath().normalize().toRealPath();
         } catch (IOException e) {
-            if (Files.exists(base, LinkOption.NOFOLLOW_LINKS))
+            if (Files.exists(base, LinkOption.NOFOLLOW_LINKS)) {
                 errors.add(new SkillLoadError(base, "unable to access workspace: " + e.getMessage()));
+            }
             return;
         }
         Path root = canonicalBase.resolve(RELATIVE_ROOT);
@@ -55,12 +56,14 @@ public final class SkillDiscoveryService {
                 return;
             }
         } catch (IOException e) {
-            if (Files.exists(root, LinkOption.NOFOLLOW_LINKS))
+            if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
                 errors.add(new SkillLoadError(root, "unable to access skills root: " + e.getMessage()));
+            }
             return;
         }
-        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
             return;
+        }
         try (var children = Files.list(root)) {
             children.sorted(Comparator.comparing(path -> path.getFileName().toString())).forEach(directory -> {
                 String candidate = directory.getFileName().toString();
@@ -68,19 +71,22 @@ public final class SkillDiscoveryService {
                     errors.add(new SkillLoadError(directory, "skill directory must not be a symbolic link", candidate));
                     return;
                 }
-                if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS))
+                if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
                     return;
+                }
                 Path file = directory.resolve("SKILL.md");
-                if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS))
+                if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                     return;
+                }
                 SkillParser.ParseResult result = parser.parse(file, scope);
                 result.error()
                         .ifPresent(error -> errors.add(error.candidateSkillName() == null
                                 ? new SkillLoadError(error.path(), error.message(), candidate)
                                 : error));
                 result.definition().ifPresent(definition -> {
-                    if (scope == SkillScope.REPOSITORY || !definitions.containsKey(definition.name()))
+                    if (scope == SkillScope.REPOSITORY || !definitions.containsKey(definition.name())) {
                         definitions.put(definition.name(), definition);
+                    }
                 });
             });
         } catch (IOException e) {

@@ -31,20 +31,24 @@ public class ApplyPatchTool implements AgentTool {
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context) throws Exception {
-        if (!context.isAllowWrite())
+        if (!context.isAllowWrite()) {
             return new ToolExecutionResult(false, "writing is disabled by configuration", Map.of());
+        }
         String rel = (String) args.get("path");
         String oldText = (String) args.get("oldText");
         String newText = (String) args.get("newText");
-        if (rel == null || oldText == null || newText == null)
+        if (rel == null || oldText == null || newText == null) {
             return new ToolExecutionResult(false, "missing args", Map.of());
+        }
         Path p = FileUtils.resolveWorkspacePath(context.getWorkspaceRoot(), rel);
-        if (!Files.exists(p))
+        if (!Files.exists(p)) {
             return new ToolExecutionResult(false, "file not found: " + rel, Map.of());
+        }
         String content = Files.readString(p);
         int idx = content.indexOf(oldText);
-        if (idx < 0)
+        if (idx < 0) {
             return new ToolExecutionResult(false, "oldText not found", Map.of());
+        }
         String updated = content.substring(0, idx) + newText + content.substring(idx + oldText.length());
         Files.writeString(p, updated);
         return new ToolExecutionResult(true, "applied patch to: " + rel, Map.of("path", rel));

@@ -4,9 +4,13 @@ const divider = document.getElementById("panel-divider");
 const shell = document.getElementById("shell");
 
 function getShellReviewPanel() {
-    if (!shell) return null;
+    if (!shell) {
+        return null;
+    }
     for (const child of shell.children) {
-        if (child.id === "review") return child;
+        if (child.id === "review") {
+            return child;
+        }
     }
     return null;
 }
@@ -25,10 +29,14 @@ if (divider && shell) {
 
     function clampReviewWidth() {
         const current = getComputedStyle(shell).getPropertyValue("--review-width").trim();
-        if (!current || current.endsWith("%")) return;
+        if (!current || current.endsWith("%")) {
+            return;
+        }
 
         const px = parseFloat(current);
-        if (Number.isFinite(px)) setReviewWidthPx(px);
+        if (Number.isFinite(px)) {
+            setReviewWidthPx(px);
+        }
     }
 
     function isDesktopReviewResizeEnabled() {
@@ -50,7 +58,9 @@ if (divider && shell) {
         shell.classList.toggle("review-open", reviewOpen);
         shell.classList.toggle("review-closed", !reviewOpen);
         divider.classList.toggle("hidden", !reviewOpen);
-        if (reviewOpen) clampReviewWidth();
+        if (reviewOpen) {
+            clampReviewWidth();
+        }
     }
 
     function handleHtmxUpdate(evt) {
@@ -58,7 +68,9 @@ if (divider && shell) {
             const trg = evt && evt.detail && evt.detail.target;
             if (trg && (trg.id === "review" || (review && review.contains && review.contains(trg)))) {
                 const newReview = getShellReviewPanel();
-                if (newReview) review = newReview;
+                if (newReview) {
+                    review = newReview;
+                }
             }
         } catch (_) {}
 
@@ -91,7 +103,9 @@ if (divider && shell) {
     document.body.addEventListener(
         "htmx:afterSwap",
         (evt) => {
-            if (controller.isDragging()) controller.cancel();
+            if (controller.isDragging()) {
+                controller.cancel();
+            }
             handleHtmxUpdate(evt);
         },
         true,

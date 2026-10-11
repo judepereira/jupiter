@@ -95,8 +95,9 @@ class ModelSelectionServicesTests {
         when(catalog.list()).thenReturn(List.of(models));
         when(catalog.hasProviderModel(any())).thenAnswer(invocation -> List.of(models).stream()
                 .anyMatch(model -> model.provider().equals(invocation.getArgument(0))));
-        for (ModelDefinition model : models)
+        for (ModelDefinition model : models) {
             when(catalog.getRequired(model.id())).thenReturn(model);
+        }
         return catalog;
     }
 }

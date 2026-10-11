@@ -21,10 +21,14 @@ if (divider && shell && leftRail) {
 
     function clampRailWidth() {
         const current = getComputedStyle(shell).getPropertyValue("--rail-width").trim();
-        if (!current || current.endsWith("%")) return;
+        if (!current || current.endsWith("%")) {
+            return;
+        }
 
         const px = parseFloat(current);
-        if (Number.isFinite(px)) setRailWidthPx(px);
+        if (Number.isFinite(px)) {
+            setRailWidthPx(px);
+        }
     }
 
     function updateVisibility() {
@@ -32,7 +36,9 @@ if (divider && shell && leftRail) {
         divider.classList.toggle("hidden", !enabled);
         shell.classList.toggle("left-rail-open", enabled);
         shell.classList.remove("left-rail-closed");
-        if (enabled) clampRailWidth();
+        if (enabled) {
+            clampRailWidth();
+        }
     }
 
     createPointerResizeController({
@@ -53,7 +59,9 @@ if (divider && shell && leftRail) {
     document.body.addEventListener(
         "htmx:afterSwap",
         () => {
-            if (window.innerWidth <= 900) divider.classList.add("hidden");
+            if (window.innerWidth <= 900) {
+                divider.classList.add("hidden");
+            }
         },
         true,
     );
