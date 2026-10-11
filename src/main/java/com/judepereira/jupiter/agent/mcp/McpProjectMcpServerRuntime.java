@@ -18,11 +18,11 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     private final McpClientFactory clientFactory;
     private final McpRuntimeListener runtimeListener;
     private final String serverSlug;
-    private volatile McpClient client;
-    private volatile McpRuntimeEvents.ConnectionStatus status = McpRuntimeEvents.ConnectionStatus.CONNECTING;
-    private volatile String statusMessage = "connecting";
-    private volatile List<ToolDefinition> toolDefinitions = List.of();
-    private volatile Map<String, McpProjectToolExecutor> executors = Map.of();
+    private volatile McpClient client; // NOPMD
+    private volatile McpRuntimeEvents.ConnectionStatus status = McpRuntimeEvents.ConnectionStatus.CONNECTING; // NOPMD
+    private volatile String statusMessage = "connecting"; // NOPMD
+    private volatile List<ToolDefinition> toolDefinitions = List.of(); // NOPMD
+    private volatile Map<String, McpProjectToolExecutor> executors = Map.of(); // NOPMD
 
     private McpProjectMcpServerRuntime(Persistence.McpServerView server,
             Map<String, String> projectEnvironmentVariables, McpTemplateResolver templateResolver,

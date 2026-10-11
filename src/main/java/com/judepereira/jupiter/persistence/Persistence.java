@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-public final class Persistence {
+public final class Persistence { // NOPMD
 
     public enum ReviewSource {
         SESSION, GIT

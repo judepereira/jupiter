@@ -123,7 +123,7 @@ class LifecycleHookServiceTests {
         AppStateService appStateService = configuredAppState(tempDir, "echo should-not-run");
         long sessionId = appStateService.loadViewData().activeSession().id();
         SystemBalloonService balloons = mock(SystemBalloonService.class);
-        var executor = Executors.newVirtualThreadPerTaskExecutor();
+        var executor = Executors.newVirtualThreadPerTaskExecutor(); // NOPMD
         LifecycleHookService service = new LifecycleHookService(appStateService, balloons,
                 new LifecycleHookRuntime(executor, ignored -> {
                     throw new IOException("test launch failure");

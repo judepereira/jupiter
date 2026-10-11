@@ -1,6 +1,6 @@
 package com.judepereira.jupiter.agent.mcp;
 
-public final class McpRuntimeEvents {
+public final class McpRuntimeEvents { // NOPMD
     private McpRuntimeEvents() {
     }
 

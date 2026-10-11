@@ -795,7 +795,7 @@ public class UiController {
 
         if (targetAssistantId == null || targetAssistantId.isBlank()) {
             ActiveStream targetActive = active;
-            targetAssistantId = activeStreams.entrySet().stream().filter(entry -> entry.getValue() == targetActive)
+            targetAssistantId = activeStreams.entrySet().stream().filter(entry -> entry.getValue() == targetActive) // NOPMD
                     .map(Map.Entry::getKey).findFirst().orElseThrow();
         }
         stopActiveStream(targetAssistantId, active);

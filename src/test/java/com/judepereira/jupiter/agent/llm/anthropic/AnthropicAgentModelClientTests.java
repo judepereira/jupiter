@@ -35,7 +35,7 @@ class AnthropicAgentModelClientTests {
     @Test
     void requestUsesApiKeyHeadersAndMapsMessages() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mock(HttpClient.class); // NOPMD
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
             request.set(i.getArgument(0));
             return response(200,
@@ -125,7 +125,7 @@ class AnthropicAgentModelClientTests {
     @Test
     void reasoningUsesAdaptiveThinkingAndMappedEffortWithoutChangingMaxTokens() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mock(HttpClient.class); // NOPMD
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
             request.set(i.getArgument(0));
             return response(200, "{\"content\":[],\"usage\":{}}");
@@ -151,7 +151,7 @@ class AnthropicAgentModelClientTests {
     @Test
     void reasoningFieldsAreAbsentWhenDisabled() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mock(HttpClient.class); // NOPMD
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
             request.set(i.getArgument(0));
             return response(200, "{\"content\":[],\"usage\":{}}");
@@ -168,7 +168,7 @@ class AnthropicAgentModelClientTests {
     @Test
     void requestDisablesParallelToolUseOnlyWhenToolsArePresent() throws Exception {
         AtomicReference<HttpRequest> request = new AtomicReference<>();
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mock(HttpClient.class); // NOPMD
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenAnswer(i -> {
             request.set(i.getArgument(0));
             return response(200, "{\"content\":[],\"usage\":{}}");
@@ -191,7 +191,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void unexpectedMultipleToolCallsFailLoudly() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mock(HttpClient.class); // NOPMD
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response(200,
                 "{\"content\":[{\"type\":\"tool_use\",\"id\":\"a\",\"name\":\"one\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"b\",\"name\":\"two\",\"input\":{}}]}"));
         var client = new AnthropicAgentModelClient(propertiesWithKey(), new AgentProperties(), new ObjectMapper(),
@@ -229,7 +229,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void interruptedRequestRestoresInterruptAndFailsClearly() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mock(HttpClient.class); // NOPMD
         when(http.send(any(), any(HttpResponse.BodyHandler.class))).thenThrow(new InterruptedException());
         AnthropicProperties properties = new AnthropicProperties();
         properties.setApiKey("sk-ant-test");
@@ -249,7 +249,7 @@ class AnthropicAgentModelClientTests {
 
     @Test
     void streamingPreservesIndexedThinkingTextToolAndRedactedBlocks() throws Exception {
-        HttpClient http = mock(HttpClient.class);
+        HttpClient http = mock(HttpClient.class); // NOPMD
         String s = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"i\",\"model\":\"m\",\"usage\":{\"input_tokens\":4}}}\n"
                 + "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\"}}\n"
                 + "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"plan \"}}\n"

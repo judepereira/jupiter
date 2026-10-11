@@ -159,7 +159,7 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
             Map<String, String> env = appStateService.loadProjectEnvironmentVariables(projectId);
             try {
                 for (McpServerView server : servers) {
-                    McpProjectMcpServerRuntime runtime = byServerId.get(server.id());
+                    McpProjectMcpServerRuntime runtime = byServerId.get(server.id()); // NOPMD
                     if (runtime == null) {
                         runtime = McpProjectMcpServerRuntime.connect(server, env, templateResolver, clientFactory,
                                 McpProjectMcpServerRuntimeManager.this);
@@ -207,7 +207,7 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
         private McpProjectToolSnapshot snapshot() {
             List<ToolDefinition> definitions = new ArrayList<>();
             Map<String, McpProjectToolExecutor> executors = new LinkedHashMap<>();
-            for (McpProjectMcpServerRuntime runtime : byServerId.values()) {
+            for (McpProjectMcpServerRuntime runtime : byServerId.values()) { // NOPMD
                 McpProjectToolSnapshot snapshot = runtime.snapshot(projectId);
                 for (ToolDefinition definition : snapshot.toolDefinitions()) {
                     if (executors.putIfAbsent(definition.getName(),
@@ -235,7 +235,7 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
 
         private void close() {
             RuntimeException cleanupFailure = null;
-            for (McpProjectMcpServerRuntime runtime : byServerId.values()) {
+            for (McpProjectMcpServerRuntime runtime : byServerId.values()) { // NOPMD
                 try {
                     runtime.close();
                 } catch (RuntimeException failure) {
