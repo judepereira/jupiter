@@ -20,9 +20,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.LongStream;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -147,6 +150,33 @@ class WatchRunnerServiceTest {
     }
 
     @Test
+    void interruptedHarnessCancellationClearsInterruptBeforeFinishingRun() throws Exception {
+        when(repository.startRun(any(), eq(9L), any(), eq(0L))).thenReturn(Optional.of(49L));
+        AtomicBoolean harnessThreadInterrupted = new AtomicBoolean();
+        AtomicBoolean finishThreadInterrupted = new AtomicBoolean(true);
+        CountDownLatch finished = new CountDownLatch(1);
+        when(harness.runTurn(any())).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            harnessThreadInterrupted.set(Thread.currentThread().isInterrupted());
+            throw new CancellationException("cancelled");
+        });
+        doAnswer(invocation -> {
+            finishThreadInterrupted.set(Thread.currentThread().isInterrupted());
+            finished.countDown();
+            return null;
+        }).when(repository).finishRun(eq(49L), eq("CANCELLED"), isNull(), isNull(), eq("Evaluator cancelled"),
+                eq(false), isNull());
+
+        runner.tick(Instant.parse("2026-01-01T00:01:00Z"));
+
+        assertThat(finished.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(harnessThreadInterrupted).isTrue();
+        assertThat(finishThreadInterrupted).isFalse();
+        verify(repository).finishRun(eq(49L), eq("CANCELLED"), isNull(), isNull(), eq("Evaluator cancelled"), eq(false),
+                isNull());
+    }
+
+    @Test
     void unexpectedRuntimeFailureFinishesRunAsFailed() throws Exception {
         when(repository.startRun(any(), eq(9L), any(), eq(0L))).thenReturn(Optional.of(46L));
         when(harness.runTurn(any())).thenThrow(new IllegalStateException("provider down"));
@@ -185,6 +215,126 @@ class WatchRunnerServiceTest {
         runner.tick(Instant.parse("2026-01-02T00:01:00Z"));
         verify(repository, timeout(1000)).finishRun(eq(48L), eq("NONACTIONABLE"), eq(false), any(), any(), eq(false),
                 isNull());
+    }
+
+    @Test
+    void newlyDueUnstartedFifthWatchRunsBeforeRepeatedFirstFour() throws Exception {
+        var firstTick = Instant.parse("2026-01-01T00:01:00Z");
+        var nextTick = firstTick.plusSeconds(60);
+        var definitions = LongStream.rangeClosed(7, 11).mapToObj(id -> new WatchService.Definition(id, 3, "watch",
+                "inspect", id == 11 ? 120 : 60, "agent", "agent", "command", 1)).toList();
+        var activity = firstTick.minusSeconds(60);
+        when(repository.enabledSessions()).thenReturn(List.of(9L));
+        when(watches.qualifyingActivity(9)).thenReturn(Optional.of(activity));
+        when(watches.listEnablements(9))
+                .thenReturn(List.of(new WatchService.Enablement(7, 9, true, 0, firstTick.minusSeconds(120)),
+                        new WatchService.Enablement(8, 9, true, 0, firstTick.minusSeconds(120)),
+                        new WatchService.Enablement(9, 9, true, 0, firstTick.minusSeconds(120)),
+                        new WatchService.Enablement(10, 9, true, 0, firstTick.minusSeconds(120)),
+                        new WatchService.Enablement(11, 9, true, 0, null)));
+        definitions.forEach(d -> when(repository.definitionFor(d.id())).thenReturn(Optional.of(d)));
+        var enablements = new ConcurrentHashMap<Long, WatchService.Enablement>();
+        definitions.forEach(d -> enablements.put(d.id(),
+                new WatchService.Enablement(d.id(), 9, true, 0, d.id() == 11 ? null : firstTick.minusSeconds(60))));
+        definitions.forEach(d -> when(repository.enablement(d.id(), 9))
+                .thenAnswer(invocation -> Optional.of(enablements.get(d.id()))));
+        when(repository.startRun(any(), eq(9L), any(), anyLong())).thenAnswer(invocation -> {
+            var definition = (WatchService.Definition) invocation.getArgument(0);
+            enablements.put(definition.id(),
+                    new WatchService.Enablement(definition.id(), 9, true, 0, (Instant) invocation.getArgument(2)));
+            return Optional.of(definition.id());
+        });
+        CountDownLatch entered = new CountDownLatch(4);
+        CountDownLatch release = new CountDownLatch(1);
+        when(harness.runTurn(any())).thenAnswer(invocation -> {
+            entered.countDown();
+            release.await(2, TimeUnit.SECONDS);
+            return new AgentTurnResult("{\"actionable\":false}", List.of());
+        });
+
+        runner.tick(firstTick);
+        assertThat(entered.await(1, TimeUnit.SECONDS)).isTrue();
+        verify(repository, times(4)).startRun(any(), eq(9L), any(), anyLong());
+        release.countDown();
+        for (long id = 7; id <= 10; id++) {
+            verify(repository, timeout(1000)).finishRun(eq(id), eq("NONACTIONABLE"), eq(false), any(), any(), eq(false),
+                    isNull());
+        }
+
+        when(watches.listEnablements(9)).thenReturn(List.of(new WatchService.Enablement(7, 9, true, 0, firstTick),
+                new WatchService.Enablement(8, 9, true, 0, firstTick),
+                new WatchService.Enablement(9, 9, true, 0, firstTick),
+                new WatchService.Enablement(10, 9, true, 0, firstTick),
+                new WatchService.Enablement(11, 9, true, 0, null)));
+        definitions.forEach(d -> enablements.put(d.id(),
+                new WatchService.Enablement(d.id(), 9, true, 0, d.id() == 11 ? null : firstTick)));
+        var secondBatchEntered = new CountDownLatch(4);
+        var secondBatchRelease = new CountDownLatch(1);
+        when(harness.runTurn(any())).thenAnswer(invocation -> {
+            secondBatchEntered.countDown();
+            secondBatchRelease.await(2, TimeUnit.SECONDS);
+            return new AgentTurnResult("{\"actionable\":false}", List.of());
+        });
+        runner.tick(nextTick);
+        assertThat(secondBatchEntered.await(1, TimeUnit.SECONDS)).isTrue();
+
+        var claimed = ArgumentCaptor.forClass(WatchService.Definition.class);
+        verify(repository, timeout(1000).times(8)).startRun(claimed.capture(), eq(9L), any(), anyLong());
+        assertThat(claimed.getAllValues().subList(4, 8)).extracting(WatchService.Definition::id).containsExactly(11L,
+                7L, 8L, 9L);
+        secondBatchRelease.countDown();
+        verify(repository, timeout(1000)).startRun(eq(definitions.get(4)), eq(9L), eq(nextTick), eq(0L));
+    }
+
+    @Test
+    void unstartedWatchGetsPermitBeforeAlreadyStartedWatches() throws Exception {
+        var now = Instant.parse("2026-01-01T00:01:00Z");
+        var startedAt = now.minusSeconds(60);
+        var definitions = List.of(
+                new WatchService.Definition(7, 3, "watch", "inspect", 60, "agent", "agent", "command", 1),
+                new WatchService.Definition(8, 3, "watch", "inspect", 60, "agent", "agent", "command", 1));
+        when(repository.enabledSessions()).thenReturn(List.of(9L, 10L));
+        when(watches.qualifyingActivity(10)).thenReturn(Optional.of(now.minusSeconds(60)));
+        when(activeStreams.hasActiveStreamForSession(10)).thenReturn(false);
+        when(watches.listEnablements(9)).thenReturn(List.of(new WatchService.Enablement(7, 9, true, 0, startedAt)));
+        when(repository.enablement(7, 9))
+                .thenReturn(Optional.of(new WatchService.Enablement(7, 9, true, 0, startedAt)));
+        when(repository.enablement(8, 10)).thenReturn(Optional.of(new WatchService.Enablement(8, 10, true, 0, null)));
+        when(watches.listEnablements(10)).thenReturn(List.of(new WatchService.Enablement(8, 10, true, 0, null)));
+        when(watches.qualifyingActivity(10)).thenReturn(Optional.of(now.minusSeconds(120)));
+        when(state.loadSessionDetail(10))
+                .thenReturn(new SessionDetailView(List.of(), List.of(), false, null, null, "/tmp", ""));
+        when(repository.definitionFor(7)).thenReturn(Optional.of(definitions.get(0)));
+        when(repository.definitionFor(8)).thenReturn(Optional.of(definitions.get(1)));
+        when(repository.enablement(8, 10)).thenReturn(Optional.of(new WatchService.Enablement(8, 10, true, 0, null)));
+        when(repository.startRun(any(), anyLong(), any(), anyLong())).thenReturn(Optional.of(51L), Optional.of(52L));
+        CountDownLatch entered = new CountDownLatch(2);
+        CountDownLatch release = new CountDownLatch(1);
+        when(harness.runTurn(any())).thenAnswer(invocation -> {
+            entered.countDown();
+            release.await(2, TimeUnit.SECONDS);
+            return new AgentTurnResult("{\"actionable\":false}", List.of());
+        });
+
+        runner.tick(now);
+
+        assertThat(entered.await(1, TimeUnit.SECONDS)).isTrue();
+        var claimed = ArgumentCaptor.forClass(WatchService.Definition.class);
+        verify(repository, times(2)).startRun(claimed.capture(), anyLong(), any(), anyLong());
+        assertThat(claimed.getAllValues()).extracting(WatchService.Definition::id).containsExactly(8L, 7L);
+        release.countDown();
+    }
+
+    @Test
+    void failedClaimDoesNotLeaveJobBlockingRetry() {
+        when(repository.startRun(any(), eq(9L), any(), anyLong())).thenThrow(new IllegalStateException("claim failed"))
+                .thenReturn(Optional.of(49L));
+        Assertions.assertThatThrownBy(() -> runner.tick(Instant.parse("2026-01-01T00:01:00Z")))
+                .isInstanceOf(IllegalStateException.class);
+
+        runner.tick(Instant.parse("2026-01-01T00:01:01Z"));
+
+        verify(repository, times(2)).startRun(any(), eq(9L), any(), anyLong());
     }
 
     @Test

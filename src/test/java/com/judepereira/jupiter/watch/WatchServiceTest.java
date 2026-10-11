@@ -46,10 +46,10 @@ class WatchServiceTest {
         var definition = new WatchService.Definition(7, 3, "watch", "look", 60, "plan", "plan", "act", 1);
         when(repository.definition(7)).thenReturn(Optional.of(definition));
 
-        assertThat(service.create(3, "watch", "look", 60, "plan", "plan", "act")).isEqualTo(definition);
-        assertThatThrownBy(() -> service.create(3, "watch", "look", 59, "plan", "plan", "act"))
+        assertThat(service.create(3, "watch", "look", 60, "plan", "plan", "act", null)).isEqualTo(definition);
+        assertThatThrownBy(() -> service.create(3, "watch", "look", 59, "plan", "plan", "act", null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.create(3, "watch", "look", 60, "plan", "plan", "missing"))
+        assertThatThrownBy(() -> service.create(3, "watch", "look", 60, "plan", "plan", "missing", null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

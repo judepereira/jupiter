@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinitionService;
 import com.judepereira.jupiter.agent.catalog.AgentMode;
 import com.judepereira.jupiter.command.CommandCatalogService;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -59,16 +60,17 @@ public class WatchService {
 
     @Transactional
     public Definition create(long projectId, String name, String prompt, int intervalSeconds, String evaluatorAgentId,
-            String actionAgentId, String actionCommandId) {
-        validate(name, prompt, intervalSeconds, evaluatorAgentId, actionAgentId, actionCommandId);
+            String actionAgentId, String actionCommandId, Path workspace) {
+        validate(name, prompt, intervalSeconds, evaluatorAgentId, actionAgentId, actionCommandId, workspace);
         long id = repository.insert(new Definition(0, projectId, name, prompt, intervalSeconds, evaluatorAgentId,
                 actionAgentId, actionCommandId, 1), Instant.now());
         return repository.definition(id).orElseThrow();
     }
+
     @Transactional
-    public Definition update(Definition definition) {
+    public Definition update(Definition definition, Path workspace) {
         validate(definition.name(), definition.prompt(), definition.intervalSeconds(), definition.evaluatorAgentId(),
-                definition.actionAgentId(), definition.actionCommandId());
+                definition.actionAgentId(), definition.actionCommandId(), workspace);
         repository.update(definition);
         notifyChange(definition.id());
         return repository.definition(definition.id()).orElseThrow();
@@ -135,7 +137,8 @@ public class WatchService {
             throw new IllegalArgumentException("Invalid actionable JSON", e);
         }
     }
-    private void validate(String name, String prompt, int interval, String evaluator, String action, String command) {
+    private void validate(String name, String prompt, int interval, String evaluator, String action, String command,
+            Path workspace) {
         if (name == null || name.isBlank() || prompt == null || prompt.isBlank() || evaluator == null
                 || evaluator.isBlank() || action == null || action.isBlank() || command == null || command.isBlank())
             throw new IllegalArgumentException("Watch fields are required");
@@ -144,10 +147,9 @@ public class WatchService {
         if (agents.getRequired(evaluator).mode() != AgentMode.AGENT
                 || agents.getRequired(action).mode() != AgentMode.AGENT)
             throw new IllegalArgumentException("Watch agents must be primary agents");
-        if (!commands.list().stream()
-                .anyMatch(c -> c.id().equals(command) && c.type() == CommandCatalogService.CommandKind.PROMPT)
-                && !commands.listCustom().stream()
-                        .anyMatch(c -> c.id().equals(command) && c.type() == CommandCatalogService.CommandKind.PROMPT))
-            throw new IllegalArgumentException("Watch action must be a PROMPT command");
+        var availableCommands = workspace == null ? commands.list() : commands.list(workspace);
+        if (availableCommands.stream()
+                .noneMatch(c -> c.id().equals(command) && c.type() == CommandCatalogService.CommandKind.PROMPT))
+            throw new IllegalArgumentException("Watch action must be a PROMPT command available in its workspace");
     }
 }

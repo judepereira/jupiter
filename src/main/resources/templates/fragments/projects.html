@@ -406,7 +406,13 @@
 </th:block>
 
 <th:block th:fragment="settingsWatches">
-    <div id="settings-watches" class="tab-pane fade" role="tabpanel" aria-labelledby="settings-watches-tab">
+    <div
+        id="settings-watches"
+        class="tab-pane fade"
+        th:classappend="${watchSettingsActive} ? ' show active' : ''"
+        role="tabpanel"
+        aria-labelledby="settings-watches-tab"
+    >
         <section class="settings-section">
             <div class="settings-section-header">
                 <h3>Watches</h3>
@@ -418,8 +424,8 @@
                 hx-target="#settings-watches"
                 hx-swap="outerHTML"
             >
-                <input type="hidden" name="workspaceId" th:value="${watchWorkspaceId}">
-                <input type="hidden" name="sessionId" th:value="${watchSessionId}">
+                <input type="hidden" name="watchWorkspaceId" th:value="${watchWorkspaceId}">
+                <input type="hidden" name="watchSessionId" th:value="${watchSessionId}">
                 <input name="name" placeholder="Name" required>
                 <textarea name="prompt" placeholder="What should be checked?" required></textarea>
                 <label
@@ -458,7 +464,14 @@
                 <input type="hidden" name="projectId" th:value="${activeProject.id}">
                 <label
                     >Workspace
-                    <select name="workspaceId" onchange="this.form.requestSubmit()">
+                    <select
+                        name="workspaceId"
+                        hx-get="/ui/settings/watches/select"
+                        hx-trigger="change"
+                        hx-target="#settings-watches"
+                        hx-swap="outerHTML"
+                        hx-include="closest form"
+                    >
                         <option
                             th:each="workspace : ${watchWorkspaces}"
                             th:value="${workspace.id}"
@@ -469,7 +482,14 @@
                 >
                 <label
                     >Session
-                    <select name="sessionId" onchange="this.form.requestSubmit()">
+                    <select
+                        name="sessionId"
+                        hx-get="/ui/settings/watches/select"
+                        hx-trigger="change"
+                        hx-target="#settings-watches"
+                        hx-swap="outerHTML"
+                        hx-include="closest form"
+                    >
                         <option
                             th:each="watchSession : ${watchSessions}"
                             th:value="${watchSession.id}"
@@ -479,6 +499,10 @@
                     </select></label
                 >
             </form>
+            <div id="watch-settings-context" hidden>
+                <input type="hidden" name="watchWorkspaceId" th:value="${watchWorkspaceId}">
+                <input type="hidden" name="watchSessionId" th:value="${watchSessionId}">
+            </div>
             <p class="settings-help-text" th:if="${#lists.isEmpty(watchSessions)}">
                 No visible primary sessions exist in this workspace. Create a session before enabling watches.
             </p>
@@ -494,8 +518,8 @@
                         hx-target="#settings-watches"
                         hx-swap="outerHTML"
                     >
-                        <input type="hidden" name="workspaceId" th:value="${watchWorkspaceId}">
-                        <input type="hidden" name="sessionId" th:value="${watchSessionId}">
+                        <input type="hidden" name="watchWorkspaceId" th:value="${watchWorkspaceId}">
+                        <input type="hidden" name="watchSessionId" th:value="${watchSessionId}">
                         <input name="name" th:value="${w.name()}" required>
                         <textarea name="prompt" th:text="${w.prompt()}" required></textarea>
                         <input
@@ -538,8 +562,8 @@
                     hx-target="#settings-watches"
                     hx-swap="outerHTML"
                 >
-                    <input type="hidden" name="workspaceId" th:value="${watchWorkspaceId}">
-                    <input type="hidden" name="sessionId" th:value="${watchSessionId}">
+                    <input type="hidden" name="watchWorkspaceId" th:value="${watchWorkspaceId}">
+                    <input type="hidden" name="watchSessionId" th:value="${watchSessionId}">
                     <button class="btn btn-link text-danger" type="submit">Delete</button>
                 </form>
                 <div class="settings-help-text" th:text="${w.prompt()}"></div>
@@ -547,10 +571,9 @@
                     <input
                         class="form-check-input"
                         type="checkbox"
-                        th:checked="${watchEnablementsBySession[s.id].?[watchId() == w.id() and enabled()].size() > 0}"
-                        th:disabled="${watchSessionId == null}"
+                        th:checked="${watchEnablementsBySession[s.id].?[watchId() == #vars.w.id() and enabled()].size() > 0}"
                         th:id="${'watch-' + w.id() + '-' + s.id}"
-                        th:attr="hx-post=@{/ui/settings/watches/{watchId}/sessions/{sessionId}/toggle(watchId=${w.id()},sessionId=${s.id})}, hx-target='#settings-watches', hx-swap='outerHTML'"
+                        th:attr="hx-post=@{/ui/settings/watches/{watchId}/sessions/{sessionId}/toggle(watchId=${w.id()},sessionId=${s.id})}, hx-target='#settings-watches', hx-swap='outerHTML', hx-include='#watch-settings-context'"
                     ><label th:for="${'watch-' + w.id() + '-' + s.id}" th:text="${s.name}"></label>
                 </div>
             </div>

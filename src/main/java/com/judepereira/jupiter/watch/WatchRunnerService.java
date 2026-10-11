@@ -15,6 +15,8 @@ import jakarta.annotation.PreDestroy;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -88,6 +90,7 @@ public class WatchRunnerService {
                     || !activity.get().equals(job.activityTimestamp) || !now.isBefore(activity.get().plus(DORMANT)))
                 cancelJob(job);
         });
+        var candidates = new ArrayList<Candidate>();
         for (long session : repository.enabledSessions()) {
             var activity = watches.qualifyingActivity(session);
             if (activity.isEmpty() || !now.isBefore(activity.get().plus(DORMANT))
@@ -104,10 +107,14 @@ public class WatchRunnerService {
                 Instant due = enablement.lastEvaluationStartedAt() == null
                         ? activity.get().plusSeconds(definition.intervalSeconds())
                         : enablement.lastEvaluationStartedAt().plusSeconds(definition.intervalSeconds());
-                if (!now.isBefore(due) && !activeStreams.hasActiveStreamForSession(session))
-                    start(definition, session, now);
+                if (!now.isBefore(due))
+                    candidates.add(new Candidate(definition, session, enablement.lastEvaluationStartedAt()));
             }
         }
+        candidates.sort(Comparator
+                .comparing(Candidate::lastEvaluationStartedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
+                .thenComparingLong(c -> c.definition().id()).thenComparingLong(Candidate::session));
+        candidates.forEach(candidate -> start(candidate.definition(), candidate.session(), now));
     }
 
     private void start(WatchService.Definition definition, long session, Instant tickNow) {
@@ -115,6 +122,7 @@ public class WatchRunnerService {
         if (!permits.tryAcquire())
             return;
         Job[] captured = new Job[1];
+        Job job;
         try {
             coordinator.withLock(session, () -> {
                 var activity = watches.qualifyingActivity(session);
@@ -130,23 +138,34 @@ public class WatchRunnerService {
                         : enablement.lastEvaluationStartedAt().plusSeconds(current.intervalSeconds());
                 if (tickNow.isBefore(due))
                     return;
-                var job = new Job(new CancellationToken(), current.configVersion(), enablement.activityGeneration(),
-                        activity.get(), coordinator.snapshot(session).version());
-                if (jobs.putIfAbsent(key, job) != null)
+                Job candidate = new Job(new CancellationToken(), current.configVersion(),
+                        enablement.activityGeneration(), activity.get(), coordinator.snapshot(session).version());
+                if (jobs.putIfAbsent(key, candidate) != null)
                     return;
-                var run = repository.startRun(current, session, tickNow, job.generation);
+                captured[0] = candidate;
+                var run = repository.startRun(current, session, tickNow, candidate.generation);
                 if (run.isEmpty()) {
-                    jobs.remove(key, job);
+                    jobs.remove(key, candidate);
+                    captured[0] = null;
                     return;
                 }
-                job.runId.set(run.get());
-                captured[0] = job;
+                candidate.runId.set(run.get());
             });
         } catch (RuntimeException e) {
-            permits.release();
+            try {
+                if (captured[0] != null) {
+                    Job failed = captured[0];
+                    jobs.remove(key, failed);
+                    captured[0] = null;
+                    if (failed.runId.get() > 0)
+                        finishRun(failed.runId.get(), "FAILED", null, null, e.toString(), false, null);
+                }
+            } finally {
+                permits.release();
+            }
             throw e;
         }
-        Job job = captured[0];
+        job = captured[0];
         if (job == null) {
             permits.release();
             return;
@@ -161,10 +180,25 @@ public class WatchRunnerService {
             ScheduledFuture<?> timeout = job.timeout.getAndSet(null);
             if (timeout != null)
                 timeout.cancel(false);
-            repository.finishRun(job.runId.get(), "FAILED", null, null, e.toString(), false, null);
-            jobs.remove(key, job);
-            permits.release();
+            try {
+                if (job.runId.get() > 0)
+                    finishRun(job.runId.get(), "FAILED", null, null, e.toString(), false, null);
+            } finally {
+                jobs.remove(key, job);
+                permits.release();
+            }
             throw e;
+        }
+    }
+
+    private void finishRun(long id, String status, Boolean actionable, String output, String error, boolean dispatched,
+            String chatId) {
+        boolean interrupted = Thread.interrupted();
+        try {
+            repository.finishRun(id, status, actionable, output, error, dispatched, chatId);
+        } finally {
+            if (interrupted)
+                Thread.currentThread().interrupt();
         }
     }
 
@@ -184,12 +218,12 @@ public class WatchRunnerService {
             job.token.throwIfCancelled();
             String output = result.getFinalText();
             if (!watches.parseActionable(output)) {
-                repository.finishRun(job.runId.get(), "FAILED", null, output,
-                        "Evaluator did not return strict actionable JSON", false, null);
+                finishRun(job.runId.get(), "FAILED", null, output, "Evaluator did not return strict actionable JSON",
+                        false, null);
                 return;
             }
             if (!watches.actionableValue(output)) {
-                repository.finishRun(job.runId.get(), "NONACTIONABLE", false, output, null, false, null);
+                finishRun(job.runId.get(), "NONACTIONABLE", false, output, null, false, null);
                 return;
             }
             var current = repository.definitionFor(definition.id()).orElse(null);
@@ -203,19 +237,19 @@ public class WatchRunnerService {
                                     repository.definitionFor(definition.id()).orElse(null)),
                             job.runId.get())
                     : Optional.<String>empty();
-            repository.finishRun(job.runId.get(), chat.isPresent() ? "DISPATCHED" : "CANCELLED", true, output,
+            finishRun(job.runId.get(), chat.isPresent() ? "DISPATCHED" : "CANCELLED", true, output,
                     chat.isEmpty() ? "Admission rejected" : null, chat.isPresent(), chat.orElse(null));
         } catch (StreamCancelledException e) {
-            repository.finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
+            finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
         } catch (CancellationException e) {
-            repository.finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
+            finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
         } catch (Exception e) {
             if (job.token.isCancelled() || Thread.currentThread().isInterrupted()) {
-                repository.finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
+                finishRun(job.runId.get(), "CANCELLED", null, null, "Evaluator cancelled", false, null);
                 return;
             }
             log.error("Watch evaluator failed for run {}", job.runId.get(), e);
-            repository.finishRun(job.runId.get(), "FAILED", null, null, e.toString(), false, null);
+            finishRun(job.runId.get(), "FAILED", null, null, e.toString(), false, null);
         } finally {
             ScheduledFuture<?> timeout = job.timeout.getAndSet(null);
             if (timeout != null)
@@ -255,6 +289,9 @@ public class WatchRunnerService {
         timeouts.shutdownNow();
         executor.shutdownNow();
     }
+    private record Candidate(WatchService.Definition definition, long session, Instant lastEvaluationStartedAt) {
+    }
+
     private record Key(long watchId, long sessionId) {
     }
     private static final class Job {

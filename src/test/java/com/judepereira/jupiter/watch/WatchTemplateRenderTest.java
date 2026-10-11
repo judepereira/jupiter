@@ -25,14 +25,39 @@ class WatchTemplateRenderTest {
         engine.setTemplateResolver(resolver);
 
         var context = new Context();
-        context.setVariable("activeSession", null);
+        context.setVariable("activeSession", new Object());
         context.setVariable("watchRuns", List.of());
         context.setVariable("bottomPanelHeight", 320);
+        context.setVariable("watchPanelOpen", true);
 
         var html = engine.process(new TemplateSpec("fragments/watches", Set.of("panel"), TemplateMode.HTML, null),
                 context);
 
-        assertThat(html).contains("id=\"bottom-panel\"", "Select a primary session to view watch history.",
-                "hx-post=\"/ui/panel/watches\"", "terminal-panel-divider");
+        assertThat(html).contains("id=\"bottom-panel\"", "No watch runs for this session yet.",
+                "hx-post=\"/ui/panel/watches\"", "terminal-panel-divider", "hx-trigger=\"every 20s\"");
+    }
+
+    @Test
+    void closedWatchPanelDoesNotPoll() {
+        var engine = new SpringTemplateEngine();
+        var resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+
+        var context = new Context();
+        context.setVariable("activeSession", new Object());
+        context.setVariable("watchRuns", List.of());
+        context.setVariable("bottomPanelHeight", 320);
+        context.setVariable("watchPanelOpen", false);
+
+        var html = engine.process(new TemplateSpec("fragments/watches", Set.of("panel"), TemplateMode.HTML, null),
+                context);
+
+        assertThat(html).contains("id=\"bottom-panel\"", "class=\"main-panel bottom-panel watches-panel closed\"")
+                .doesNotContain("hx-trigger=");
     }
 }

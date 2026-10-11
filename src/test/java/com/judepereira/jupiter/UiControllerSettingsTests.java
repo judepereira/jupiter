@@ -133,14 +133,16 @@ public class UiControllerSettingsTests {
 
         assertThat(context.controller().createWatch("new", "prompt", 60, "eval-2", "action-2", "command-2", workspaceId,
                 sessionId, new ConcurrentModel())).isEqualTo("fragments/projects :: settingsWatches");
-        verify(context.watchService()).create(projectId, "new", "prompt", 60, "eval-2", "action-2", "command-2");
+        verify(context.watchService()).create(projectId, "new", "prompt", 60, "eval-2", "action-2", "command-2",
+                workspaceRoot.toAbsolutePath().normalize());
 
         assertThat(context.controller().updateWatch(7, "updated", "updated prompt", 90, "eval-3", "action-3",
-                "command-3", new ConcurrentModel())).isEqualTo("fragments/projects :: settingsWatches");
+                "command-3", workspaceId, sessionId, new ConcurrentModel()))
+                .isEqualTo("fragments/projects :: settingsWatches");
         verify(context.watchService()).update(new WatchService.Definition(7, projectId, "updated", "updated prompt", 90,
-                "eval-3", "action-3", "command-3", 4));
+                "eval-3", "action-3", "command-3", 4), workspaceRoot.toAbsolutePath().normalize());
 
-        assertThat(context.controller().deleteWatch(7, new ConcurrentModel()))
+        assertThat(context.controller().deleteWatch(7, workspaceId, sessionId, new ConcurrentModel()))
                 .isEqualTo("fragments/projects :: settingsWatches");
         verify(context.watchService()).delete(7);
     }
@@ -150,7 +152,7 @@ public class UiControllerSettingsTests {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
 
-        Assertions.assertThatThrownBy(() -> context.controller().selectWatchSession(999, 1, 1, new ConcurrentModel()))
+        Assertions.assertThatThrownBy(() -> context.controller().selectWatchSession(999, 1, 1L, new ConcurrentModel()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid project");
         verify(context.watchService(), never()).listDefinitions(Mockito.anyLong());
     }
@@ -186,9 +188,10 @@ public class UiControllerSettingsTests {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long sessionId = context.appStateService().loadViewData().activeSession().id();
+        long workspaceId = context.appStateService().loadViewData().activeWorkspace().id();
         when(context.watchService().listEnablements(sessionId)).thenReturn(List.of());
 
-        assertThat(context.controller().toggleWatch(7, sessionId, new ConcurrentModel()))
+        assertThat(context.controller().toggleWatch(7, sessionId, workspaceId, sessionId, new ConcurrentModel()))
                 .isEqualTo("fragments/projects :: settingsWatches");
         verify(context.watchService()).enable(7, sessionId);
     }
@@ -198,10 +201,11 @@ public class UiControllerSettingsTests {
         TestContext context = newContext(workspaceRoot);
         context.controller().addProject("Alpha", workspaceRoot.toString(), new ConcurrentModel());
         long sessionId = context.appStateService().loadViewData().activeSession().id();
+        long workspaceId = context.appStateService().loadViewData().activeWorkspace().id();
         when(context.watchService().listEnablements(sessionId))
                 .thenReturn(List.of(new WatchService.Enablement(7, sessionId, true, 1, null)));
 
-        assertThat(context.controller().toggleWatch(7, sessionId, new ConcurrentModel()))
+        assertThat(context.controller().toggleWatch(7, sessionId, workspaceId, sessionId, new ConcurrentModel()))
                 .isEqualTo("fragments/projects :: settingsWatches");
         verify(context.watchService()).disable(7, sessionId);
     }

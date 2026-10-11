@@ -59,6 +59,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("directoryEntries", List.of());
         context.setVariable("includeChatContainer", false);
         context.setVariable("reviewPanelOpen", false);
+        context.setVariable("watchPanelOpen", false);
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);
@@ -69,6 +70,21 @@ public class ProjectsTemplateRenderTest {
 
         assertThat(html).contains("No projects", "No project selected", "New tab");
         assertThat(html).contains("id=\"topbar-logo\"", "src=\"/favicon-32x32.png\"");
+    }
+
+    @Test
+    public void watchesPanelDefaultsClosedWhenOpenStateIsMissing() {
+        SpringTemplateEngine engine = engine();
+        WebContext context = webContext();
+        context.setVariable("activeSession", null);
+        context.setVariable("bottomPanelHeight", 240);
+        context.setVariable("watchRuns", List.of());
+        context.setVariable("watchPanelOob", false);
+
+        String html = engine.process("fragments/watches", context);
+
+        assertThat(html).contains("closed", "Select a primary session to view watch history.");
+        assertThat(html).doesNotContain("hx-trigger=");
     }
 
     @Test
@@ -121,6 +137,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("directoryEntries", List.of());
         context.setVariable("includeChatContainer", false);
         context.setVariable("reviewPanelOpen", false);
+        context.setVariable("watchPanelOpen", false);
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);
@@ -173,6 +190,7 @@ public class ProjectsTemplateRenderTest {
         context.setVariable("directoryEntries", List.of());
         context.setVariable("includeChatContainer", false);
         context.setVariable("reviewPanelOpen", false);
+        context.setVariable("watchPanelOpen", false);
         context.setVariable("reviewOob", false);
         context.setVariable("changedFiles", List.of());
         context.setVariable("selectedFile", null);

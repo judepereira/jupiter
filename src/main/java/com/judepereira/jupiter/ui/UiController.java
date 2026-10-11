@@ -435,6 +435,7 @@ public class UiController {
         activeStreams.put(assistantId, active);
         try {
             activeStreamRegistryService.register(assistantId, sessionId, workspaceRoot);
+            workspaceRailRefreshService.publishChatTurnStarted(sessionId);
             appStateService.publishWorkspaceRailRefresh();
             return assistantId;
         } catch (RuntimeException e) {
@@ -997,7 +998,7 @@ public class UiController {
     @PostMapping("/ui/panel/watches")
     public String openWatchesPanel(Model model) {
         AppStateView view = appStateService.loadViewData();
-        if (view.activeSession() != null) {
+        if (view.activeSession() != null && view.activeWorkspace() != null) {
             var state = terminalStateService.snapshot(view.activeWorkspace().id());
             boolean open = !appStateService.watchPanelState(view.activeSession().id()).open();
             if (open) {
@@ -1133,26 +1134,32 @@ public class UiController {
         populateProjectModel(model, view);
         populateSettingsModel(model);
         if (view.activeProject() != null)
-            populateWatchModel(model, view, null, null, null);
+            populateWatchModel(model, view, null, null, null, false);
         return "fragments/projects :: settingsModal";
     }
 
     private void populateWatchModel(Model model, AppStateView view, Long projectId, Long workspaceId, Long sessionId) {
+        populateWatchModel(model, view, projectId, workspaceId, sessionId, true);
+    }
+
+    private void populateWatchModel(Model model, AppStateView view, Long projectId, Long workspaceId, Long sessionId,
+            boolean active) {
         var project = view.activeProject();
         var workspaces = appStateService.listProjectWorkspaces(project.id());
-        var selectedWorkspace = workspaces.stream().filter(w -> workspaceId != null && w.id() == workspaceId)
-                .findFirst()
-                .or(() -> workspaces.stream()
+        var selectedWorkspace = workspaceId == null
+                ? workspaces.stream()
                         .filter(w -> view.activeWorkspace() != null && w.id() == view.activeWorkspace().id())
-                        .findFirst())
-                .orElseGet(() -> workspaces.isEmpty() ? null : workspaces.getFirst());
+                        .findFirst().orElseGet(() -> workspaces.isEmpty() ? null : workspaces.getFirst())
+                : workspaces.stream().filter(w -> w.id() == workspaceId).findFirst().orElse(null);
         var sessions = selectedWorkspace == null
                 ? List.<SessionView>of()
                 : appStateService.listVisiblePrimarySessions(selectedWorkspace.id());
         var selectedSession = sessions.stream().filter(s -> sessionId != null && s.id() == sessionId).findFirst()
                 .or(() -> sessions.stream()
                         .filter(s -> view.activeSession() != null && s.id() == view.activeSession().id()).findFirst())
-                .orElse(null);
+                .orElseGet(() -> sessions.isEmpty() ? null : sessions.getFirst());
+        model.addAttribute("watchSettingsActive", active);
+        model.addAttribute("activeProject", toProject(project));
         model.addAttribute("watchDefinitions", watchService.listDefinitions(project.id()));
         model.addAttribute("watchAgents", agentDefinitionService.listPrimaryAgents());
         model.addAttribute("watchWorkspaces", workspaces);
@@ -1174,7 +1181,7 @@ public class UiController {
 
     @GetMapping("/ui/settings/watches/select")
     public String selectWatchSession(@RequestParam long projectId, @RequestParam long workspaceId,
-            @RequestParam long sessionId, Model model) {
+            @RequestParam(required = false) Long sessionId, Model model) {
         var view = appStateService.loadViewData();
         if (view.activeProject() == null || view.activeProject().id() != projectId)
             throw new IllegalArgumentException("Invalid project");
@@ -1185,12 +1192,18 @@ public class UiController {
     @PostMapping("/ui/settings/watches/create")
     public String createWatch(@RequestParam String name, @RequestParam String prompt, @RequestParam int intervalSeconds,
             @RequestParam String evaluatorAgentId, @RequestParam String actionAgentId,
-            @RequestParam String actionCommandId, @RequestParam long workspaceId, @RequestParam long sessionId,
-            Model model) {
+            @RequestParam String actionCommandId, @RequestParam long watchWorkspaceId,
+            @RequestParam(required = false) Long watchSessionId, Model model) {
         AppStateView view = appStateService.loadViewData();
+        var selectedWorkspace = appStateService.listProjectWorkspaces(view.activeProject().id()).stream()
+                .filter(workspace -> workspace.id() == watchWorkspaceId).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Invalid workspace"));
+        if (watchSessionId != null && appStateService.listVisiblePrimarySessions(watchWorkspaceId).stream()
+                .noneMatch(session -> session.id() == watchSessionId))
+            throw new IllegalArgumentException("Invalid session for workspace");
         watchService.create(view.activeProject().id(), name, prompt, intervalSeconds, evaluatorAgentId, actionAgentId,
-                actionCommandId);
-        populateWatchModel(model, view, null, workspaceId, sessionId);
+                actionCommandId, Path.of(selectedWorkspace.path()));
+        populateWatchModel(model, view, null, watchWorkspaceId, watchSessionId);
         return "fragments/projects :: settingsWatches";
     }
 
@@ -1201,25 +1214,37 @@ public class UiController {
     @PostMapping("/ui/settings/watches/{id}")
     public String updateWatch(@PathVariable long id, @RequestParam String name, @RequestParam String prompt,
             @RequestParam int intervalSeconds, @RequestParam String evaluatorAgentId,
-            @RequestParam String actionAgentId, @RequestParam String actionCommandId, Model model) {
-        var existing = watchService.listDefinitions(appStateService.loadViewData().activeProject().id()).stream()
-                .filter(w -> w.id() == id).findFirst().orElseThrow();
+            @RequestParam String actionAgentId, @RequestParam String actionCommandId,
+            @RequestParam(required = false) Long watchWorkspaceId, @RequestParam(required = false) Long watchSessionId,
+            Model model) {
+        AppStateView view = appStateService.loadViewData();
+        var existing = watchService.listDefinitions(view.activeProject().id()).stream().filter(w -> w.id() == id)
+                .findFirst().orElseThrow();
+        var workspaces = appStateService.listProjectWorkspaces(view.activeProject().id());
+        var selectedWorkspace = workspaces.stream().filter(w -> watchWorkspaceId != null && w.id() == watchWorkspaceId)
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("Invalid workspace"));
+        if (existing.projectId() != view.activeProject().id())
+            throw new IllegalArgumentException("Invalid project");
         watchService.update(new WatchService.Definition(id, existing.projectId(), name, prompt, intervalSeconds,
-                evaluatorAgentId, actionAgentId, actionCommandId, existing.configVersion()));
-        populateWatchModel(model, appStateService.loadViewData());
+                evaluatorAgentId, actionAgentId, actionCommandId, existing.configVersion()),
+                Path.of(selectedWorkspace.path()));
+        populateWatchModel(model, view, null, watchWorkspaceId, watchSessionId);
         return "fragments/projects :: settingsWatches";
     }
 
     @PostMapping("/ui/settings/watches/{id}/delete")
-    public String deleteWatch(@PathVariable long id, Model model) {
+    public String deleteWatch(@PathVariable long id, @RequestParam(required = false) Long watchWorkspaceId,
+            @RequestParam(required = false) Long watchSessionId, Model model) {
         watchService.delete(id);
         AppStateView view = appStateService.loadViewData();
-        populateWatchModel(model, view);
+        populateWatchModel(model, view, null, watchWorkspaceId, watchSessionId);
         return "fragments/projects :: settingsWatches";
     }
 
     @PostMapping("/ui/settings/watches/{watchId}/sessions/{sessionId}/toggle")
-    public String toggleWatch(@PathVariable long watchId, @PathVariable long sessionId, Model model) {
+    public String toggleWatch(@PathVariable long watchId, @PathVariable long sessionId,
+            @RequestParam(required = false) Long watchWorkspaceId, @RequestParam(required = false) Long watchSessionId,
+            Model model) {
         var enabled = watchService.listEnablements(sessionId).stream().filter(e -> e.watchId() == watchId).findFirst()
                 .map(Enablement::enabled).orElse(false);
         if (enabled)
@@ -1227,7 +1252,7 @@ public class UiController {
         else
             watchService.enable(watchId, sessionId);
         AppStateView view = appStateService.loadViewData();
-        populateWatchModel(model, view);
+        populateWatchModel(model, view, null, watchWorkspaceId, watchSessionId);
         return "fragments/projects :: settingsWatches";
     }
 
