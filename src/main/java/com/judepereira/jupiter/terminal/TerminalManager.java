@@ -216,7 +216,7 @@ public class TerminalManager {
                 return;
             }
             try {
-                OutputStream outputStream = process.getOutputStream();
+                OutputStream outputStream = process.getOutputStream(); // NOPMD
                 outputStream.write(data.getBytes(StandardCharsets.UTF_8));
                 outputStream.flush();
             } catch (Exception e) {

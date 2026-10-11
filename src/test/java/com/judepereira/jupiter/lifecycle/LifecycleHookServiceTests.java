@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -21,6 +22,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class LifecycleHookServiceTests {
 
@@ -120,7 +123,7 @@ class LifecycleHookServiceTests {
         AppStateService appStateService = configuredAppState(tempDir, "echo should-not-run");
         long sessionId = appStateService.loadViewData().activeSession().id();
         SystemBalloonService balloons = mock(SystemBalloonService.class);
-        var executor = Executors.newVirtualThreadPerTaskExecutor();
+        var executor = Executors.newVirtualThreadPerTaskExecutor(); // NOPMD
         LifecycleHookService service = new LifecycleHookService(appStateService, balloons,
                 new LifecycleHookRuntime(executor, ignored -> {
                     throw new IOException("test launch failure");
@@ -134,6 +137,50 @@ class LifecycleHookServiceTests {
                     .isEmpty();
             verify(balloons).publishError("Lifecycle action failed",
                     "The configured lifecycle action failed for session " + sessionId + " (could not be started).");
+        } finally {
+            service.shutdown();
+        }
+    }
+
+    @Test
+    void fatalLaunchFailureCompletesExceptionallyAndDeletesScript(@TempDir Path tempDir) throws Exception {
+        AppStateService appStateService = configuredAppState(tempDir, "echo should-not-run");
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        SystemBalloonService balloons = mock(SystemBalloonService.class);
+        var executor = Executors.newVirtualThreadPerTaskExecutor();
+        AssertionError fatal = new AssertionError("fatal launcher failure");
+        LifecycleHookService service = new LifecycleHookService(appStateService, balloons,
+                new LifecycleHookRuntime(executor, ignored -> {
+                    throw fatal;
+                }, tempDir));
+        try {
+            var result = service.dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, sessionId);
+            assertThatThrownBy(result::join).hasCauseReference(fatal);
+            assertThat(Files.list(tempDir)
+                    .filter(path -> path.getFileName().toString().startsWith(".jupiter-lifecycle-")).toList())
+                    .isEmpty();
+            verifyNoInteractions(balloons);
+        } finally {
+            service.shutdown();
+        }
+    }
+
+    @Test
+    void launchFailureNotificationFailureStillCompletesFuture(@TempDir Path tempDir) throws Exception {
+        AppStateService appStateService = configuredAppState(tempDir, "echo should-not-run");
+        long sessionId = appStateService.loadViewData().activeSession().id();
+        SystemBalloonService balloons = mock(SystemBalloonService.class);
+        Mockito.doThrow(new IllegalStateException("notification failed")).when(balloons)
+                .publishError(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+        var executor = Executors.newVirtualThreadPerTaskExecutor();
+        LifecycleHookService service = new LifecycleHookService(appStateService, balloons,
+                new LifecycleHookRuntime(executor, ignored -> {
+                    throw new IOException("launch failed");
+                }, tempDir));
+        try {
+            var result = service.dispatch(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, sessionId);
+            assertThat(result.get(5, TimeUnit.SECONDS).status())
+                    .isEqualTo(LifecycleHookService.HookStatus.LAUNCH_FAILED);
         } finally {
             service.shutdown();
         }

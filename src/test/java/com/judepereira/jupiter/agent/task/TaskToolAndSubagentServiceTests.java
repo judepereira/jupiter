@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.agent.task;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,6 +31,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.ToolProgressSink;
 import com.judepereira.jupiter.agent.tools.ToolRegistry;
 import com.judepereira.jupiter.agent.tools.impl.TaskTool;
+import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.AgentModelPreference;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
@@ -379,6 +382,76 @@ public class TaskToolAndSubagentServiceTests {
         assertThat(result.isSuccess()).isTrue();
         assertThat(events).containsExactly("started:Engineer:Create the parser file", "delta:child final",
                 "tool_call:write_file:wrote child.txt", "done:child final");
+    }
+
+    @Test
+    public void runtimeExceptionFromCompletionHookDoesNotChangeSuccessfulTaskOutcome(@TempDir Path workspaceRoot) {
+        LifecycleHookService hooks = mock(LifecycleHookService.class);
+        RuntimeException failure = new RuntimeException("hook failed");
+        doThrow(failure).when(hooks).dispatch(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED, 1L);
+        SubagentTaskService service = lifecycleHookTestService(workspaceRoot, hooks, null);
+
+        SubagentTaskService.SubagentTaskResult result = service.runTask(lifecycleHookTestRequest(workspaceRoot));
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.errorText()).isNull();
+        verify(hooks).dispatch(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED, 1L);
+    }
+
+    @Test
+    public void runtimeExceptionFromFailureHookDoesNotChangeFailedTaskOutcome(@TempDir Path workspaceRoot) {
+        LifecycleHookService hooks = mock(LifecycleHookService.class);
+        RuntimeException hookFailure = new RuntimeException("hook failed");
+        doThrow(hookFailure).when(hooks).dispatch(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED, 1L);
+        SubagentTaskService service = lifecycleHookTestService(workspaceRoot, hooks,
+                new IllegalStateException("task failed"));
+
+        SubagentTaskService.SubagentTaskResult result = service.runTask(lifecycleHookTestRequest(workspaceRoot));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorText()).isEqualTo("task failed");
+        verify(hooks).dispatch(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED, 1L);
+    }
+
+    @Test
+    public void errorFromCompletionHookEscapesUnchanged(@TempDir Path workspaceRoot) {
+        LifecycleHookService hooks = mock(LifecycleHookService.class);
+        AssertionError failure = new AssertionError("hook error");
+        doThrow(failure).when(hooks).dispatch(LifecycleHookService.LifecycleEvent.SUBAGENT_COMPLETED, 1L);
+        SubagentTaskService service = lifecycleHookTestService(workspaceRoot, hooks, null);
+
+        assertThatThrownBy(() -> service.runTask(lifecycleHookTestRequest(workspaceRoot))).isSameAs(failure);
+    }
+
+    private static SubagentTaskService lifecycleHookTestService(Path workspaceRoot, LifecycleHookService hooks,
+            RuntimeException harnessFailure) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "prompt", AgentMode.SUBAGENT,
+                "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true, List.of());
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+                if (harnessFailure != null) {
+                    throw harnessFailure;
+                }
+                AgentTurnResult result = new AgentTurnResult("done", List.of());
+                listener.onComplete(result);
+                return result;
+            }
+        };
+        return new SubagentTaskService(appStateService, agentService(subagent), childHarnessProvider(harness),
+                ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                hooks);
+    }
+
+    private static SubagentTaskService.SubagentTaskRequest lifecycleHookTestRequest(Path workspaceRoot) {
+        return new SubagentTaskService.SubagentTaskRequest(1L, "parent-tool", workspaceRoot.toString(), "engineer",
+                "inspect", "inspect", "done", null);
     }
 
     private static ObjectProvider<CodingAgentHarness> childHarnessProvider(CodingAgentHarness harness) {

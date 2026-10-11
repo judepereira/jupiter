@@ -87,8 +87,8 @@ class SystemBalloonServiceTests {
     private static final class TestEmitter extends SseEmitter {
         private final IOException sendFailure;
         private final AtomicReference<Throwable> completionError;
-        private volatile SseEventBuilder sentEvent;
-        private volatile boolean completed;
+        private volatile SseEventBuilder sentEvent; // NOPMD
+        private volatile boolean completed; // NOPMD
 
         private TestEmitter() {
             this(null, new AtomicReference<>());

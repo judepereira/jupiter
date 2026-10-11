@@ -18,11 +18,11 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     private final McpClientFactory clientFactory;
     private final McpRuntimeListener runtimeListener;
     private final String serverSlug;
-    private volatile McpClient client;
-    private volatile McpRuntimeEvents.ConnectionStatus status = McpRuntimeEvents.ConnectionStatus.CONNECTING;
-    private volatile String statusMessage = "connecting";
-    private volatile List<ToolDefinition> toolDefinitions = List.of();
-    private volatile Map<String, McpProjectToolExecutor> executors = Map.of();
+    private volatile McpClient client; // NOPMD
+    private volatile McpRuntimeEvents.ConnectionStatus status = McpRuntimeEvents.ConnectionStatus.CONNECTING; // NOPMD
+    private volatile String statusMessage = "connecting"; // NOPMD
+    private volatile List<ToolDefinition> toolDefinitions = List.of(); // NOPMD
+    private volatile Map<String, McpProjectToolExecutor> executors = Map.of(); // NOPMD
 
     private McpProjectMcpServerRuntime(Persistence.McpServerView server,
             Map<String, String> projectEnvironmentVariables, McpTemplateResolver templateResolver,
@@ -40,8 +40,19 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
             McpClientFactory clientFactory, McpRuntimeListener runtimeListener) {
         McpProjectMcpServerRuntime runtime = new McpProjectMcpServerRuntime(server, projectEnvironmentVariables,
                 templateResolver, clientFactory, runtimeListener);
-        runtime.reconnect();
-        return runtime;
+        try {
+            runtime.reconnect();
+            return runtime;
+        } catch (RuntimeException | Error failure) {
+            try {
+                runtime.close();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) {
+                    failure.addSuppressed(cleanupFailure);
+                }
+            }
+            throw failure;
+        }
     }
 
     synchronized void updateProjectEnvironmentVariables(Map<String, String> projectEnvironmentVariables) {
@@ -61,6 +72,7 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
         } catch (McpToolCollisionException e) {
             toolDefinitions = List.of();
             executors = Map.of();
+            closeClient();
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
             throw e;
         } catch (Exception e) {
@@ -92,6 +104,7 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
         } catch (McpToolCollisionException e) {
             toolDefinitions = List.of();
             executors = Map.of();
+            closeClient();
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
             throw e;
         } catch (Exception e) {

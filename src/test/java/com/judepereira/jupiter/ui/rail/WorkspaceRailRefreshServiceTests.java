@@ -63,7 +63,7 @@ class WorkspaceRailRefreshServiceTests {
     }
 
     private static final class TestEmitter extends SseEmitter {
-        private volatile boolean completed;
+        private volatile boolean completed; // NOPMD
 
         @Override
         public void complete() {

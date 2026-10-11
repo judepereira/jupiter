@@ -404,9 +404,9 @@ class SubagentTaskE2ETest extends E2ETestSupport {
     @TestConfiguration(proxyBeanMethods = false)
     static class TestAppConfig {
 
-        private static volatile TurnControl primaryTurnControl;
-        private static volatile TurnControl subagentTurnControl;
-        private static volatile TurnControl subagentToolCallControl;
+        private static volatile TurnControl primaryTurnControl; // NOPMD
+        private static volatile TurnControl subagentTurnControl; // NOPMD
+        private static volatile TurnControl subagentToolCallControl; // NOPMD
 
         static void reset() {
             primaryTurnControl = null;

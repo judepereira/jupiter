@@ -18,6 +18,35 @@ import org.springframework.context.ApplicationEventPublisher;
 class McpProjectMcpServerRuntimeManagerTest {
 
     @Test
+    void connect_preserves_primary_error_when_close_status_listener_fails() throws Exception {
+        McpClient client = mock(McpClient.class);
+        AssertionError primary = new AssertionError("list tools failed");
+        RuntimeException listenerFailure = new RuntimeException("closed callback failed");
+        when(client.listTools()).thenThrow(primary);
+        McpProjectMcpServerRuntime.McpRuntimeListener listener = new McpProjectMcpServerRuntime.McpRuntimeListener() {
+            @Override
+            public void onStatusChanged(long serverId, McpRuntimeEvents.ConnectionStatus status, String message) {
+                if (status == McpRuntimeEvents.ConnectionStatus.CLOSED) {
+                    throw listenerFailure;
+                }
+            }
+
+            @Override
+            public void onToolsChanged(long serverId) {
+            }
+        };
+
+        AssertionError thrown = assertThrows(AssertionError.class,
+                () -> McpProjectMcpServerRuntime.connect(
+                        new Persistence.McpServerView(10L, "server", "http://one", true, List.of(), List.of()),
+                        Map.of(), new McpTemplateResolver(name -> null, name -> null),
+                        (name, url, headers, clientListener) -> client, listener));
+        assertSame(primary, thrown);
+        assertArrayEquals(new Throwable[]{listenerFailure}, thrown.getSuppressed());
+        verify(client).close();
+    }
+
+    @Test
     void connection_failure_sets_failed_status() {
         AppStateService appStateService = mock(AppStateService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -84,6 +113,115 @@ class McpProjectMcpServerRuntimeManagerTest {
     }
 
     @Test
+    void newly_created_clients_are_closed_when_a_later_connection_fails() throws Exception {
+        AppStateService appStateService = mock(AppStateService.class);
+        McpClient firstClient = mock(McpClient.class);
+        when(firstClient.listTools()).thenReturn(List.of());
+        when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(
+                List.of(new Persistence.McpServerView(10L, "first", "http://one", true, List.of(), List.of()),
+                        new Persistence.McpServerView(11L, "second", "http://two", true, List.of(), List.of())));
+        when(appStateService.loadProjectEnvironmentVariables(1L)).thenReturn(Map.of());
+        McpClientFactory factory = (name, url, headers, listener) -> {
+            if ("http://two".equals(url)) {
+                throw new McpToolCollisionException("collision");
+            }
+            return firstClient;
+        };
+
+        McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(appStateService,
+                mock(ApplicationEventPublisher.class), factory, new RuntimeEnvironment(Map.of()));
+        assertThrows(IllegalStateException.class, () -> manager.reloadProject(1L));
+        verify(firstClient).close();
+    }
+
+    @Test
+    void failed_reload_closes_new_clients_but_keeps_reconnected_retained_client() throws Exception {
+        AppStateService appStateService = mock(AppStateService.class);
+        McpClient original = mock(McpClient.class);
+        McpClient replacement = mock(McpClient.class);
+        McpClient successfulNew = mock(McpClient.class);
+        McpClient collision = mock(McpClient.class);
+        when(original.listTools()).thenReturn(List.of());
+        when(replacement.listTools()).thenReturn(List.of());
+        when(successfulNew.listTools()).thenReturn(List.of());
+        when(collision.listTools()).thenReturn(List.of(
+                ToolSpecification.builder().name("same").description("one")
+                        .parameters(JsonObjectSchema.builder().build()).build(),
+                ToolSpecification.builder().name("same").description("two")
+                        .parameters(JsonObjectSchema.builder().build()).build()));
+        when(appStateService.loadProjectEnvironmentVariables(1L)).thenReturn(Map.of());
+        when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(
+                List.of(new Persistence.McpServerView(10L, "retained", "http://retained", true, List.of(), List.of())));
+        McpClientFactory factory = (name, url, headers, listener) -> switch (url) {
+            case "http://retained" -> original;
+            case "http://success" -> successfulNew;
+            case "http://collision" -> collision;
+            default -> replacement;
+        };
+        McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(appStateService,
+                mock(ApplicationEventPublisher.class), factory, new RuntimeEnvironment(Map.of()));
+        manager.reloadProject(1L);
+
+        when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(
+                new Persistence.McpServerView(10L, "retained", "http://retained", true, List.of(), List.of()),
+                new Persistence.McpServerView(11L, "new", "http://success", true, List.of(), List.of()),
+                new Persistence.McpServerView(12L, "collision", "http://collision", true, List.of(), List.of())));
+        assertThrows(McpToolCollisionException.class, () -> manager.reloadProject(1L));
+
+        verify(original).close();
+        verify(replacement, never()).close();
+        verify(successfulNew).close();
+        verify(collision).close();
+        manager.close();
+        verify(original, times(2)).close();
+    }
+
+    @Test
+    void existing_runtime_is_not_closed_when_reload_fails() throws Exception {
+        AppStateService appStateService = mock(AppStateService.class);
+        McpClient client = mock(McpClient.class);
+        when(client.listTools()).thenReturn(List.of());
+        when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(
+                List.of(new Persistence.McpServerView(10L, "first", "http://one", true, List.of(), List.of())));
+        when(appStateService.loadProjectEnvironmentVariables(1L)).thenReturn(Map.of());
+        McpClientFactory factory = (name, url, headers, listener) -> client;
+        McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(appStateService,
+                mock(ApplicationEventPublisher.class), factory, new RuntimeEnvironment(Map.of()));
+        manager.reloadProject(1L);
+
+        when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(
+                List.of(new Persistence.McpServerView(10L, "first", "http://one", true, List.of(), List.of()),
+                        new Persistence.McpServerView(11L, "second", "http://two", true, List.of(), List.of())));
+        when(appStateService.loadProjectEnvironmentVariables(1L)).thenThrow(new IllegalStateException("reload failed"));
+        assertThrows(IllegalStateException.class, () -> manager.reloadProject(1L));
+        verify(client, never()).close();
+    }
+
+    @Test
+    void shutdown_closes_all_retained_clients_and_is_idempotent() throws Exception {
+        AppStateService appStateService = mock(AppStateService.class);
+        McpClient first = mock(McpClient.class);
+        McpClient second = mock(McpClient.class);
+        when(first.listTools()).thenReturn(List.of());
+        when(second.listTools()).thenReturn(List.of());
+        when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(
+                List.of(new Persistence.McpServerView(10L, "first", "http://one", true, List.of(), List.of())));
+        when(appStateService.loadEnabledMcpServersForProject(2L)).thenReturn(
+                List.of(new Persistence.McpServerView(20L, "second", "http://two", true, List.of(), List.of())));
+        when(appStateService.loadProjectEnvironmentVariables(anyLong())).thenReturn(Map.of());
+        McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(appStateService,
+                mock(ApplicationEventPublisher.class),
+                (name, url, headers, listener) -> "http://one".equals(url) ? first : second,
+                new RuntimeEnvironment(Map.of()));
+        manager.reloadProject(1L);
+        manager.reloadProject(2L);
+        manager.close();
+        manager.close();
+        verify(first).close();
+        verify(second).close();
+    }
+
+    @Test
     void naming_collision_is_rejected() throws Exception {
         AppStateService appStateService = mock(AppStateService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -102,5 +240,6 @@ class McpProjectMcpServerRuntimeManagerTest {
         McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(appStateService, publisher,
                 factory, new RuntimeEnvironment(Map.of()));
         assertThrows(McpToolCollisionException.class, () -> manager.reloadProject(1L));
+        verify(client).close();
     }
 }

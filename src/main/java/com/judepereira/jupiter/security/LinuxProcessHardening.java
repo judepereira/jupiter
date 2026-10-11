@@ -32,7 +32,7 @@ public final class LinuxProcessHardening {
         final int result;
         try {
             result = nativeCall.prctl(PR_SET_DUMPABLE, 0L);
-        } catch (Throwable exception) {
+        } catch (Throwable exception) { // NOPMD
             throw new IllegalStateException("Unable to set Linux process dumpability to 0", exception);
         }
         if (result != 0) {

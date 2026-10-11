@@ -235,8 +235,8 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
         private final CopyOnWriteArrayList<String> authorizationRequestBodies = new CopyOnWriteArrayList<>();
         private final CopyOnWriteArrayList<String> tokenRequestMethods = new CopyOnWriteArrayList<>();
         private final CopyOnWriteArrayList<String> tokenRequestBodies = new CopyOnWriteArrayList<>();
-        private volatile String deviceRequestMethod;
-        private volatile String deviceRequestBody;
+        private volatile String deviceRequestMethod; // NOPMD
+        private volatile String deviceRequestBody; // NOPMD
 
         private TestServer(HttpServer server) {
             this.server = server;

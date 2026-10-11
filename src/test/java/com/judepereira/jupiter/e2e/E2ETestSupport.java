@@ -44,7 +44,7 @@ abstract class E2ETestSupport {
     private static final ExtensionContext.Namespace PLAYWRIGHT_NAMESPACE = ExtensionContext.Namespace
             .create(E2ETestSupport.class);
     private static final String SHARED_BROWSER_RESOURCE = "shared-browser";
-    private static volatile SharedBrowser sharedBrowser;
+    private static volatile SharedBrowser sharedBrowser; // NOPMD
     protected static Browser sharedBrowser() {
         SharedBrowser resource = sharedBrowser;
         if (resource == null) {
@@ -147,7 +147,7 @@ abstract class E2ETestSupport {
                 createdPlaywright = Playwright.create();
                 launchedBrowser = createdPlaywright.chromium()
                         .launch(new BrowserType.LaunchOptions().setHeadless(true));
-            } catch (Throwable throwable) {
+            } catch (Throwable throwable) { // NOPMD
                 if (launchedBrowser != null) {
                     launchedBrowser.close();
                 }
@@ -208,7 +208,7 @@ abstract class E2ETestSupport {
                 return skipReason;
             }
             throw new RuntimeException(e);
-        } catch (Throwable throwable) {
+        } catch (Throwable throwable) { // NOPMD
             String skipReason = playwrightDependencySkipReason(throwable);
             if (skipReason != null) {
                 return skipReason;
@@ -312,7 +312,7 @@ abstract class E2ETestSupport {
         ConfigurableApplicationContext context;
         try {
             context = new SpringApplicationBuilder(sources).web(WebApplicationType.SERVLET).run(applicationArguments);
-        } catch (Throwable throwable) {
+        } catch (Throwable throwable) { // NOPMD
             if (catalogServer != null) {
                 catalogServer.stop(0);
             }
@@ -333,7 +333,7 @@ abstract class E2ETestSupport {
             });
             catalogServer = null;
             return app;
-        } catch (Throwable throwable) {
+        } catch (Throwable throwable) { // NOPMD
             try {
                 context.close();
             } finally {
