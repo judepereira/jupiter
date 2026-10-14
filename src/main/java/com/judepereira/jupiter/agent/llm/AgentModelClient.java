@@ -39,4 +39,12 @@ public interface AgentModelClient {
             AgentModelOptions options, Consumer<String> onDelta) {
         return chatStreaming(conversation, tools, onDelta);
     }
+
+    default ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+            AgentModelOptions options, Consumer<String> onDelta, Consumer<RetryNotice> onRetry) {
+        return chatStreaming(conversation, tools, options, onDelta);
+    }
+
+    record RetryNotice(int attempt, long delayMillis, Throwable cause) {
+    }
 }

@@ -50,6 +50,7 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import java.io.IOException;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -616,6 +617,43 @@ public class UiControllerAsyncStreamingTests {
         // This fake produces no tool calls; verify the accessor exposes an empty
         // collection.
         assertThat(found.toolCalls()).isEmpty();
+    }
+
+    @Test
+    public void modelRetryResetsStreamingTextAndCompletesWithRetrySnapshot(@TempDir Path tmp) throws Exception {
+        String secretCause = "sensitive cause";
+        CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
+            @Override
+            public AgentTurnResult runTurn(AgentTurnRequest request) {
+                return new AgentTurnResult("", List.of());
+            }
+
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+                listener.onTextDelta("prior ");
+                listener.onTextDelta("discarded");
+                listener.onModelRequestRetry(1, 0, new IOException(secretCause), "prior ");
+                listener.onTextDelta("final");
+                AgentTurnResult result = new AgentTurnResult("prior final", List.of());
+                listener.onComplete(result);
+                return result;
+            }
+        };
+
+        var props = new AgentProperties();
+        props.setWorkspaceRoot(tmp.toString());
+        UiController ctrl = TestAppStateSupport.controller(fake, props);
+        Model model = new ConcurrentModel();
+        ctrl.sendMessage("go", model, null);
+        String assistantId = assistantId((ConcurrentModel) model);
+        assertThat(ctrl.streamChat(assistantId)).isNotNull();
+
+        ChatPresentationService.ChatMessage completed = TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
+        assertThat(completed.text()).isEqualTo("prior final");
+        assertThat(completed.text()).doesNotContain("discarded", secretCause);
     }
 
     @Test

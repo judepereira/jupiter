@@ -19,6 +19,9 @@ public interface AgentStreamListener {
     default void onStatus(String status) {
     }
 
+    default void onModelRequestRetry(int attempt, long delayMillis, Throwable cause, String turnTextSnapshot) {
+    }
+
     default void onModelResolved(String preferredModelId, ModelDefinition actualModel) {
     }
 

@@ -26,6 +26,7 @@ import com.judepereira.jupiter.agent.tools.impl.WriteFileTool;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.SystemPromptTestSupport;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -222,6 +223,80 @@ public class CodingAgentHarnessFakeModelTest {
         assertEquals(second.get(2).getToolCalls().get(0).getToolCallId(), second.get(3).getToolCallId());
         assertTrue(second.stream().noneMatch(m -> m.getRole() == Message.Role.ASSISTANT && m.getContent() != null
                 && m.getContent().startsWith("[tool_result]")));
+    }
+
+    @Test
+    public void runTurnStreaming_retryResetsOnlyCurrentRequestTextAndRetainsToolHistory(@TempDir Path tmp) {
+        List<List<Message>> captured = new ArrayList<>();
+        List<String> retrySnapshots = new ArrayList<>();
+        List<ToolCallTrace> traces = new ArrayList<>();
+        AgentModelClient model = new AgentModelClient() {
+            private int iteration;
+
+            @Override
+            public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+                    AgentModelOptions options, Consumer<String> onDelta,
+                    Consumer<AgentModelClient.RetryNotice> onRetry) {
+                captured.add(List.copyOf(conversation));
+                if (iteration++ == 0) {
+                    onDelta.accept("prior ");
+                    return new ModelResponse(null,
+                            new ToolCall(null, "write_file", Map.of("path", "retry.txt", "content", "written")),
+                            ModelResponseMetadata.empty(), null);
+                }
+                onDelta.accept("discard");
+                onRetry.accept(new AgentModelClient.RetryNotice(1, 0, new IOException("transient")));
+                onDelta.accept("final");
+                return new ModelResponse(null, null, ModelResponseMetadata.empty(), null);
+            }
+        };
+
+        AgentProperties props = new AgentProperties();
+        props.setMaxIterations(3);
+        props.setWorkspaceRoot(tmp.toString());
+        props.setModel("openai/gpt-5.6-sol");
+        props.getTooling().setAllowWrite(true);
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new WriteFileTool());
+        var catalog = ModelCatalogTestSupport.modelCatalogService();
+        CodingAgentHarness harness = new CodingAgentHarness(fakeFactory(model), registry, props, null, catalog,
+                ModelCatalogTestSupport.preferenceResolver(catalog), null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector());
+        AgentStreamListener listener = new AgentStreamListener() {
+            @Override
+            public void onModelRequestRetry(int attempt, long delayMillis, Throwable cause, String snapshot) {
+                retrySnapshots.add(snapshot);
+            }
+
+            @Override
+            public void onToolCallTrace(ToolCallTrace trace) {
+                traces.add(trace);
+            }
+        };
+
+        var result = harness.runTurnStreaming(
+                new AgentTurnRequest("sys", List.of(new Message(Message.Role.USER, "user", null, null, null)), null,
+                        null, null, null, null, null, null),
+                listener);
+
+        assertEquals(List.of("prior "), retrySnapshots);
+        assertEquals("prior final", result.getFinalText());
+        assertEquals(1, result.getTraces().size());
+        assertEquals("write_file", result.getTraces().getFirst().getToolName());
+        assertEquals(1, traces.size());
+        assertEquals("written", assertDoesNotThrow(() -> Files.readString(tmp.resolve("retry.txt"))));
+        assertEquals(2, captured.size());
+        List<Message> secondRequest = captured.get(1);
+        assertEquals(Message.Role.ASSISTANT, secondRequest.get(2).getRole());
+        assertEquals("write_file", secondRequest.get(2).getToolCalls().getFirst().getToolName());
+        assertEquals(Message.Role.TOOL, secondRequest.get(3).getRole());
     }
 
     @Test

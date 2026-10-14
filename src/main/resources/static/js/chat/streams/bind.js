@@ -46,6 +46,14 @@ function bindPendingStreams() {
             const currentTextSpan = () => buffer.currentTextSpan();
 
             const es = new EventSource(url);
+            function clearRetryStatus() {
+                const liveRow = currentRow();
+                const status = liveRow && liveRow.querySelector(".chat-retry-status");
+                if (status) {
+                    status.hidden = true;
+                    status.textContent = "";
+                }
+            }
             registerPendingStream(assistantId, es);
             updateChatSendButtonState();
 
@@ -53,6 +61,7 @@ function bindPendingStreams() {
                 try {
                     const payload = parseStreamPayload(e);
                     if (payload && payload.text != null) {
+                        clearRetryStatus();
                         buffer.pushDelta(payload.text);
                     }
                 } catch (_) {}
@@ -90,6 +99,23 @@ function bindPendingStreams() {
             // Legacy tool-call events remain subscribed for protocol compatibility.
             es.addEventListener("tool_call_started", () => {});
             es.addEventListener("tool_call_progress", () => {});
+
+            es.addEventListener("retry", (e) => {
+                try {
+                    const payload = parseStreamPayload(e) || {};
+                    clearRetryStatus();
+                    buffer.replaceText(payload.text || "");
+                    const liveRow = currentRow();
+                    if (liveRow) {
+                        const status = liveRow.querySelector(".chat-retry-status");
+                        if (status) {
+                            status.hidden = false;
+                            status.textContent = `Retrying request ${payload.attempt || ""} in ${payload.delayMillis || 0} ms; connection/provider temporarily unavailable`;
+                        }
+                        liveRow.removeAttribute("title");
+                    }
+                } catch (_) {}
+            });
 
             es.addEventListener("status", (e) => {
                 try {
@@ -151,6 +177,7 @@ function bindPendingStreams() {
                         buffer.flushBuffer();
                     }
 
+                    clearRetryStatus();
                     const liveRow = currentRow();
                     if (liveRow) {
                         liveRow.classList.remove("pending");
@@ -174,6 +201,7 @@ function bindPendingStreams() {
 
             es.addEventListener("stopped", (e) => {
                 try {
+                    clearRetryStatus();
                     const payload = parseStreamPayload(e);
                     buffer.flushBuffer();
                     const textSpan = currentTextSpan();
@@ -203,6 +231,7 @@ function bindPendingStreams() {
 
             es.addEventListener("error", (e) => {
                 try {
+                    clearRetryStatus();
                     const rawData = e && typeof e.data === "string" ? e.data.trim() : "";
                     const payload = parseStreamPayload(e);
                     const data = payload && payload.message ? payload.message : rawData || "Stream error";

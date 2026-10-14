@@ -35,7 +35,8 @@ An agent can define one default model or an ordered preference list.
 
 For an agent-default turn, Jupiter chooses the first preference whose provider is currently available. If the resulting
 model request fails, Jupiter will retry the turn with the next preference. This permits seamless continuity during
-outages.
+outages. Separately, transient OpenAI streaming failures are retried against the same model request with visible status
+and bounded backoff; these retries do not switch models.
 
 An explicit model selection is strict: if that provider or model is unavailable, the turn fails instead of silently
 switching models. A saved agent override is also strict and is never silently replaced by a bundled model. If its model

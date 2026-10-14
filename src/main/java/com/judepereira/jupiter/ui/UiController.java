@@ -415,6 +415,22 @@ public class UiController {
             }
 
             @Override
+            public void onModelRequestRetry(int attempt, long delayMillis, Throwable cause, String turnTextSnapshot) {
+                try {
+                    active.cancellationToken().throwIfCancelled();
+                    accumulated.setLength(0);
+                    accumulated.append(turnTextSnapshot);
+                    appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId, turnTextSnapshot);
+                    broadcastEvent(active, assistantId, "retry",
+                            Map.of("attempt", attempt, "delayMillis", delayMillis, "text", turnTextSnapshot));
+                } catch (RuntimeException e) {
+                    throw e;
+                } catch (Exception e) {
+                    throw new IllegalStateException("Failed to publish model retry status", e);
+                }
+            }
+
+            @Override
             public void onToolCallStarted(ToolCallTrace trace) {
                 try {
                     if (trace != null) {
@@ -435,7 +451,8 @@ public class UiController {
             public void onToolCallProgress(String toolCallId, String toolName, String eventName, Object payload) {
                 broadcastEvent(active, assistantId, "tool_call_progress", Map.of("toolCallId", toolCallId, "toolName",
                         toolName, "eventName", eventName, "payload", payload));
-                if ("subagent_started".equals(eventName) && chatToolCallHtmlService != null) {
+                if (("subagent_started".equals(eventName) || "subagent_retry".equals(eventName))
+                        && chatToolCallHtmlService != null) {
                     broadcastToolCallHtml(active, assistantId,
                             chatToolCallHtmlService.subagentStarted(pending.sessionId(), assistantId, toolCallId));
                 }
