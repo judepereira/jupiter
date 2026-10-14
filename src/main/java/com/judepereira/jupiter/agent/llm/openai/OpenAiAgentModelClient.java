@@ -31,6 +31,7 @@ import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiResponsesChatModel;
 import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -49,12 +50,15 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 public class OpenAiAgentModelClient implements AgentModelClient {
 
+    private static final Logger log = LoggerFactory.getLogger(OpenAiAgentModelClient.class);
     private static final String CHATGPT_BACKEND_URL = "https://chatgpt.com/backend-api/codex";
     private static final String OPENAI_API_BASE_URL = "https://api.openai.com/v1";
     private static final String CHATGPT_ACCOUNT_HEADER = "ChatGPT-Account-ID";
@@ -96,11 +100,24 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     @Override
     public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
             AgentModelOptions options, Consumer<String> onDelta) {
+        return chatStreamingInternal(conversation, tools, options, onDelta, retry -> {
+        }, false);
+    }
+
+    @Override
+    public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
+            AgentModelOptions options, Consumer<String> onDelta, Consumer<AgentModelClient.RetryNotice> onRetry) {
+        return chatStreamingInternal(conversation, tools, options, onDelta, onRetry, true);
+    }
+
+    private ModelResponse chatStreamingInternal(List<Message> conversation, List<ToolDefinition> tools,
+            AgentModelOptions options, Consumer<String> onDelta, Consumer<AgentModelClient.RetryNotice> onRetry,
+            boolean retryAfterOutput) {
         String modelName = resolveModelName(options);
         ResolvedAuth auth = resolveAuth();
         ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools,
                 options);
-        return executeStreamingWithRetry(modelName, auth, request, onDelta);
+        return executeStreamingWithRetry(modelName, auth, request, onDelta, onRetry, retryAfterOutput);
     }
 
     @Override
@@ -110,47 +127,80 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     }
 
     private ModelResponse executeStreamingWithRetry(String modelName, ResolvedAuth auth, ChatRequest request,
-            Consumer<String> onDelta) {
+            Consumer<String> onDelta, Consumer<AgentModelClient.RetryNotice> onRetry, boolean retryAfterOutput) {
         OpenAiRetryPolicy retryPolicy = retryPolicy();
         int retriesUsed = 0;
         while (true) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new IllegalStateException("OpenAI streaming request interrupted");
+            }
             StreamingAttemptState attemptState = new StreamingAttemptState(onDelta);
+            Throwable failure = null;
             try {
                 streamingChatModel(modelName, auth).chat(request, attemptState.handler());
                 attemptState.await();
-                Throwable handlerError = attemptState.error();
-                if (handlerError != null) {
-                    if (handlerError instanceof StreamCancelledException cancelled) {
-                        throw cancelled;
-                    }
-                    if (attemptState.canRetry() && retryPolicy.shouldRetry(handlerError)
-                            && retriesUsed < retryPolicy.maxRetries()) {
-                        retriesUsed++;
-                        retryPolicy.sleep(retriesUsed);
-                        continue;
-                    }
-                    throw attemptState.streamingFailure(handlerError, true);
-                }
-                return attemptState.finish();
+                failure = attemptState.error();
             } catch (InterruptedException e) {
+                attemptState.close();
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("OpenAI streaming request interrupted", e);
             } catch (StreamCancelledException e) {
+                attemptState.close();
                 throw e;
             } catch (Exception e) {
-                if (attemptState.canRetry() && retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
-                    retriesUsed++;
-                    try {
-                        retryPolicy.sleep(retriesUsed);
-                        continue;
-                    } catch (InterruptedException interruptedException) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException("OpenAI streaming request interrupted", interruptedException);
-                    }
-                }
-                throw attemptState.streamingFailure(e, false);
+                failure = e;
+            } finally {
+                attemptState.close();
             }
+
+            if (attemptState.consumerFailure() != null) {
+                Throwable consumerFailure = attemptState.consumerFailure();
+                if (containsCancellation(consumerFailure)) {
+                    throw new StreamCancelledException();
+                }
+                throw new IllegalStateException("OpenAI streaming response consumer failed", consumerFailure);
+            }
+            if (failure == null) {
+                return attemptState.finish();
+            }
+            if (containsInterruption(failure)) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("OpenAI streaming request interrupted", failure);
+            }
+            if (containsCancellation(failure)) {
+                throw new StreamCancelledException();
+            }
+            attemptState.close();
+            if (retryPolicy.shouldRetry(failure) && retriesUsed < retryPolicy.maxRetries()
+                    && (retryAfterOutput || !attemptState.hasOutput())) {
+                retriesUsed++;
+                long delayMillis = retryPolicy.delayMillis(retriesUsed);
+                logRetry(retriesUsed, delayMillis, failure);
+                try {
+                    onRetry.accept(new AgentModelClient.RetryNotice(retriesUsed, delayMillis, failure));
+                } catch (RuntimeException callbackFailure) {
+                    if (containsCancellation(callbackFailure)) {
+                        throw new StreamCancelledException();
+                    }
+                    throw new IllegalStateException("OpenAI retry callback failed", callbackFailure);
+                }
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new IllegalStateException("OpenAI streaming request interrupted");
+                }
+                try {
+                    retryPolicy.sleep(delayMillis);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("OpenAI streaming request interrupted", e);
+                }
+                continue;
+            }
+            throw attemptState.streamingFailure(failure);
         }
+    }
+
+    private void logRetry(int attempt, long delayMillis, Throwable cause) {
+        log.warn("Transient OpenAI request failure; retrying attempt {} in {} ms", attempt, delayMillis, cause);
     }
 
     private <T> T executeWithRetry(Callable<T> operation, String failureMessage) {
@@ -168,7 +218,7 @@ public class OpenAiAgentModelClient implements AgentModelClient {
                 if (retryPolicy.shouldRetry(e) && retriesUsed < retryPolicy.maxRetries()) {
                     retriesUsed++;
                     try {
-                        retryPolicy.sleep(retriesUsed);
+                        retryPolicy.sleep(retryPolicy.delayMillis(retriesUsed));
                         continue;
                     } catch (InterruptedException interruptedException) {
                         Thread.currentThread().interrupt();
@@ -331,10 +381,15 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             this.maxBackoff = retry.getMaxBackoff();
         }
 
-        private void sleep(int retryNumber) throws InterruptedException {
-            long backoffMillis = Math.min(maxBackoff.toMillis(),
-                    initialBackoff.toMillis() << Math.max(0, retryNumber - 1));
-            Thread.sleep(backoffMillis);
+        private long delayMillis(int retryNumber) {
+            long initial = initialBackoff.toMillis();
+            int shift = Math.max(0, retryNumber - 1);
+            long scaled = shift >= 63 || initial > (Long.MAX_VALUE >> shift) ? Long.MAX_VALUE : initial << shift;
+            return Math.min(maxBackoff.toMillis(), scaled);
+        }
+
+        private void sleep(long delayMillis) throws InterruptedException {
+            Thread.sleep(delayMillis);
         }
 
         private int maxRetries() {
@@ -348,11 +403,12 @@ public class OpenAiAgentModelClient implements AgentModelClient {
 
     private final class StreamingAttemptState {
         private final Consumer<String> onDelta;
-        private final AtomicBoolean observedPartial = new AtomicBoolean();
-        private final AtomicBoolean observedToolCall = new AtomicBoolean();
         private final AtomicReference<ModelResponse> response = new AtomicReference<>();
         private final AtomicReference<ToolCall> toolCall = new AtomicReference<>();
         private final AtomicReference<Throwable> error = new AtomicReference<>();
+        private final AtomicBoolean active = new AtomicBoolean(true);
+        private final AtomicBoolean output = new AtomicBoolean();
+        private final AtomicReference<Throwable> consumerFailure = new AtomicReference<>();
         private final CountDownLatch done = new CountDownLatch(1);
 
         private StreamingAttemptState(Consumer<String> onDelta) {
@@ -363,33 +419,56 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             return new StreamingChatResponseHandler() {
                 @Override
                 public void onPartialResponse(String partialResponse) {
-                    if (partialResponse != null && !partialResponse.isEmpty()) {
-                        observedPartial.set(true);
-                        if (onDelta != null) {
-                            onDelta.accept(partialResponse);
+                    synchronized (StreamingAttemptState.this) {
+                        if (active.get() && partialResponse != null && !partialResponse.isEmpty()) {
+                            output.set(true);
+                            if (onDelta != null) {
+                                try {
+                                    onDelta.accept(partialResponse);
+                                } catch (RuntimeException e) {
+                                    consumerFailure.compareAndSet(null, e);
+                                    active.set(false);
+                                    done.countDown();
+                                }
+                            }
                         }
                     }
                 }
 
                 @Override
                 public void onCompleteToolCall(CompleteToolCall completeToolCall) {
-                    observedToolCall.set(true);
-                    toolCall.compareAndSet(null, messageMapper.toToolCall(completeToolCall.toolExecutionRequest()));
+                    synchronized (StreamingAttemptState.this) {
+                        if (active.get()) {
+                            toolCall.compareAndSet(null,
+                                    messageMapper.toToolCall(completeToolCall.toolExecutionRequest()));
+                            output.set(true);
+                        }
+                    }
                 }
 
                 @Override
                 public void onCompleteResponse(ChatResponse chatResponse) {
-                    response.set(messageMapper.toModelResponse(chatResponse));
-                    if (toolCall.get() == null && response.get() != null) {
-                        toolCall.compareAndSet(null, response.get().getToolCall());
+                    synchronized (StreamingAttemptState.this) {
+                        if (active.get()) {
+                            response.set(messageMapper.toModelResponse(chatResponse));
+                            if (toolCall.get() == null && response.get() != null) {
+                                toolCall.compareAndSet(null, response.get().getToolCall());
+                            }
+                            active.set(false);
+                            done.countDown();
+                        }
                     }
-                    done.countDown();
                 }
 
                 @Override
                 public void onError(Throwable throwable) {
-                    error.set(throwable);
-                    done.countDown();
+                    synchronized (StreamingAttemptState.this) {
+                        if (active.get()) {
+                            error.set(throwable);
+                            active.set(false);
+                            done.countDown();
+                        }
+                    }
                 }
             };
         }
@@ -398,12 +477,22 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             done.await();
         }
 
-        private boolean canRetry() {
-            return !observedPartial.get() && !observedToolCall.get();
-        }
-
         private Throwable error() {
             return error.get();
+        }
+
+        private boolean hasOutput() {
+            return output.get();
+        }
+
+        private Throwable consumerFailure() {
+            return consumerFailure.get();
+        }
+
+        private void close() {
+            synchronized (this) {
+                active.set(false);
+            }
         }
 
         private ModelResponse finish() {
@@ -416,19 +505,53 @@ public class OpenAiAgentModelClient implements AgentModelClient {
             return new ModelResponse(null, toolCall.get(), ModelResponseMetadata.empty(), null);
         }
 
-        private IllegalStateException streamingFailure(Throwable throwable, boolean includePrefix) {
-            String message = throwable.getMessage();
-            if (includePrefix && message != null && !message.isBlank()) {
-                return new IllegalStateException("OpenAI streaming request failed: " + message, throwable);
+        private IllegalStateException streamingFailure(Throwable throwable) {
+            Throwable root = throwable;
+            while (root.getCause() != null && root.getCause() != root) {
+                root = root.getCause();
             }
-            return new IllegalStateException("OpenAI streaming request failed", throwable);
+            String message = root.getMessage();
+            if (message == null || message.isBlank()) {
+                message = throwable.getMessage();
+            }
+            return new IllegalStateException(message == null || message.isBlank()
+                    ? "OpenAI streaming request failed"
+                    : "OpenAI streaming request failed: " + message, throwable);
         }
+    }
+
+    private boolean containsInterruption(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            if (current instanceof InterruptedException
+                    || (current instanceof InterruptedIOException && !(current instanceof SocketTimeoutException))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsCancellation(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            if (current instanceof StreamCancelledException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isTransient(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
             if (current instanceof RateLimitException || current instanceof InternalServerException) {
+                return true;
+            }
+            // LangChain4j reports HTTP-200 Responses API response.failed events with this
+            // message,
+            // losing the server status/code that would otherwise identify the transient
+            // overload.
+            if (current.getClass() == RuntimeException.class
+                    && "Response failed: Our servers are currently overloaded. Please try again later."
+                            .equals(current.getMessage())) {
                 return true;
             }
             if (current instanceof HttpException httpException

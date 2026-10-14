@@ -142,12 +142,18 @@ public class CodingAgentHarness {
                 }
                 convo = new ArrayList<>(seedConversation(systemPrompt, preparedConversation));
 
+                int requestTextStart = accumulated.length();
                 ModelResponse resp = model.chatStreaming(convo, defs, modelOptions, delta -> {
                     throwIfCancelled(cancellationToken);
                     if (delta != null) {
                         accumulated.append(delta);
                         listener.onTextDelta(delta);
                     }
+                }, retry -> {
+                    throwIfCancelled(cancellationToken);
+                    accumulated.setLength(requestTextStart);
+                    listener.onModelRequestRetry(retry.attempt(), retry.delayMillis(), retry.cause(),
+                            accumulated.toString());
                 });
                 if (tokenUsageService != null && appStateService != null && request.getSessionId() != null) {
                     String usageModelKey = modelOptions == null ? request.getModelId() : modelOptions.modelId();

@@ -167,6 +167,15 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
         buffer = "";
     }
 
+    function replaceText(text) {
+        buffer = "";
+        gotDelta = true;
+        const span = currentTextSpan();
+        if (span) {
+            renderChatMarkdown(span, String(text == null ? "" : text));
+        }
+    }
+
     function hasDelta() {
         return gotDelta;
     }
@@ -187,6 +196,7 @@ function createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive) 
         hasDelta,
         pushDelta,
         removeHistoryScrollListener,
+        replaceText,
         scheduleFlush,
         setShouldStickToBottom,
         shouldStick,

@@ -99,7 +99,8 @@ implementation details.
   render durable state that will naturally appear through the normal server-rendered flow.
 - Scheduling, concurrency, lifecycle, deduplication, and recovery semantics belong in backend services. Browser timing
   or browser-held state must not be required for correctness.
-- Failures are surfaced loudly to the frontend instead of being silently retried or hidden.
+- Failures are surfaced loudly to the frontend instead of being silently hidden. Provider streaming may use bounded,
+  observable retries for transient failures; cancellation and permanent failures are not retried.
 
 ### Testing conventions
 

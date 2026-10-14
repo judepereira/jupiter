@@ -92,6 +92,59 @@ public class TaskToolAndSubagentServiceTests {
     }
 
     @Test
+    public void retryPersistsChildSnapshotAndEmitsRetryWithoutChangingParentTranscript(@TempDir Path workspaceRoot) {
+        AppStateService appStateService = TestAppStateSupport.appStateService();
+        appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());
+        long parentSessionId = appStateService.loadViewData().activeSession().id();
+        AgentDefinition subagent = new AgentDefinition("engineer", "Engineer", "", "prompt", AgentMode.SUBAGENT,
+                "openai/gpt-5.6-sol", ThinkingLevel.MEDIUM, "low", true, true, List.of());
+        AgentDefinitionService definitions = agentService(subagent);
+        CodingAgentHarness harness = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
+                new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
+                SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
+                SkillTestSupport.defaultComponents().injector()) {
+            @Override
+            public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
+                listener.onTextDelta("discarded attempt");
+                listener.onModelRequestRetry(2, 250, new IllegalStateException("temporary"), "preserved snapshot");
+                listener.onTextDelta(" final");
+                var result = new AgentTurnResult("preserved snapshot final", List.of());
+                listener.onComplete(result);
+                return result;
+            }
+        };
+        var service = new SubagentTaskService(appStateService, definitions, childHarnessProvider(harness),
+                ModelCatalogTestSupport.preferenceResolver(appStateService,
+                        ModelCatalogTestSupport.modelCatalogService()),
+                null);
+        List<SubagentTaskService.SubagentTaskRetry> retries = new ArrayList<>();
+        List<String> parentBefore = appStateService.loadSessionDetail(parentSessionId).chatMessages().stream()
+                .map(ChatMessageView::text).toList();
+
+        var result = service.runTask(
+                new SubagentTaskService.SubagentTaskRequest(parentSessionId, "parent-tool", workspaceRoot.toString(),
+                        "engineer", "inspect", "inspect", "done", null),
+                new SubagentTaskService.SubagentTaskStreamListener() {
+                    @Override
+                    public void onRetry(SubagentTaskService.SubagentTaskRetry event) {
+                        retries.add(event);
+                    }
+                });
+
+        assertThat(retries).singleElement().satisfies(event -> {
+            assertThat(event.childSessionId()).isEqualTo(result.childSessionId());
+            assertThat(event.parentToolCallId()).isEqualTo("parent-tool");
+            assertThat(event.attempt()).isEqualTo(2);
+            assertThat(event.delayMillis()).isEqualTo(250);
+            assertThat(event.turnTextSnapshot()).isEqualTo("preserved snapshot");
+        });
+        assertThat(appStateService.loadSubagentSessionDetail(result.childSessionId()).sessionDetail().chatMessages())
+                .anySatisfy(message -> assertThat(message.text()).isEqualTo("preserved snapshot final"));
+        assertThat(appStateService.loadSessionDetail(parentSessionId).chatMessages().stream().map(ChatMessageView::text)
+                .toList()).isEqualTo(parentBefore);
+    }
+
+    @Test
     public void savedThinkingOverrideReachesChildRequestAndAssistantMetadata(@TempDir Path workspaceRoot) {
         AppStateService appStateService = TestAppStateSupport.appStateService();
         appStateService.addOrReopenProject("Alpha", workspaceRoot.toString());

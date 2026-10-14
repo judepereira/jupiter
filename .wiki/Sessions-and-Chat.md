@@ -10,7 +10,13 @@ plan, but one session to manage all active agent work.
 
 ## Stopping a Turn
 
-The stop button cancels the active assistant turn and any managed command execution attached to it.
+The stop button cancels the active assistant turn and any managed command execution attached to it. Cancellation is not
+retried.
+
+Transient OpenAI streaming failures (such as rate limits, server errors, or I/O interruptions) are retried with a
+visible status and bounded backoff. The in-progress request's partial text and pending tool calls are discarded before
+retrying; completed earlier work, including executed tools and their results, is retained. Permanent failures are
+surfaced without retry, and the turn fails if retries are exhausted.
 
 ## Agent, Model, and Thinking Choices
 

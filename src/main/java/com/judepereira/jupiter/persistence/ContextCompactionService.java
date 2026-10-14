@@ -89,7 +89,7 @@ public class ContextCompactionService {
                             if (delta != null) {
                                 streamedSummary.append(delta);
                             }
-                        });
+                        }, retry -> streamedSummary.setLength(0));
         if (tokenUsageService != null) {
             tokenUsageService.recordModelResponse(sessionId, model.id(), "compaction", summaryResult);
         }

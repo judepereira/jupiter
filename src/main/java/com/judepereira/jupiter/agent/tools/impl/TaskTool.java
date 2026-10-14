@@ -75,6 +75,11 @@ public class TaskTool implements AgentTool {
                                 }
 
                                 @Override
+                                public void onRetry(SubagentTaskService.SubagentTaskRetry event) {
+                                    context.getProgressSink().emit("subagent_retry", event);
+                                }
+
+                                @Override
                                 public void onToolCall(SubagentTaskService.SubagentTaskToolCall event) {
                                     context.getProgressSink().emit("subagent_tool_call", event);
                                 }

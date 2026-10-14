@@ -137,6 +137,17 @@ public class SubagentTaskService {
                 }
 
                 @Override
+                public void onModelRequestRetry(int attempt, long delayMillis, Throwable cause,
+                        String turnTextSnapshot) {
+                    throwIfCancelled(request.cancellationToken());
+                    accumulated.setLength(0);
+                    accumulated.append(turnTextSnapshot);
+                    appStateService.updateStreamingAssistantText(childSessionId, assistantPublicId, turnTextSnapshot);
+                    sink.onRetry(new SubagentTaskRetry(childSessionId, request.parentToolCallId(), subagent.id(),
+                            subagent.name(), attempt, delayMillis, turnTextSnapshot));
+                }
+
+                @Override
                 public void onToolCallStarted(ToolCallTrace trace) {
                     appStateService.startToolCallTrace(childSessionId, assistantPublicId, toTraceInput(trace));
                 }
@@ -356,6 +367,9 @@ public class SubagentTaskService {
         default void onToolCall(SubagentTaskToolCall event) {
         }
 
+        default void onRetry(SubagentTaskRetry event) {
+        }
+
         default void onComplete(SubagentTaskCompleted event) {
         }
 
@@ -374,6 +388,10 @@ public class SubagentTaskService {
 
     public record SubagentTaskTextDelta(long childSessionId, String parentToolCallId, String subagentAgentId,
             String subagentAgentName, String delta) {
+    }
+
+    public record SubagentTaskRetry(long childSessionId, String parentToolCallId, String subagentAgentId,
+            String subagentAgentName, int attempt, long delayMillis, String turnTextSnapshot) {
     }
 
     public record SubagentTaskToolCall(long childSessionId, String parentToolCallId, String subagentAgentId,
