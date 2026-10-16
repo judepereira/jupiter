@@ -4,7 +4,9 @@ import com.judepereira.jupiter.command.CommandCatalogService;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
+import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +29,7 @@ public class CommandController {
     private final CommandStreamService commandStreamService;
     private final AppStateService appStateService;
     private final ChatPresentationService chatPresentationService;
+    private final SessionActivityCoordinator activityCoordinator;
 
     @GetMapping(value = "/catalog", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
@@ -52,11 +55,19 @@ public class CommandController {
 
         String userId = UUID.randomUUID().toString();
         String assistantId = UUID.randomUUID().toString();
-        var queuedTurn = appStateService.appendUserMessageAndPendingAssistant(view.activeSession().id(), userId,
-                assistantId, "/" + command.id(), null);
-        commandStreamService.queue(view.activeSession().id(), assistantId, command,
-                view.activeSessionDetail().workspaceRoot(),
-                appStateService.loadSessionProjectEnvironmentVariables(view.activeSession().id()));
+        var result = new Object[]{null};
+        activityCoordinator.withLock(view.activeSession().id(), () -> {
+            if (appStateService.activeStreamRegistryService().hasActiveStreamForSession(view.activeSession().id())) {
+                throw new IllegalStateException("A stream is already active for the current session");
+            }
+            var queuedTurn = appStateService.appendUserMessageAndPendingAssistant(view.activeSession().id(), userId,
+                    assistantId, "/" + command.id(), null);
+            commandStreamService.queue(view.activeSession().id(), assistantId, command,
+                    view.activeSessionDetail().workspaceRoot(),
+                    appStateService.loadSessionProjectEnvironmentVariables(view.activeSession().id()));
+            result[0] = queuedTurn;
+        });
+        var queuedTurn = (QueuedChatTurn) result[0];
 
         model.addAttribute("newChatMessages",
                 List.of(chatPresentationService.toChatMessage(queuedTurn.userMessage(), ignored -> null),

@@ -1,3 +1,19 @@
+@media (max-width: 640px) {
+    .terminal-shell {
+        padding: 10px;
+    }
+    .watch-run {
+        grid-template-columns: 1fr;
+        gap: 5px;
+    }
+    .watch-run-time {
+        white-space: normal;
+    }
+    .watch-run-error {
+        grid-column: auto;
+    }
+}
+
 @media (max-width: 480px) {
     #system-balloon-root {
         right: calc(8px + env(safe-area-inset-right));

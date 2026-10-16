@@ -19,6 +19,7 @@ public class WorkspaceRailRefreshService {
 
     private static final Logger log = LogManager.getLogger(WorkspaceRailRefreshService.class);
     static final String WORKSPACE_RAIL_REFRESH_EVENT = "workspace-rail-refresh";
+    static final String CHAT_TURN_STARTED_EVENT = "chat-turn-started";
 
     private final Supplier<SseEmitter> emitterFactory;
     private final EventSender eventSender;
@@ -52,6 +53,10 @@ public class WorkspaceRailRefreshService {
 
     public void publishWorkspaceRailRefresh() {
         publish(WORKSPACE_RAIL_REFRESH_EVENT, "");
+    }
+
+    public void publishChatTurnStarted(long sessionId) {
+        publish(CHAT_TURN_STARTED_EVENT, sessionId);
     }
 
     @EventListener

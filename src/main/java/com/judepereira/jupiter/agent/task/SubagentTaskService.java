@@ -109,7 +109,7 @@ public class SubagentTaskService {
 
         try {
             CodingAgentHarness harness = harnessProvider.getObject();
-            AgentTurnRequest childRequest = new AgentTurnRequest(subagent.systemPrompt(),
+            AgentTurnRequest childRequest = AgentTurnRequest.withPreferenceSnapshot(subagent.systemPrompt(),
                     appStateService.buildConversationHistory(childSessionId), request.workspaceRoot(), subagent.id(),
                     preference.model().id(), preference.thinkingLevel(), childSessionId, request.cancellationToken(),
                     preference);

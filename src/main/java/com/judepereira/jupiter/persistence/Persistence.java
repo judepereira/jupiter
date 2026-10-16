@@ -106,6 +106,9 @@ public final class Persistence {
             String chatDraft) {
     }
 
+    public record WatchPanelState(boolean open, int height) {
+    }
+
     public record SubagentSessionDetailView(SessionDetailView sessionDetail, Long parentSessionId,
             String parentToolCallId, String subagentAgentId, String subagentAgentName) {
     }

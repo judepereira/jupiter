@@ -15,6 +15,7 @@
 - [Sessions and Chat](Sessions-and-Chat)
 - [Review and Diffs](Review-and-Diffs)
 - [Terminal](Terminal)
+- [Watches](Watches)
 - [Slash Commands](Slash-Commands)
 
 ## Agents and Tools

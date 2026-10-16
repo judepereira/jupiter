@@ -30,6 +30,8 @@ import com.judepereira.jupiter.ui.ChatPresentationService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
+import com.judepereira.jupiter.watch.SessionActivityCoordinator;
+import com.judepereira.jupiter.watch.WatchService;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
@@ -421,7 +423,8 @@ public class UiControllerTerminalTests {
                     TestAppStateSupport.contextCompactionService(appStateService), null,
                     mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
                     null, new ChatPresentationService(), null, null, new HttpAuthProperties(),
-                    mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT",
+                    mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class),
+                    mock(SessionActivityCoordinator.class), mock(WatchService.class), "0.0.1-SNAPSHOT",
                     System.getProperty("user.home"));
         }
     }

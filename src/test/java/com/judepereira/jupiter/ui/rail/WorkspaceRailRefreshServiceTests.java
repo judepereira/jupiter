@@ -31,6 +31,23 @@ class WorkspaceRailRefreshServiceTests {
     }
 
     @Test
+    void chatTurnStartedPublishesSessionIdAsEventPayload() {
+        TestEmitter emitter = new TestEmitter();
+        AtomicReference<String> eventName = new AtomicReference<>();
+        AtomicReference<Object> payload = new AtomicReference<>();
+        WorkspaceRailRefreshService service = new WorkspaceRailRefreshService(() -> emitter, (target, name, data) -> {
+            eventName.set(name);
+            payload.set(data);
+        });
+
+        service.connect();
+        service.publishChatTurnStarted(123L);
+
+        assertThat(eventName.get()).isEqualTo("chat-turn-started");
+        assertThat(payload.get()).isEqualTo(123L);
+    }
+
+    @Test
     void closeContextCompletesAndRemovesActiveEmitters() {
         TestEmitter emitter = new TestEmitter();
         WorkspaceRailRefreshService service = new WorkspaceRailRefreshService(() -> emitter, (target, name, data) -> {
