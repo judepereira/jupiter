@@ -172,15 +172,14 @@ public final class TestAppStateSupport {
 
     public static ChatPresentationService.ChatMessage awaitAssistantCompletion(UiController controller,
             String assistantId) {
-        ChatPresentationService.ChatMessage completed = awaitChatMessage(controller, assistantId,
-                message -> !message.pending());
+        awaitChatMessage(controller, assistantId, message -> !message.pending());
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {
             ConcurrentModel model = new ConcurrentModel();
             controller.index(model);
             UiController.Session activeSession = (UiController.Session) model.getAttribute("activeSession");
             if (activeSession == null || !activeSession.inProgress()) {
-                return completed;
+                return awaitChatMessage(controller, assistantId, message -> !message.pending());
             }
             try {
                 Thread.sleep(25);
