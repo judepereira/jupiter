@@ -55,7 +55,7 @@ public final class Persistence {
     }
 
     public record McpServerView(long id, String name, String url, boolean enabled, List<McpServerHeader> headers,
-            List<Long> exposedProjectIds) {
+            List<Long> exposedProjectIds, Set<String> disabledToolNames) {
     }
 
     public record WorkspaceView(long id, String name, String path, boolean unread, RailStatus railStatus) {

@@ -52,6 +52,10 @@ final class McpToolAdapter implements McpProjectToolExecutor {
         return toolDefinition;
     }
 
+    String remoteToolName() {
+        return remoteToolName;
+    }
+
     @Override
     public String modelToolName() {
         return modelToolName;

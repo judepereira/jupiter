@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -1324,6 +1325,26 @@ public class AppStateServicePersistenceTests {
 
         assertThat(service.loadEnabledMcpServersForProject(projectId)).singleElement().extracting(McpServerView::id)
                 .isEqualTo(created.id());
+    }
+
+    @Test
+    public void disabledMcpToolsDefaultRoundTripAndRemainEncryptedAcrossServerUpdates() {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateService service = context.service();
+        McpServerView server = service.createMcpServer("Server", "http://localhost:3000", true, List.of(), List.of());
+        assertThat(server.disabledToolNames()).isEmpty();
+
+        Set<String> disabledNames = Set.of("read_sensitive_file", "execute_private_action");
+        service.updateMcpServerDisabledTools(server.id(), disabledNames);
+        assertThat(service.listMcpServers().getFirst().disabledToolNames()).isEqualTo(disabledNames);
+        String storedJson = new JdbcTemplate(context.dataSource())
+                .queryForObject("SELECT disabled_tools_json FROM mcp_servers WHERE id = ?", String.class, server.id());
+        assertThat(storedJson).isNotNull().doesNotContain("read_sensitive_file", "execute_private_action")
+                .startsWith("JUPITER-ENCRYPTED-V1-AES-256-GCM:");
+
+        service.updateMcpServer(server.id(), "Renamed", "http://localhost:3001", false, List.of(), List.of());
+        assertThat(service.listMcpServers().getFirst().disabledToolNames()).isEqualTo(disabledNames);
     }
 
     @Test

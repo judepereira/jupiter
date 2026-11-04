@@ -12,7 +12,10 @@ Each entry has:
 - request headers
 - the projects allowed to use it
 
-The catalogue is global; exposure is project-specific.
+The catalogue and each server's tool exclusions are global; exposure is project-specific. In **Tool access**, discovered
+tools are enabled by default and can be individually disabled. If a server has not connected yet, apply its settings and
+reconnect to discover tools. Saved exclusions remain in effect if a tool is temporarily unavailable or its name
+disappears.
 
 ## Environment Placeholders
 

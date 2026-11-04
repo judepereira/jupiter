@@ -1036,6 +1036,14 @@ public class UiController {
                 commandCatalogService.list(workspace).stream().filter(command -> !command.editable()).toList());
         populateSettingsModels(model);
         model.addAttribute("agentPreferences", agentPreferenceService.list());
+        model.addAttribute("mcpServers", appStateService.listMcpServers());
+        Map<Long, McpProjectMcpServerRuntimeManager.DiscoveredServer> discoveredMcpServers = new LinkedHashMap<>();
+        if (mcpRuntimeManager != null) {
+            for (var discoveredServer : mcpRuntimeManager.discoveredServers()) {
+                discoveredMcpServers.put(discoveredServer.serverId(), discoveredServer);
+            }
+        }
+        model.addAttribute("discoveredMcpServers", discoveredMcpServers);
     }
 
     @PostMapping("/ui/settings/agents/save")
@@ -1335,6 +1343,9 @@ public class UiController {
             } else {
                 saved = appStateService.createMcpServer(server.name(), server.url(), server.enabled(), headers,
                         exposedProjectIds);
+            }
+            if (server.disabledToolNames() != null) {
+                appStateService.updateMcpServerDisabledTools(saved.id(), server.disabledToolNames());
             }
             affectedProjects.addAll(saved.exposedProjectIds());
         }
@@ -2183,7 +2194,7 @@ public class UiController {
     }
 
     private record McpServerPayload(Long id, String name, String url, boolean enabled,
-            List<McpServerHeaderPayload> headers, List<Long> exposedProjectIds) {
+            List<McpServerHeaderPayload> headers, List<Long> exposedProjectIds, Set<String> disabledToolNames) {
     }
 
     private record McpServerHeaderPayload(String name, String value) {

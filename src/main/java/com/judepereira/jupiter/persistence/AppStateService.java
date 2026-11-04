@@ -601,6 +601,14 @@ public class AppStateService {
     }
 
     @Transactional
+    public void updateMcpServerDisabledTools(long mcpServerId, Set<String> disabledToolNames) {
+        repository.findMcpServer(mcpServerId)
+                .orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId));
+        Set<String> names = disabledToolNames == null ? Set.of() : new TreeSet<>(disabledToolNames);
+        repository.updateMcpServerDisabledTools(mcpServerId, names.isEmpty() ? null : json(names));
+    }
+
+    @Transactional
     public void deleteMcpServer(long mcpServerId) {
         repository.findMcpServer(mcpServerId)
                 .orElseThrow(() -> new IllegalStateException("Missing MCP server " + mcpServerId));
@@ -2038,7 +2046,19 @@ public class AppStateService {
 
     private McpServerView toMcpServerView(AppStateRepository.McpServerRow row) {
         return new McpServerView(row.id(), row.name(), row.url(), row.enabled(), mcpServerHeaders(row.headersJson()),
-                row.exposedProjectIds());
+                row.exposedProjectIds(), disabledMcpToolNames(row.disabledToolsJson()));
+    }
+
+    private Set<String> disabledMcpToolNames(String value) {
+        if (value == null || value.isBlank()) {
+            return Set.of();
+        }
+        try {
+            return Set.copyOf(objectMapper.readValue(value, new TypeReference<Set<String>>() {
+            }));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to read disabled MCP tools", exception);
+        }
     }
 
     private List<McpServerHeader> mcpServerHeaders(String json) {

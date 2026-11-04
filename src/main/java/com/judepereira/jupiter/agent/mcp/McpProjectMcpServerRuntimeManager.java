@@ -5,10 +5,12 @@ import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.context.ApplicationEventPublisher;
@@ -74,6 +76,46 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
         return runtime.snapshot();
     }
 
+    public record DiscoveredServer(long serverId, String serverName, McpRuntimeEvents.ConnectionStatus status,
+            List<DiscoveredTool> tools) {
+    }
+
+    public record DiscoveredTool(String name, String description, boolean disabled) {
+    }
+
+    public synchronized List<DiscoveredServer> discoveredServers() {
+        Map<Long, List<DiscoveredServer>> byServer = new TreeMap<>();
+        for (ProjectRuntime runtime : runtimes.values()) {
+            for (var server : runtime.discoveredServers()) {
+                byServer.computeIfAbsent(server.serverId(), ignored -> new ArrayList<>()).add(server);
+            }
+        }
+        return byServer.values().stream().map(instances -> {
+            DiscoveredServer representative = instances.stream()
+                    .max(Comparator.comparingInt(server -> statusRank(server.status()))).orElseThrow();
+            Map<String, DiscoveredTool> tools = new TreeMap<>();
+            for (DiscoveredServer instance : instances) {
+                for (DiscoveredTool tool : instance.tools()) {
+                    tools.merge(tool.name(), tool,
+                            (left, right) -> new DiscoveredTool(left.name(),
+                                    left.description() != null ? left.description() : right.description(),
+                                    left.disabled() && right.disabled()));
+                }
+            }
+            return new DiscoveredServer(representative.serverId(), representative.serverName(), representative.status(),
+                    List.copyOf(tools.values()));
+        }).toList();
+    }
+
+    private static int statusRank(McpRuntimeEvents.ConnectionStatus status) {
+        return switch (status) {
+            case READY -> 3;
+            case CONNECTING -> 2;
+            case FAILED -> 1;
+            case CLOSED -> 0;
+        };
+    }
+
     public synchronized Map<Long, McpRuntimeEvents.ConnectionStatus> connectionStatuses(long projectId) {
         ProjectRuntime runtime = runtimes.get(projectId);
         if (runtime == null) {
@@ -136,7 +178,7 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
                     runtime = McpProjectMcpServerRuntime.connect(server, env, templateResolver, clientFactory,
                             McpProjectMcpServerRuntimeManager.this);
                 } else {
-                    runtime.updateProjectEnvironmentVariables(env);
+                    runtime.updateConfiguration(server, env);
                     runtime.reconnect();
                 }
                 next.put(server.id(), runtime);
@@ -148,6 +190,15 @@ public class McpProjectMcpServerRuntimeManager implements McpProjectMcpServerRun
             }
             byServerId.clear();
             byServerId.putAll(next);
+        }
+
+        private List<DiscoveredServer> discoveredServers() {
+            return byServerId.values().stream()
+                    .map(server -> new DiscoveredServer(server.serverId(), server.serverName(), server.status(),
+                            server.discoveredTools().stream()
+                                    .map(tool -> new DiscoveredTool(tool.name(), tool.description(), tool.disabled()))
+                                    .toList()))
+                    .toList();
         }
 
         private boolean containsServer(long serverId) {

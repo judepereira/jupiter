@@ -105,7 +105,9 @@ implementation details.
 
 - Unit and integration-style tests live under `src/test/java` and generally mirror production package layout.
 - End-to-end browser tests live in `src/test/java/com/judepereira/jupiter/e2e` and use Playwright.
-- Template rendering tests validate Thymeleaf fragments and pages without a browser.
+- Validate UI rendering and behavior in a real browser with Playwright tests. Do not add template-rendering tests or
+  tests that assert HTML markup/strings directly; use Playwright to exercise UI interactions and inspect the rendered
+  result visually and through browser-visible behavior.
 - Shared test helpers live in `src/test/java/com/judepereira/jupiter/testsupport`.
 - Tests should avoid reflection; expose production code with the narrowest sensible visibility instead.
 - Isolate external processes and environment-dependent integrations behind small injectable boundaries. Test their

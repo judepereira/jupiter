@@ -366,6 +366,46 @@
     gap: 8px;
 }
 
+.settings-mcp-tools {
+    border-top: 1px solid var(--outline-colour);
+    padding-top: 10px;
+}
+
+.settings-mcp-tools > summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.settings-mcp-tools-status {
+    color: var(--muted-colour);
+    margin: 10px 0 0;
+}
+
+.settings-mcp-tool-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.settings-mcp-tool {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 2px 9px;
+    align-items: start;
+}
+
+.settings-mcp-tool-name {
+    overflow-wrap: anywhere;
+}
+
+.settings-mcp-tool-description {
+    grid-column: 2;
+    color: var(--muted-colour);
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+}
+
 .settings-provider-subsection {
     display: flex;
     flex-direction: column;

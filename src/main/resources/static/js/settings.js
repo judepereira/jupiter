@@ -133,7 +133,20 @@ function serializeMcpCatalog(form) {
             };
         });
 
+        const disabledToolNames = new Set(
+            Array.from(server.querySelectorAll("[data-mcp-disabled-tool]")).map(function (input) {
+                return input.value;
+            }),
+        );
+        server.querySelectorAll("[data-mcp-tool-name]").forEach(function (input) {
+            if (input.checked) {
+                disabledToolNames.delete(input.value);
+            } else {
+                disabledToolNames.add(input.value);
+            }
+        });
         const serverData = {
+            disabledToolNames: Array.from(disabledToolNames),
             name: name,
             url: url,
             enabled: enabled,
