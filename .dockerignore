@@ -4,6 +4,8 @@
 *.iml
 .DS_Store
 target/
+report-output/
+results.json
 .data/
 .env
 .env.*

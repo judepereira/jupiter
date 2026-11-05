@@ -101,7 +101,15 @@ implementation details.
   or browser-held state must not be required for correctness.
 - Failures are surfaced loudly to the frontend instead of being silently retried or hidden.
 
-### Testing conventions
+### Failed-test PR reporting
+
+The `Report failed tests` workflow is triggered by `workflow_run` and runs with write permission. It checks out only the
+trusted default-branch commit; do not check out or execute pull-request code in this workflow. The reporter uses GitHub
+API run/PR metadata to associate results and treats artifacts as untrusted data. It is activated only after the workflow
+is merged to the default branch. Test changes to the privileged workflow/helper for fork isolation, stale runs, and
+artifact validation carefully.
+
+## Testing conventions
 
 - Unit and integration-style tests live under `src/test/java` and generally mirror production package layout.
 - End-to-end browser tests live in `src/test/java/com/judepereira/jupiter/e2e` and use Playwright.

@@ -31,6 +31,7 @@ jobs:
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Java for release validation
         if: inputs.checkout_ref != ''
@@ -79,6 +80,7 @@ jobs:
           BLUECAVE_BRANCH: ${{ github.head_ref || github.ref_name }}
           BLUECAVE_PR_NUMBER: ${{ github.event.pull_request.number }}
           IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           build_sha="$(git rev-parse HEAD)"
@@ -95,8 +97,25 @@ jobs:
             args+=(--secret id=bluecave_token,env=BLUECAVE_TOKEN)
           fi
 
-          docker build "${args[@]}" .
+          docker buildx build --target report-export --output type=local,dest=report-output "${args[@]}" .
+          status="$(cat report-output/build-exit-status)"
+          head_sha="${PR_HEAD_SHA}"
+          python3 scripts/collect_test_results.py \
+            --reports report-output/surefire-reports \
+            --output results.json \
+            --build-sha "$build_sha" \
+            --head-sha "$head_sha" \
+            --exit-status "$status"
           echo "BUILD_SHA=$build_sha" >> "$GITHUB_ENV"
+          docker buildx build --load "${args[@]}" .
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verify-test-results-${{ github.run_attempt }}
+          path: results.json
+          if-no-files-found: warn
 
       - name: Select publication tag
         id: publication
