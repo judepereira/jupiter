@@ -83,8 +83,9 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         ResolvedAuth auth = resolveAuth();
         ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools,
                 options);
-        return executeWithRetry(() -> messageMapper.toModelResponse(chatModel(modelName, auth).chat(request)),
+        ChatResponse response = executeWithRetry(() -> chatModel(modelName, auth).chat(request),
                 "OpenAI request failed");
+        return messageMapper.toModelResponse(response);
     }
 
     @Override

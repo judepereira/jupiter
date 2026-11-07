@@ -304,6 +304,23 @@ public class OpenAiAgentModelClientTest {
     }
 
     @Test
+    public void non_streaming_does_not_retry_response_mapping_failures() {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.from("assistant", List.of(
+                        ToolExecutionRequest.builder().id("call-1").name("read_file").arguments("not-json").build())))
+                .build());
+        RecordingClient client = new RecordingClient(chatModel, null,
+                openAiProperties(2, Duration.ZERO, Duration.ZERO));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "request", null, null, null)), List.of()));
+
+        assertEquals("Failed to parse tool call arguments", failure.getMessage());
+        verify(chatModel, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
     public void non_streaming_retries_transient_failures_then_succeeds() {
         OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
         ChatModel chatModel = mock(ChatModel.class);
