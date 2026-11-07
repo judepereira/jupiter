@@ -1328,6 +1328,41 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void disabledMcpToolsNullAndEmptyClearPersistedExclusions() {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateService service = context.service();
+        McpServerView server = service.createMcpServer("Server", "http://localhost:3000", true, List.of(), List.of());
+        JdbcTemplate jdbc = new JdbcTemplate(context.dataSource());
+
+        for (Set<String> exclusions : List.of(Set.of("tool"), Set.<String>of())) {
+            service.updateMcpServerDisabledTools(server.id(), exclusions);
+        }
+        assertThat(jdbc.queryForObject("SELECT disabled_tools_json FROM mcp_servers WHERE id = ?", String.class,
+                server.id())).isNull();
+        assertThat(service.listMcpServers().getFirst().disabledToolNames()).isEmpty();
+        service.updateMcpServerDisabledTools(server.id(), null);
+        assertThat(jdbc.queryForObject("SELECT disabled_tools_json FROM mcp_servers WHERE id = ?", String.class,
+                server.id())).isNull();
+        assertThat(service.listMcpServers().getFirst().disabledToolNames()).isEmpty();
+    }
+
+    @Test
+    public void disabledMcpToolsReadBlankAndMalformedStoredJson() {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+        McpServerView server = service.createMcpServer("Server", "http://localhost:3000", true, List.of(), List.of());
+
+        repository.updateMcpServerDisabledTools(server.id(), "   ");
+        assertThat(service.listMcpServers().getFirst().disabledToolNames()).isEmpty();
+        repository.updateMcpServerDisabledTools(server.id(), "{");
+        assertThatThrownBy(service::listMcpServers).isInstanceOf(IllegalStateException.class)
+                .hasMessage("Unable to read disabled MCP tools");
+    }
+
+    @Test
     public void disabledMcpToolsDefaultRoundTripAndRemainEncryptedAcrossServerUpdates() {
         var context = TestAppStateSupport.appStateContext(event -> {
         });

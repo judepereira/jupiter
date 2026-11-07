@@ -4,12 +4,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.security.RuntimeEnvironment;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.McpClientListener;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.service.tool.ToolExecutionResult;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -108,6 +112,66 @@ class McpProjectMcpServerRuntimeManagerTest {
         when(state.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(server(10L, "server", Set.of())));
         manager.reloadProject(1L);
         assertEquals(List.of("mcp__server__raw_tool", "mcp__server__other"), names(manager.snapshot(1L)));
+    }
+
+    @Test
+    void stale_executor_dispatches_to_current_client_after_tool_refresh_and_reconnect() throws Exception {
+        AppStateService state = mock(AppStateService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        McpClient first = mock(McpClient.class);
+        McpClient second = mock(McpClient.class);
+        when(first.listTools()).thenReturn(tools("raw"));
+        when(second.listTools()).thenReturn(tools("raw"));
+        when(first.executeTool(any())).thenReturn(ToolExecutionResult.builder().resultText("ok").build());
+        when(second.executeTool(any())).thenReturn(ToolExecutionResult.builder().resultText("ok").build());
+        doNothing().when(first).close();
+        doNothing().when(second).close();
+        when(state.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(server(10L, "server", Set.of())));
+        when(state.loadProjectEnvironmentVariables(1L)).thenReturn(Map.of());
+        McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(state, publisher,
+                (key, url, headers, listener) -> "http://one".equals(url) ? first : second,
+                new RuntimeEnvironment(Map.of()));
+        manager.reloadProject(1L);
+        McpProjectToolExecutor stale = manager.snapshot(1L).executors().get("mcp__server__raw");
+
+        when(state.loadEnabledMcpServersForProject(1L))
+                .thenReturn(List.of(server(10L, "server", Set.of(), "http://two")));
+        manager.reloadProject(1L);
+        stale.execute(Map.of(), new ToolExecutionContext(Path.of("."), false, false, 30, null, null, null, "call",
+                Map.of(), Set.of(), null, null));
+
+        verify(second).executeTool(any());
+        verify(first, never()).executeTool(any());
+    }
+
+    @Test
+    void notification_refresh_rebinds_executor_and_blocks_removed_or_reassigned_raw_names() throws Exception {
+        AppStateService state = mock(AppStateService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        McpClient client = mock(McpClient.class);
+        when(client.listTools()).thenReturn(tools("read-items"), tools("read-items"), tools("read_items"), List.of());
+        when(client.executeTool(any())).thenReturn(ToolExecutionResult.builder().resultText("ok").build());
+        doNothing().when(client).close();
+        when(state.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(server(10L, "server", Set.of())));
+        when(state.loadProjectEnvironmentVariables(1L)).thenReturn(Map.of());
+        McpClientListener[] listener = new McpClientListener[1];
+        McpProjectMcpServerRuntimeManager manager = new McpProjectMcpServerRuntimeManager(state, publisher,
+                (key, url, headers, createdListener) -> {
+                    listener[0] = createdListener;
+                    return client;
+                }, new RuntimeEnvironment(Map.of()));
+        manager.reloadProject(1L);
+        McpProjectToolExecutor stale = manager.snapshot(1L).executors().get("mcp__server__read_items");
+
+        listener[0].onNotificationToolsListChanged();
+        ToolExecutionContext context = new ToolExecutionContext(Path.of("."), false, false, 30, null, null, null,
+                "call", Map.of(), Set.of(), null, null);
+        stale.execute(Map.of(), context);
+        verify(client, times(1)).executeTool(any());
+
+        listener[0].onNotificationToolsListChanged();
+        assertThrows(IllegalStateException.class, () -> stale.execute(Map.of(), context));
+        verify(client, times(1)).executeTool(any());
     }
 
     @Test

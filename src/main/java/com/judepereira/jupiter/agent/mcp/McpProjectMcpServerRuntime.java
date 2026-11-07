@@ -13,7 +13,11 @@ import java.util.List;
 import java.util.Map;
 
 final class McpProjectMcpServerRuntime implements AutoCloseable {
+    // These snapshots are read by tool-call threads while lifecycle callbacks
+    // replace them.
+    @SuppressWarnings("PMD.AvoidUsingVolatile")
     private volatile Persistence.McpServerView server;
+    @SuppressWarnings("PMD.AvoidUsingVolatile")
     private volatile DiscoveryState discovery = new DiscoveryState(List.of(), Map.of(), List.of(), Map.of());
 
     private record DiscoveryState(List<ToolDefinition> rawDefinitions, Map<String, McpToolAdapter> rawExecutors,
@@ -181,13 +185,14 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
             public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context)
                     throws Exception {
                 String rawName = ((McpToolAdapter) delegate).remoteToolName();
-                McpProjectMcpServerRuntime runtime = McpProjectMcpServerRuntime.this;
-                if (runtime.status != McpRuntimeEvents.ConnectionStatus.READY
-                        || !runtime.discovery.executors().containsValue(delegate)
-                        || runtime.server.disabledToolNames().contains(rawName)) {
+                DiscoveryState current = discovery;
+                McpProjectToolExecutor currentExecutor = current.executors().get(name);
+                if (status != McpRuntimeEvents.ConnectionStatus.READY || currentExecutor == null
+                        || !((McpToolAdapter) currentExecutor).remoteToolName().equals(rawName)
+                        || server.disabledToolNames().contains(rawName)) {
                     throw new IllegalStateException("MCP tool is unavailable: " + rawName);
                 }
-                return delegate.execute(args, context);
+                return currentExecutor.execute(args, context);
             }
         }));
         return Map.copyOf(guarded);
