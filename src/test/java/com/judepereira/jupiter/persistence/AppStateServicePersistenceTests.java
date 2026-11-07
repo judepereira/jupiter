@@ -1383,6 +1383,68 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void projectStatusAggregatesVisibleSessionsWithUnreadAndFailurePrecedence(@TempDir Path firstProject,
+            @TempDir Path secondProject, @TempDir Path closedProject) {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateService service = context.service();
+        AppStateRepository repository = context.repository();
+        service.addOrReopenProject("First", firstProject.toString());
+        long firstId = service.loadViewData().activeProject().id();
+        long activeSessionId = service.loadViewData().activeSession().id();
+        long pendingSessionId = service.createSession(service.loadViewData().activeWorkspace().id(), "Pending").id();
+        long hiddenSessionId = service.createHiddenSubagentSession(activeSessionId, "hidden-tool-call",
+                new AgentDefinition("hidden-agent", "Hidden agent", "", "", AgentMode.SUBAGENT, "openai/gpt-5.5",
+                        ThinkingLevel.MEDIUM, "low", true, true, List.of("write_file")));
+        long failedSessionId = service.createSession(service.loadViewData().activeWorkspace().id(), "Failed").id();
+        repository.updateSessionUnread(hiddenSessionId, true);
+        service.appendUserMessageAndPendingAssistant(hiddenSessionId, "hidden pending");
+        var beforeVisiblePending = service.loadViewData().projects().stream().filter(project -> project.id() == firstId)
+                .findFirst().orElseThrow();
+        assertThat(beforeVisiblePending.unread()).isFalse();
+        assertThat(beforeVisiblePending.railStatus()).isEqualTo(Persistence.RailStatus.NONE);
+
+        repository.updateSessionUnread(pendingSessionId, true);
+        service.appendUserMessageAndPendingAssistant(pendingSessionId, "pending");
+        context.activeStreamRegistryService().register("pending", pendingSessionId, firstProject.toString());
+        var pendingAndActive = service.loadViewData().projects().stream().filter(project -> project.id() == firstId)
+                .findFirst().orElseThrow();
+        assertThat(pendingAndActive.railStatus()).isEqualTo(Persistence.RailStatus.IN_PROGRESS);
+        repository.updateSessionUnread(failedSessionId, true);
+        service.appendUserMessageAndPendingAssistant(failedSessionId, "failed");
+        var first = service.loadViewData().projects().stream().filter(project -> project.id() == firstId).findFirst()
+                .orElseThrow();
+        assertThat(first.unread()).isTrue();
+        assertThat(first.railStatus()).isEqualTo(Persistence.RailStatus.FAILED);
+        context.activeStreamRegistryService().unregister("pending");
+
+        service.addOrReopenProject("Second", secondProject.toString());
+        long secondId = service.loadViewData().activeProject().id();
+        long secondSessionId = service.loadViewData().activeSession().id();
+        context.activeStreamRegistryService().register("active", secondSessionId, secondProject.toString());
+        assertThat(service.loadViewData().projects()).filteredOn(project -> project.id() == secondId).singleElement()
+                .extracting(ProjectView::railStatus).isEqualTo(Persistence.RailStatus.FAILED);
+        context.activeStreamRegistryService().unregister("active");
+        repository.updateSessionUnread(secondSessionId, true);
+        assertThat(service.loadViewData().projects()).filteredOn(project -> project.id() == secondId).singleElement()
+                .extracting(ProjectView::unread).isEqualTo(true);
+        repository.updateSessionUnread(pendingSessionId, false);
+        assertThat(service.loadViewData().projects()).filteredOn(project -> project.id() == firstId).singleElement()
+                .extracting(ProjectView::unread).isEqualTo(true);
+        repository.updateSessionUnread(failedSessionId, false);
+        assertThat(service.loadViewData().projects()).filteredOn(project -> project.id() == firstId).singleElement()
+                .extracting(ProjectView::unread).isEqualTo(false);
+
+        service.addOrReopenProject("Closed", closedProject.toString());
+        long closedId = service.loadViewData().activeProject().id();
+        long closedSessionId = service.loadViewData().activeSession().id();
+        repository.updateSessionUnread(closedSessionId, true);
+        service.closeProject(closedId);
+        assertThat(service.loadViewData().projects()).extracting(ProjectView::id).doesNotContain(closedId);
+
+    }
+
+    @Test
     public void reopeningAClosedProjectPreservesMcpServerExposureAssignments(@TempDir Path projectPath) {
         AppStateService service = TestAppStateSupport.appStateService();
 

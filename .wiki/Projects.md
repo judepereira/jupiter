@@ -11,6 +11,12 @@ Jupiter stores the project name and normalized path. Closing a project removes i
 
 If you later add a path Jupiter has seen before, it can reopen the persisted project state.
 
+## Project status
+
+All open project tabs are included in status indicators. Inactive tabs show a dot for failed (red) or unread (green)
+sessions; a running-only project has no dot. Failure takes priority over unread. The favicon and top-left logo aggregate
+failure and unread across all open projects, including the selected project.
+
 ## Project-Specific Settings
 
 Each project can carry:

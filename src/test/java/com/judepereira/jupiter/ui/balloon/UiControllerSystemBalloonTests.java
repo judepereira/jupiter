@@ -25,6 +25,7 @@ import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.git.ManualGitPullCoordinator;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
+import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.persistence.Persistence.McpServerView;
 import com.judepereira.jupiter.persistence.Persistence.ProjectView;
@@ -51,10 +52,11 @@ class UiControllerSystemBalloonTests {
         SystemBalloonService balloonService = mock(SystemBalloonService.class);
         UiController controller = controller(appStateService, runtimeManager, balloonService);
 
-        when(appStateService.loadViewData())
-                .thenReturn(new AppStateView(List.of(new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of(), null)),
-                        new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of(), null), List.of(), null, List.of(),
-                        null, null, false));
+        when(appStateService.loadViewData()).thenReturn(new AppStateView(
+                List.of(new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of(), null, false,
+                        Persistence.RailStatus.NONE)),
+                new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of(), null, false, Persistence.RailStatus.NONE),
+                List.of(), null, List.of(), null, null, false));
         when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(
                 new McpServerView(10L, "GitHub MCP", "http://localhost:3000", true, List.of(), List.of(1L), Set.of())));
         when(runtimeManager.connectionStatuses(1L)).thenReturn(Map.of(10L, McpRuntimeEvents.ConnectionStatus.FAILED));

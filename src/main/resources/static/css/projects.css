@@ -128,6 +128,11 @@ textarea:focus {
     box-shadow: none;
 }
 
+.project-tab .failed-dot,
+.project-tab .unread-dot {
+    flex: 0 0 auto;
+}
+
 .project-tab-label {
     display: block;
     min-width: 0;

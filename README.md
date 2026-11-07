@@ -67,6 +67,12 @@ It is possible to change the username from `jupiter` to your own username (makes
 an external IDE), and to configure system init and user init scripts (preinstall software required). See
 [Running with Docker](https://github.com/judepereira/jupiter/wiki/Running-with-Docker).
 
+## Project status indicators
+
+Project tabs cover all open projects: inactive tabs show a dot when a project has a failed or unread session;
+running-only projects have no dot. Red failure dots take priority over green unread dots. The favicon and top-left logo
+aggregate these states across all open projects, including the selected project.
+
 ## Connecting Model Providers
 
 Open **Settings → Model Providers** to connect an OpenAI subscription or configure Claude. OpenAI can also use
