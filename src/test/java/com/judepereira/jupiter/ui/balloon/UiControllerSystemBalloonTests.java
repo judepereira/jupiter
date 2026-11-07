@@ -38,6 +38,7 @@ import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -54,8 +55,8 @@ class UiControllerSystemBalloonTests {
                 .thenReturn(new AppStateView(List.of(new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of(), null)),
                         new ProjectView(1L, "Alpha", "/tmp/alpha", null, List.of(), null), List.of(), null, List.of(),
                         null, null, false));
-        when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(
-                List.of(new McpServerView(10L, "GitHub MCP", "http://localhost:3000", true, List.of(), List.of(1L))));
+        when(appStateService.loadEnabledMcpServersForProject(1L)).thenReturn(List.of(
+                new McpServerView(10L, "GitHub MCP", "http://localhost:3000", true, List.of(), List.of(1L), Set.of())));
         when(runtimeManager.connectionStatuses(1L)).thenReturn(Map.of(10L, McpRuntimeEvents.ConnectionStatus.FAILED));
         doNothing().when(balloonService).publishWarning(any(), anyString(), anyString());
         when(balloonService.markShellInitialized("shell-1")).thenReturn(true, false);

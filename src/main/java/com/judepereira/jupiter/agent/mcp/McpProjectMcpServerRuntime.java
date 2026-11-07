@@ -1,28 +1,36 @@
 package com.judepereira.jupiter.agent.mcp;
 
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
+import com.judepereira.jupiter.agent.tools.ToolExecutionContext;
+import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.persistence.Persistence;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.McpClientListener;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 final class McpProjectMcpServerRuntime implements AutoCloseable {
-    private final Persistence.McpServerView server;
+    // These snapshots are read by tool-call threads while lifecycle callbacks
+    // replace them.
+    @SuppressWarnings("PMD.AvoidUsingVolatile")
+    private volatile Persistence.McpServerView server;
+    @SuppressWarnings("PMD.AvoidUsingVolatile")
+    private volatile DiscoveryState discovery = new DiscoveryState(List.of(), Map.of(), List.of(), Map.of());
+
+    private record DiscoveryState(List<ToolDefinition> rawDefinitions, Map<String, McpToolAdapter> rawExecutors,
+            List<ToolDefinition> definitions, Map<String, McpProjectToolExecutor> executors) {
+    }
     private Map<String, String> projectEnvironmentVariables;
     private final McpTemplateResolver templateResolver;
     private final McpClientFactory clientFactory;
     private final McpRuntimeListener runtimeListener;
-    private final String serverSlug;
+
     private volatile McpClient client;
     private volatile McpRuntimeEvents.ConnectionStatus status = McpRuntimeEvents.ConnectionStatus.CONNECTING;
     private volatile String statusMessage = "connecting";
-    private volatile List<ToolDefinition> toolDefinitions = List.of();
-    private volatile Map<String, McpProjectToolExecutor> executors = Map.of();
 
     private McpProjectMcpServerRuntime(Persistence.McpServerView server,
             Map<String, String> projectEnvironmentVariables, McpTemplateResolver templateResolver,
@@ -32,7 +40,6 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
         this.templateResolver = templateResolver;
         this.clientFactory = clientFactory;
         this.runtimeListener = runtimeListener;
-        this.serverSlug = templateResolver.slugify(server.name());
     }
 
     static McpProjectMcpServerRuntime connect(Persistence.McpServerView server,
@@ -44,11 +51,29 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
         return runtime;
     }
 
-    synchronized void updateProjectEnvironmentVariables(Map<String, String> projectEnvironmentVariables) {
+    synchronized void updateConfiguration(Persistence.McpServerView server,
+            Map<String, String> projectEnvironmentVariables) {
+        this.server = server;
         this.projectEnvironmentVariables = projectEnvironmentVariables;
+        applyDisabledPolicy();
+    }
+
+    private void applyDisabledPolicy() {
+        DiscoveryState current = discovery;
+        Map<String, McpProjectToolExecutor> enabled = new LinkedHashMap<>();
+        current.rawExecutors().values().forEach(adapter -> {
+            if (!server.disabledToolNames().contains(adapter.remoteToolName())) {
+                enabled.put(adapter.modelToolName(), adapter);
+            }
+        });
+        List<ToolDefinition> definitions = current.rawDefinitions().stream()
+                .filter(definition -> enabled.containsKey(definition.getName())).toList();
+        discovery = new DiscoveryState(current.rawDefinitions(), current.rawExecutors(), definitions,
+                Map.copyOf(enabled));
     }
 
     synchronized void reconnect() {
+        discovery = new DiscoveryState(discovery.rawDefinitions(), discovery.rawExecutors(), List.of(), Map.of());
         closeClient();
         updateStatus(McpRuntimeEvents.ConnectionStatus.CONNECTING, "connecting");
         try {
@@ -56,48 +81,59 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
             Map<String, String> resolvedHeaders = templateResolver.resolveHeaders(server.headers(),
                     projectEnvironmentVariables);
             client = clientFactory.create(server.name(), resolvedUrl, resolvedHeaders, new Listener());
-            refreshTools();
-            updateStatus(McpRuntimeEvents.ConnectionStatus.READY, "ready");
+            if (refreshTools()) {
+                updateStatus(McpRuntimeEvents.ConnectionStatus.READY, "ready");
+            }
         } catch (McpToolCollisionException e) {
-            toolDefinitions = List.of();
-            executors = Map.of();
+            discovery = new DiscoveryState(discovery.rawDefinitions(), discovery.rawExecutors(), List.of(), Map.of());
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
             throw e;
         } catch (Exception e) {
-            toolDefinitions = List.of();
-            executors = Map.of();
+            discovery = new DiscoveryState(discovery.rawDefinitions(), discovery.rawExecutors(), List.of(), Map.of());
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
         }
     }
 
-    synchronized void refreshTools() {
+    synchronized boolean refreshTools() {
         McpClient currentClient = client;
         if (currentClient == null) {
-            return;
+            return false;
         }
         try {
             List<ToolSpecification> remoteTools = currentClient.listTools();
             Map<String, McpProjectToolExecutor> nextExecutors = new LinkedHashMap<>();
+            Map<String, McpToolAdapter> nextDiscoveredExecutors = new LinkedHashMap<>();
             List<ToolDefinition> nextDefinitions = new ArrayList<>(remoteTools.size());
             for (ToolSpecification specification : remoteTools) {
-                McpToolAdapter adapter = McpToolAdapter.from(currentClient, serverSlug, specification);
+                McpToolAdapter adapter = McpToolAdapter.from(currentClient, templateResolver.slugify(server.name()),
+                        specification);
+                nextDiscoveredExecutors.put(specification.name(), adapter);
                 if (nextExecutors.putIfAbsent(adapter.modelToolName(), adapter) != null) {
                     throw new McpToolCollisionException("MCP tool name collision: " + adapter.modelToolName());
                 }
                 nextDefinitions.add(adapter.definition());
             }
-            toolDefinitions = List.copyOf(nextDefinitions);
-            executors = Map.copyOf(nextExecutors);
+            Map<String, McpProjectToolExecutor> disabledFilteredExecutors = new LinkedHashMap<>(nextExecutors);
+            disabledFilteredExecutors.entrySet().removeIf(
+                    entry -> server.disabledToolNames().contains(((McpToolAdapter) entry.getValue()).remoteToolName()));
+            List<ToolDefinition> enabledDefinitions = nextDefinitions.stream()
+                    .filter(definition -> disabledFilteredExecutors.containsKey(definition.getName())).toList();
+            discovery = new DiscoveryState(List.copyOf(nextDefinitions), Map.copyOf(nextDiscoveredExecutors),
+                    enabledDefinitions, Map.copyOf(disabledFilteredExecutors));
             runtimeListener.onToolsChanged(server.id());
+            if (status == McpRuntimeEvents.ConnectionStatus.FAILED
+                    || status == McpRuntimeEvents.ConnectionStatus.CONNECTING) {
+                updateStatus(McpRuntimeEvents.ConnectionStatus.READY, "ready");
+            }
+            return true;
         } catch (McpToolCollisionException e) {
-            toolDefinitions = List.of();
-            executors = Map.of();
+            discovery = new DiscoveryState(discovery.rawDefinitions(), discovery.rawExecutors(), List.of(), Map.of());
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
             throw e;
         } catch (Exception e) {
-            toolDefinitions = List.of();
-            executors = Map.of();
+            discovery = new DiscoveryState(discovery.rawDefinitions(), discovery.rawExecutors(), List.of(), Map.of());
             updateStatus(McpRuntimeEvents.ConnectionStatus.FAILED, safeMessage(e));
+            return false;
         }
     }
 
@@ -122,11 +158,62 @@ final class McpProjectMcpServerRuntime implements AutoCloseable {
     }
 
     McpProjectToolSnapshot snapshot(long projectId) {
-        return new McpProjectToolSnapshot(projectId, toolDefinitions, executors);
+        DiscoveryState current = discovery;
+        return new McpProjectToolSnapshot(projectId, current.definitions(), guardedExecutors(current));
+    }
+
+    private Map<String, McpProjectToolExecutor> guardedExecutors(DiscoveryState state) {
+        Map<String, McpProjectToolExecutor> currentExecutors = state.executors();
+        Map<String, McpProjectToolExecutor> guarded = new LinkedHashMap<>();
+        currentExecutors.forEach((name, delegate) -> guarded.put(name, new McpProjectToolExecutor() {
+            @Override
+            public String modelToolName() {
+                return delegate.modelToolName();
+            }
+
+            @Override
+            public String serverSlug() {
+                return delegate.serverSlug();
+            }
+
+            @Override
+            public String toolSlug() {
+                return delegate.toolSlug();
+            }
+
+            @Override
+            public ToolExecutionResult execute(Map<String, Object> args, ToolExecutionContext context)
+                    throws Exception {
+                String rawName = ((McpToolAdapter) delegate).remoteToolName();
+                DiscoveryState current = discovery;
+                McpProjectToolExecutor currentExecutor = current.executors().get(name);
+                if (status != McpRuntimeEvents.ConnectionStatus.READY || currentExecutor == null
+                        || !((McpToolAdapter) currentExecutor).remoteToolName().equals(rawName)
+                        || server.disabledToolNames().contains(rawName)) {
+                    throw new IllegalStateException("MCP tool is unavailable: " + rawName);
+                }
+                return currentExecutor.execute(args, context);
+            }
+        }));
+        return Map.copyOf(guarded);
+    }
+
+    List<DiscoveredTool> discoveredTools() {
+        List<DiscoveredTool> result = new ArrayList<>();
+        DiscoveryState current = discovery;
+        for (McpToolAdapter adapter : current.rawExecutors().values()) {
+            result.add(new DiscoveredTool(adapter.remoteToolName(), adapter.definition().getDescription(),
+                    server.disabledToolNames().contains(adapter.remoteToolName())));
+        }
+        return List.copyOf(result);
+    }
+
+    record DiscoveredTool(String name, String description, boolean disabled) {
     }
 
     @Override
     public synchronized void close() {
+        discovery = new DiscoveryState(discovery.rawDefinitions(), Map.of(), List.of(), Map.of());
         closeClient();
         updateStatus(McpRuntimeEvents.ConnectionStatus.CLOSED, "closed");
     }

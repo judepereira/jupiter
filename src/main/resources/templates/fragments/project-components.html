@@ -230,6 +230,50 @@
                 ></option>
             </select>
         </div>
+        <details class="settings-mcp-tools">
+            <summary>Tool access</summary>
+            <th:block th:if="${server != null and server.disabledToolNames != null}"
+                ><input
+                    type="hidden"
+                    data-mcp-disabled-tool
+                    th:each="toolName : ${server.disabledToolNames}"
+                    th:value="${toolName}"
+                ></th:block
+            >
+            <th:block th:with="discovered=${server == null ? null : discoveredMcpServers.get(server.id)}">
+                <p class="settings-mcp-tools-status" th:if="${discovered == null}">
+                    Connect after applying server settings to discover tools.
+                </p>
+                <p
+                    class="settings-mcp-tools-status"
+                    th:if="${discovered != null and discovered.status != null and discovered.status.name() != 'READY'}"
+                    th:text="${'Server status: ' + discovered.status}"
+                ></p>
+                <div
+                    class="settings-mcp-tool-list"
+                    data-mcp-tool-list
+                    th:if="${discovered != null and !#lists.isEmpty(discovered.tools)}"
+                >
+                    <label class="settings-mcp-tool" th:each="tool : ${discovered.tools}">
+                        <input
+                            type="checkbox"
+                            data-mcp-tool-name
+                            th:value="${tool.name}"
+                            th:checked="${server.disabledToolNames == null or !server.disabledToolNames.contains(tool.name)}"
+                        >
+                        <span class="settings-mcp-tool-name" th:text="${tool.name}"></span>
+                        <span
+                            class="settings-mcp-tool-description"
+                            th:if="${tool.description != null and !tool.description.isBlank()}"
+                            th:text="${tool.description}"
+                        ></span>
+                    </label>
+                </div>
+                <p class="settings-mcp-tools-status" th:if="${discovered != null and #lists.isEmpty(discovered.tools)}">
+                    No tools discovered for this server.
+                </p>
+            </th:block>
+        </details>
         <div class="project-form-field settings-mcp-headers-field" data-settings-mcp-headers>
             <span>Headers</span>
             <div class="settings-mcp-header-list" data-settings-mcp-header-list>

@@ -550,6 +550,12 @@ public class AppStateRepository {
                         .addValue("headersJson", enc("mcp_servers", "headers_json", headersJson)));
     }
 
+    void updateMcpServerDisabledTools(long mcpServerId, String disabledToolsJson) {
+        jdbc.update("UPDATE mcp_servers SET disabled_tools_json = :disabledToolsJson WHERE id = :mcpServerId",
+                new MapSqlParameterSource().addValue("mcpServerId", mcpServerId).addValue("disabledToolsJson",
+                        enc("mcp_servers", "disabled_tools_json", disabledToolsJson)));
+    }
+
     void deleteMcpServer(long mcpServerId) {
         jdbc.update("DELETE FROM project_mcp_servers WHERE mcp_server_id = :mcpServerId",
                 new MapSqlParameterSource("mcpServerId", mcpServerId));
@@ -620,7 +626,8 @@ public class AppStateRepository {
         });
         return rows.stream()
                 .map(row -> new McpServerRow(row.id(), row.name(), row.url(), row.enabled(), row.headersJson(),
-                        row.createdAt(), List.copyOf(projectIdsByMcpServerId.getOrDefault(row.id(), List.of()))))
+                        row.disabledToolsJson(), row.createdAt(),
+                        List.copyOf(projectIdsByMcpServerId.getOrDefault(row.id(), List.of()))))
                 .toList();
     }
 
@@ -1493,6 +1500,7 @@ public class AppStateRepository {
         return new McpServerRow(rs.getLong("id"), dec("mcp_servers", "name", rs.getString("name")),
                 dec("mcp_servers", "url", rs.getString("url")), rs.getBoolean("enabled"),
                 dec("mcp_servers", "headers_json", rs.getString("headers_json")),
+                dec("mcp_servers", "disabled_tools_json", rs.getString("disabled_tools_json")),
                 timestampToInstant(rs.getTimestamp("created_at")), List.of());
     }
 
@@ -1582,8 +1590,8 @@ public class AppStateRepository {
             Instant createdAt, Instant lastOpenedAt, String workspaceInitCommands, String environmentVariables,
             String commandEnvironmentAllowlist) {
     }
-    record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, Instant createdAt,
-            List<Long> exposedProjectIds) {
+    record McpServerRow(long id, String name, String url, boolean enabled, String headersJson, String disabledToolsJson,
+            Instant createdAt, List<Long> exposedProjectIds) {
     }
     record WorkspaceRow(long id, long projectId, String name, String normalizedPath, long position, Instant createdAt,
             Instant lastOpenedAt, boolean unread, boolean inProgress) {
