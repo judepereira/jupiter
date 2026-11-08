@@ -490,10 +490,24 @@ public class AppStateService {
     public AppStateView loadViewData() {
         var appState = repository.loadAppState();
         Set<Long> activeSessionIds = activeStreamRegistryService.activeSessionIdsSnapshot();
-        List<ProjectView> projects = repository.listVisibleProjects().stream().map(this::toProjectView).toList();
+        Map<Long, ProjectStatusAggregate> projectStatuses = new HashMap<>();
+        for (var status : repository.listVisibleProjectSessionStatuses()) {
+            var aggregate = projectStatuses.computeIfAbsent(status.projectId(),
+                    ignored -> new ProjectStatusAggregate());
+            aggregate.unread |= status.unread();
+            RailStatus sessionStatus = railStatus(status.pending(), activeSessionIds.contains(status.sessionId()));
+            if (sessionStatus == RailStatus.FAILED) {
+                aggregate.railStatus = RailStatus.FAILED;
+            } else if (sessionStatus == RailStatus.IN_PROGRESS && aggregate.railStatus != RailStatus.FAILED) {
+                aggregate.railStatus = RailStatus.IN_PROGRESS;
+            }
+        }
+        List<ProjectView> projects = repository.listVisibleProjects().stream().map(project -> toProjectView(project,
+                projectStatuses.getOrDefault(project.id(), new ProjectStatusAggregate()))).toList();
         ProjectView activeProject = appState.activeProjectId() == null
                 ? null
-                : toProjectView(repository.findProject(appState.activeProjectId()));
+                : toProjectView(repository.findProject(appState.activeProjectId()),
+                        projectStatuses.getOrDefault(appState.activeProjectId(), new ProjectStatusAggregate()));
 
         List<WorkspaceView> workspaces = activeProject == null
                 ? List.of()
@@ -1983,12 +1997,16 @@ public class AppStateService {
     }
 
     private ProjectView toProjectView(AppStateRepository.ProjectRow row) {
+        return toProjectView(row, new ProjectStatusAggregate());
+    }
+
+    private ProjectView toProjectView(AppStateRepository.ProjectRow row, ProjectStatusAggregate status) {
         String workspaceInitCommands = row.workspaceInitCommands() == null || row.workspaceInitCommands().isBlank()
                 ? null
                 : row.workspaceInitCommands();
         List<ProjectEnvironmentVariable> environmentVariables = projectEnvironmentVariables(row.environmentVariables());
         return new ProjectView(row.id(), row.name(), row.normalizedPath(), workspaceInitCommands, environmentVariables,
-                row.commandEnvironmentAllowlist());
+                row.commandEnvironmentAllowlist(), status.unread, status.railStatus);
     }
 
     private WorkspaceView toWorkspaceView(AppStateRepository.WorkspaceRow row) {
@@ -2023,6 +2041,11 @@ public class AppStateService {
             }
         }
         return status;
+    }
+
+    private static final class ProjectStatusAggregate {
+        private boolean unread;
+        private RailStatus railStatus = RailStatus.NONE;
     }
 
     private RailStatus railStatus(boolean dbPending, boolean hasActiveStream) {

@@ -1,10 +1,12 @@
 export function syncFaviconWithRail() {
     try {
-        const unreadDotPresent = !!document.querySelector("#workspace-session-rail .unread-dot");
+        const projectTabs = document.getElementById("project-tabs");
+        const failedDotPresent = projectTabs?.dataset.globalFailed === "true";
+        const unreadDotPresent = projectTabs?.dataset.globalUnread === "true";
         const favicon32 = document.getElementById("favicon-32x32");
         const favicon16 = document.getElementById("favicon-16x16");
         const topbarLogo = document.getElementById("topbar-logo");
-        const base = unreadDotPresent ? "/favicon-complete" : "/favicon";
+        const base = failedDotPresent ? "/favicon-failed" : unreadDotPresent ? "/favicon-complete" : "/favicon";
         const source32 = base + "-32x32.png";
         if (favicon32) {
             favicon32.setAttribute("href", source32);
@@ -22,7 +24,8 @@ export function syncFaviconWithRail() {
 
 export function refreshWorkspaceRail() {
     const rail = document.getElementById("workspace-session-rail");
-    if (!rail) {
+    const tabs = document.querySelector(".project-tabs");
+    if (!rail && !tabs) {
         return;
     }
     fetch("/ui/workspaces/rail", { headers: { "HX-Request": "true" } })
@@ -33,9 +36,23 @@ export function refreshWorkspaceRail() {
             return response.text();
         })
         .then((html) => {
-            rail.outerHTML = html;
-            if (window.htmx) {
-                window.htmx.process(document.getElementById("workspace-session-rail"));
+            const responseRoot = document.createElement("div");
+            responseRoot.innerHTML = html;
+            const refreshedRail = responseRoot.querySelector("#workspace-session-rail");
+            const refreshedTabs = responseRoot.querySelector("#project-tabs");
+            const currentRail = document.getElementById("workspace-session-rail");
+            const currentTabs = document.querySelector(".project-tabs");
+            if (refreshedRail && currentRail) {
+                currentRail.outerHTML = refreshedRail.outerHTML;
+                if (window.htmx) {
+                    window.htmx.process(document.getElementById("workspace-session-rail"));
+                }
+            }
+            if (refreshedTabs && currentTabs) {
+                currentTabs.outerHTML = refreshedTabs.outerHTML;
+                if (window.htmx) {
+                    window.htmx.process(document.getElementById("project-tabs"));
+                }
             }
             syncFaviconWithRail();
         })

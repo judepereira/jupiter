@@ -451,6 +451,28 @@ public class AppStateRepository {
                 this::mapProject, "project " + id);
     }
 
+    List<ProjectSessionStatus> listVisibleProjectSessionStatuses() {
+        return jdbc.query("""
+                SELECT p.id AS project_id, s.id AS session_id, s.unread,
+                       EXISTS (
+                           SELECT 1 FROM conversation_messages m
+                           WHERE m.session_id = s.id AND m.role = 'assistant' AND m.show_in_chat = TRUE
+                             AND m.sequence = (SELECT MAX(m2.sequence) FROM conversation_messages m2
+                                               WHERE m2.session_id = s.id AND m2.role = 'assistant'
+                                                 AND m2.show_in_chat = TRUE)
+                             AND m.pending = TRUE
+                       ) AS pending
+                FROM projects p
+                JOIN workspaces w ON w.project_id = p.id
+                JOIN sessions s ON s.workspace_id = w.id
+                WHERE p.closed_at IS NULL AND s.hidden = FALSE
+                """, new MapSqlParameterSource(), (rs, rowNum) -> new ProjectSessionStatus(rs.getLong("project_id"),
+                rs.getLong("session_id"), rs.getBoolean("unread"), rs.getBoolean("pending")));
+    }
+
+    record ProjectSessionStatus(long projectId, long sessionId, boolean unread, boolean pending) {
+    }
+
     List<ProjectRow> listVisibleProjects() {
         return jdbc.query("SELECT * FROM projects WHERE closed_at IS NULL ORDER BY display_order ASC",
                 new MapSqlParameterSource(), this::mapProject);
