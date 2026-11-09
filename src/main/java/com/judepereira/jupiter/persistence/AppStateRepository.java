@@ -43,6 +43,99 @@ public class AppStateRepository {
         return value == null ? null : crypto.decrypt(value, table + "." + column);
     }
 
+    @Transactional
+    public void insertInboundMcpCredential(String id, String name, String token, boolean allProjects,
+            String projectIdsJson, String allowedToolsJson, Instant now) {
+        jdbc.update(
+                "INSERT INTO inbound_mcp_credentials (id, name, token_hash, token_ciphertext, all_projects, "
+                        + "project_ids_json, allowed_tools_json, created_at) VALUES (:id, :name, :hash, :token, "
+                        + ":allProjects, :projects, :tools, :created)",
+                new MapSqlParameterSource().addValue("id", id)
+                        .addValue("name", enc("inbound_mcp_credentials", "name", name))
+                        .addValue("hash", crypto.blindIndex(token, "inbound-mcp-token"))
+                        .addValue("token", enc("inbound_mcp_credentials", "token_ciphertext", token))
+                        .addValue("allProjects", allProjects ? 1 : 0)
+                        .addValue("projects", enc("inbound_mcp_credentials", "project_ids_json", projectIdsJson))
+                        .addValue("tools", enc("inbound_mcp_credentials", "allowed_tools_json", allowedToolsJson))
+                        .addValue("created", now.toString()));
+    }
+
+    @Transactional
+    public boolean initializeInboundMcpCredential(String id, String name, String token, String projectsJson,
+            String toolsJson, Instant now) {
+        int inserted = jdbc.update(
+                "INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('inbound_mcp_initialized', '1')",
+                new MapSqlParameterSource());
+        if (inserted == 0) {
+            return false;
+        }
+        insertInboundMcpCredential(id, name, token, true, projectsJson, toolsJson, now);
+        return true;
+    }
+
+    public List<InboundMcpCredentialRow> listInboundMcpCredentials() {
+        return jdbc.query("SELECT * FROM inbound_mcp_credentials ORDER BY created_at, id", new MapSqlParameterSource(),
+                (rs, row) -> mapInboundMcpCredential(rs));
+    }
+
+    private InboundMcpCredentialRow mapInboundMcpCredential(ResultSet rs) throws SQLException {
+        return new InboundMcpCredentialRow(rs.getString("id"),
+                dec("inbound_mcp_credentials", "name", rs.getString("name")), rs.getInt("all_projects") != 0,
+                dec("inbound_mcp_credentials", "project_ids_json", rs.getString("project_ids_json")),
+                dec("inbound_mcp_credentials", "allowed_tools_json", rs.getString("allowed_tools_json")),
+                rs.getString("revoked_at") != null,
+                dec("inbound_mcp_credentials", "token_ciphertext", rs.getString("token_ciphertext")));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<InboundMcpCredentialRow> findInboundMcpCredentialByToken(String token) {
+        return jdbc.query("SELECT * FROM inbound_mcp_credentials WHERE token_hash = :hash AND revoked_at IS NULL",
+                new MapSqlParameterSource("hash", crypto.blindIndex(token, "inbound-mcp-token")),
+                (rs, row) -> mapInboundMcpCredential(rs)).stream().findFirst();
+    }
+
+    @Transactional
+    public void updateInboundMcpCredential(String id, String name, boolean allProjects, String projectsJson,
+            String toolsJson) {
+        int updated = jdbc.update(
+                "UPDATE inbound_mcp_credentials SET name=:name, all_projects=:allProjects, project_ids_json=:projects, allowed_tools_json=:tools WHERE id=:id AND revoked_at IS NULL",
+                new MapSqlParameterSource().addValue("id", id)
+                        .addValue("name", enc("inbound_mcp_credentials", "name", name))
+                        .addValue("allProjects", allProjects ? 1 : 0)
+                        .addValue("projects", enc("inbound_mcp_credentials", "project_ids_json", projectsJson))
+                        .addValue("tools", enc("inbound_mcp_credentials", "allowed_tools_json", toolsJson)));
+        requireUpdatedCredential(updated);
+    }
+
+    @Transactional
+    public void replaceInboundMcpCredentialToken(String id, String token, Instant now) {
+        int updated = jdbc.update(
+                "UPDATE inbound_mcp_credentials SET token_hash=:hash, token_ciphertext=:token, rotated_at=:now WHERE id=:id AND revoked_at IS NULL",
+                new MapSqlParameterSource().addValue("id", id)
+                        .addValue("hash", crypto.blindIndex(token, "inbound-mcp-token"))
+                        .addValue("token", enc("inbound_mcp_credentials", "token_ciphertext", token))
+                        .addValue("now", now.toString()));
+        requireUpdatedCredential(updated);
+    }
+
+    @Transactional
+    public void revokeInboundMcpCredential(String id, Instant now) {
+        int updated = jdbc.update(
+                "UPDATE inbound_mcp_credentials SET revoked_at=:now WHERE id=:id AND revoked_at IS NULL",
+                new MapSqlParameterSource().addValue("id", id).addValue("now", now.toString()));
+        requireUpdatedCredential(updated);
+    }
+
+    private void requireUpdatedCredential(int updated) {
+        if (updated != 1) {
+            throw new IllegalArgumentException("Credential not found or revoked");
+        }
+    }
+
+    public record InboundMcpCredentialRow(String id, String name, boolean allProjects, String projectIdsJson,
+            String allowedToolsJson, boolean revoked, String token) {
+    }
+
     AppStateRow loadAppState() {
         return jdbc.queryForObject(
                 "SELECT active_project_id, active_workspace_id, active_session_id FROM app_state WHERE id = 1",
@@ -449,6 +542,11 @@ public class AppStateRepository {
     ProjectRow findProject(long id) {
         return queryRequired("SELECT * FROM projects WHERE id = :id", new MapSqlParameterSource("id", id),
                 this::mapProject, "project " + id);
+    }
+
+    public List<Long> listVisibleProjectIds() {
+        return jdbc.query("SELECT id FROM projects WHERE closed_at IS NULL", new MapSqlParameterSource(),
+                (rs, row) -> rs.getLong("id"));
     }
 
     List<ProjectRow> listVisibleProjects() {

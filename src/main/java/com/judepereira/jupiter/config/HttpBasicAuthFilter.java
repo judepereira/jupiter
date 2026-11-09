@@ -27,6 +27,10 @@ public class HttpBasicAuthFilter implements Filter {
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
+        if (isMcpRequest(request)) {
+            chain.doFilter(request, response);
+            return;
+        }
         if (!properties.enabled() || isHealthGet(request)) {
             chain.doFilter(request, response);
             return;
@@ -64,6 +68,11 @@ public class HttpBasicAuthFilter implements Filter {
         } catch (IllegalArgumentException e) {
             return false;
         }
+    }
+
+    private static boolean isMcpRequest(ServletRequest request) {
+        HttpServletRequest httpRequest = (HttpServletRequest) request;
+        return "/mcp".equals(httpRequest.getRequestURI());
     }
 
     private static boolean isHealthGet(ServletRequest request) {

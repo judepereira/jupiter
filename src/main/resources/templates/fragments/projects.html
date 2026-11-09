@@ -464,6 +464,18 @@
                         </button>
                         <button
                             class="nav-link"
+                            id="settings-inbound-mcp-tab"
+                            data-bs-toggle="pill"
+                            data-bs-target="#settings-inbound-mcp"
+                            type="button"
+                            role="tab"
+                            aria-controls="settings-inbound-mcp"
+                            aria-selected="false"
+                        >
+                            Inbound MCP
+                        </button>
+                        <button
+                            class="nav-link"
                             id="settings-hooks-tab"
                             data-bs-toggle="pill"
                             data-bs-target="#settings-hooks"
@@ -541,6 +553,15 @@
 
                 <div class="col-12 col-md-9 overflow-scroll h-100">
                     <div class="tab-content settings-tab-content">
+                        <div
+                            class="tab-pane fade"
+                            id="settings-inbound-mcp"
+                            role="tabpanel"
+                            aria-labelledby="settings-inbound-mcp-tab"
+                            hx-get="/ui/settings/inbound-mcp"
+                            hx-trigger="load"
+                            hx-swap="innerHTML"
+                        ></div>
                         <div
                             th:if="${activeProject != null}"
                             class="tab-pane fade show active"

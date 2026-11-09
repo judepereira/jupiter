@@ -1,0 +1,100 @@
+<th:block xmlns:th="http://www.thymeleaf.org" th:fragment="panel">
+    <section class="settings-section" id="inbound-mcp-settings">
+        <h3>Inbound MCP credentials</h3>
+        <p>Connect an MCP client to this Jupiter instance using the bearer token. Tokens are shown only on request.</p>
+        <form hx-post="/ui/settings/inbound-mcp/create" hx-target="#inbound-mcp-settings" hx-swap="outerHTML">
+            <label>Name <input name="name" maxlength="100" required></label>
+            <label
+                ><input type="checkbox" name="allProjects" value="true">
+                All projects, including future projects</label
+            >
+            <fieldset>
+                <legend>Projects (when not using all projects)</legend>
+                <label th:each="project : ${inboundProjects}"
+                    ><input type="checkbox" name="projectIds" th:value="${project.id}">
+                    <span th:text="${project.name}"></span></label
+                >
+            </fieldset>
+            <fieldset>
+                <legend>Allowed tools</legend>
+                <label th:each="tool : ${inboundTools}"
+                    ><input type="checkbox" name="tools" th:value="${tool}" checked>
+                    <span th:text="${tool}"></span></label
+                >
+            </fieldset>
+            <button class="btn btn-primary" type="submit">Create credential</button>
+        </form>
+        <p th:if="${issuedToken != null}" class="alert alert-warning">
+            Copy this token now: <code th:text="${issuedToken}"></code>
+        </p>
+        <article th:each="credential : ${inboundCredentials}" class="settings-section">
+            <strong th:text="${credential.name}"></strong
+            ><span
+                th:text="${credential.revoked ? 'Revoked' : (credential.allProjects ? 'All projects' : 'Selected projects')}"
+            ></span>
+            <p th:text="${credential.tools}"></p>
+            <form
+                th:if="${!credential.revoked}"
+                th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/edit(id=${credential.id})}"
+                hx-target="#inbound-mcp-settings"
+                hx-swap="outerHTML"
+            >
+                <label>Name <input name="name" maxlength="100" required th:value="${credential.name}"></label>
+                <label
+                    ><input type="checkbox" name="allProjects" value="true" th:checked="${credential.allProjects}">
+                    All projects, including future projects</label
+                >
+                <fieldset>
+                    <legend>Projects</legend>
+                    <label th:each="project : ${inboundProjects}"
+                        ><input
+                            type="checkbox"
+                            name="projectIds"
+                            th:value="${project.id}"
+                            th:checked="${credential.projectIds.contains(project.id)}"
+                        ><span th:text="${project.name}"></span></label
+                    >
+                </fieldset>
+                <fieldset>
+                    <legend>Allowed tools</legend>
+                    <label th:each="tool : ${inboundTools}"
+                        ><input
+                            type="checkbox"
+                            name="tools"
+                            th:value="${tool}"
+                            th:checked="${credential.tools.contains(tool)}"
+                        ><span th:text="${tool}"></span></label
+                    >
+                </fieldset>
+                <button type="submit">Save changes</button>
+            </form>
+            <form
+                th:if="${!credential.revoked}"
+                th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/reveal(id=${credential.id})}"
+                hx-target="#inbound-mcp-settings"
+                hx-swap="outerHTML"
+            >
+                <button type="submit">Reveal</button>
+            </form>
+            <form
+                th:if="${!credential.revoked}"
+                th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/rotate(id=${credential.id})}"
+                hx-target="#inbound-mcp-settings"
+                hx-swap="outerHTML"
+                hx-confirm="Rotate this credential? Existing clients will stop working."
+            >
+                <button type="submit">Rotate</button>
+            </form>
+            <form
+                th:if="${!credential.revoked}"
+                th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/revoke(id=${credential.id})}"
+                hx-target="#inbound-mcp-settings"
+                hx-swap="outerHTML"
+                hx-confirm="Revoke this credential?"
+            >
+                <button type="submit">Revoke</button>
+            </form>
+        </article>
+        <p>Endpoint: <code>/mcp</code>. Configure your client with this URL and the bearer token.</p>
+    </section>
+</th:block>

@@ -1,18 +1,10 @@
 package com.judepereira.jupiter.ui;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.*;
 import com.judepereira.jupiter.agent.config.AgentProperties;
-import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
-import com.judepereira.jupiter.agent.harness.AgentTurnResult;
-import com.judepereira.jupiter.agent.harness.CancellationToken;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
-import com.judepereira.jupiter.agent.harness.StreamCancelledException;
-import com.judepereira.jupiter.agent.harness.ToolCallTrace;
-import com.judepereira.jupiter.agent.llm.AgentStreamListener;
-import com.judepereira.jupiter.agent.llm.dto.Message;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
@@ -33,31 +25,21 @@ import com.judepereira.jupiter.persistence.GitWorktreeException;
 import com.judepereira.jupiter.persistence.InvalidGitBranchNameException;
 import com.judepereira.jupiter.persistence.Persistence.*;
 import com.judepereira.jupiter.persistence.TokenUsageService;
-import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.terminal.TerminalHandle;
 import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalPanelState;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
-import com.judepereira.jupiter.ui.ChatPresentationService.ToolCallView;
+import com.judepereira.jupiter.ui.ChatStreamRuntime.ActiveStream;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import jakarta.servlet.http.HttpServletRequest;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.Locale;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -111,10 +93,15 @@ public class UiController {
     private final String appVersion;
     private final String userHome;
 
-    private final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
+    private final ChatStreamRuntime chatStreamRuntime;
 
     private ManualGitPullCoordinator manualGitPullCoordinator() {
         return manualGitPullCoordinator;
+    }
+
+    @GetMapping("/ui/chat/stream/{assistantId}")
+    public SseEmitter streamChat(@PathVariable("assistantId") String assistantId) {
+        return chatStreamRuntime.streamChat(assistantId);
     }
 
     @Autowired
@@ -131,9 +118,10 @@ public class UiController {
             McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
             ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
             HttpAuthProperties httpAuthProperties, GitAutoUpdateService gitAutoUpdateService,
-            ManualGitPullCoordinator manualGitPullCoordinator,
+            ManualGitPullCoordinator manualGitPullCoordinator, ChatStreamRuntime chatStreamRuntime,
             @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion,
             @Value("${user.home}") String userHome) {
+        this.chatStreamRuntime = chatStreamRuntime;
         this.harness = harness;
         this.agentProperties = agentProperties;
         this.appStateService = appStateService;
@@ -192,78 +180,16 @@ public class UiController {
         ChatSelection selected = resolveChatSelection(agentId, modelId, thinkingLevel);
 
         if (message != null && !message.isBlank()) {
-            boolean implicitModel = modelId == null || modelId.isBlank();
-            AgentPreferenceResolver.Resolution preferenceSnapshot = agentPreferenceResolver.resolve(
-                    selected.selectedAgent(), implicitModel ? null : modelId,
-                    thinkingLevel == null || thinkingLevel.isBlank() ? null : ThinkingLevel.fromValue(thinkingLevel),
-                    !implicitModel);
-            AgentModelResolutionService.ModelResolution modelResolution = new AgentModelResolutionService.ModelResolution(
-                    preferenceSnapshot.preferredModelId(), preferenceSnapshot.model());
-            // Use the queue-time executable model for validation and compaction, but keep
-            // the
-            // request implicit so the harness resolves availability again at execution
-            // time.
-            if (implicitModel) {
-                selected = new ChatSelection(selected.selectedAgent(), modelResolution.model(),
-                        selected.selectedThinking(), false, selected.defaultAgent(), selected.defaultModel(),
-                        selected.defaultThinking());
-            }
-            String selectedModelId = selected.selectedModel().id();
-            if (modelPickerService != null && modelPickerService.listPickerModels().stream()
-                    .noneMatch(candidate -> candidate.id().equals(selectedModelId))) {
-                throw new IllegalArgumentException(
-                        "That model is no longer available. Choose an available model in Settings.");
-            }
-            if (view.activeSession() != null
-                    && activeStreamRegistryService.hasActiveStreamForSession(view.activeSession().id())) {
-                throw new IllegalStateException("A chat stream is already active for the current session");
-            }
             shellRefresh = view.activeSession() == null;
-            if (shellRefresh) {
-                session = appStateService.ensureChatSession(agentProperties.getWorkspaceRoot());
-                view = appStateService.loadViewData();
-            } else {
-                session = view.activeSession();
+            session = shellRefresh
+                    ? appStateService.ensureChatSession(agentProperties.getWorkspaceRoot())
+                    : view.activeSession();
+            var submission = chatStreamRuntime.submit(session.id(), message, agentId, modelId, thinkingLevel);
+            if (submission.summary() != null) {
+                newChatMessages.add(toChatMessage(submission.summary()));
             }
-            SessionDetailView sessionDetail = view.activeSessionDetail();
-            String workspaceRoot = sessionDetail.workspaceRoot();
-            String user = message.trim();
-            String assistantId = UUID.randomUUID().toString();
-            String userId = UUID.randomUUID().toString();
-            ChatMessageMetadata metadata = new ChatMessageMetadata(selected.selectedAgent().id(),
-                    selected.selectedAgent().name(), selected.selectedModel().id(), selected.selectedThinking().name(),
-                    implicitModel && modelResolution.fallback() ? modelResolution.preferredModelId() : null);
-            Optional<ChatMessageView> summaryMessage = contextCompactionService.compactIfNeeded(session.id(),
-                    selected.selectedAgent(), selected.selectedModel(), selected.selectedThinking(), workspaceRoot,
-                    user);
-            summaryMessage.ifPresent(summary -> newChatMessages.add(toChatMessage(summary)));
-            QueuedChatTurn queued = appStateService.appendUserMessageAndPendingAssistant(session.id(), userId,
-                    assistantId, user, metadata);
-            newChatMessages.add(toChatMessage(queued.userMessage()));
-            newChatMessages.add(toChatMessage(queued.assistantMessage()));
-
-            List<Message> conversationHistory = new ArrayList<>(appStateService.buildConversationHistory(session.id()));
-            CancellationToken cancellationToken = new CancellationToken();
-            ActiveStream activeStream = ActiveStream.create(
-                    new PendingStream(session.id(), workspaceRoot,
-                            new AgentTurnRequest(null, conversationHistory, workspaceRoot,
-                                    selected.selectedAgent().id(), implicitModel ? null : selected.selectedModel().id(),
-                                    selected.selectedThinking(), session.id(), cancellationToken, preferenceSnapshot)),
-                    cancellationToken);
-            activeStreams.put(assistantId, activeStream);
-            try {
-                activeStreamRegistryService.register(assistantId, session.id(), workspaceRoot);
-                appStateService.publishWorkspaceRailRefresh();
-            } catch (RuntimeException e) {
-                activeStreams.remove(assistantId, activeStream);
-                activeStreamRegistryService.unregister(assistantId);
-                throw e;
-            } catch (Exception e) {
-                activeStreams.remove(assistantId, activeStream);
-                activeStreamRegistryService.unregister(assistantId);
-                throw new IllegalStateException("Failed to queue active stream", e);
-            }
-
+            newChatMessages.add(toChatMessage(submission.queuedTurn().userMessage()));
+            newChatMessages.add(toChatMessage(submission.queuedTurn().assistantMessage()));
             view = appStateService.loadViewData();
         }
 
@@ -340,371 +266,6 @@ public class UiController {
         return "fragments/review :: panel";
     }
 
-    @GetMapping("/ui/chat/stream/{assistantId}")
-    public SseEmitter streamChat(@PathVariable("assistantId") String assistantId) {
-        SseEmitter commandEmitter = commandStreamService.tryConnect(assistantId);
-        if (commandEmitter != null) {
-            return commandEmitter;
-        }
-
-        SseEmitter emitter = new SseEmitter(0L);
-        ActiveStream active = activeStreams.get(assistantId);
-        if (active == null || active.finished().get()) {
-            try {
-                emitter.send(
-                        SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
-            } catch (Exception ignored) {
-            }
-            emitter.complete();
-            return emitter;
-        }
-
-        attachEmitter(active, emitter);
-        sendToolCallSnapshot(active, assistantId, emitter);
-        if (active.started().compareAndSet(false, true)) {
-            startActiveStream(assistantId, active, emitter);
-        }
-
-        return emitter;
-    }
-
-    private void startActiveStream(String assistantId, ActiveStream active, SseEmitter emitter) {
-        try {
-            Thread runner = Thread.startVirtualThread(() -> runActiveStream(assistantId, active));
-            active.runner().set(runner);
-        } catch (Exception e) {
-            active.started().set(false);
-            listenerStartFailed(active, assistantId, e, emitter);
-        } catch (Throwable t) {
-            active.started().set(false);
-            listenerStartFailed(active, assistantId, new RuntimeException(t), emitter);
-        }
-    }
-
-    private void runActiveStream(String assistantId, ActiveStream active) {
-        PendingStream pending = active.pendingStream();
-        AtomicBoolean completed = active.completed();
-        StringBuilder accumulated = active.accumulatedText().get();
-
-        AgentStreamListener listener = new AgentStreamListener() {
-            @Override
-            public void onModelResolved(String preferredModelId, ModelDefinition actualModel) {
-                appStateService.updateAssistantModelMetadata(pending.sessionId(), assistantId, actualModel.id(),
-                        preferredModelId);
-            }
-
-            @Override
-            public void onTextDelta(String delta) {
-                try {
-                    if (delta == null) {
-                        return;
-                    }
-                    active.cancellationToken().throwIfCancelled();
-                    accumulated.append(delta);
-                    appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId,
-                            accumulated.toString());
-                    broadcastEvent(active, assistantId, "delta", Map.of("text", delta));
-                } catch (Exception e) {
-                    onError(e);
-                }
-            }
-
-            @Override
-            public void onStatus(String status) {
-                broadcastEvent(active, assistantId, "status", Map.of("status", status));
-            }
-
-            @Override
-            public void onToolCallStarted(ToolCallTrace trace) {
-                try {
-                    if (trace != null) {
-                        appStateService.startToolCallTrace(pending.sessionId(), assistantId,
-                                toToolCallTraceInput(trace));
-                        if (chatToolCallHtmlService != null) {
-                            broadcastToolCallHtml(active, assistantId,
-                                    chatToolCallHtmlService.toolStarted(pending.sessionId(), assistantId));
-                        }
-                    }
-                    broadcastEvent(active, assistantId, "tool_call_started", trace);
-                } catch (Exception e) {
-                    onError(e);
-                }
-            }
-
-            @Override
-            public void onToolCallProgress(String toolCallId, String toolName, String eventName, Object payload) {
-                broadcastEvent(active, assistantId, "tool_call_progress", Map.of("toolCallId", toolCallId, "toolName",
-                        toolName, "eventName", eventName, "payload", payload));
-                if ("subagent_started".equals(eventName) && chatToolCallHtmlService != null) {
-                    broadcastToolCallHtml(active, assistantId,
-                            chatToolCallHtmlService.subagentStarted(pending.sessionId(), assistantId, toolCallId));
-                }
-            }
-
-            @Override
-            public void onToolCallTrace(ToolCallTrace trace) {
-                try {
-                    ToolCallView v = chatPresentationService.toToolCallView(appStateService
-                            .appendToolCallTrace(pending.sessionId(), assistantId, toToolCallTraceInput(trace)));
-                    if (chatToolCallHtmlService != null) {
-                        broadcastToolCallHtml(active, assistantId, chatToolCallHtmlService
-                                .toolCompleted(pending.sessionId(), assistantId, trace.getToolCallId()));
-                    }
-                    broadcastEvent(active, assistantId, "tool_call", v);
-                } catch (Exception e) {
-                    onError(e);
-                }
-            }
-
-            @Override
-            public List<Message> onBeforeModelRequest(AgentTurnRequest currentRequest, List<Message> conversation) {
-                active.cancellationToken().throwIfCancelled();
-                if (currentRequest.getSessionId() == null) {
-                    return conversation;
-                }
-
-                AgentDefinition requestAgent = resolveRequestAgent(currentRequest);
-                ModelDefinition requestModel = resolveRequestModel(currentRequest, requestAgent);
-                ThinkingLevel requestThinking = currentRequest.getPreferenceSnapshot() != null
-                        ? currentRequest.getPreferenceSnapshot().thinkingLevel()
-                        : (currentRequest.getThinkingLevel() != null
-                                ? currentRequest.getThinkingLevel()
-                                : (requestAgent == null ? null : requestAgent.defaultThinkingLevel()));
-
-                Optional<ChatMessageView> summary = contextCompactionService.compactIfNeeded(
-                        currentRequest.getSessionId(), requestAgent, requestModel, requestThinking,
-                        pending.workspaceRoot(), null);
-                if (summary.isEmpty()) {
-                    return conversation;
-                }
-
-                broadcastEvent(active, assistantId, "context_compaction", summary.get());
-
-                return appStateService.buildConversationHistory(currentRequest.getSessionId());
-            }
-
-            @Override
-            public void onComplete(AgentTurnResult result) {
-                try {
-                    String finalText = result.getFinalText() == null ? "" : result.getFinalText();
-                    List<ToolCallTraceInput> traces = result.getTraces() == null
-                            ? List.of()
-                            : result.getTraces().stream().map(UiController.this::toToolCallTraceInput).toList();
-                    ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(),
-                            assistantId, finalText, traces);
-                    dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, pending.sessionId());
-                    processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
-                    finalizeStreamSuccess(active, assistantId, completedMessage, completed);
-                } catch (Exception e) {
-                    onError(e);
-                }
-            }
-
-            @Override
-            public void onError(Exception e) {
-                try {
-                    if (e instanceof StreamCancelledException) {
-                        active.cancellationToken().cancel();
-                        Thread runner = active.runner().getAndSet(null);
-                        if (runner != null) {
-                            runner.interrupt();
-                        }
-                        ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(pending.sessionId(),
-                                assistantId, accumulated.toString());
-                        finalizeStreamStopped(active, assistantId, stoppedMessage, completed);
-                        return;
-                    }
-                    String normalizedMessage = normalizeProviderErrorMessage(e);
-                    ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(),
-                            assistantId, "Agent execution failed: " + normalizedMessage);
-                    dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, pending.sessionId());
-                    log.error("Execution failure!", e);
-                    finalizeStreamError(active, assistantId, normalizedMessage, failedMessage, e, completed);
-                } catch (Exception ignored) {
-                }
-            }
-        };
-
-        try {
-            AgentTurnResult result = harness.runTurnStreaming(pending.request(), listener);
-            if (!completed.get()) {
-                listener.onComplete(result);
-            }
-        } catch (StreamCancelledException e) {
-            listener.onError(e);
-        } catch (Exception e) {
-            listener.onError(e);
-        }
-    }
-
-    private void listenerStartFailed(ActiveStream active, String assistantId, Exception e, SseEmitter emitter) {
-        try {
-            String normalizedMessage = normalizeProviderErrorMessage(e);
-            ChatMessageView failedMessage = appStateService.failAssistantMessage(active.pendingStream().sessionId(),
-                    assistantId, "Agent execution failed: " + normalizedMessage);
-            dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED,
-                    active.pendingStream().sessionId());
-            log.error("Execution failure!", e);
-            broadcastToolCallHostSnapshot(active, assistantId);
-            broadcastEvent(active, assistantId, "error",
-                    Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
-        } catch (Exception ignored) {
-        } finally {
-            active.finished().set(true);
-            activeStreams.remove(assistantId, active);
-            activeStreamRegistryService.unregister(assistantId);
-            appStateService.publishWorkspaceRailRefresh();
-            completeEmitters(active);
-            detachEmitter(active, emitter);
-        }
-    }
-
-    private void attachEmitter(ActiveStream active, SseEmitter emitter) {
-        active.emitters().add(emitter);
-        emitter.onCompletion(() -> detachEmitter(active, emitter));
-        emitter.onTimeout(() -> detachEmitter(active, emitter));
-        emitter.onError(ignored -> detachEmitter(active, emitter));
-    }
-
-    private void detachEmitter(ActiveStream active, SseEmitter emitter) {
-        active.emitters().remove(emitter);
-    }
-
-    private void sendToolCallSnapshot(ActiveStream active, String assistantId, SseEmitter emitter) {
-        if (chatToolCallHtmlService == null) {
-            return;
-        }
-        try {
-            sendEventToEmitter(active, assistantId, emitter, "tool_call_html",
-                    chatToolCallHtmlService.hostSnapshot(active.pendingStream().sessionId(), assistantId));
-        } catch (Exception e) {
-            log.error("Failed to send tool-call snapshot", e);
-        }
-    }
-
-    private void broadcastToolCallHtml(ActiveStream active, String assistantId, List<DomPatch> patches) {
-        if (chatToolCallHtmlService != null && !patches.isEmpty()) {
-            broadcastEvent(active, assistantId, "tool_call_html", patches);
-        }
-    }
-
-    private void dispatchLifecycleHook(LifecycleHookService.LifecycleEvent event, long sessionId) {
-        if (lifecycleHookService == null) {
-            return;
-        }
-        try {
-            lifecycleHookService.dispatch(event, sessionId);
-        } catch (Throwable e) {
-            log.warn("Failed to dispatch lifecycle hook: event={}, sessionId={}", event, sessionId, e);
-        }
-    }
-
-    private void broadcastToolCallHostSnapshot(ActiveStream active, String assistantId) {
-        if (chatToolCallHtmlService != null) {
-            broadcastToolCallHtml(active, assistantId,
-                    chatToolCallHtmlService.hostSnapshot(active.pendingStream().sessionId(), assistantId));
-        }
-    }
-
-    private void broadcastEvent(ActiveStream active, String assistantId, String name, Object payload) {
-        for (SseEmitter emitter : active.emitters()) {
-            sendEventToEmitter(active, assistantId, emitter, name, payload);
-        }
-    }
-
-    private void sendEventToEmitter(ActiveStream active, String assistantId, SseEmitter emitter, String name,
-            Object payload) {
-        try {
-            emitter.send(SseEmitter.event().name(name).data(SseJson.writeValueAsString(payload)));
-        } catch (Exception e) {
-            log.debug("Dropping disconnected SSE subscriber for assistant {}", assistantId, e);
-            detachEmitter(active, emitter);
-        }
-    }
-
-    private void finalizeStreamSuccess(ActiveStream active, String assistantId, ChatMessageView completedMessage,
-            AtomicBoolean completed) {
-        if (!completed.compareAndSet(false, true)) {
-            return;
-        }
-
-        active.finished().set(true);
-        activeStreams.remove(assistantId, active);
-        activeStreamRegistryService.unregister(assistantId);
-        broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "done",
-                Map.of("text", completedMessage.text(), "completedTs", completedMessage.completedTs()));
-        completeEmitters(active);
-        appStateService.publishWorkspaceRailRefresh();
-    }
-
-    private void finalizeStreamError(ActiveStream active, String assistantId, String normalizedMessage,
-            ChatMessageView failedMessage, Exception e, AtomicBoolean completed) {
-        if (!completed.compareAndSet(false, true)) {
-            return;
-        }
-
-        active.finished().set(true);
-        activeStreams.remove(assistantId, active);
-        activeStreamRegistryService.unregister(assistantId);
-        broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "error",
-                Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
-        completeEmitters(active);
-        appStateService.publishWorkspaceRailRefresh();
-    }
-
-    private void finalizeStreamStopped(ActiveStream active, String assistantId, ChatMessageView stoppedMessage,
-            AtomicBoolean completed) {
-        if (!completed.compareAndSet(false, true)) {
-            return;
-        }
-
-        active.finished().set(true);
-        activeStreams.remove(assistantId, active);
-        activeStreamRegistryService.unregister(assistantId);
-        broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "stopped",
-                Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
-        completeEmitters(active);
-        appStateService.publishWorkspaceRailRefresh();
-    }
-
-    private void stopActiveStream(String assistantId, ActiveStream active) {
-        if (!active.completed().compareAndSet(false, true)) {
-            return;
-        }
-        active.cancellationToken().cancel();
-        Thread runner = active.runner().getAndSet(null);
-        if (runner != null) {
-            runner.interrupt();
-        }
-        try {
-            ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(active.pendingStream().sessionId(),
-                    assistantId, active.accumulatedText().get().toString());
-            active.finished().set(true);
-            activeStreams.remove(assistantId, active);
-            activeStreamRegistryService.unregister(assistantId);
-            broadcastToolCallHostSnapshot(active, assistantId);
-            broadcastEvent(active, assistantId, "stopped",
-                    Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
-            completeEmitters(active);
-            appStateService.publishWorkspaceRailRefresh();
-        } catch (Exception e) {
-            log.error("Failed to stop assistant stream", e);
-        }
-    }
-
-    private void completeEmitters(ActiveStream active) {
-        for (SseEmitter emitter : active.emitters()) {
-            try {
-                emitter.complete();
-            } catch (Exception ignored) {
-            }
-        }
-        active.emitters().clear();
-    }
-
     @PostMapping("/ui/chat/stop")
     public String stopChat(@RequestParam(value = "assistantId", required = false) String assistantId, Model model) {
         AppStateView view = appStateService.loadViewData();
@@ -719,13 +280,13 @@ public class UiController {
         String targetAssistantId = assistantId;
         ActiveStream active = targetAssistantId == null || targetAssistantId.isBlank()
                 ? null
-                : activeStreams.get(targetAssistantId);
+                : chatStreamRuntime.activeStreams.get(targetAssistantId);
         if (active != null && active.pendingStream().sessionId() != session.id()) {
             throw new IllegalStateException("Assistant stream does not belong to the active session");
         }
         if (active == null) {
-            active = activeStreams.values().stream().filter(s -> s.pendingStream().sessionId() == session.id())
-                    .findFirst().orElse(null);
+            active = chatStreamRuntime.activeStreams.values().stream()
+                    .filter(s -> s.pendingStream().sessionId() == session.id()).findFirst().orElse(null);
         }
         if (active == null) {
             if (targetAssistantId != null && !targetAssistantId.isBlank()) {
@@ -747,10 +308,10 @@ public class UiController {
 
         if (targetAssistantId == null || targetAssistantId.isBlank()) {
             ActiveStream targetActive = active;
-            targetAssistantId = activeStreams.entrySet().stream().filter(entry -> entry.getValue() == targetActive)
-                    .map(Map.Entry::getKey).findFirst().orElseThrow();
+            targetAssistantId = chatStreamRuntime.activeStreams.entrySet().stream()
+                    .filter(entry -> entry.getValue() == targetActive).map(Map.Entry::getKey).findFirst().orElseThrow();
         }
-        stopActiveStream(targetAssistantId, active);
+        chatStreamRuntime.stopActiveStream(targetAssistantId, active);
         view = appStateService.loadViewData();
         populateChatControlsModel(model, activeChatSelection(view));
         populateProjectModel(model, view);
@@ -1921,109 +1482,6 @@ public class UiController {
         }
     }
 
-    private String safeComputeDiff(String workspaceRoot, String relativePath) {
-        final int MAX_CHARS = 16_000;
-        Path root = Path.of(workspaceRoot);
-        Path resolved;
-        try {
-            resolved = FileUtils.resolveWorkspacePath(root, relativePath);
-        } catch (Exception e) {
-            return "(invalid path: " + relativePath + ")";
-        }
-
-        try {
-            Path relForGit = FileUtils.relativizeWorkspacePath(root, resolved);
-            ProcessBuilder pb = new ProcessBuilder("git", "diff", "--", relForGit.toString());
-            ProcessEnvironmentSanitizer.sanitize(pb);
-            pb.directory(new File(root.toAbsolutePath().normalize().toString()));
-            Process p = pb.start();
-            StringBuilder out = new StringBuilder();
-            try (BufferedReader r = new BufferedReader(
-                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = r.readLine()) != null) {
-                    out.append(line).append('\n');
-                    if (out.length() > MAX_CHARS) {
-                        break;
-                    }
-                }
-            }
-            p.waitFor();
-            String gitDiff = out.toString().trim();
-            if (!gitDiff.isBlank()) {
-                return gitDiff.length() > MAX_CHARS ? gitDiff.substring(0, MAX_CHARS) : gitDiff;
-            }
-        } catch (Exception ignored) {
-        }
-
-        try {
-            if (!Files.exists(resolved)) {
-                return "(no diff available)";
-            }
-            String content = Files.readString(resolved);
-            if (content.length() > MAX_CHARS) {
-                content = content.substring(0, MAX_CHARS) + "\n... (truncated)";
-            }
-            return "+++ " + resolved + "\n" + content;
-        } catch (Exception e) {
-            return "(error reading file: " + e.getMessage() + ")";
-        }
-    }
-
-    private void processChangedFiles(AgentTurnResult result, long sessionId, String workspaceRoot) {
-        var mutatingTools = Set.of("write_file", "apply_patch");
-        List<ToolCallTrace> traces = result.getTraces() == null ? List.of() : result.getTraces();
-        Set<String> seen = new HashSet<>();
-        List<ChangedFileDraft> drafts = new ArrayList<>();
-
-        for (ToolCallTrace t : traces) {
-            if (t.getToolName() == null || !mutatingTools.contains(t.getToolName()) || !t.isSuccess()) {
-                continue;
-            }
-
-            Object mp = t.getMachineSummary() == null ? null : t.getMachineSummary().get("path");
-            String path = mp instanceof String ? (String) mp : null;
-            if (path == null || path.isBlank()) {
-                continue;
-            }
-
-            try {
-                Path root = Path.of(workspaceRoot);
-                Path resolved = FileUtils.resolveWorkspacePath(root, path);
-                Path rel = FileUtils.relativizeWorkspacePath(root, resolved);
-                String relStr = rel.toString();
-                if (seen.add(relStr)) {
-                    drafts.add(new ChangedFileDraft(relStr, safeComputeDiff(workspaceRoot, relStr)));
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        if (!drafts.isEmpty()) {
-            appStateService.addChangedFilesToSession(sessionId, drafts);
-        }
-    }
-
-    private AgentDefinition resolveRequestAgent(AgentTurnRequest request) {
-        if (request.getAgentId() == null || request.getAgentId().isBlank()) {
-            return agentDefinitionService.defaultAgent();
-        }
-        return agentDefinitionService.getRequired(request.getAgentId());
-    }
-
-    private ModelDefinition resolveRequestModel(AgentTurnRequest request, AgentDefinition agent) {
-        if (request.getPreferenceSnapshot() != null) {
-            return request.getPreferenceSnapshot().model();
-        }
-        String requestedModelId = request.getModelId();
-        if (requestedModelId == null || requestedModelId.isBlank()) {
-            return agent == null
-                    ? modelCatalogService.getRequired(agentProperties.getModel())
-                    : agentModelResolutionService.resolve(agent).model();
-        }
-        return modelCatalogService.getRequired(requestedModelId);
-    }
-
     String resolveModelLabel(String modelId) {
         if (modelId == null || modelId.isBlank()) {
             return null;
@@ -2073,109 +1531,9 @@ public class UiController {
         return view == null ? null : new Session(view.id(), view.name(), view.unread(), view.railStatus());
     }
 
-    private ToolCallTraceInput toToolCallTraceInput(ToolCallTrace trace) {
-        return new ToolCallTraceInput(trace.getToolCallId(), trace.getToolName(), trace.getArgs(), trace.isSuccess(),
-                trace.getTextSummary(), trace.getMachineSummary());
-    }
-
     private String directoryDisplayName(Path path) {
         Path fileName = path.getFileName();
         return fileName == null ? path.toString() : fileName.toString();
-    }
-
-    private static final String CHATGPT_SESSION_EXPIRED_MESSAGE = "Your ChatGPT/OpenAI session has expired. Please sign in again.";
-
-    private String normalizeProviderErrorMessage(Exception e) {
-        if (e == null) {
-            return "error";
-        }
-
-        String fallbackMessage = plainMessage(e.getMessage());
-        String providerMessage = null;
-
-        for (Throwable current = e; current != null; current = current.getCause()) {
-            if (isAuthenticationExceptionWithTokenExpired(current)) {
-                return CHATGPT_SESSION_EXPIRED_MESSAGE;
-            }
-
-            String message = current.getMessage();
-            if (message == null || message.isBlank()) {
-                continue;
-            }
-
-            String rawJson = extractJsonObject(message);
-            if (rawJson == null) {
-                continue;
-            }
-
-            try {
-                ProviderErrorPayload payload = SseJson.readValue(rawJson, ProviderErrorPayload.class);
-                if (isTokenExpired(payload)) {
-                    return CHATGPT_SESSION_EXPIRED_MESSAGE;
-                }
-
-                String errorMessage = payload.error() == null ? null : payload.error().message();
-                if (errorMessage != null && !errorMessage.isBlank()) {
-                    providerMessage = errorMessage;
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        if (providerMessage != null) {
-            return providerMessage;
-        }
-
-        return fallbackMessage == null || fallbackMessage.isBlank() ? "error" : fallbackMessage;
-    }
-
-    private boolean isAuthenticationExceptionWithTokenExpired(Throwable throwable) {
-        if (throwable == null) {
-            return false;
-        }
-        String simpleName = throwable.getClass().getSimpleName();
-        if (!"AuthenticationException".equals(simpleName)) {
-            return false;
-        }
-        return containsTokenExpired(throwable);
-    }
-
-    private boolean containsTokenExpired(Throwable throwable) {
-        for (Throwable current = throwable; current != null; current = current.getCause()) {
-            String message = current.getMessage();
-            if (message != null && message.contains("token_expired")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isTokenExpired(ProviderErrorPayload payload) {
-        if (payload == null) {
-            return false;
-        }
-        return isTokenExpired(payload.error()) || isTokenExpired(payload.detail());
-    }
-
-    private boolean isTokenExpired(ProviderError error) {
-        return error != null && "token_expired".equals(error.code());
-    }
-
-    private boolean isTokenExpired(ProviderDetail detail) {
-        return detail != null && "token_expired".equals(detail.code());
-    }
-
-    private String plainMessage(String message) {
-        return message == null || message.isBlank() || extractJsonObject(message) != null ? null : message;
-    }
-
-    private String extractJsonObject(String message) {
-        int start = message.indexOf('{');
-        int end = message.lastIndexOf('}');
-        if (start < 0 || end <= start) {
-            return null;
-        }
-        return message.substring(start, end + 1);
     }
 
     private record McpCatalogPayload(List<McpServerPayload> servers) {
@@ -2223,18 +1581,6 @@ public class UiController {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderErrorPayload(ProviderError error, ProviderDetail detail) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderError(String message, String code) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record ProviderDetail(String message, String code) {
-    }
-
     public record ChangedFile(String key, ReviewSource source, Integer id, String path, String diff) {
     }
 
@@ -2275,16 +1621,4 @@ public class UiController {
             ModelDefinition defaultModel, ThinkingLevel defaultThinking) {
     }
 
-    private record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {
-    }
-
-    private record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters,
-            AtomicBoolean started, AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,
-            CancellationToken cancellationToken, AtomicReference<StringBuilder> accumulatedText) {
-        private static ActiveStream create(PendingStream pendingStream, CancellationToken cancellationToken) {
-            return new ActiveStream(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false),
-                    new AtomicBoolean(false), new AtomicBoolean(false), new AtomicReference<>(), cancellationToken,
-                    new AtomicReference<>(new StringBuilder()));
-        }
-    }
 }

@@ -14,24 +14,48 @@ import org.springframework.stereotype.Service;
 public class ActiveStreamRegistryService {
 
     private final ConcurrentMap<String, StreamRef> streamsByAssistantId = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, String> assistantBySessionId = new ConcurrentHashMap<>();
+    private final Object admissionLock = new Object();
+
+    public boolean claim(String assistantId, long sessionId, String workspaceRoot) {
+        if (assistantId == null || assistantId.isBlank()) {
+            throw new IllegalArgumentException("assistantId is required");
+        }
+        synchronized (admissionLock) {
+            if (assistantBySessionId.containsKey(sessionId) || streamsByAssistantId.containsKey(assistantId)) {
+                return false;
+            }
+            StreamRef ref = new StreamRef(sessionId, workspaceRoot, normalize(workspaceRoot));
+            assistantBySessionId.put(sessionId, assistantId);
+            streamsByAssistantId.put(assistantId, ref);
+            return true;
+        }
+    }
 
     public void register(String assistantId, long sessionId, String workspaceRoot) {
         if (assistantId == null || assistantId.isBlank()) {
             return;
         }
-        Path workspace = normalize(workspaceRoot);
-        streamsByAssistantId.put(assistantId, new StreamRef(sessionId, workspaceRoot, workspace));
+        synchronized (admissionLock) {
+            if (assistantBySessionId.containsKey(sessionId) || streamsByAssistantId.containsKey(assistantId)) {
+                throw new IllegalStateException("SESSION_BUSY: A chat stream is already active");
+            }
+            StreamRef ref = new StreamRef(sessionId, workspaceRoot, normalize(workspaceRoot));
+            assistantBySessionId.put(sessionId, assistantId);
+            streamsByAssistantId.put(assistantId, ref);
+        }
     }
 
     public void unregister(String assistantId) {
         if (assistantId == null || assistantId.isBlank()) {
             return;
         }
-        StreamRef current = streamsByAssistantId.get(assistantId);
-        if (current == null) {
-            return;
+        synchronized (admissionLock) {
+            StreamRef current = streamsByAssistantId.remove(assistantId);
+            if (current != null) {
+                assistantBySessionId.remove(current.sessionId(), assistantId);
+            }
         }
-        streamsByAssistantId.remove(assistantId, current);
     }
 
     public Set<Long> activeSessionIdsSnapshot() {

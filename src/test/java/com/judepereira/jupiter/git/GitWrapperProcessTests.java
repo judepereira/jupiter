@@ -16,7 +16,23 @@ import org.junit.jupiter.api.io.TempDir;
 
 class GitWrapperProcessTests {
     private static final String TRAILER = "Co-authored-by: Jupiter IDE <340693705+jupiter-ide@users.noreply.github.com>";
-    private static final String REAL_GIT = "/usr/bin/git";
+    private static final String REAL_GIT = resolveRealGit();
+
+    private static String resolveRealGit() {
+        String configured = System.getenv("JUPITER_TEST_REAL_GIT");
+        if (configured != null && !configured.isBlank()) {
+            return Path.of(configured).toAbsolutePath().normalize().toString();
+        }
+        Path systemGit = Path.of("/usr/bin/git.real");
+        if (Files.isExecutable(systemGit)) {
+            return systemGit.toString();
+        }
+        Path git = Path.of("/usr/bin/git");
+        if (Files.isExecutable(git)) {
+            return git.toString();
+        }
+        throw new IllegalStateException("Unable to locate real git executable; set JUPITER_TEST_REAL_GIT");
+    }
     private static final Path WRAPPER = Path.of("git-wrapper.sh").toAbsolutePath();
     private static final List<String> CONFIG_VARS = List.of("GIT_CONFIG", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS",
             "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_AUTHOR_NAME",

@@ -145,6 +145,19 @@ public class AppStateService {
                 activeStreamRegistryService.activeSessionIdsSnapshot());
     }
 
+    @Transactional(readOnly = true)
+    public List<WorkspaceView> listWorkspaces(long projectId) {
+        return repository.listWorkspacesByProject(projectId).stream()
+                .map(workspace -> toWorkspaceView(workspace, activeStreamRegistryService.activeSessionIdsSnapshot()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SessionView> listPrimarySessions(long workspaceId) {
+        return repository.listSessionsByWorkspace(workspaceId).stream().filter(session -> !session.hidden())
+                .map(this::toSessionView).toList();
+    }
+
     @Transactional
     public void closeProject(long projectId) {
         Instant now = Instant.now();

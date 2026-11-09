@@ -26,6 +26,7 @@ import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.ChatStreamRuntime;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
@@ -370,6 +371,13 @@ public class UiControllerSubagentChatTests {
                 openAiOAuthService, contextCompactionService, null, mock(CommandStreamService.class),
                 new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
                 null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "test", System.getProperty("user.home"));
+                mock(ManualGitPullCoordinator.class),
+                new ChatStreamRuntime(harness, props, appStateService, agentDefinitionService, modelCatalog,
+                        new AgentModelResolutionService(modelCatalog, availability), contextCompactionService,
+                        new AgentPreferenceResolver(appStateService, modelCatalog, availability,
+                                new AgentModelResolutionService(modelCatalog, availability)),
+                        modelPicker, mock(CommandStreamService.class), appStateService.activeStreamRegistryService(),
+                        new ChatPresentationService(), null, null),
+                "test", System.getProperty("user.home"));
     }
 }
