@@ -24,8 +24,6 @@ class OpenAiOAuthPayloadsTests {
                 OpenAiOAuthPayloads.AuthorizationPayload.class).authorizationCode()).isEqualTo("code");
         assertThat(JSON.readValue("{\"access_token\":\"access\",\"extra\":1}", OpenAiOAuthPayloads.TokenPayload.class)
                 .accessToken()).isEqualTo("access");
-        assertThat(JSON.readValue("{\"exp\":123,\"extra\":1}", OpenAiOAuthPayloads.JwtClaims.class).expiresAt())
-                .isEqualTo(123L);
         assertThat(
                 JSON.readValue("{\"error\":\"invalid_grant\",\"extra\":1}", OpenAiOAuthPayloads.TokenErrorPayload.class)
                         .error().code())

@@ -8,6 +8,7 @@ import com.judepereira.jupiter.persistence.DocumentationScreenshotFixture.Fixtur
 import com.judepereira.jupiter.persistence.DocumentationScreenshotFixture.FixturePaths;
 import com.judepereira.jupiter.persistence.Persistence;
 import com.judepereira.jupiter.persistence.TokenUsageService;
+import com.judepereira.jupiter.testsupport.JwtTestTokens;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
@@ -676,13 +677,14 @@ class DocumentationScreenshotsTest extends E2ETestSupport {
                       "code_verifier": "docs-code-verifier"
                     }
                     """));
+            String idToken = JwtTestTokens.plain(Map.of("sub", "docs-user"));
             server.createContext("/oauth/token", exchange -> respond(exchange, 200, """
                     {
                       "access_token": "docs-access-token",
                       "refresh_token": "docs-refresh-token",
-                      "id_token": "eyJhbGciOiJub25lIn0.eyJzdWIiOiJkb2NzLXVzZXIifQ."
+                      "id_token": "%s"
                     }
-                    """));
+                    """.formatted(idToken)));
             server.createContext("/codex/device", exchange -> respond(exchange, 200, "ok"));
             server.start();
             return fixture;

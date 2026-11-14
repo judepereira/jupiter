@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.persistence.AppStateRepository;
 import com.judepereira.jupiter.persistence.AppStateRepository.OpenAiOAuthStateRow;
+import com.judepereira.jupiter.testsupport.JwtTestTokens;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -17,7 +18,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Base64;
+import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -78,8 +79,10 @@ class OpenAiOAuthRefreshRegressionTests {
 
     @Test
     void expiredStateRefreshesAndPersistsRotatedTokensAndAccount() throws Exception {
+        String idToken = JwtTestTokens.plain(Map.of("chatgpt_account_id", "acct-new"));
         try (Server server = new Server(200,
-                "{\"access_token\":\"new-access\",\"refresh_token\":\"new-refresh\",\"id_token\":\"header.eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LW5ldyJ9.sig\",\"expires_in\":3600}")) {
+                "{\"access_token\":\"new-access\",\"refresh_token\":\"new-refresh\",\"id_token\":\"" + idToken
+                        + "\",\"expires_in\":3600}")) {
             AppStateRepository repo = mock(AppStateRepository.class);
             var props = properties(server);
             Mockito.when(repo.loadOpenAiOAuthState())
@@ -92,16 +95,16 @@ class OpenAiOAuthRefreshRegressionTests {
                     "client_id=client-123");
             ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
             Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
-                    ArgumentMatchers.eq("new-refresh"),
-                    ArgumentMatchers.eq("header.eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LW5ldyJ9.sig"),
-                    ArgumentMatchers.eq("acct-new"), expiry.capture());
+                    ArgumentMatchers.eq("new-refresh"), ArgumentMatchers.eq(idToken), ArgumentMatchers.eq("acct-new"),
+                    expiry.capture());
             assertThat(expiry.getValue()).isAfter(Instant.now().plusSeconds(3500));
         }
     }
 
     @Test
     void nestedAccountClaimIsExtractedOnInitialAuthorizationAndRefresh() throws Exception {
-        String idToken = "header.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1uZXN0ZWQifX0.sig";
+        String idToken = JwtTestTokens
+                .plain(Map.of("https://api.openai.com/auth", Map.of("chatgpt_account_id", "acct-nested")));
         try (Server server = new Server(200,
                 "{\"access_token\":\"new-access\",\"id_token\":\"" + idToken + "\",\"expires_in\":3600}")) {
             AppStateRepository repo = mock(AppStateRepository.class);
@@ -116,16 +119,54 @@ class OpenAiOAuthRefreshRegressionTests {
     }
 
     @Test
-    void refreshedIdTokenWithoutAccountClaimRetainsExistingAccount() throws Exception {
+    void refreshedIdTokenUsesNestedAccountWhenTopLevelAccountIsBlank() throws Exception {
+        String idToken = JwtTestTokens.plain(Map.of("chatgpt_account_id", " ", "https://api.openai.com/auth",
+                Map.of("chatgpt_account_id", "acct-new-nested")));
         try (Server server = new Server(200,
-                "{\"access_token\":\"new-access\",\"id_token\":\"opaque-id\",\"expires_in\":3600}")) {
+                "{\"access_token\":\"new-access\",\"id_token\":\"" + idToken + "\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            assertThat(service.currentAccountId()).contains("acct-new-nested");
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.eq(idToken),
+                    ArgumentMatchers.eq("acct-new-nested"), ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void malformedRefreshedIdTokenFailsSanitizedWithoutPersistingTokens() throws Exception {
+        String malformed = "secret.invalid.token";
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"id_token\":\"" + malformed + "\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Failed to decode OpenAI id_token").satisfies(error -> {
+                        assertThat(error.getCause()).isNull();
+                        assertThat(error.toString()).doesNotContain(malformed);
+                    });
+            Mockito.verify(repo, Mockito.never()).updateOpenAiOAuthState(ArgumentMatchers.any(), ArgumentMatchers.any(),
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void refreshedIdTokenWithoutAccountClaimRetainsExistingAccount() throws Exception {
+        String idToken = JwtTestTokens.plain(Map.of("sub", "test-user"));
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"id_token\":\"" + idToken + "\",\"expires_in\":3600}")) {
             AppStateRepository repo = mock(AppStateRepository.class);
             Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
             OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
                     repo, null);
             service.currentAccessToken();
             Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
-                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.eq("opaque-id"), ArgumentMatchers.eq("acct-old"),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.eq(idToken), ArgumentMatchers.eq("acct-old"),
                     ArgumentMatchers.any());
         }
     }
@@ -250,6 +291,42 @@ class OpenAiOAuthRefreshRegressionTests {
     }
 
     @Test
+    void jwtWithoutExpiryUsesConservativeFallback() throws Exception {
+        String accessToken = JwtTestTokens.plain(Map.of("iss", "untrusted-test-issuer"));
+        try (Server server = new Server(200, "{\"access_token\":\"" + accessToken + "\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq(accessToken),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.any(), ArgumentMatchers.any(), expiry.capture());
+            assertThat(expiry.getValue()).isAfter(Instant.now()).isBefore(Instant.now().plusSeconds(900));
+            assertThat(expiry.getValue()).isNotEqualTo(Instant.MAX);
+        }
+    }
+
+    @Test
+    void jwtWithPastExpiryAndFutureIssuedAtPersistsExpiryWithoutTemporalValidation() throws Exception {
+        long exp = Instant.now().minusSeconds(3600).getEpochSecond();
+        long iat = Instant.now().plusSeconds(3600).getEpochSecond();
+        String accessToken = JwtTestTokens.plain(Map.of("exp", new Date(exp * 1000L), "iat", new Date(iat * 1000L),
+                "iss", "unexpected-issuer", "aud", "unexpected-audience"));
+        try (Server server = new Server(200, "{\"access_token\":\"" + accessToken + "\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq(accessToken),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.any(), ArgumentMatchers.any(), expiry.capture());
+            assertThat(expiry.getValue()).isEqualTo(Instant.ofEpochSecond(exp));
+        }
+    }
+
+    @Test
     void jwtExpiryWithinSafetyMarginTriggersRefresh() throws Exception {
         long exp = Instant.now().plusSeconds(45).getEpochSecond();
         String token = jwtWithExpiry(exp);
@@ -359,11 +436,8 @@ class OpenAiOAuthRefreshRegressionTests {
         }
     }
 
-    private static String jwtWithExpiry(long exp) throws Exception {
-        String claims = JSON.writeValueAsString(Map.of("exp", exp));
-        return "header."
-                + Base64.getUrlEncoder().withoutPadding().encodeToString(claims.getBytes(StandardCharsets.UTF_8))
-                + ".signature";
+    private static String jwtWithExpiry(long exp) {
+        return JwtTestTokens.withExpiry(exp);
     }
 
     private static OpenAiOAuthProperties properties(Server server) {

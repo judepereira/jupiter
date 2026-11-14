@@ -6,6 +6,8 @@ import com.judepereira.jupiter.agent.catalog.ProviderConnectedEvent;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthPayloads.*;
 import com.judepereira.jupiter.persistence.AppStateRepository;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.JWTParser;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -15,11 +17,14 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jwt.MappedJwtClaimSetConverter;
 import org.springframework.stereotype.Service;
 
 @Log4j2
@@ -250,18 +255,30 @@ public class OpenAiOAuthService {
             }
         }
         try {
-            String[] parts = accessToken.split("\\.");
-            if (parts.length > 1) {
-                JwtClaims claims = objectMapper.readValue(Base64.getUrlDecoder().decode(parts[1]), JwtClaims.class);
-                if (claims.expiresAt() != null && claims.expiresAt() > 0) {
-                    return Instant.ofEpochSecond(claims.expiresAt());
-                }
+            Jwt jwt = parseJwt(accessToken);
+            Instant expiresAt = jwt.getClaimAsInstant("exp");
+            if (expiresAt != null && expiresAt.getEpochSecond() > 0) {
+                return expiresAt;
             }
         } catch (Exception ignored) {
             // JWT claims are informational only; use a conservative fallback when
             // unavailable.
         }
         return Instant.now().plusSeconds(DEFAULT_EXPIRES_SECONDS);
+    }
+
+    private Jwt parseJwt(String token) {
+        try {
+            // This is parse-only: token claims are untrusted OAuth metadata, not
+            // authenticated identity.
+            var parsed = JWTParser.parse(token);
+            JWTClaimsSet claims = parsed.getJWTClaimsSet();
+            Map<String, Object> convertedClaims = MappedJwtClaimSetConverter.withDefaults(Map.of())
+                    .convert(claims.getClaims());
+            return new Jwt(token, null, null, parsed.getHeader().toJSONObject(), convertedClaims);
+        } catch (Exception exception) {
+            throw new JwtException("Invalid JWT format");
+        }
     }
 
     private boolean hasText(String value) {
@@ -441,16 +458,18 @@ public class OpenAiOAuthService {
 
     private Optional<String> extractAccountId(String idToken) {
         try {
-            String[] parts = idToken.split("\\.");
-            if (parts.length < 2) {
-                return Optional.empty();
+            Jwt jwt = parseJwt(idToken);
+            Object accountClaim = jwt.getClaims().get("chatgpt_account_id");
+            if (accountClaim == null || accountClaim instanceof String value && value.isBlank()) {
+                Object auth = jwt.getClaims().get("https://api.openai.com/auth");
+                if (auth instanceof Map<?, ?> authClaims) {
+                    accountClaim = authClaims.get("chatgpt_account_id");
+                }
             }
-            JwtClaims claims = objectMapper.readValue(Base64.getUrlDecoder().decode(parts[1]), JwtClaims.class);
-            String accountId = claims.accountId();
-            if (!hasText(accountId) && claims.auth() != null) {
-                accountId = claims.auth().accountId();
+            if (accountClaim != null && !(accountClaim instanceof String)) {
+                throw new JwtException("Invalid account claim");
             }
-            return Optional.ofNullable(accountId).filter(value -> !value.isBlank());
+            return Optional.ofNullable((String) accountClaim).filter(value -> !value.isBlank());
         } catch (Exception e) {
             throw new IllegalStateException("Failed to decode OpenAI id_token");
         }

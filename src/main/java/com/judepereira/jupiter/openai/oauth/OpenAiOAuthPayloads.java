@@ -44,18 +44,6 @@ final class OpenAiOAuthPayloads {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record JwtClaims(
-            @JsonProperty("chatgpt_account_id") @JsonDeserialize(using = StrictStringDeserializer.class) String accountId,
-            @JsonProperty("https://api.openai.com/auth") AuthClaims auth,
-            @JsonDeserialize(using = StrictLongDeserializer.class) @JsonProperty("exp") Long expiresAt) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record AuthClaims(
-            @JsonProperty("chatgpt_account_id") @JsonDeserialize(using = StrictStringDeserializer.class) String accountId) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
     record TokenErrorPayload(@JsonDeserialize(using = OAuthErrorDeserializer.class) OAuthError error) {
     }
 
