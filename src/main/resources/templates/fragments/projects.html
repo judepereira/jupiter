@@ -445,8 +445,12 @@
             ></th:block>
 
             <div class="settings-modal-grid row g-4">
-                <div class="col-12 col-md-3 h-100 overflow-scroll">
-                    <nav class="nav nav-pills flex-md-column settings-nav" aria-label="Settings tabs" role="tablist">
+                <div class="col-12 col-md-3 overflow-scroll">
+                    <nav
+                        class="nav nav-pills flex-md-column settings-nav pb-3 pb-md-0"
+                        aria-label="Settings tabs"
+                        role="tablist"
+                    >
                         <button
                             th:if="${activeProject != null}"
                             class="nav-link active"
