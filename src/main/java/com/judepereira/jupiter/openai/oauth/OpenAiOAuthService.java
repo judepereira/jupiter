@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 public class OpenAiOAuthService {
     private static final int DEFAULT_INTERVAL_SECONDS = 5;
     private static final int DEFAULT_EXPIRES_SECONDS = 15 * 60;
+    private static final Duration EXPIRY_SAFETY_MARGIN = Duration.ofSeconds(60);
 
     private final OpenAiOAuthProperties properties;
     private final ObjectMapper objectMapper;
@@ -56,7 +57,21 @@ public class OpenAiOAuthService {
     }
 
     public synchronized Optional<String> currentAccessToken() {
-        return state.tokens() == null ? Optional.empty() : Optional.of(state.tokens().accessToken());
+        if (state.tokens() == null) {
+            return Optional.empty();
+        }
+        Tokens tokens = state.tokens();
+        if (tokens.expiresAt() == null || !tokens.expiresAt().isAfter(Instant.now().plus(EXPIRY_SAFETY_MARGIN))) {
+            try {
+                tokens = refreshTokens(tokens);
+                state = new State(null, tokens, "Connected.");
+            } catch (RefreshRejectedException e) {
+                clearPersistedState();
+                state = new State(null, null, "OpenAI authorization expired. Reconnect OpenAI.");
+                throw new IllegalStateException("OpenAI authorization was rejected. Reconnect OpenAI.");
+            }
+        }
+        return Optional.of(tokens.accessToken());
     }
 
     public synchronized Optional<String> currentAccountId() {
@@ -133,11 +148,10 @@ public class OpenAiOAuthService {
         }
 
         JsonNode tokenPayload = readJson(tokenResponse.body(), "token response");
-        TokenResponse token = new TokenResponse(requiredText(tokenPayload, "access_token"),
-                requiredText(tokenPayload, "refresh_token"), requiredText(tokenPayload, "id_token"));
+        TokenResponse token = tokenResponse(tokenPayload);
 
         Optional<String> accountId = extractAccountId(token.idToken());
-        Instant expiresAt = Instant.now().plusSeconds(DEFAULT_EXPIRES_SECONDS);
+        Instant expiresAt = expiry(tokenPayload, token.accessToken());
 
         persistConnectedState(token.accessToken(), token.refreshToken(), token.idToken(), accountId.orElse(null),
                 expiresAt);
@@ -164,6 +178,115 @@ public class OpenAiOAuthService {
                     Optional.ofNullable(row.accountId()).filter(accountId -> !accountId.isBlank()), row.expiresAt()),
                     "Connected.");
         });
+    }
+
+    private Tokens refreshTokens(Tokens current) {
+        if (current.refreshToken() == null || current.refreshToken().isBlank()) {
+            throw new RefreshRejectedException();
+        }
+        StringBuilder body = new StringBuilder();
+        appendForm(body, "grant_type", "refresh_token");
+        appendForm(body, "refresh_token", current.refreshToken());
+        appendForm(body, "client_id", requiredClientId());
+        HttpResponse<String> response = postForm(URI.create(requiredTokenUrl()), body.toString());
+        if (response.statusCode() / 100 != 2) {
+            if (isPermanentTokenRejection(response.statusCode(), response.body())) {
+                log.warn("OpenAI OAuth refresh was permanently rejected with status {}", response.statusCode());
+                throw new RefreshRejectedException();
+            }
+            throw new IllegalStateException("OpenAI token refresh failed with status " + response.statusCode());
+        }
+        JsonNode payload = readJson(response.body(), "token refresh response");
+        String accessToken = requiredText(payload, "access_token");
+        String refreshToken = optionalText(payload, "refresh_token", current.refreshToken());
+        String idToken = optionalText(payload, "id_token", current.idToken());
+        Optional<String> accountId = hasText(payload, "id_token") ? extractAccountId(idToken) : current.accountId();
+        Tokens refreshed = new Tokens(accessToken, refreshToken, idToken, accountId, expiry(payload, accessToken));
+        persistConnectedState(refreshed.accessToken(), refreshed.refreshToken(), refreshed.idToken(),
+                accountId.orElse(null), refreshed.expiresAt());
+        return refreshed;
+    }
+
+    private TokenResponse tokenResponse(JsonNode payload) {
+        return new TokenResponse(requiredText(payload, "access_token"), requiredText(payload, "refresh_token"),
+                requiredText(payload, "id_token"));
+    }
+
+    private String optionalText(JsonNode payload, String field, String fallback) {
+        JsonNode node = payload.get(field);
+        if (node == null || node.isNull() || node.asText().isBlank()) {
+            if (fallback != null) {
+                return fallback;
+            }
+            throw new IllegalStateException("Missing OpenAI OAuth field: " + field);
+        }
+        return node.asText();
+    }
+
+    private Instant expiry(JsonNode payload, String accessToken) {
+        JsonNode expiresIn = payload.get("expires_in");
+        if (expiresIn != null && !expiresIn.isNull()) {
+            long seconds;
+            try {
+                if (expiresIn.isIntegralNumber() && expiresIn.canConvertToLong()) {
+                    seconds = expiresIn.longValue();
+                } else if (expiresIn.isTextual() && !expiresIn.textValue().isBlank()) {
+                    seconds = Long.parseLong(expiresIn.textValue());
+                } else {
+                    throw new NumberFormatException();
+                }
+                if (seconds <= 0) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException e) {
+                throw new IllegalStateException(
+                        "Invalid OpenAI OAuth expires_in: expected a positive integer number of seconds");
+            }
+            try {
+                return Instant.now().plusSeconds(seconds);
+            } catch (RuntimeException e) {
+                throw new IllegalStateException("Invalid OpenAI OAuth expires_in: value is out of range");
+            }
+        }
+        try {
+            String[] parts = accessToken.split("\\.");
+            if (parts.length > 1) {
+                JsonNode exp = objectMapper.readTree(Base64.getUrlDecoder().decode(parts[1])).get("exp");
+                if (exp != null && exp.isIntegralNumber() && exp.canConvertToLong() && exp.asLong() > 0) {
+                    return Instant.ofEpochSecond(exp.asLong());
+                }
+            }
+        } catch (Exception ignored) {
+            // JWT claims are informational only; use a conservative fallback when
+            // unavailable.
+        }
+        return Instant.now().plusSeconds(DEFAULT_EXPIRES_SECONDS);
+    }
+
+    private boolean hasText(JsonNode payload, String field) {
+        JsonNode node = payload.get(field);
+        return node != null && !node.isNull() && !node.asText().isBlank();
+    }
+
+    private boolean isPermanentTokenRejection(int status, String body) {
+        try {
+            JsonNode error = objectMapper.readTree(body).path("error");
+            String code = error.isObject() ? error.path("code").asText("") : error.asText("");
+            boolean invalidClient = code.equals("invalid_client");
+            if (invalidClient) {
+                return false;
+            }
+            boolean permanentCode = code.equals("invalid_grant") || code.equals("invalid_token")
+                    || code.equals("refresh_token_reused") || code.equals("refresh_token_expired")
+                    || code.equals("refresh_token_invalidated") || code.equals("refresh_token_revoked");
+            return permanentCode && (status == 400 || status == 401 || status == 403)
+                    || status == 401 && code.isEmpty();
+        } catch (Exception e) {
+            return status == 401;
+        }
+    }
+
+    private static final class RefreshRejectedException extends RuntimeException {
     }
 
     private void persistConnectedState(String accessToken, String refreshToken, String idToken, String accountId,
@@ -211,7 +334,7 @@ public class OpenAiOAuthService {
             }
             return node;
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse OpenAI OAuth " + description, e);
+            throw new IllegalStateException("Failed to parse OpenAI OAuth " + description);
         }
     }
 
@@ -303,13 +426,25 @@ public class OpenAiOAuthService {
 
     private int optionalSeconds(JsonNode payload, String field, int defaultValue) {
         JsonNode node = payload.get(field);
-        if (node == null || node.isNull() || node.asText().isBlank()) {
+        if (node == null || node.isNull()) {
             return defaultValue;
         }
         try {
-            return node.isNumber() ? node.asInt() : Integer.parseInt(node.asText());
+            int seconds;
+            if (node.isIntegralNumber() && node.canConvertToInt()) {
+                seconds = node.intValue();
+            } else if (node.isTextual() && !node.textValue().isBlank()) {
+                seconds = Integer.parseInt(node.textValue());
+            } else {
+                throw new NumberFormatException();
+            }
+            if (seconds <= 0) {
+                throw new NumberFormatException();
+            }
+            return seconds;
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("Missing OpenAI OAuth field: " + field, e);
+            throw new IllegalStateException(
+                    "Invalid OpenAI OAuth " + field + ": expected a positive integer number of seconds");
         }
     }
 
@@ -328,7 +463,7 @@ public class OpenAiOAuthService {
             }
             return Optional.of(accountId.asText());
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to decode OpenAI id_token", e);
+            throw new IllegalStateException("Failed to decode OpenAI id_token");
         }
     }
 

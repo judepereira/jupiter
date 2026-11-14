@@ -11,8 +11,10 @@ OpenAI can be connected in two ways:
 - open **Settings → Model Providers** and use the OpenAI browser/device authorisation flow
 
 The device flow shows a user code and verification URL while Jupiter waits for authorisation to complete. OAuth state is
-stored encrypted and restored across restarts. **Disconnect** clears that OAuth connection; a configured API key remains
-available independently.
+stored encrypted and restored across restarts. Access tokens are refreshed shortly before their reported expiry, and
+rotated credentials are persisted. Refresh happens on use; if OpenAI rejects the refresh token, Jupiter clears the OAuth
+connection and requires reconnection through the device flow. Refresh failures are surfaced rather than silently falling
+back to an API key; a configured API key remains available independently. **Disconnect** clears that OAuth connection.
 
 ## Configure Claude
 
