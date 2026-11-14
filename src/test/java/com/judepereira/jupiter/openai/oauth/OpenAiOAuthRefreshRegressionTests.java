@@ -2,6 +2,7 @@ package com.judepereira.jupiter.openai.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,6 +37,44 @@ import org.mockito.Mockito;
 
 class OpenAiOAuthRefreshRegressionTests {
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    @Test
+    void rotatedCredentialsRemainInMemoryAndArePersistedBeforeTheNextRefreshAfterPersistenceFailure() throws Exception {
+        try (Server server = new Server(200,
+                "{\"access_token\":\"rotated-access\",\"refresh_token\":\"rotated-refresh\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "old-refresh", Instant.EPOCH)));
+            doThrow(new IllegalStateException("database unavailable")).doNothing().when(repo).updateOpenAiOAuthState(
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
+                    ArgumentMatchers.any());
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+
+            assertThatThrownBy(service::currentAccessToken).hasMessageContaining("database unavailable");
+            assertThat(service.currentAccessToken()).contains("rotated-access");
+            assertThat(server.calls.get()).isEqualTo(1);
+            Mockito.verify(repo, Mockito.times(2)).updateOpenAiOAuthState(ArgumentMatchers.eq("rotated-access"),
+                    ArgumentMatchers.eq("rotated-refresh"), ArgumentMatchers.eq("id-token"),
+                    ArgumentMatchers.eq("acct-old"), ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void expiredTokenRetriesPendingPersistenceBeforeMakingAnotherRefreshRequest() throws Exception {
+        try (Server server = new Server(200,
+                "{\"access_token\":\"rotated-access\",\"refresh_token\":\"rotated-refresh\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "old-refresh", Instant.EPOCH)));
+            doThrow(new IllegalStateException("database unavailable")).doNothing().when(repo).updateOpenAiOAuthState(
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
+                    ArgumentMatchers.any());
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).hasMessageContaining("database unavailable");
+            assertThat(service.currentAccessToken()).contains("rotated-access");
+            assertThat(server.calls.get()).isEqualTo(1);
+        }
+    }
 
     @Test
     void expiredStateRefreshesAndPersistsRotatedTokensAndAccount() throws Exception {
@@ -48,7 +88,7 @@ class OpenAiOAuthRefreshRegressionTests {
             assertThat(service.currentAccessToken()).contains("new-access");
             assertThat(service.currentAccountId()).contains("acct-new");
             assertThat(server.calls.get()).isEqualTo(1);
-            assertThat(server.body).contains("grant_type=refresh_token", "refresh_token=old-refresh",
+            assertThat(server.lastRequestBody.get()).contains("grant_type=refresh_token", "refresh_token=old-refresh",
                     "client_id=client-123");
             ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
             Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
@@ -56,6 +96,37 @@ class OpenAiOAuthRefreshRegressionTests {
                     ArgumentMatchers.eq("header.eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2N0LW5ldyJ9.sig"),
                     ArgumentMatchers.eq("acct-new"), expiry.capture());
             assertThat(expiry.getValue()).isAfter(Instant.now().plusSeconds(3500));
+        }
+    }
+
+    @Test
+    void nestedAccountClaimIsExtractedOnInitialAuthorizationAndRefresh() throws Exception {
+        String idToken = "header.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1uZXN0ZWQifX0.sig";
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"id_token\":\"" + idToken + "\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.eq(idToken), ArgumentMatchers.eq("acct-nested"),
+                    ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void refreshedIdTokenWithoutAccountClaimRetainsExistingAccount() throws Exception {
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"id_token\":\"opaque-id\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.eq("opaque-id"), ArgumentMatchers.eq("acct-old"),
+                    ArgumentMatchers.any());
         }
     }
 
@@ -105,8 +176,7 @@ class OpenAiOAuthRefreshRegressionTests {
                     .satisfies(error -> assertThat(error.toString()).doesNotContain("refresh-secret"));
             Mockito.verify(repo, Mockito.never()).clearOpenAiOAuthState();
             assertThat(service.currentView().connected()).isTrue();
-            server.status = 200;
-            server.response = "{\"access_token\":\"recovered\",\"expires_in\":3600}";
+            server.setResponse(200, "{\"access_token\":\"recovered\",\"expires_in\":3600}");
             assertThat(service.currentAccessToken()).contains("recovered");
             assertThat(server.calls.get()).isEqualTo(2);
             Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("recovered"),
@@ -119,24 +189,26 @@ class OpenAiOAuthRefreshRegressionTests {
     void concurrentExpiredTokenCallsPerformOneRefresh() throws Exception {
         try (Server server = new Server(200,
                 "{\"access_token\":\"new-access\",\"refresh_token\":\"rotated\",\"expires_in\":3600}")) {
-            server.delayMillis = 150;
+            server.delayMillis.set(150);
             AppStateRepository repo = mock(AppStateRepository.class);
             Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
             OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
                     repo, null);
-            ExecutorService workers = Executors.newFixedThreadPool(8);
-            try {
+            try (ExecutorService workers = Executors.newFixedThreadPool(8)) {
                 CountDownLatch start = new CountDownLatch(1);
                 var calls = IntStream.range(0, 8).mapToObj(i -> workers.submit(() -> {
                     start.await();
                     return service.currentAccessToken().orElseThrow();
                 })).toList();
                 start.countDown();
-                for (Future<String> call : calls) {
-                    assertThat(call.get(5, TimeUnit.SECONDS)).isEqualTo("new-access");
+                try {
+                    for (Future<String> call : calls) {
+                        assertThat(call.get(5, TimeUnit.SECONDS)).isEqualTo("new-access");
+                    }
+                } catch (Exception e) {
+                    workers.shutdownNow();
+                    throw e;
                 }
-            } finally {
-                workers.shutdownNow();
             }
             assertThat(server.calls.get()).isEqualTo(1);
             Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
@@ -305,17 +377,18 @@ class OpenAiOAuthRefreshRegressionTests {
         return new OpenAiOAuthStateRow(access, refresh, "id-token", "acct-old", expires);
     }
 
+    private record Response(int status, String body) {
+    }
+
     private static final class Server implements AutoCloseable {
         final HttpServer server;
         final AtomicInteger calls = new AtomicInteger();
-        volatile int status;
-        volatile String response;
-        volatile String body;
-        volatile long delayMillis;
+        final AtomicReference<Response> response;
+        final AtomicReference<String> lastRequestBody = new AtomicReference<>();
+        final AtomicInteger delayMillis = new AtomicInteger();
 
         Server(int status, String response) throws IOException {
-            this.status = status;
-            this.response = response;
+            this.response = new AtomicReference<>(new Response(status, response));
             server = HttpServer.create(new InetSocketAddress(0), 0);
             server.createContext("/oauth/token", this::handle);
             server.start();
@@ -324,19 +397,25 @@ class OpenAiOAuthRefreshRegressionTests {
         String url() {
             return URI.create("http://localhost:" + server.getAddress().getPort()).toString();
         }
+        void setResponse(int status, String body) {
+            response.set(new Response(status, body));
+        }
+
         void handle(HttpExchange exchange) throws IOException {
             calls.incrementAndGet();
-            if (delayMillis > 0) {
+            int delay = delayMillis.get();
+            if (delay > 0) {
                 try {
-                    Thread.sleep(delayMillis);
+                    Thread.sleep(delay);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new IOException(e);
                 }
             }
-            body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(status, bytes.length);
+            lastRequestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            Response currentResponse = response.get();
+            byte[] bytes = currentResponse.body().getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(currentResponse.status(), bytes.length);
             exchange.getResponseBody().write(bytes);
             exchange.close();
         }

@@ -1,9 +1,10 @@
 package com.judepereira.jupiter.openai.oauth;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.ProviderConnectedEvent;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
+import com.judepereira.jupiter.openai.oauth.OpenAiOAuthPayloads.*;
 import com.judepereira.jupiter.persistence.AppStateRepository;
 import java.io.IOException;
 import java.net.URI;
@@ -35,6 +36,7 @@ public class OpenAiOAuthService {
     private final ApplicationEventPublisher eventPublisher;
 
     private State state = State.empty();
+    private boolean pendingTokenPersistence;
 
     public OpenAiOAuthService(OpenAiOAuthProperties properties, ObjectMapper objectMapper, HttpClient httpClient,
             AppStateRepository appStateRepository, ApplicationEventPublisher eventPublisher) {
@@ -52,6 +54,7 @@ public class OpenAiOAuthService {
 
     public synchronized OpenAiOAuthView resetConnectionState() {
         clearPersistedState();
+        pendingTokenPersistence = false;
         state = State.empty();
         return toView(state);
     }
@@ -61,10 +64,14 @@ public class OpenAiOAuthService {
             return Optional.empty();
         }
         Tokens tokens = state.tokens();
+        if (pendingTokenPersistence) {
+            persistTokens(tokens);
+        }
         if (tokens.expiresAt() == null || !tokens.expiresAt().isAfter(Instant.now().plus(EXPIRY_SAFETY_MARGIN))) {
             try {
                 tokens = refreshTokens(tokens);
                 state = new State(null, tokens, "Connected.");
+                persistTokens(tokens);
             } catch (RefreshRejectedException e) {
                 clearPersistedState();
                 state = new State(null, null, "OpenAI authorization expired. Reconnect OpenAI.");
@@ -89,17 +96,19 @@ public class OpenAiOAuthService {
     public synchronized OpenAiOAuthView startDeviceAuthorization() {
         String clientId = requiredClientId();
         HttpResponse<String> response = postJson(URI.create(requiredDeviceUserCodeUrl()),
-                objectMapper.createObjectNode().put("client_id", clientId));
+                new ClientIdRequest(clientId));
         if (response.statusCode() / 100 != 2) {
             throw new IllegalStateException("OpenAI device authorization failed with status " + response.statusCode());
         }
-        JsonNode payload = readJson(response.body(), "device authorization response");
+        DeviceAuthorizationPayload payload = readJson(response.body(), DeviceAuthorizationPayload.class,
+                "device authorization response");
 
         DeviceAuthorizationResponse authorization = new DeviceAuthorizationResponse(
-                requiredText(payload, "device_auth_id"), requiredText(payload, "user_code", "usercode"),
-                resolvedVerificationUrl(), optionalSeconds(payload, "interval", DEFAULT_INTERVAL_SECONDS),
-                optionalSeconds(payload, "expires", DEFAULT_EXPIRES_SECONDS));
+                requiredText(payload.deviceAuthId(), "device_auth_id"), requiredText(payload.userCode(), "user_code"),
+                resolvedVerificationUrl(), optionalSeconds(payload.interval(), "interval", DEFAULT_INTERVAL_SECONDS),
+                optionalSeconds(payload.expires(), "expires", DEFAULT_EXPIRES_SECONDS));
 
+        pendingTokenPersistence = false;
         state = new State(new DeviceFlow(authorization.deviceAuthId(), authorization.userCode(),
                 authorization.verificationUri(), authorization.intervalSeconds(),
                 Instant.now().plusSeconds(authorization.expiresInSeconds()), null), null,
@@ -117,8 +126,8 @@ public class OpenAiOAuthService {
             return toView(state);
         }
 
-        HttpResponse<String> response = postJson(URI.create(requiredDevicePollUrl()), objectMapper.createObjectNode()
-                .put("device_auth_id", state.flow().deviceAuthId()).put("user_code", state.flow().userCode()));
+        HttpResponse<String> response = postJson(URI.create(requiredDevicePollUrl()),
+                new DevicePollRequest(state.flow().deviceAuthId(), state.flow().userCode()));
 
         if (response.statusCode() == 403 || response.statusCode() == 404) {
             return toView(state);
@@ -137,9 +146,11 @@ public class OpenAiOAuthService {
             throw new IllegalStateException("OpenAI token polling failed with status " + response.statusCode());
         }
 
-        JsonNode payload = readJson(response.body(), "authorization response");
-        AuthorizationResponse authorization = new AuthorizationResponse(requiredText(payload, "authorization_code"),
-                requiredText(payload, "code_challenge"), requiredText(payload, "code_verifier"));
+        AuthorizationPayload payload = readJson(response.body(), AuthorizationPayload.class, "authorization response");
+        AuthorizationResponse authorization = new AuthorizationResponse(
+                requiredText(payload.authorizationCode(), "authorization_code"),
+                requiredText(payload.codeChallenge(), "code_challenge"),
+                requiredText(payload.codeVerifier(), "code_verifier"));
 
         HttpResponse<String> tokenResponse = postForm(URI.create(requiredTokenUrl()), authorizationCodeExchangeBody(
                 requiredClientId(), authorization.authorizationCode(), authorization.codeVerifier()));
@@ -147,7 +158,7 @@ public class OpenAiOAuthService {
             throw new IllegalStateException("OpenAI token exchange failed with status " + tokenResponse.statusCode());
         }
 
-        JsonNode tokenPayload = readJson(tokenResponse.body(), "token response");
+        TokenPayload tokenPayload = readJson(tokenResponse.body(), TokenPayload.class, "token response");
         TokenResponse token = tokenResponse(tokenPayload);
 
         Optional<String> accountId = extractAccountId(token.idToken());
@@ -196,54 +207,44 @@ public class OpenAiOAuthService {
             }
             throw new IllegalStateException("OpenAI token refresh failed with status " + response.statusCode());
         }
-        JsonNode payload = readJson(response.body(), "token refresh response");
-        String accessToken = requiredText(payload, "access_token");
-        String refreshToken = optionalText(payload, "refresh_token", current.refreshToken());
-        String idToken = optionalText(payload, "id_token", current.idToken());
-        Optional<String> accountId = hasText(payload, "id_token") ? extractAccountId(idToken) : current.accountId();
+        TokenPayload payload = readJson(response.body(), TokenPayload.class, "token refresh response");
+        String accessToken = requiredText(payload.accessToken(), "access_token");
+        String refreshToken = optionalText(payload.refreshToken(), "refresh_token", current.refreshToken());
+        String idToken = optionalText(payload.idToken(), "id_token", current.idToken());
+        Optional<String> accountId = hasText(payload.idToken()) ? extractAccountId(idToken) : current.accountId();
+        if (accountId.isEmpty()) {
+            accountId = current.accountId();
+        }
         Tokens refreshed = new Tokens(accessToken, refreshToken, idToken, accountId, expiry(payload, accessToken));
-        persistConnectedState(refreshed.accessToken(), refreshed.refreshToken(), refreshed.idToken(),
-                accountId.orElse(null), refreshed.expiresAt());
+        state = new State(null, refreshed, "Connected.");
+        pendingTokenPersistence = true;
         return refreshed;
     }
 
-    private TokenResponse tokenResponse(JsonNode payload) {
-        return new TokenResponse(requiredText(payload, "access_token"), requiredText(payload, "refresh_token"),
-                requiredText(payload, "id_token"));
+    private TokenResponse tokenResponse(TokenPayload payload) {
+        return new TokenResponse(requiredText(payload.accessToken(), "access_token"),
+                requiredText(payload.refreshToken(), "refresh_token"), requiredText(payload.idToken(), "id_token"));
     }
 
-    private String optionalText(JsonNode payload, String field, String fallback) {
-        JsonNode node = payload.get(field);
-        if (node == null || node.isNull() || node.asText().isBlank()) {
+    private String optionalText(String value, String field, String fallback) {
+        if (value == null || value.isBlank()) {
             if (fallback != null) {
                 return fallback;
             }
             throw new IllegalStateException("Missing OpenAI OAuth field: " + field);
         }
-        return node.asText();
+        return value;
     }
 
-    private Instant expiry(JsonNode payload, String accessToken) {
-        JsonNode expiresIn = payload.get("expires_in");
-        if (expiresIn != null && !expiresIn.isNull()) {
-            long seconds;
-            try {
-                if (expiresIn.isIntegralNumber() && expiresIn.canConvertToLong()) {
-                    seconds = expiresIn.longValue();
-                } else if (expiresIn.isTextual() && !expiresIn.textValue().isBlank()) {
-                    seconds = Long.parseLong(expiresIn.textValue());
-                } else {
-                    throw new NumberFormatException();
-                }
-                if (seconds <= 0) {
-                    throw new NumberFormatException();
-                }
-            } catch (NumberFormatException e) {
+    private Instant expiry(TokenPayload payload, String accessToken) {
+        Long expiresIn = payload.expiresIn();
+        if (expiresIn != null) {
+            if (expiresIn <= 0) {
                 throw new IllegalStateException(
                         "Invalid OpenAI OAuth expires_in: expected a positive integer number of seconds");
             }
             try {
-                return Instant.now().plusSeconds(seconds);
+                return Instant.now().plusSeconds(expiresIn);
             } catch (RuntimeException e) {
                 throw new IllegalStateException("Invalid OpenAI OAuth expires_in: value is out of range");
             }
@@ -251,9 +252,9 @@ public class OpenAiOAuthService {
         try {
             String[] parts = accessToken.split("\\.");
             if (parts.length > 1) {
-                JsonNode exp = objectMapper.readTree(Base64.getUrlDecoder().decode(parts[1])).get("exp");
-                if (exp != null && exp.isIntegralNumber() && exp.canConvertToLong() && exp.asLong() > 0) {
-                    return Instant.ofEpochSecond(exp.asLong());
+                JwtClaims claims = objectMapper.readValue(Base64.getUrlDecoder().decode(parts[1]), JwtClaims.class);
+                if (claims.expiresAt() != null && claims.expiresAt() > 0) {
+                    return Instant.ofEpochSecond(claims.expiresAt());
                 }
             }
         } catch (Exception ignored) {
@@ -263,15 +264,14 @@ public class OpenAiOAuthService {
         return Instant.now().plusSeconds(DEFAULT_EXPIRES_SECONDS);
     }
 
-    private boolean hasText(JsonNode payload, String field) {
-        JsonNode node = payload.get(field);
-        return node != null && !node.isNull() && !node.asText().isBlank();
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private boolean isPermanentTokenRejection(int status, String body) {
         try {
-            JsonNode error = objectMapper.readTree(body).path("error");
-            String code = error.isObject() ? error.path("code").asText("") : error.asText("");
+            TokenErrorPayload payload = objectMapper.readValue(body, TokenErrorPayload.class);
+            String code = payload.error() == null || payload.error().code() == null ? "" : payload.error().code();
             boolean invalidClient = code.equals("invalid_client");
             if (invalidClient) {
                 return false;
@@ -289,6 +289,12 @@ public class OpenAiOAuthService {
     private static final class RefreshRejectedException extends RuntimeException {
     }
 
+    private void persistTokens(Tokens tokens) {
+        persistConnectedState(tokens.accessToken(), tokens.refreshToken(), tokens.idToken(),
+                tokens.accountId().orElse(null), tokens.expiresAt());
+        pendingTokenPersistence = false;
+    }
+
     private void persistConnectedState(String accessToken, String refreshToken, String idToken, String accountId,
             Instant expiresAt) {
         if (appStateRepository == null) {
@@ -304,8 +310,12 @@ public class OpenAiOAuthService {
         appStateRepository.clearOpenAiOAuthState();
     }
 
-    private HttpResponse<String> postJson(URI uri, JsonNode body) {
-        return sendRequest(uri, "application/json", body.toString());
+    private HttpResponse<String> postJson(URI uri, Object body) {
+        try {
+            return sendRequest(uri, "application/json", objectMapper.writeValueAsString(body));
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to serialize OpenAI OAuth request");
+        }
     }
 
     private HttpResponse<String> postForm(URI uri, String body) {
@@ -326,15 +336,21 @@ public class OpenAiOAuthService {
         }
     }
 
-    private JsonNode readJson(String body, String description) {
+    private <T> T readJson(String body, Class<T> type, String description) {
         try {
-            JsonNode node = objectMapper.readTree(body);
-            if (node == null || !node.isObject()) {
-                throw new IllegalStateException("Unexpected " + description + " payload");
+            T payload = objectMapper.readValue(body, type);
+            if (payload == null) {
+                throw new IllegalStateException("Empty OpenAI OAuth " + description);
             }
-            return node;
+            return payload;
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse OpenAI OAuth " + description);
+            String field = e instanceof JsonMappingException mapping
+                    && mapping.getPath().stream().anyMatch(reference -> "expires_in".equals(reference.getFieldName()))
+                            ? " expires_in"
+                            : " token fields";
+            throw new IllegalStateException("Failed to parse OpenAI OAuth " + description + ": invalid" + field);
         }
     }
 
@@ -405,47 +421,22 @@ public class OpenAiOAuthService {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    private String requiredText(JsonNode payload, String field) {
-        JsonNode node = payload.get(field);
-        if (node == null || node.isNull() || node.asText().isBlank()) {
+    private String requiredText(String value, String field) {
+        if (value == null || value.isBlank()) {
             throw new IllegalStateException("Missing OpenAI OAuth field: " + field);
         }
-        return node.asText();
+        return value;
     }
 
-    private String requiredText(JsonNode payload, String firstField, String aliasField) {
-        JsonNode node = payload.get(firstField);
-        if (node == null || node.isNull() || node.asText().isBlank()) {
-            node = payload.get(aliasField);
-        }
-        if (node == null || node.isNull() || node.asText().isBlank()) {
-            throw new IllegalStateException("Missing OpenAI OAuth field: " + firstField);
-        }
-        return node.asText();
-    }
-
-    private int optionalSeconds(JsonNode payload, String field, int defaultValue) {
-        JsonNode node = payload.get(field);
-        if (node == null || node.isNull()) {
+    private int optionalSeconds(Long value, String field, int defaultValue) {
+        if (value == null) {
             return defaultValue;
         }
-        try {
-            int seconds;
-            if (node.isIntegralNumber() && node.canConvertToInt()) {
-                seconds = node.intValue();
-            } else if (node.isTextual() && !node.textValue().isBlank()) {
-                seconds = Integer.parseInt(node.textValue());
-            } else {
-                throw new NumberFormatException();
-            }
-            if (seconds <= 0) {
-                throw new NumberFormatException();
-            }
-            return seconds;
-        } catch (NumberFormatException e) {
+        if (value <= 0 || value > Integer.MAX_VALUE) {
             throw new IllegalStateException(
                     "Invalid OpenAI OAuth " + field + ": expected a positive integer number of seconds");
         }
+        return value.intValue();
     }
 
     private Optional<String> extractAccountId(String idToken) {
@@ -454,14 +445,12 @@ public class OpenAiOAuthService {
             if (parts.length < 2) {
                 return Optional.empty();
             }
-
-            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
-            JsonNode payload = objectMapper.readTree(payloadBytes);
-            JsonNode accountId = payload.get("chatgpt_account_id");
-            if (accountId == null || accountId.isNull() || accountId.asText().isBlank()) {
-                return Optional.empty();
+            JwtClaims claims = objectMapper.readValue(Base64.getUrlDecoder().decode(parts[1]), JwtClaims.class);
+            String accountId = claims.accountId();
+            if (!hasText(accountId) && claims.auth() != null) {
+                accountId = claims.auth().accountId();
             }
-            return Optional.of(accountId.asText());
+            return Optional.ofNullable(accountId).filter(value -> !value.isBlank());
         } catch (Exception e) {
             throw new IllegalStateException("Failed to decode OpenAI id_token");
         }

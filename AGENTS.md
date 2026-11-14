@@ -121,6 +121,7 @@ implementation details.
   required updates.
 - Keep documentation accurate for behavior changes. Record user-facing changes on the nearest relevant task-oriented
   page; update `.wiki/_Sidebar.md` when adding or removing wiki pages.
+- Modify user documentation only for end-user behavior, not implementation details.
 - Keep maintainer-only architecture, testing, publishing, and implementation guidance in `AGENTS.md` or other repository
   contributor documentation rather than the user-facing wiki.
 - Treat `.wiki/` as the source of truth for wiki content. Do not directly edit the published GitHub wiki.
@@ -151,4 +152,6 @@ implementation details.
    use a named static factory for genuinely distinct construction semantics; use a parameter object or builder when
    direct construction becomes unclear. An overload is allowed only when required by a framework or external
    compatibility contract, and its exception must be documented.
+10. Deserialize external JSON into typed POJOs or records with Jackson and `@JsonIgnoreProperties(ignoreUnknown =
+    true)`; avoid manual JSON tree traversal.
 
