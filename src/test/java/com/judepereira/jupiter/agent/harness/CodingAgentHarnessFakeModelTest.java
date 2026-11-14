@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
-import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -48,10 +47,13 @@ public class CodingAgentHarnessFakeModelTest {
         };
     }
 
-    @RequiredArgsConstructor
     static class SequenceModel implements AgentModelClient {
         private final List<ModelResponse> seq;
         private int idx = 0;
+
+        SequenceModel(List<ModelResponse> seq) {
+            this.seq = seq;
+        }
 
         @Override
         public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {

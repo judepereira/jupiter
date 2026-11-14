@@ -16,22 +16,26 @@ import org.junit.jupiter.api.io.TempDir;
 
 class GitWrapperProcessTests {
     private static final String TRAILER = "Co-authored-by: Jupiter IDE <340693705+jupiter-ide@users.noreply.github.com>";
-    private static final String REAL_GIT = resolveRealGit();
+    private static final Path REAL_GIT = resolveRealGit();
 
-    private static String resolveRealGit() {
-        String configured = System.getenv("JUPITER_TEST_REAL_GIT");
-        if (configured != null && !configured.isBlank()) {
-            return Path.of(configured).toAbsolutePath().normalize().toString();
+    private static Path resolveRealGit() {
+        String configuredGit = System.getenv("JUPITER_GIT_REAL");
+        if (configuredGit != null && !configuredGit.isBlank()) {
+            return Path.of(configuredGit).toAbsolutePath().normalize();
         }
-        Path systemGit = Path.of("/usr/bin/git.real");
+        String testGit = System.getenv("JUPITER_TEST_REAL_GIT");
+        if (testGit != null && !testGit.isBlank()) {
+            return Path.of(testGit).toAbsolutePath().normalize();
+        }
+        Path installedGit = Path.of("/usr/bin/git.real");
+        if (Files.isExecutable(installedGit)) {
+            return installedGit;
+        }
+        Path systemGit = Path.of("/usr/bin/git");
         if (Files.isExecutable(systemGit)) {
-            return systemGit.toString();
+            return systemGit;
         }
-        Path git = Path.of("/usr/bin/git");
-        if (Files.isExecutable(git)) {
-            return git.toString();
-        }
-        throw new IllegalStateException("Unable to locate real git executable; set JUPITER_TEST_REAL_GIT");
+        throw new IllegalStateException("Unable to locate real git executable; set JUPITER_GIT_REAL");
     }
     private static final Path WRAPPER = Path.of("git-wrapper.sh").toAbsolutePath();
     private static final List<String> CONFIG_VARS = List.of("GIT_CONFIG", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS",
@@ -209,7 +213,7 @@ class GitWrapperProcessTests {
             return process(WRAPPER, args);
         }
         Result invokeDirect(String... args) throws Exception {
-            return process(Path.of(REAL_GIT), args);
+            return process(REAL_GIT, args);
         }
         Result process(Path executable, String... args) throws Exception {
             ProcessBuilder pb = new ProcessBuilder();
@@ -223,7 +227,7 @@ class GitWrapperProcessTests {
             env.put("XDG_CONFIG_HOME", xdg.toString());
             env.put("GIT_CONFIG_NOSYSTEM", "1");
             env.put("GIT_CONFIG_GLOBAL", "/dev/null");
-            env.put("JUPITER_GIT_REAL", REAL_GIT);
+            env.put("JUPITER_GIT_REAL", REAL_GIT.toString());
             env.put("LC_ALL", "C");
             env.put("LANG", "C");
             Process p = pb.start();
