@@ -7,6 +7,7 @@ import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.harness.SystemPromptComposer;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
+import com.judepereira.jupiter.testsupport.JwtTestTokens;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
@@ -306,9 +307,9 @@ class OpenAiOAuthE2ETest extends E2ETestSupport {
                             {
                               "access_token": "access-123",
                               "refresh_token": "refresh-456",
-                              "id_token": "id-789"
+                              "id_token": "%s"
                             }
-                            """);
+                            """.formatted(JwtTestTokens.plain(Map.of("chatgpt_account_id", "acct-123"))));
                 } else {
                     respond(exchange, 500, "{\"error\":\"unexpected token exchange\"}");
                 }
