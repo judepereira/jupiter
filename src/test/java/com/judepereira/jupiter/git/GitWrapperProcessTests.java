@@ -16,7 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class GitWrapperProcessTests {
     private static final String TRAILER = "Co-authored-by: Jupiter IDE <340693705+jupiter-ide@users.noreply.github.com>";
-    private static final String REAL_GIT = "/usr/bin/git";
+    private static final Path REAL_GIT = resolveRealGit();
     private static final Path WRAPPER = Path.of("git-wrapper.sh").toAbsolutePath();
     private static final List<String> CONFIG_VARS = List.of("GIT_CONFIG", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS",
             "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_AUTHOR_NAME",
@@ -26,6 +26,18 @@ class GitWrapperProcessTests {
 
     @TempDir
     Path temp;
+
+    private static Path resolveRealGit() {
+        String configuredGit = System.getenv("JUPITER_GIT_REAL");
+        if (configuredGit != null && !configuredGit.isBlank()) {
+            return Path.of(configuredGit);
+        }
+        Path installedGit = Path.of("/usr/bin/git.real");
+        if (Files.isExecutable(installedGit)) {
+            return installedGit;
+        }
+        return Path.of("/usr/bin/git");
+    }
 
     @Test
     void ordinaryMessageGetsTrailerAndPreservesIdentity() throws Exception {
@@ -193,7 +205,7 @@ class GitWrapperProcessTests {
             return process(WRAPPER, args);
         }
         Result invokeDirect(String... args) throws Exception {
-            return process(Path.of(REAL_GIT), args);
+            return process(REAL_GIT, args);
         }
         Result process(Path executable, String... args) throws Exception {
             ProcessBuilder pb = new ProcessBuilder();
@@ -207,7 +219,7 @@ class GitWrapperProcessTests {
             env.put("XDG_CONFIG_HOME", xdg.toString());
             env.put("GIT_CONFIG_NOSYSTEM", "1");
             env.put("GIT_CONFIG_GLOBAL", "/dev/null");
-            env.put("JUPITER_GIT_REAL", REAL_GIT);
+            env.put("JUPITER_GIT_REAL", REAL_GIT.toString());
             env.put("LC_ALL", "C");
             env.put("LANG", "C");
             Process p = pb.start();
