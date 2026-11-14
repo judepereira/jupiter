@@ -3,6 +3,7 @@ package com.judepereira.jupiter.e2e;
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.judepereira.jupiter.testsupport.JwtTestTokens;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -147,8 +148,10 @@ class AnthropicModelsE2ETest extends E2ETestSupport {
                             "{\"authorization_code\":\"auth\",\"code_challenge\":\"challenge\",\"code_verifier\":\"verifier\"}");
                 }
             });
-            server.createContext("/oauth/token", e -> respond(e, 200,
-                    "{\"access_token\":\"openai-access\",\"refresh_token\":\"openai-refresh\",\"id_token\":\"id\"}"));
+            server.createContext("/oauth/token",
+                    e -> respond(e, 200,
+                            "{\"access_token\":\"openai-access\",\"refresh_token\":\"openai-refresh\",\"id_token\":\""
+                                    + JwtTestTokens.plain(Map.of("sub", "anthropic-models-user")) + "\"}"));
             server.start();
             return fixture;
         }

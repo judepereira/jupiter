@@ -1,0 +1,500 @@
+package com.judepereira.jupiter.openai.oauth;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
+import com.judepereira.jupiter.persistence.AppStateRepository;
+import com.judepereira.jupiter.persistence.AppStateRepository.OpenAiOAuthStateRow;
+import com.judepereira.jupiter.testsupport.JwtTestTokens;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+
+class OpenAiOAuthRefreshRegressionTests {
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    @Test
+    void rotatedCredentialsRemainInMemoryAndArePersistedBeforeTheNextRefreshAfterPersistenceFailure() throws Exception {
+        try (Server server = new Server(200,
+                "{\"access_token\":\"rotated-access\",\"refresh_token\":\"rotated-refresh\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "old-refresh", Instant.EPOCH)));
+            doThrow(new IllegalStateException("database unavailable")).doNothing().when(repo).updateOpenAiOAuthState(
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
+                    ArgumentMatchers.any());
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+
+            assertThatThrownBy(service::currentAccessToken).hasMessageContaining("database unavailable");
+            assertThat(service.currentAccessToken()).contains("rotated-access");
+            assertThat(server.calls.get()).isEqualTo(1);
+            Mockito.verify(repo, Mockito.times(2)).updateOpenAiOAuthState(ArgumentMatchers.eq("rotated-access"),
+                    ArgumentMatchers.eq("rotated-refresh"), ArgumentMatchers.eq("id-token"),
+                    ArgumentMatchers.eq("acct-old"), ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void expiredTokenRetriesPendingPersistenceBeforeMakingAnotherRefreshRequest() throws Exception {
+        try (Server server = new Server(200,
+                "{\"access_token\":\"rotated-access\",\"refresh_token\":\"rotated-refresh\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "old-refresh", Instant.EPOCH)));
+            doThrow(new IllegalStateException("database unavailable")).doNothing().when(repo).updateOpenAiOAuthState(
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
+                    ArgumentMatchers.any());
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).hasMessageContaining("database unavailable");
+            assertThat(service.currentAccessToken()).contains("rotated-access");
+            assertThat(server.calls.get()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void expiredStateRefreshesAndPersistsRotatedTokensAndAccount() throws Exception {
+        String idToken = JwtTestTokens.plain(Map.of("chatgpt_account_id", "acct-new"));
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"refresh_token\":\"new-refresh\",\"id_token\":\"" + idToken
+                        + "\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            var props = properties(server);
+            Mockito.when(repo.loadOpenAiOAuthState())
+                    .thenReturn(Optional.of(row("old-access", "old-refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(props, JSON, HttpClient.newHttpClient(), repo, null);
+            assertThat(service.currentAccessToken()).contains("new-access");
+            assertThat(service.currentAccountId()).contains("acct-new");
+            assertThat(server.calls.get()).isEqualTo(1);
+            assertThat(server.lastRequestBody.get()).contains("grant_type=refresh_token", "refresh_token=old-refresh",
+                    "client_id=client-123");
+            ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
+                    ArgumentMatchers.eq("new-refresh"), ArgumentMatchers.eq(idToken), ArgumentMatchers.eq("acct-new"),
+                    expiry.capture());
+            assertThat(expiry.getValue()).isAfter(Instant.now().plusSeconds(3500));
+        }
+    }
+
+    @Test
+    void nestedAccountClaimIsExtractedOnInitialAuthorizationAndRefresh() throws Exception {
+        String idToken = JwtTestTokens
+                .plain(Map.of("https://api.openai.com/auth", Map.of("chatgpt_account_id", "acct-nested")));
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"id_token\":\"" + idToken + "\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.eq(idToken), ArgumentMatchers.eq("acct-nested"),
+                    ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void refreshedIdTokenUsesNestedAccountWhenTopLevelAccountIsBlank() throws Exception {
+        String idToken = JwtTestTokens.plain(Map.of("chatgpt_account_id", " ", "https://api.openai.com/auth",
+                Map.of("chatgpt_account_id", "acct-new-nested")));
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"id_token\":\"" + idToken + "\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            assertThat(service.currentAccountId()).contains("acct-new-nested");
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.eq(idToken),
+                    ArgumentMatchers.eq("acct-new-nested"), ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void malformedRefreshedIdTokenFailsSanitizedWithoutPersistingTokens() throws Exception {
+        String malformed = "secret.invalid.token";
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"id_token\":\"" + malformed + "\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Failed to decode OpenAI id_token").satisfies(error -> {
+                        assertThat(error.getCause()).isNull();
+                        assertThat(error.toString()).doesNotContain(malformed);
+                    });
+            Mockito.verify(repo, Mockito.never()).updateOpenAiOAuthState(ArgumentMatchers.any(), ArgumentMatchers.any(),
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void refreshedIdTokenWithoutAccountClaimRetainsExistingAccount() throws Exception {
+        String idToken = JwtTestTokens.plain(Map.of("sub", "test-user"));
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"id_token\":\"" + idToken + "\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.eq(idToken), ArgumentMatchers.eq("acct-old"),
+                    ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void validTokenDoesNotRefreshAndMissingExpiryRefreshes() throws Exception {
+        try (Server server = new Server(200, "{\"access_token\":\"new-access\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            var props = properties(server);
+            Mockito.when(repo.loadOpenAiOAuthState())
+                    .thenReturn(Optional.of(row("valid", "refresh", Instant.now().plusSeconds(600))));
+            OpenAiOAuthService service = new OpenAiOAuthService(props, JSON, HttpClient.newHttpClient(), repo, null);
+            assertThat(service.currentAccessToken()).contains("valid");
+            assertThat(server.calls.get()).isZero();
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("legacy", "refresh", null)));
+            service = new OpenAiOAuthService(props, JSON, HttpClient.newHttpClient(), repo, null);
+            assertThat(service.currentAccessToken()).contains("new-access");
+            assertThat(server.calls.get()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void rejectedRefreshClearsStateAndRequiresReconnect() throws Exception {
+        try (Server server = new Server(400, "{\"error\":\"invalid_grant\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState())
+                    .thenReturn(Optional.of(row("old-access", "refresh-secret", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Reconnect")
+                    .satisfies(error -> assertThat(error.toString()).doesNotContain("refresh-secret"));
+            Mockito.verify(repo).clearOpenAiOAuthState();
+            assertThat(service.currentView().connected()).isFalse();
+            assertThat(server.calls.get()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void temporaryRefreshFailurePreservesStateAndAllowsSuccessfulRetry() throws Exception {
+        try (Server server = new Server(503, "{\"error\":\"refresh-secret\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState())
+                    .thenReturn(Optional.of(row("old-access", "refresh-secret", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).hasMessageContaining("503")
+                    .satisfies(error -> assertThat(error.toString()).doesNotContain("refresh-secret"));
+            Mockito.verify(repo, Mockito.never()).clearOpenAiOAuthState();
+            assertThat(service.currentView().connected()).isTrue();
+            server.setResponse(200, "{\"access_token\":\"recovered\",\"expires_in\":3600}");
+            assertThat(service.currentAccessToken()).contains("recovered");
+            assertThat(server.calls.get()).isEqualTo(2);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("recovered"),
+                    ArgumentMatchers.eq("refresh-secret"), ArgumentMatchers.eq("id-token"),
+                    ArgumentMatchers.eq("acct-old"), ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void concurrentExpiredTokenCallsPerformOneRefresh() throws Exception {
+        try (Server server = new Server(200,
+                "{\"access_token\":\"new-access\",\"refresh_token\":\"rotated\",\"expires_in\":3600}")) {
+            server.delayMillis.set(150);
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            try (ExecutorService workers = Executors.newFixedThreadPool(8)) {
+                CountDownLatch start = new CountDownLatch(1);
+                var calls = IntStream.range(0, 8).mapToObj(i -> workers.submit(() -> {
+                    start.await();
+                    return service.currentAccessToken().orElseThrow();
+                })).toList();
+                start.countDown();
+                try {
+                    for (Future<String> call : calls) {
+                        assertThat(call.get(5, TimeUnit.SECONDS)).isEqualTo("new-access");
+                    }
+                } catch (Exception e) {
+                    workers.shutdownNow();
+                    throw e;
+                }
+            }
+            assertThat(server.calls.get()).isEqualTo(1);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("new-access"),
+                    ArgumentMatchers.eq("rotated"), ArgumentMatchers.eq("id-token"), ArgumentMatchers.eq("acct-old"),
+                    ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void refreshRequiresAccessTokenAndDoesNotOverwriteStateOnMalformedResponse() throws Exception {
+        try (Server server = new Server(200, "{\"refresh_token\":\"rotated\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState())
+                    .thenReturn(Optional.of(row("old", "refresh-secret", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).hasMessageContaining("access_token");
+            Mockito.verify(repo, Mockito.never()).updateOpenAiOAuthState(ArgumentMatchers.any(), ArgumentMatchers.any(),
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+            assertThat(service.currentView().connected()).isTrue();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {4_102_444_800L, 1_577_836_800L})
+    void jwtExpiryIsPersistedExactlyIncludingPastExpiry(long exp) throws Exception {
+        String token = jwtWithExpiry(exp);
+        try (Server server = new Server(200, "{\"access_token\":\"" + token + "\",\"expires_in\":null}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq(token), ArgumentMatchers.eq("refresh"),
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), expiry.capture());
+            assertThat(expiry.getValue()).isEqualTo(Instant.ofEpochSecond(exp));
+        }
+    }
+
+    @Test
+    void jwtWithoutExpiryUsesConservativeFallback() throws Exception {
+        String accessToken = JwtTestTokens.plain(Map.of("iss", "untrusted-test-issuer"));
+        try (Server server = new Server(200, "{\"access_token\":\"" + accessToken + "\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq(accessToken),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.any(), ArgumentMatchers.any(), expiry.capture());
+            assertThat(expiry.getValue()).isAfter(Instant.now()).isBefore(Instant.now().plusSeconds(900));
+            assertThat(expiry.getValue()).isNotEqualTo(Instant.MAX);
+        }
+    }
+
+    @Test
+    void jwtWithPastExpiryAndFutureIssuedAtPersistsExpiryWithoutTemporalValidation() throws Exception {
+        long exp = Instant.now().minusSeconds(3600).getEpochSecond();
+        long iat = Instant.now().plusSeconds(3600).getEpochSecond();
+        String accessToken = JwtTestTokens.plain(Map.of("exp", new Date(exp * 1000L), "iat", new Date(iat * 1000L),
+                "iss", "unexpected-issuer", "aud", "unexpected-audience"));
+        try (Server server = new Server(200, "{\"access_token\":\"" + accessToken + "\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq(accessToken),
+                    ArgumentMatchers.eq("refresh"), ArgumentMatchers.any(), ArgumentMatchers.any(), expiry.capture());
+            assertThat(expiry.getValue()).isEqualTo(Instant.ofEpochSecond(exp));
+        }
+    }
+
+    @Test
+    void jwtExpiryWithinSafetyMarginTriggersRefresh() throws Exception {
+        long exp = Instant.now().plusSeconds(45).getEpochSecond();
+        String token = jwtWithExpiry(exp);
+        try (Server server = new Server(200, "{\"access_token\":\"refreshed\",\"expires_in\":3600}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState())
+                    .thenReturn(Optional.of(row(token, "refresh", Instant.ofEpochSecond(exp))));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThat(service.currentAccessToken()).contains("refreshed");
+            assertThat(server.calls.get()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void missingRefreshTokenClearsStateAndRequiresReconnect() throws Exception {
+        try (Server server = new Server(200, "{}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", null, Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).hasMessageContaining("Reconnect");
+            Mockito.verify(repo).clearOpenAiOAuthState();
+            assertThat(service.currentView().connected()).isFalse();
+            assertThat(server.calls.get()).isZero();
+        }
+    }
+
+    @Test
+    void omittedRefreshFieldsRetainExistingCredentialsAndExpiryFallbacksAreApplied() throws Exception {
+        try (Server server = new Server(200, "{\"access_token\":\"opaque-access\"}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState())
+                    .thenReturn(Optional.of(row("old", "keep-refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            service.currentAccessToken();
+            ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("opaque-access"),
+                    ArgumentMatchers.eq("keep-refresh"), ArgumentMatchers.eq("id-token"),
+                    ArgumentMatchers.eq("acct-old"), expiry.capture());
+            assertThat(expiry.getValue()).isBetween(Instant.now().plusSeconds(800), Instant.now().plusSeconds(900));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"3600", "\"3600\""})
+    void acceptsIntegerAndNumericStringExpiry(String expiresIn) throws Exception {
+        try (Server server = new Server(200, "{\"access_token\":\"fresh\",\"expires_in\":" + expiresIn + "}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThat(service.currentAccessToken()).contains("fresh");
+            ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+            Mockito.verify(repo).updateOpenAiOAuthState(ArgumentMatchers.eq("fresh"), ArgumentMatchers.eq("refresh"),
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), expiry.capture());
+            assertThat(expiry.getValue()).isAfter(Instant.now().plusSeconds(3500));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1.5", "-1", "9223372036854775808"})
+    void rejectsInvalidExpiryWithoutOverwritingState(String expiresIn) throws Exception {
+        try (Server server = new Server(200, "{\"access_token\":\"fresh\",\"expires_in\":" + expiresIn + "}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).hasMessageContaining("expires_in");
+            Mockito.verify(repo, Mockito.never()).updateOpenAiOAuthState(ArgumentMatchers.any(), ArgumentMatchers.any(),
+                    ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"refresh_token_reused", "invalid_client"})
+    void nestedRefreshRejectionClearsStateOnlyForReusedToken(String error) throws Exception {
+        try (Server server = new Server(400, "{\"error\":{\"code\":\"" + error + "\"}}")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState()).thenReturn(Optional.of(row("old", "refresh", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).isInstanceOf(IllegalStateException.class);
+            if (error.equals("refresh_token_reused")) {
+                Mockito.verify(repo).clearOpenAiOAuthState();
+                assertThat(service.currentView().connected()).isFalse();
+            } else {
+                Mockito.verify(repo, Mockito.never()).clearOpenAiOAuthState();
+                assertThat(service.currentView().connected()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void malformedBodyErrorDoesNotRetainCause() throws Exception {
+        try (Server server = new Server(200, "{secret malformed")) {
+            AppStateRepository repo = mock(AppStateRepository.class);
+            Mockito.when(repo.loadOpenAiOAuthState())
+                    .thenReturn(Optional.of(row("old", "refresh-secret", Instant.EPOCH)));
+            OpenAiOAuthService service = new OpenAiOAuthService(properties(server), JSON, HttpClient.newHttpClient(),
+                    repo, null);
+            assertThatThrownBy(service::currentAccessToken).satisfies(error -> {
+                assertThat(error.getMessage()).doesNotContain("secret", "malformed");
+                assertThat(error.getCause()).isNull();
+            });
+        }
+    }
+
+    private static String jwtWithExpiry(long exp) {
+        return JwtTestTokens.withExpiry(exp);
+    }
+
+    private static OpenAiOAuthProperties properties(Server server) {
+        var props = new OpenAiOAuthProperties();
+        props.setIssuer(server.url());
+        props.setClientId("client-123");
+        return props;
+    }
+
+    private static OpenAiOAuthStateRow row(String access, String refresh, Instant expires) {
+        return new OpenAiOAuthStateRow(access, refresh, "id-token", "acct-old", expires);
+    }
+
+    private record Response(int status, String body) {
+    }
+
+    private static final class Server implements AutoCloseable {
+        final HttpServer server;
+        final AtomicInteger calls = new AtomicInteger();
+        final AtomicReference<Response> response;
+        final AtomicReference<String> lastRequestBody = new AtomicReference<>();
+        final AtomicInteger delayMillis = new AtomicInteger();
+
+        Server(int status, String response) throws IOException {
+            this.response = new AtomicReference<>(new Response(status, response));
+            server = HttpServer.create(new InetSocketAddress(0), 0);
+            server.createContext("/oauth/token", this::handle);
+            server.start();
+        }
+
+        String url() {
+            return URI.create("http://localhost:" + server.getAddress().getPort()).toString();
+        }
+        void setResponse(int status, String body) {
+            response.set(new Response(status, body));
+        }
+
+        void handle(HttpExchange exchange) throws IOException {
+            calls.incrementAndGet();
+            int delay = delayMillis.get();
+            if (delay > 0) {
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException(e);
+                }
+            }
+            lastRequestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            Response currentResponse = response.get();
+            byte[] bytes = currentResponse.body().getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(currentResponse.status(), bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        }
+        public void close() {
+            server.stop(0);
+        }
+    }
+}

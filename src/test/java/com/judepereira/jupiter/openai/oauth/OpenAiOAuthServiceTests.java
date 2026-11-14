@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.persistence.AppStateRepository;
+import com.judepereira.jupiter.testsupport.JwtTestTokens;
 import com.judepereira.jupiter.testsupport.SQLiteTestSupport;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.sun.net.httpserver.HttpExchange;
@@ -21,7 +22,6 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.flywaydb.core.Flyway;
@@ -221,21 +221,11 @@ public class OpenAiOAuthServiceTests {
                             "auth-123", "redirect_uri", url("/deviceauth/callback"), "client_id", "client-123",
                             "code_verifier", "verifier-456")));
                     respond(exchange, 200, Map.of("access_token", "access-123", "refresh_token", "refresh-456",
-                            "id_token", jwtWithAccountId("acct-123")));
+                            "id_token", JwtTestTokens.plain(Map.of("chatgpt_account_id", "acct-123"))));
                 } else {
                     respond(exchange, 500, Map.of("error", "unexpected token exchange"));
                 }
             };
-        }
-
-        private String jwtWithAccountId(String accountId) throws IOException {
-            String header = base64Url("{\"alg\":\"none\",\"typ\":\"JWT\"}");
-            String payload = base64Url(objectMapper.writeValueAsString(Map.of("chatgpt_account_id", accountId)));
-            return header + "." + payload + ".signature";
-        }
-
-        private String base64Url(String value) {
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
         }
 
         private Map<String, Object> readJsonBody(HttpExchange exchange) throws IOException {
