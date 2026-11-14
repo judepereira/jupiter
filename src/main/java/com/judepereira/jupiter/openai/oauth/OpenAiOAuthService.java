@@ -2,6 +2,7 @@ package com.judepereira.jupiter.openai.oauth;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
 import com.judepereira.jupiter.agent.catalog.ProviderConnectedEvent;
 import com.judepereira.jupiter.agent.config.OpenAiOAuthProperties;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthPayloads.*;
@@ -36,6 +37,7 @@ public class OpenAiOAuthService {
 
     private final OpenAiOAuthProperties properties;
     private final ObjectMapper objectMapper;
+    private final ObjectReader oauthReader;
     private final HttpClient httpClient;
     private final AppStateRepository appStateRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -47,6 +49,7 @@ public class OpenAiOAuthService {
             AppStateRepository appStateRepository, ApplicationEventPublisher eventPublisher) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.oauthReader = OpenAiOAuthPayloads.reader(objectMapper);
         this.httpClient = httpClient;
         this.appStateRepository = appStateRepository;
         this.eventPublisher = eventPublisher;
@@ -287,7 +290,7 @@ public class OpenAiOAuthService {
 
     private boolean isPermanentTokenRejection(int status, String body) {
         try {
-            TokenErrorPayload payload = objectMapper.readValue(body, TokenErrorPayload.class);
+            TokenErrorPayload payload = oauthReader.readValue(body, TokenErrorPayload.class);
             String code = payload.error() == null || payload.error().code() == null ? "" : payload.error().code();
             boolean invalidClient = code.equals("invalid_client");
             if (invalidClient) {
@@ -355,7 +358,7 @@ public class OpenAiOAuthService {
 
     private <T> T readJson(String body, Class<T> type, String description) {
         try {
-            T payload = objectMapper.readValue(body, type);
+            T payload = oauthReader.readValue(body, type);
             if (payload == null) {
                 throw new IllegalStateException("Empty OpenAI OAuth " + description);
             }

@@ -154,4 +154,8 @@ implementation details.
    compatibility contract, and its exception must be documented.
 10. Deserialize external JSON into typed POJOs or records with Jackson and `@JsonIgnoreProperties(ignoreUnknown =
     true)`; avoid manual JSON tree traversal.
+11. Prefer Jackson's built-in coercion configuration at integration boundaries over per-field custom scalar
+    deserializers. Scope coercion changes to a copied mapper or reader; never mutate the application's shared mapper.
+    Use custom scalar deserializers only for genuinely nonstandard formats, and preserve the accepted/rejected input
+    contract in tests.
 
