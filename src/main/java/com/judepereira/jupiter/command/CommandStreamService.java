@@ -9,6 +9,7 @@ import com.judepereira.jupiter.agent.tools.ToolExecutionResult;
 import com.judepereira.jupiter.agent.tools.impl.RunCommandTool;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
+import com.judepereira.jupiter.persistence.Persistence.QueuedChatTurn;
 import com.judepereira.jupiter.persistence.Persistence.ToolCallTraceInput;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import com.judepereira.jupiter.ui.ChatToolCallHtmlService;
@@ -51,18 +52,28 @@ public class CommandStreamService {
         this.chatToolCallHtmlService = chatToolCallHtmlService;
     }
 
-    public void queue(long sessionId, String assistantId, CommandCatalogService.CommandDefinition command,
-            String workspaceRoot, Map<String, String> environmentVariables) {
-        activeStreams.put(assistantId,
-                new ActiveCommandStream(
-                        new PendingCommand(sessionId, assistantId, command, workspaceRoot,
-                                environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables),
-                                appStateService.loadSessionProjectCommandEnvironmentAllowlist(sessionId)),
-                        new CopyOnWriteArrayList<>(), new AtomicBoolean(false), new AtomicBoolean(false),
-                        new AtomicBoolean(false), new AtomicReference<>(), new CancellationToken(),
-                        new AtomicReference<>(new StringBuilder())));
+    public QueuedChatTurn queue(long sessionId, String userId, String assistantId,
+            CommandCatalogService.CommandDefinition command, String workspaceRoot,
+            Map<String, String> environmentVariables) {
+        PendingCommand pending = new PendingCommand(sessionId, assistantId, command, workspaceRoot,
+                environmentVariables == null ? Map.of() : Map.copyOf(environmentVariables),
+                appStateService.loadSessionProjectCommandEnvironmentAllowlist(sessionId));
+        ActiveCommandStream active = new ActiveCommandStream(pending);
         activeStreamRegistryService.register(assistantId, sessionId, workspaceRoot);
-        appStateService.publishWorkspaceRailRefresh();
+        if (activeStreams.putIfAbsent(assistantId, active) != null) {
+            activeStreamRegistryService.unregister(assistantId);
+            throw new IllegalStateException("SESSION_BUSY: A command stream is already active");
+        }
+        try {
+            var queued = appStateService.appendUserMessageAndPendingAssistant(sessionId, userId, assistantId,
+                    "/" + command.id(), null);
+            appStateService.publishWorkspaceRailRefresh();
+            return queued;
+        } catch (RuntimeException failure) {
+            activeStreams.remove(assistantId, active);
+            activeStreamRegistryService.unregister(assistantId);
+            throw failure;
+        }
     }
 
     PendingCommand pendingCommand(String assistantId) {

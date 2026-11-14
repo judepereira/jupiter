@@ -20,6 +20,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -228,7 +229,7 @@ class InboundMcpE2ETest extends E2ETestSupport {
             AgentModelClient client = new AgentModelClient() {
                 public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
                     boolean summaryPrompt = conversation.stream().anyMatch(message -> message.getContent() != null
-                            && message.getContent().toLowerCase().contains("summar"));
+                            && message.getContent().toLowerCase(Locale.ROOT).contains("summar"));
                     return new ModelResponse(
                             summaryPrompt ? InboundMcpE2ETest.SUMMARY_MARKER : InboundMcpE2ETest.MODEL_MARKER, null,
                             null, List.of());
@@ -284,10 +285,10 @@ class InboundMcpE2ETest extends E2ETestSupport {
             if (this.sessionId != null) {
                 builder.header("Mcp-Session-Id", this.sessionId);
             }
-            if ((response = this.http.send(builder.POST(HttpRequest.BodyPublishers.ofString(json)).build(),
-                    HttpResponse.BodyHandlers.ofString())).statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AssertionError(
-                        (Object) ("MCP request failed with " + response.statusCode() + ": " + response.body()));
+            response = this.http.send(builder.POST(HttpRequest.BodyPublishers.ofString(json)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new AssertionError("MCP request failed with " + response.statusCode() + ": " + response.body());
             }
             this.sessionId = response.headers().firstValue("Mcp-Session-Id").orElse(this.sessionId);
             String body = response.body();

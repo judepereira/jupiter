@@ -32,6 +32,14 @@ public class ActiveStreamRegistryService {
         }
     }
 
+    public boolean isClaimedBy(String assistantId, long sessionId) {
+        synchronized (admissionLock) {
+            StreamRef ref = streamsByAssistantId.get(assistantId);
+            return ref != null && ref.sessionId() == sessionId
+                    && assistantId.equals(assistantBySessionId.get(sessionId));
+        }
+    }
+
     public void register(String assistantId, long sessionId, String workspaceRoot) {
         if (assistantId == null || assistantId.isBlank()) {
             return;

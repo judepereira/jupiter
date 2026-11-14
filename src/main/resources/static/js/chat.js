@@ -1,7 +1,7 @@
 import { configureChatComposer, initChatComposer, resizeChatTextarea } from "./chat/composer.js";
 import { configureCommandPicker } from "./chat/commands.js";
 import { bindChatMessageCopyButtons, formatAllChatSubtitles, renderAllChatMarkdown } from "./chat/markdown.js";
-import { initWorkspaceRailSync, syncFaviconWithRail } from "./chat/rail-sync.js";
+import { initWorkspaceRailSync, invalidateWorkspaceRailRefresh, syncFaviconWithRail } from "./chat/rail-sync.js";
 import { bindAutoScrollListeners } from "./chat/scroll.js";
 import {
     activePrimaryPendingAssistantRow,
@@ -18,6 +18,22 @@ function bindChatHtmxLifecycleListeners() {
     }
     chatHtmxListenersBound = true;
 
+    document.body.addEventListener(
+        "htmx:beforeRequest",
+        function (evt) {
+            const target = evt?.detail?.target;
+            const source = evt?.detail?.elt;
+            const requestUrl = evt?.detail?.requestConfig?.path || "";
+            if (
+                target?.id === "chat-content" ||
+                source?.closest?.("#project-tabs, #workspace-session-rail") ||
+                /\/ui\/(projects|workspaces|sessions)\//.test(requestUrl)
+            ) {
+                invalidateWorkspaceRailRefresh();
+            }
+        },
+        true,
+    );
     document.body.addEventListener(
         "htmx:afterSwap",
         function (evt) {

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -306,6 +307,54 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
     private static double bottomOffset(Page page) {
         return ((Number) page.locator("#chat-history")
                 .evaluate("history => history.scrollHeight - history.clientHeight - history.scrollTop")).doubleValue();
+    }
+
+    @Test
+    void delayedRailRefreshCannotOverwriteNewlyActivatedProject(@TempDir Path tempDir) throws Exception {
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path alphaDir = Files.createDirectories(fakeHome.resolve("alpha-project"));
+        Path betaDir = Files.createDirectories(fakeHome.resolve("beta-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", alphaDir);
+            openProject(page, "Beta", betaDir);
+
+            AtomicReference<Route> delayedRoute = new AtomicReference<>();
+            AtomicReference<APIResponse> fetchedResponse = new AtomicReference<>();
+            page.route("**/ui/workspaces/rail", route -> {
+                if (delayedRoute.compareAndSet(null, route)) {
+                    fetchedResponse.set(route.fetch());
+                } else {
+                    route.resume();
+                }
+            });
+            page.evaluate("window.__railSyncReady = import('/js/chat/rail-sync.js')");
+            page.waitForFunction("() => window.__railSyncReady");
+            page.evaluate("window.__railSyncReady.then(module => module.refreshWorkspaceRail())");
+            page.waitForCondition(() -> delayedRoute.get() != null && fetchedResponse.get() != null,
+                    new Page.WaitForConditionOptions().setTimeout(10_000));
+
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/projects/") && response.url().contains("/activate")
+                            && response.status() == 200,
+                    () -> page.locator(".project-tab-group").filter(new Locator.FilterOptions().setHasText("Alpha"))
+                            .locator(".project-tab").click());
+            assertThat(page.locator(".project-tab-group.active")).containsText("Alpha");
+            try {
+                delayedRoute.get().fulfill(new Route.FulfillOptions().setResponse(fetchedResponse.get()));
+            } catch (PlaywrightException ignored) {
+                // Navigation may abort the intercepted request after invalidating the refresh.
+            }
+            page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+            assertThat(page.locator(".project-tab-group.active")).containsText("Alpha");
+            assertThat(page.locator(".project-tab-group.active .project-tab")).hasCount(1);
+        }
     }
 
     @Test

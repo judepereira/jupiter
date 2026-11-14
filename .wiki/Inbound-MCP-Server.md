@@ -5,20 +5,22 @@ configures outbound connections from Jupiter to other MCP servers.
 
 ## Set up a credential
 
-Open **Settings → Inbound MCP credentials**. Create a named credential, choose either **All projects, including future
-projects** or selected projects, and select allowed tools. Create additional named credentials for different clients or
-access scopes. The automatically-created **Default** credential initially covers the projects currently available and
-all seven tools; you can edit its scope like any other credential.
+Open **Settings → Inbound MCP**. Create a named credential, choose either **All projects, including future projects** or
+selected projects, and select allowed tools. Create additional named credentials for different clients or access scopes.
+The automatically-created **Default** credential covers all current and future projects and all seven tools; you can
+edit its scope like any other credential.
 
 The bearer token is shown when created and only when you explicitly choose **Reveal** or **Rotate**. Copy it into the
 MCP client securely. Rotate replaces the token, so update every client using it; revoke disables it. A credential's
 project and tool permissions can be edited without changing its token. There are no MCP tools for managing credentials:
 use Jupiter's settings UI.
 
-Configure an MCP client with the instance's `/mcp` URL and an `Authorization: Bearer <token>` header. The endpoint uses
-Streamable HTTP. Use HTTPS when connecting over an untrusted network, and only connect to a Jupiter instance whose
-identity you trust. The token grants access to Jupiter tools and is not a sandbox for the connected agent or host
-operating system; configure a separate network/OS sandbox appropriate to your deployment.
+Configure an MCP client with the instance's `/mcp` URL and an `Authorization: Bearer <token>` header. When behind a
+TLS-terminating reverse proxy, configure trusted proxy header handling as described in
+[Remote Deployment](Remote-Deployment); arbitrary forwarded headers are not trusted. The endpoint uses Streamable HTTP.
+Use HTTPS when connecting over an untrusted network, and only connect to a Jupiter instance whose identity you trust.
+The token grants access to Jupiter tools and is not a sandbox for the connected agent or host operating system;
+configure a separate network/OS sandbox appropriate to your deployment.
 
 When Jupiter itself connects to its own endpoint as an outbound MCP server, configure a server entry in **Settings → MCP
 Servers** with the `/mcp` URL and an `Authorization` header containing the bearer token. Update that header after

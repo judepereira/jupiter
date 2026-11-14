@@ -44,10 +44,6 @@ public class InboundMcpAuthFilter implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
         HttpServletRequest http = (HttpServletRequest) request;
-        if (!"/mcp".equals(http.getRequestURI())) {
-            chain.doFilter(request, response);
-            return;
-        }
         HttpServletResponse res = (HttpServletResponse) response;
         if (!validOrigin(http)) {
             res.sendError(HttpServletResponse.SC_FORBIDDEN);
@@ -68,9 +64,16 @@ public class InboundMcpAuthFilter implements Filter {
         }
         String fingerprint = fingerprint(bearer);
         String session = http.getHeader("Mcp-Session-Id");
-        if (session != null && !tokens.isSessionBound(session, credential.id(), fingerprint)) {
-            res.sendError(HttpServletResponse.SC_FORBIDDEN);
-            return;
+        if (session != null) {
+            InboundMcpTokenService.SessionStatus status = tokens.sessionStatus(session, credential.id(), fingerprint);
+            if (status == InboundMcpTokenService.SessionStatus.UNKNOWN) {
+                res.sendError(HttpServletResponse.SC_NOT_FOUND);
+                return;
+            }
+            if (status == InboundMcpTokenService.SessionStatus.MISMATCH) {
+                res.sendError(HttpServletResponse.SC_FORBIDDEN);
+                return;
+            }
         }
         http.setAttribute(CREDENTIAL_ATTRIBUTE, credential);
         chain.doFilter(request, new HttpServletResponseWrapper(res) {
@@ -119,8 +122,7 @@ public class InboundMcpAuthFilter implements Filter {
         try {
             URI supplied = URI.create(origin);
             String scheme = PublicRequestScheme.isHttps(request) ? "https" : "http";
-            int publicPort = publicPort(request, scheme);
-            int expectedPort = effectivePort(scheme, publicPort);
+            int expectedPort = effectivePort(scheme, request.getServerPort());
             return supplied.getScheme() != null && supplied.getScheme().equalsIgnoreCase(scheme)
                     && supplied.getHost() != null && supplied.getHost().equalsIgnoreCase(request.getServerName())
                     && effectivePort(supplied.getScheme(), supplied.getPort()) == expectedPort
@@ -129,31 +131,6 @@ public class InboundMcpAuthFilter implements Filter {
         } catch (IllegalArgumentException exception) {
             return false;
         }
-    }
-
-    private static int publicPort(HttpServletRequest request, String scheme) {
-        String forwarded = request.getHeader("Forwarded");
-        if (forwarded != null) {
-            for (String parameter : forwarded.split(",", 2)[0].split(";")) {
-                String[] parts = parameter.trim().split("=", 2);
-                if (parts.length == 2 && parts[0].equalsIgnoreCase("host")) {
-                    return hostPort(parts[1].replace("\"", ""), scheme, request.getServerPort());
-                }
-            }
-        }
-        String host = request.getHeader("X-Forwarded-Host");
-        if (host != null && !host.isBlank()) {
-            return hostPort(host.split(",", 2)[0].trim(), scheme, request.getServerPort());
-        }
-        String port = request.getHeader("X-Forwarded-Port");
-        if (port != null) {
-            try {
-                return Integer.parseInt(port.split(",", 2)[0].trim());
-            } catch (NumberFormatException ignored) {
-                return request.getServerPort();
-            }
-        }
-        return request.getServerPort();
     }
 
     private static int hostPort(String host, String scheme, int fallback) {

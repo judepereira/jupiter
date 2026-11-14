@@ -2,6 +2,7 @@
     <section class="settings-section" id="inbound-mcp-settings">
         <h3>Inbound MCP credentials</h3>
         <p>Connect an MCP client to this Jupiter instance using the bearer token. Tokens are shown only on request.</p>
+        <p th:if="${settingsError != null}" class="alert alert-danger" role="alert" th:text="${settingsError}"></p>
         <form hx-post="/ui/settings/inbound-mcp/create" hx-target="#inbound-mcp-settings" hx-swap="outerHTML">
             <label>Name <input name="name" maxlength="100" required></label>
             <label

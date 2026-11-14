@@ -52,7 +52,7 @@ public class ChatStreamRuntime {
     private final CommandStreamService commandStreamService;
     private final ActiveStreamRegistryService activeStreamRegistryService;
     private final ChatPresentationService chatPresentationService;
-    private final ChatToolCallHtmlService chatToolCallHtmlService;
+    final ChatToolCallHtmlService chatToolCallHtmlService;
     private final LifecycleHookService lifecycleHookService;
     final ConcurrentMap<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
 
@@ -142,7 +142,7 @@ public class ChatStreamRuntime {
         return emitter;
     }
 
-    private void sendPersistedTerminalState(String assistantId, SseEmitter emitter) {
+    void sendPersistedTerminalState(String assistantId, SseEmitter emitter) {
         try {
             for (var session : appStateService.loadViewData().sessions()) {
                 ChatMessageView message;
@@ -165,24 +165,21 @@ public class ChatStreamRuntime {
                         ? Map.of("message", message.text(), "completedTs", message.completedTs())
                         : Map.of("text", message.text() == null ? "" : message.text(), "completedTs",
                                 message.completedTs());
-                emitter.send(SseEmitter.event().name(event).data(SseJson.writeValueAsString(payload)));
                 if (chatToolCallHtmlService != null) {
                     emitter.send(SseEmitter.event().name("tool_call_html").data(
                             SseJson.writeValueAsString(chatToolCallHtmlService.hostSnapshot(sessionId, assistantId))));
                 }
+                emitter.send(SseEmitter.event().name(event).data(SseJson.writeValueAsString(payload)));
                 emitter.complete();
                 return;
             }
             emitter.send(
                     SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
-        } catch (Exception ignored) {
-            try {
-                emitter.send(
-                        SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
-            } catch (Exception ignoredAgain) {
-            }
+        } catch (Exception e) {
+            log.debug("Could not send persisted terminal state for assistant {}", assistantId, e);
+        } finally {
+            emitter.complete();
         }
-        emitter.complete();
     }
 
     void startActiveStream(String assistantId, ActiveStream active, SseEmitter emitter) {
@@ -192,9 +189,6 @@ public class ChatStreamRuntime {
         } catch (Exception e) {
             active.started().set(false);
             listenerStartFailed(active, assistantId, e, emitter);
-        } catch (Throwable t) {
-            active.started().set(false);
-            listenerStartFailed(active, assistantId, new RuntimeException(t), emitter);
         }
     }
 
@@ -302,57 +296,62 @@ public class ChatStreamRuntime {
 
             @Override
             public void onComplete(AgentTurnResult result) {
-                if (completed.get()) {
-                    return;
-                }
-                try {
-                    String finalText = result.getFinalText() == null ? "" : result.getFinalText();
-                    List<ToolCallTraceInput> traces = result.getTraces() == null
-                            ? List.of()
-                            : result.getTraces().stream().map(ChatStreamRuntime.this::toToolCallTraceInput).toList();
-                    ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(),
-                            assistantId, finalText, traces);
-                    dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED, pending.sessionId());
-                    processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
-                    finalizeStreamSuccess(active, assistantId, completedMessage, completed);
-                } catch (Exception e) {
-                    if (!completed.get()) {
-                        onError(e);
-                    } else {
-                        log.error("Failed after assistant stream became terminal: {}", assistantId, e);
+                synchronized (active) {
+                    if (completed.get()) {
+                        return;
+                    }
+                    try {
+                        String finalText = result.getFinalText() == null ? "" : result.getFinalText();
+                        List<ToolCallTraceInput> traces = result.getTraces() == null
+                                ? List.of()
+                                : result.getTraces().stream().map(ChatStreamRuntime.this::toToolCallTraceInput)
+                                        .toList();
+                        ChatMessageView completedMessage = appStateService.completeAssistantMessage(pending.sessionId(),
+                                assistantId, finalText, traces);
+                        dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED,
+                                pending.sessionId());
+                        processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
+                        finalizeStreamSuccess(active, assistantId, completedMessage, completed);
+                    } catch (Exception e) {
+                        if (!completed.get()) {
+                            onError(e);
+                        } else {
+                            log.error("Failed after assistant stream became terminal: {}", assistantId, e);
+                        }
                     }
                 }
             }
 
             @Override
             public void onError(Exception e) {
-                try {
+                synchronized (active) {
                     if (completed.get()) {
                         return;
                     }
-                    if (e instanceof StreamCancelledException) {
-                        active.cancellationToken().cancel();
-                        Thread runner = active.runner().getAndSet(null);
-                        if (runner != null) {
-                            runner.interrupt();
+                    try {
+                        if (e instanceof StreamCancelledException) {
+                            active.cancellationToken().cancel();
+                            Thread runner = active.runner().getAndSet(null);
+                            if (runner != null) {
+                                runner.interrupt();
+                            }
+                            ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(pending.sessionId(),
+                                    assistantId, accumulated.toString());
+                            finalizeStreamStopped(active, assistantId, stoppedMessage, completed);
+                            return;
                         }
-                        ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(pending.sessionId(),
-                                assistantId, accumulated.toString());
-                        finalizeStreamStopped(active, assistantId, stoppedMessage, completed);
-                        return;
+                        String normalizedMessage = normalizeProviderErrorMessage(e);
+                        ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(),
+                                assistantId, "Agent execution failed: " + normalizedMessage);
+                        dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED,
+                                pending.sessionId());
+                        log.error("Execution failure!", e);
+                        finalizeStreamError(active, assistantId, normalizedMessage, failedMessage, e, completed);
+                    } catch (Exception failure) {
+                        log.error("Failed to finalize assistant stream {}", assistantId, failure);
+                        finishActiveStream(active, assistantId);
+                        completeEmitters(active);
                     }
-                    String normalizedMessage = normalizeProviderErrorMessage(e);
-                    ChatMessageView failedMessage = appStateService.failAssistantMessage(pending.sessionId(),
-                            assistantId, "Agent execution failed: " + normalizedMessage);
-                    dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED, pending.sessionId());
-                    log.error("Execution failure!", e);
-                    finalizeStreamError(active, assistantId, normalizedMessage, failedMessage, e, completed);
-                } catch (Exception failure) {
-                    log.error("Failed to finalize assistant stream {}", assistantId, failure);
-                    active.finished().set(true);
-                    activeStreams.remove(assistantId, active);
-                    activeStreamRegistryService.unregister(assistantId);
-                    completeEmitters(active);
                 }
             }
         };
@@ -380,12 +379,15 @@ public class ChatStreamRuntime {
             broadcastToolCallHostSnapshot(active, assistantId);
             broadcastEvent(active, assistantId, "error",
                     Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
-        } catch (Exception ignored) {
+        } catch (Exception failure) {
+            log.error("Failed to start assistant stream", failure);
         } finally {
-            active.finished().set(true);
-            activeStreams.remove(assistantId, active);
-            activeStreamRegistryService.unregister(assistantId);
-            appStateService.publishWorkspaceRailRefresh();
+            finishActiveStream(active, assistantId);
+            try {
+                appStateService.publishWorkspaceRailRefresh();
+            } catch (Exception failure) {
+                log.error("Failed to publish workspace rail refresh", failure);
+            }
             completeEmitters(active);
             if (emitter != null) {
                 detachEmitter(active, emitter);
@@ -428,7 +430,7 @@ public class ChatStreamRuntime {
         }
         try {
             lifecycleHookService.dispatch(event, sessionId);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             log.warn("Failed to dispatch lifecycle hook: event={}, sessionId={}", event, sessionId, e);
         }
     }
@@ -462,11 +464,7 @@ public class ChatStreamRuntime {
             return;
         }
 
-        synchronized (active) {
-            active.finished().set(true);
-        }
-        activeStreams.remove(assistantId, active);
-        activeStreamRegistryService.unregister(assistantId);
+        finishActiveStream(active, assistantId);
         broadcastToolCallHostSnapshot(active, assistantId);
         broadcastEvent(active, assistantId, "done",
                 Map.of("text", completedMessage.text(), "completedTs", completedMessage.completedTs()));
@@ -480,9 +478,7 @@ public class ChatStreamRuntime {
             return;
         }
 
-        active.finished().set(true);
-        activeStreams.remove(assistantId, active);
-        activeStreamRegistryService.unregister(assistantId);
+        finishActiveStream(active, assistantId);
         broadcastToolCallHostSnapshot(active, assistantId);
         broadcastEvent(active, assistantId, "error",
                 Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
@@ -496,9 +492,7 @@ public class ChatStreamRuntime {
             return;
         }
 
-        active.finished().set(true);
-        activeStreams.remove(assistantId, active);
-        activeStreamRegistryService.unregister(assistantId);
+        finishActiveStream(active, assistantId);
         broadcastToolCallHostSnapshot(active, assistantId);
         broadcastEvent(active, assistantId, "stopped",
                 Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
@@ -507,27 +501,44 @@ public class ChatStreamRuntime {
     }
 
     void stopActiveStream(String assistantId, ActiveStream active) {
-        if (!active.completed().compareAndSet(false, true)) {
-            return;
+        synchronized (active) {
+            if (!active.completed().compareAndSet(false, true)) {
+                return;
+            }
+            active.cancellationToken().cancel();
+            Thread runner = active.runner().getAndSet(null);
+            if (runner != null) {
+                runner.interrupt();
+            }
+            try {
+                ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(
+                        active.pendingStream().sessionId(), assistantId, active.accumulatedText().get().toString());
+                finishActiveStream(active, assistantId);
+                broadcastToolCallHostSnapshot(active, assistantId);
+                broadcastEvent(active, assistantId, "stopped",
+                        Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
+                completeEmitters(active);
+            } catch (Exception e) {
+                log.error("Failed to stop assistant stream", e);
+                broadcastEvent(active, assistantId, "error", Map.of("message", normalizeProviderErrorMessage(e)));
+            } finally {
+                finishActiveStream(active, assistantId);
+                completeEmitters(active);
+                try {
+                    appStateService.publishWorkspaceRailRefresh();
+                } catch (Exception failure) {
+                    log.error("Failed to publish workspace rail refresh", failure);
+                }
+            }
         }
-        active.cancellationToken().cancel();
-        Thread runner = active.runner().getAndSet(null);
-        if (runner != null) {
-            runner.interrupt();
-        }
-        try {
-            ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(active.pendingStream().sessionId(),
-                    assistantId, active.accumulatedText().get().toString());
-            active.finished().set(true);
-            activeStreams.remove(assistantId, active);
-            activeStreamRegistryService.unregister(assistantId);
-            broadcastToolCallHostSnapshot(active, assistantId);
-            broadcastEvent(active, assistantId, "stopped",
-                    Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
-            completeEmitters(active);
-            appStateService.publishWorkspaceRailRefresh();
-        } catch (Exception e) {
-            log.error("Failed to stop assistant stream", e);
+    }
+
+    private void finishActiveStream(ActiveStream active, String assistantId) {
+        synchronized (active) {
+            if (active.finished().compareAndSet(false, true)) {
+                activeStreams.remove(assistantId, active);
+                activeStreamRegistryService.unregister(assistantId);
+            }
         }
     }
 

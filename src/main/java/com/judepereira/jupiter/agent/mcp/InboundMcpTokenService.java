@@ -4,14 +4,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.persistence.AppStateRepository;
 import java.security.SecureRandom;
-import java.time.Duration;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -25,35 +23,26 @@ public class InboundMcpTokenService {
     private final AppStateRepository repository;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
-    private final ConcurrentMap<String, SessionBinding> sessions = new ConcurrentHashMap<>();
-    private static final int MAX_SESSIONS = 10_000;
-    private static final Duration SESSION_TTL = Duration.ofHours(24);
+    private final InboundMcpSessionRegistry sessions = new InboundMcpSessionRegistry(Clock.systemUTC());
 
     public void bindSession(String sessionId, String credentialId, String fingerprint) {
-        cleanupSessions();
-        if (sessions.size() >= MAX_SESSIONS && !sessions.containsKey(sessionId)) {
-            return;
-        }
-        sessions.put(sessionId, new SessionBinding(credentialId, fingerprint, Instant.now().plus(SESSION_TTL)));
+        sessions.bind(sessionId, credentialId, fingerprint);
+    }
+
+    public SessionStatus sessionStatus(String sessionId, String credentialId, String fingerprint) {
+        return sessions.status(sessionId, credentialId, fingerprint);
     }
 
     public boolean isSessionBound(String sessionId, String credentialId, String fingerprint) {
-        cleanupSessions();
-        SessionBinding binding = sessions.get(sessionId);
-        return binding != null && binding.credentialId().equals(credentialId)
-                && binding.fingerprint().equals(fingerprint);
+        return sessionStatus(sessionId, credentialId, fingerprint) == SessionStatus.VALID;
     }
 
     public void invalidateSession(String sessionId) {
-        sessions.remove(sessionId);
+        sessions.invalidate(sessionId);
     }
 
-    private void cleanupSessions() {
-        Instant now = Instant.now();
-        sessions.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
-    }
-
-    private record SessionBinding(String credentialId, String fingerprint, Instant expiresAt) {
+    public enum SessionStatus {
+        UNKNOWN, MISMATCH, VALID
     }
 
     public InboundMcpTokenService(AppStateRepository repository, ObjectMapper mapper) {

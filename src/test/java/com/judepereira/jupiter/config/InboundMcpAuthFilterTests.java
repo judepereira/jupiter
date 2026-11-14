@@ -54,24 +54,49 @@ class InboundMcpAuthFilterTests {
     }
 
     @Test
+    void unknownSessionReturnedByTheRegisteredFilterIsNotFound() throws Exception {
+        var tokens = mock(InboundMcpTokenService.class);
+        when(tokens.authenticate(TOKEN)).thenReturn(credential("own"));
+        when(tokens.sessionStatus("stale-session", "own", fingerprint(TOKEN)))
+                .thenReturn(InboundMcpTokenService.SessionStatus.UNKNOWN);
+        var request = request();
+        request.addHeader("Authorization", "Bearer " + TOKEN);
+        request.addHeader("Mcp-Session-Id", "stale-session");
+        var chain = mock(FilterChain.class);
+
+        assertThat(invoke(new InboundMcpAuthFilter(tokens), request, chain).getStatus()).isEqualTo(404);
+        Mockito.verifyNoInteractions(chain);
+    }
+
+    @Test
     void sessionIsBoundToCredentialAndRotatedOrRevokedBearerIsRejected() throws Exception {
         var tokens = mock(InboundMcpTokenService.class);
         var own = credential("own");
         when(tokens.authenticate(TOKEN)).thenReturn(own);
-        when(tokens.isSessionBound("session", "own", fingerprint(TOKEN))).thenReturn(true);
+        when(tokens.sessionStatus("session", "own", fingerprint(TOKEN)))
+                .thenReturn(InboundMcpTokenService.SessionStatus.VALID);
         var ownRequest = request();
         ownRequest.addHeader("Authorization", "Bearer " + TOKEN);
         ownRequest.addHeader("Mcp-Session-Id", "session");
         assertThat(invoke(new InboundMcpAuthFilter(tokens), ownRequest, mock(FilterChain.class)).getStatus())
                 .isEqualTo(200);
 
-        when(tokens.isSessionBound("session", "other", fingerprint(TOKEN))).thenReturn(false);
+        when(tokens.sessionStatus("session", "other", fingerprint(TOKEN)))
+                .thenReturn(InboundMcpTokenService.SessionStatus.MISMATCH);
         var otherRequest = request();
         otherRequest.addHeader("Authorization", "Bearer " + TOKEN);
         otherRequest.addHeader("Mcp-Session-Id", "session");
         when(tokens.authenticate(TOKEN)).thenReturn(credential("other"));
         assertThat(invoke(new InboundMcpAuthFilter(tokens), otherRequest, mock(FilterChain.class)).getStatus())
                 .isEqualTo(403);
+
+        when(tokens.sessionStatus(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+                .thenReturn(InboundMcpTokenService.SessionStatus.UNKNOWN);
+        var unknownRequest = request();
+        unknownRequest.addHeader("Authorization", "Bearer " + TOKEN);
+        unknownRequest.addHeader("Mcp-Session-Id", "unknown");
+        assertThat(invoke(new InboundMcpAuthFilter(tokens), unknownRequest, mock(FilterChain.class)).getStatus())
+                .isEqualTo(404);
 
         when(tokens.authenticate(TOKEN)).thenReturn(null);
         var staleRequest = request();

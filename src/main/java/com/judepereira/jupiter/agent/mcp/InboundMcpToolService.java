@@ -44,7 +44,7 @@ public class InboundMcpToolService {
         return switch (name) {
             case "list_projects" -> {
                 keys(args);
-                yield appState.loadViewData().projects().stream().filter(p -> allowed(p.id(), credential))
+                yield appState.listVisibleProjects().stream().filter(p -> allowed(p.id(), credential))
                         .map(p -> Map.of("id", p.id(), "name", p.name())).toList();
             }
             case "list_workspaces" -> {
@@ -77,17 +77,19 @@ public class InboundMcpToolService {
         if (project != null) {
             requireProject(project, c);
         }
-        List<Persistence.WorkspaceView> workspaces = permittedProjects(c).stream()
-                .filter(p -> project == null || p.id() == project)
-                .flatMap(p -> appState.listWorkspaces(p.id()).stream())
-                .filter(w -> !args.containsKey("workspaceId") || w.id() == positive(args, "workspaceId")).toList();
+        List<Persistence.ProjectView> visibleProjects = permittedProjects(c);
+        List<WorkspaceOwner> workspaces = visibleProjects.stream().filter(p -> project == null || p.id() == project)
+                .flatMap(p -> appState.listWorkspaces(p.id()).stream().map(w -> new WorkspaceOwner(w, p.id())))
+                .filter(owner -> !args.containsKey("workspaceId")
+                        || owner.workspace().id() == positive(args, "workspaceId"))
+                .toList();
         if (args.containsKey("workspaceId") && workspaces.isEmpty()) {
             throw denied();
         }
         return workspaces.stream()
-                .flatMap(w -> appState.listPrimarySessions(w.id()).stream()
-                        .map(s -> Map.of("id", s.id(), "name", s.name(), "workspaceId", w.id(), "busy", s.inProgress(),
-                                "projectId", projectForWorkspace(c, w.id()))))
+                .flatMap(owner -> appState.listPrimarySessions(owner.workspace().id()).stream()
+                        .map(s -> Map.of("id", s.id(), "name", s.name(), "workspaceId", owner.workspace().id(), "busy",
+                                s.inProgress(), "projectId", owner.projectId())))
                 .toList();
     }
 
@@ -124,6 +126,9 @@ public class InboundMcpToolService {
         if (session && sessionName != null) {
             throw new IllegalArgumentException("sessionName is only valid when targeting a workspace or creating one");
         }
+        if (create && sessionName != null && !sessionName.isBlank()) {
+            throw new IllegalArgumentException("sessionName is not supported when creating a workspace");
+        }
         long sessionId;
         long workspaceId;
         long projectId;
@@ -158,9 +163,6 @@ public class InboundMcpToolService {
             projectId = project;
             sessionId = appState.listPrimarySessions(workspaceId).stream().findFirst()
                     .orElseThrow(() -> new IllegalStateException("Initial session was not created")).id();
-            if (sessionName != null && !sessionName.isBlank()) {
-                throw new IllegalArgumentException("sessionName is not supported when creating a workspace");
-            }
         }
         var result = chatRuntime.submit(sessionId, message, agentId, modelId, thinkingLevel);
         return Map.of("accepted", true, "status", "accepted", "sessionId", sessionId, "workspaceId", workspaceId,
@@ -204,7 +206,7 @@ public class InboundMcpToolService {
                 .mapToLong(Persistence.ProjectView::id).findFirst().orElseThrow(InboundMcpToolService::denied);
     }
     private List<Persistence.ProjectView> permittedProjects(InboundMcpTokenService.Credential c) {
-        return appState.loadViewData().projects().stream().filter(p -> allowed(p.id(), c)).toList();
+        return appState.listVisibleProjects().stream().filter(p -> allowed(p.id(), c)).toList();
     }
     private static boolean allowed(long id, InboundMcpTokenService.Credential c) {
         return c.allProjects() || c.projectIds().contains(id);
@@ -236,7 +238,16 @@ public class InboundMcpToolService {
         }
         return n.longValue();
     }
-    private static IllegalArgumentException denied() {
-        return new IllegalArgumentException("Resource unavailable");
+    private record WorkspaceOwner(Persistence.WorkspaceView workspace, long projectId) {
+    }
+
+    static ResourceUnavailableException denied() {
+        return new ResourceUnavailableException();
+    }
+
+    static final class ResourceUnavailableException extends RuntimeException {
+        private ResourceUnavailableException() {
+            super("Resource unavailable");
+        }
     }
 }

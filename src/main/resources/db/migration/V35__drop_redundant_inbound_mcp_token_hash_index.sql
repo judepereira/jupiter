@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_inbound_mcp_credentials_token_hash;

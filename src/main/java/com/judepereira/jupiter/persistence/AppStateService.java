@@ -10,8 +10,10 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.persistence.Persistence.*;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
@@ -125,16 +127,28 @@ public class AppStateService {
         }
 
         String normalizedBranchName = branchName.trim();
-        if (createBranch) {
-            if (normalizedBranchName.isBlank()) {
-                throw new InvalidGitBranchNameException("Branch name is required", null);
-            }
-            validateGitBranchName(normalizedBranchName);
+        if (normalizedBranchName.isBlank()) {
+            throw new InvalidGitBranchNameException("Branch name is required", null);
         }
+        validateGitBranchName(normalizedBranchName);
 
-        Path projectRoot = Path.of(project.normalizedPath());
-        Path worktreePath = projectRoot.resolveSibling(".trees").resolve(projectRoot.getFileName().toString())
-                .resolve(normalizedBranchName).toAbsolutePath().normalize();
+        Path projectRoot = Path.of(project.normalizedPath()).toAbsolutePath().normalize();
+        Path treesRoot = projectRoot.resolveSibling(".trees").resolve(projectRoot.getFileName().toString())
+                .toAbsolutePath().normalize();
+        Path worktreePath = treesRoot.resolve(normalizedBranchName).normalize();
+        if (!worktreePath.startsWith(treesRoot)) {
+            throw new InvalidGitBranchNameException("Invalid Git branch name: " + normalizedBranchName, null);
+        }
+        try {
+            Path canonicalTreesRoot = treesRoot.toRealPath();
+            Path canonicalParent = worktreePath.getParent().toRealPath();
+            if (!canonicalParent.startsWith(canonicalTreesRoot)) {
+                throw new InvalidGitBranchNameException("Invalid Git branch name: " + normalizedBranchName, null);
+            }
+        } catch (NoSuchFileException ignored) {
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to validate workspace path", e);
+        }
         runGitWorktreeAdd(projectRoot, worktreePath, normalizedBranchName, createBranch);
 
         long position = repository.nextWorkspacePosition(projectId);
@@ -498,6 +512,12 @@ public class AppStateService {
         repository.updateLifecycleHookSettings(normalizeOptionalScript(settings.assistantCompletedScript()),
                 normalizeOptionalScript(settings.assistantErroredScript()),
                 normalizeOptionalScript(settings.subagentCompletedScript()), settings.timeoutSeconds());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProjectView> listVisibleProjects() {
+        return repository.listVisibleProjects().stream()
+                .map(project -> toProjectView(project, new ProjectStatusAggregate())).toList();
     }
 
     public AppStateView loadViewData() {

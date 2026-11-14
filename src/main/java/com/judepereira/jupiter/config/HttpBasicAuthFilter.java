@@ -72,11 +72,13 @@ public class HttpBasicAuthFilter implements Filter {
 
     private static boolean isMcpRequest(ServletRequest request) {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
-        return "/mcp".equals(httpRequest.getRequestURI());
+        return "/mcp".equals(httpRequest.getServletPath())
+                && (httpRequest.getPathInfo() == null || httpRequest.getPathInfo().isEmpty());
     }
 
     private static boolean isHealthGet(ServletRequest request) {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
-        return "GET".equals(httpRequest.getMethod()) && "/health".equals(httpRequest.getRequestURI());
+        return "GET".equals(httpRequest.getMethod()) && "/health".equals(httpRequest.getServletPath())
+                && (httpRequest.getPathInfo() == null || httpRequest.getPathInfo().isEmpty());
     }
 }

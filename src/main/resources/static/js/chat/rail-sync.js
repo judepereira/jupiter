@@ -25,6 +25,14 @@ export function syncFaviconWithRail() {
 let railRefreshRequest = null;
 let railRefreshVersion = 0;
 
+export function invalidateWorkspaceRailRefresh() {
+    railRefreshVersion++;
+    if (railRefreshRequest) {
+        railRefreshRequest.abort();
+        railRefreshRequest = null;
+    }
+}
+
 export function refreshWorkspaceRail() {
     const rail = document.getElementById("workspace-session-rail");
     const tabs = document.querySelector(".project-tabs");

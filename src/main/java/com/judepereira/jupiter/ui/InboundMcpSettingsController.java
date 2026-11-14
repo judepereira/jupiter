@@ -1,6 +1,7 @@
 package com.judepereira.jupiter.ui;
 
 import com.judepereira.jupiter.agent.mcp.InboundMcpTokenService;
+import com.judepereira.jupiter.config.PublicRequestScheme;
 import com.judepereira.jupiter.persistence.AppStateService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -36,9 +37,14 @@ public class InboundMcpSettingsController {
             HttpServletRequest request, HttpServletResponse response, Model model) {
         protect(request);
         noStore(response);
-        String token = tokens.create(name, allProjects, projectIds, tools == null ? Set.of() : tools);
-        populate(model);
-        model.addAttribute("issuedToken", token);
+        try {
+            String token = tokens.create(name, allProjects, projectIds, tools == null ? Set.of() : tools);
+            populate(model);
+            model.addAttribute("issuedToken", token);
+        } catch (IllegalArgumentException e) {
+            populate(model);
+            model.addAttribute("settingsError", "Unable to create credential. Check the name, projects, and tools.");
+        }
         return PANEL;
     }
 
@@ -48,7 +54,11 @@ public class InboundMcpSettingsController {
             @RequestParam(required = false) Set<Long> projectIds, @RequestParam(required = false) Set<String> tools,
             HttpServletRequest request, Model model) {
         protect(request);
-        tokens.edit(id, name, allProjects, projectIds, tools == null ? Set.of() : tools);
+        try {
+            tokens.edit(id, name, allProjects, projectIds, tools == null ? Set.of() : tools);
+        } catch (IllegalArgumentException e) {
+            model.addAttribute("settingsError", "Unable to update credential. It may no longer be available.");
+        }
         populate(model);
         return PANEL;
     }
@@ -58,7 +68,11 @@ public class InboundMcpSettingsController {
             Model model) {
         protect(request);
         noStore(response);
-        model.addAttribute("issuedToken", tokens.reveal(id));
+        try {
+            model.addAttribute("issuedToken", tokens.reveal(id));
+        } catch (IllegalArgumentException e) {
+            model.addAttribute("settingsError", "Unable to reveal credential. It may no longer be available.");
+        }
         populate(model);
         return PANEL;
     }
@@ -68,7 +82,11 @@ public class InboundMcpSettingsController {
             Model model) {
         protect(request);
         noStore(response);
-        model.addAttribute("issuedToken", tokens.rotate(id));
+        try {
+            model.addAttribute("issuedToken", tokens.rotate(id));
+        } catch (IllegalArgumentException e) {
+            model.addAttribute("settingsError", "Unable to rotate credential. It may no longer be available.");
+        }
         populate(model);
         return PANEL;
     }
@@ -76,7 +94,11 @@ public class InboundMcpSettingsController {
     @PostMapping("/{id}/revoke")
     public String revoke(@PathVariable String id, HttpServletRequest request, Model model) {
         protect(request);
-        tokens.revoke(id);
+        try {
+            tokens.revoke(id);
+        } catch (IllegalArgumentException e) {
+            model.addAttribute("settingsError", "Unable to revoke credential. It may no longer be available.");
+        }
         populate(model);
         return PANEL;
     }
@@ -110,7 +132,8 @@ public class InboundMcpSettingsController {
             if (requestPort == 0) {
                 requestPort = "https".equalsIgnoreCase(request.getScheme()) ? 443 : 80;
             }
-            return uri.getScheme().equalsIgnoreCase(request.getScheme())
+            return uri.getScheme() != null && uri.getHost() != null
+                    && uri.getScheme().equalsIgnoreCase(PublicRequestScheme.isHttps(request) ? "https" : "http")
                     && uri.getHost().equalsIgnoreCase(request.getServerName()) && port == requestPort;
         } catch (RuntimeException e) {
             return false;

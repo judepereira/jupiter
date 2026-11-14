@@ -47,7 +47,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             }
             create.locator("input[name='tools'][value='list_projects']").check();
             create.locator("input[name='tools'][value='list_agents']").check();
-            create.locator("button[type='submit']").click();
+            settingsAction(page, "/create", create.locator("button[type='submit']")::click);
             String restrictedToken = reveal(page, "restricted");
             Mcp restricted = new Mcp(app.baseUrl(), restrictedToken);
             restricted.initialize();
@@ -56,6 +56,11 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             if (!visible.isArray() || visible.size() != 1
                     || !visible.get(0).path("name").asText().equals("Authorization A")) {
                 throw new AssertionError("Project-scoped tools/list/call exposed unexpected projects: " + listed);
+            }
+            long projectAId = projectIdFromForm(page, "Authorization A");
+            JsonNode allowed = restricted.call("list_agents", "{\"projectId\":" + projectAId + "}");
+            if (result(allowed).path("result").isEmpty()) {
+                throw new AssertionError("Permitted project MCP call returned no agents: " + allowed);
             }
             long projectBId = projectIdFromForm(page, "Authorization B");
             JsonNode denied = restricted.call("list_agents", "{\"projectId\":" + projectBId + "}");
@@ -66,24 +71,26 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             Locator card = card(page, "restricted");
             Locator editForm = card.locator("form").filter(new Locator.FilterOptions()
                     .setHas(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Save changes"))));
+            JsonNode editedAllowed = restricted.call("list_agents", "{\"projectId\":" + projectAId + "}");
+            if (result(editedAllowed).path("result").isEmpty()) {
+                throw new AssertionError("list_agents was not permitted before editing: " + editedAllowed);
+            }
             editForm.locator("input[name='tools'][value='list_agents']").uncheck();
             editForm.locator("input[name='tools'][value='list_projects']").check();
-            page.waitForResponse(
-                    response -> response.url().endsWith("/edit") && response.request().method().equals("POST")
-                            && response.status() == 200,
-                    () -> editForm.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save changes"))
-                            .click());
+            settingsAction(page, "/edit", () -> editForm
+                    .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save changes")).click());
             card = card(page, "restricted");
-            JsonNode changed = restricted.call("list_agents", "{}");
-            if (!changed.path("result").path("isError").asBoolean()) {
-                throw new AssertionError("Edited tool permission did not apply to the existing MCP client: " + changed);
+            JsonNode changed = restricted.call("list_agents", "{\"projectId\":" + projectAId + "}");
+            JsonNode changedError = changed.path("result").path("structuredContent").path("error");
+            if (!changed.path("result").path("isError").asBoolean()
+                    || !"RESOURCE_UNAVAILABLE".equals(changedError.path("code").asText())
+                    || !"Resource unavailable".equals(changedError.path("message").asText())) {
+                throw new AssertionError("Edited tool permission did not deny with RESOURCE_UNAVAILABLE: " + changed);
             }
             Locator rotate = card(page, "restricted").getByRole(AriaRole.BUTTON,
                     new Locator.GetByRoleOptions().setName("Rotate"));
             page.onceDialog(dialog -> dialog.accept());
-            page.waitForResponse(response -> response.url().contains("/ui/settings/inbound-mcp/")
-                    && response.url().endsWith("/rotate") && response.request().method().equals("POST")
-                    && response.status() == 200, rotate::click);
+            settingsAction(page, "/rotate", rotate::click);
             Locator issuedToken = page.locator("#inbound-mcp-settings > p.alert.alert-warning code");
             issuedToken.waitFor();
             String rotatedToken = issuedToken.textContent().trim();
@@ -100,13 +107,15 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             Locator independent = page.locator("#inbound-mcp-settings > form");
             independent.locator("input[name='name']").fill("independent");
             independent.locator("input[name='allProjects']").check();
-            independent.locator("button[type='submit']").click();
+            settingsAction(page, "/create", independent.locator("button[type='submit']")::click);
             String independentToken = reveal(page, "independent");
             Locator revoke = card(page, "restricted").getByRole(AriaRole.BUTTON,
                     new Locator.GetByRoleOptions().setName("Revoke"));
             page.onceDialog(dialog -> dialog.accept());
+            armSettled(page, "/revoke");
             var revokeResponse = page.waitForResponse(response -> response.url().endsWith("/revoke")
                     && response.request().method().equals("POST") && response.status() == 200, revoke::click);
+            waitForSettled(page, "/revoke");
             String revokeHtml = revokeResponse.text();
             if (!revokeHtml.contains("Revoked")) {
                 throw new AssertionError("Revoke response did not render revoked credential: " + revokeHtml);
@@ -129,6 +138,32 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
         }
     }
 
+    private static void settingsAction(Page page, String path, Runnable action) {
+        armSettled(page, path);
+        page.waitForResponse(response -> response.url().endsWith(path) && response.request().method().equals("POST")
+                && response.status() == 200, action);
+        waitForSettled(page, path);
+    }
+
+    private static void armSettled(Page page, String path) {
+        page.evaluate("""
+                path => {
+                    window.__settingsSettled = null;
+                    document.addEventListener('htmx:afterSettle', event => {
+                        const requestPath = event.detail.requestConfig?.path;
+                        const responseUrl = event.detail.xhr?.responseURL;
+                        if (requestPath?.endsWith(path) || responseUrl?.endsWith(path)) {
+                            window.__settingsSettled = path;
+                        }
+                    });
+                }
+                """, path);
+    }
+
+    private static void waitForSettled(Page page, String path) {
+        page.waitForFunction("path => window.__settingsSettled === path", path);
+    }
+
     private static void settings(Page page) {
         page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click();
         page.getByRole(AriaRole.TAB, new Page.GetByRoleOptions().setName("Inbound MCP")).click();
@@ -141,7 +176,8 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
     }
 
     private static String reveal(Page page, String name) {
-        card(page, name).getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Reveal")).click();
+        settingsAction(page, "/reveal", () -> card(page, name)
+                .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Reveal")).click());
         return tokenText(page);
     }
 

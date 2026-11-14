@@ -93,15 +93,14 @@ public class InboundMcpServletConfiguration {
                 return McpSchema.CallToolResult.builder()
                         .content(List.of(new McpSchema.TextContent(mapper.writeValueAsString(response))))
                         .structuredContent(response).build();
+            } catch (InboundMcpToolService.ResourceUnavailableException exception) {
+                return error(mapper, "RESOURCE_UNAVAILABLE", "Resource unavailable");
             } catch (IllegalArgumentException exception) {
                 return error(mapper, "INVALID_ARGUMENT", exception.getMessage());
             } catch (IllegalStateException exception) {
                 String message = exception.getMessage();
                 if (message != null && message.startsWith("SESSION_BUSY:")) {
                     return error(mapper, "SESSION_BUSY", message.substring("SESSION_BUSY:".length()).trim());
-                }
-                if ("Resource unavailable".equals(message)) {
-                    return error(mapper, "RESOURCE_UNAVAILABLE", message);
                 }
                 logger.error("Inbound MCP tool failed: {}", name);
                 return error(mapper, "EXECUTION_FAILED", "Tool execution failed");
