@@ -11,6 +11,7 @@ import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.persistence.AppStateService;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
+import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.AriaRole;
 import java.nio.file.Files;
@@ -106,6 +107,78 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
             assertThat(page.locator("#favicon-32x32")).hasAttribute("href", "/favicon-32x32.png");
             assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-16x16.png");
         } finally {
+            TestAppConfig.reset();
+        }
+    }
+
+    @Test
+    void inactiveProjectUnreadAndFailureStatusUpdatesAcrossReloadAndActivation(@TempDir Path tempDir) throws Exception {
+        TestAppConfig.reset();
+        TestAppConfig.blockPrimaryTurn();
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path alphaDir = Files.createDirectories(fakeHome.resolve("alpha-project"));
+        Path betaDir = Files.createDirectories(fakeHome.resolve("beta-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", alphaDir);
+            long alphaSessionId = app.context().getBean(AppStateService.class).loadViewData().activeSession().id();
+            Locator alphaTab = page.locator(".project-tab-group")
+                    .filter(new Locator.FilterOptions().setHasText("Alpha"));
+            page.locator("#chat-input").fill("block this turn");
+            page.locator("#chat-send-btn").click();
+            TestAppConfig.awaitPrimaryStarted();
+            page.locator("#chat-messages-list > li.pending").waitFor();
+            openProject(page, "Beta", betaDir);
+            TestAppConfig.releasePrimaryTurn();
+            TestAppConfig.awaitPrimaryCompleted();
+
+            assertThat(alphaTab.locator(".unread-dot")).hasCount(1);
+            assertThat(alphaTab.locator(".failed-dot")).hasCount(0);
+            assertThat(page.locator(".project-tab-group.active .unread-dot, .project-tab-group.active .failed-dot"))
+                    .hasCount(0);
+            assertThat(page.locator("#topbar-logo")).hasAttribute("src", "/favicon-complete-32x32.png");
+            assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-complete-16x16.png");
+            assertThat(page.locator("#favicon-32x32")).hasAttribute("href", "/favicon-complete-32x32.png");
+            page.reload();
+            alphaTab = page.locator(".project-tab-group").filter(new Locator.FilterOptions().setHasText("Alpha"));
+            assertThat(alphaTab.locator(".unread-dot")).hasCount(1);
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/projects/") && response.url().contains("/activate")
+                            && response.status() == 200,
+                    () -> page.locator(".project-tab-group").filter(new Locator.FilterOptions().setHasText("Alpha"))
+                            .locator(".project-tab").click());
+            assertThat(page.locator(".project-tab-group.active .unread-dot, .project-tab-group.active .failed-dot"))
+                    .hasCount(0);
+            assertThat(page.locator("#topbar-logo")).hasAttribute("src", "/favicon-32x32.png");
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/projects/") && response.url().contains("/activate")
+                            && response.status() == 200,
+                    () -> page.locator(".project-tab-group").filter(new Locator.FilterOptions().setHasText("Beta"))
+                            .locator(".project-tab").click());
+
+            insertPendingAssistant(app.context().getBean(JdbcTemplate.class), alphaSessionId);
+            app.context().getBean(WorkspaceRailRefreshService.class).publishWorkspaceRailRefresh();
+            assertThat(page.locator(".project-tab-group").filter(new Locator.FilterOptions().setHasText("Alpha"))
+                    .locator(".failed-dot")).hasCount(1);
+            assertThat(page.locator("#topbar-logo")).hasAttribute("src", "/favicon-failed-32x32.png");
+            assertThat(page.locator("#favicon-16x16")).hasAttribute("href", "/favicon-failed-16x16.png");
+            assertThat(page.locator("#favicon-32x32")).hasAttribute("href", "/favicon-failed-32x32.png");
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/projects/") && response.url().contains("/activate")
+                            && response.status() == 200,
+                    () -> page.locator(".project-tab-group").filter(new Locator.FilterOptions().setHasText("Beta"))
+                            .locator(".project-tab").click());
+            assertThat(page.locator(".project-tab-group.active .failed-dot, .project-tab-group.active .unread-dot"))
+                    .hasCount(0);
+            assertThat(page.locator("#topbar-logo")).hasAttribute("src", "/favicon-failed-32x32.png");
+        } finally {
+            TestAppConfig.releasePrimaryTurn();
             TestAppConfig.reset();
         }
     }

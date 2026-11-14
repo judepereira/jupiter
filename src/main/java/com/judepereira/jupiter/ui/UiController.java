@@ -1177,7 +1177,7 @@ public class UiController {
     public String workspaceRail(Model model) {
         AppStateView view = appStateService.loadViewData();
         populateProjectModel(model, view);
-        return "fragments/projects :: workspaceRail";
+        return "fragments/projects :: workspaceRailRefresh";
     }
 
     @GetMapping("/ui/sessions/new/button")
@@ -1254,6 +1254,8 @@ public class UiController {
     private void populateProjectModel(Model model, AppStateView view) {
         List<Project> projects = view.projects().stream().map(this::toProject).toList();
         model.addAttribute("projects", projects);
+        model.addAttribute("globalFailed", projects.stream().anyMatch(Project::failed));
+        model.addAttribute("globalUnread", projects.stream().anyMatch(Project::unread));
         model.addAttribute("visibleProjects", projects);
         model.addAttribute("mcpServers", appStateService.listMcpServers());
         model.addAttribute("activeProject", toProject(view.activeProject()));
@@ -1509,7 +1511,8 @@ public class UiController {
         return view == null
                 ? null
                 : new Project(view.id(), view.name(), view.path(), view.workspaceInitCommands(),
-                        view.environmentVariables(), view.commandEnvironmentAllowlist());
+                        view.environmentVariables(), view.commandEnvironmentAllowlist(), view.unread(),
+                        view.railStatus());
     }
 
     private Map<String, String> activeProjectEnvironmentVariables(AppStateView view) {
@@ -1585,7 +1588,16 @@ public class UiController {
     }
 
     public record Project(long id, String name, String path, String workspaceInitCommands,
-            List<ProjectEnvironmentVariable> environmentVariables, String commandEnvironmentAllowlist) {
+            List<ProjectEnvironmentVariable> environmentVariables, String commandEnvironmentAllowlist, boolean unread,
+            RailStatus railStatus) {
+
+        public boolean failed() {
+            return railStatus == RailStatus.FAILED;
+        }
+
+        public boolean inProgress() {
+            return railStatus == RailStatus.IN_PROGRESS;
+        }
     }
 
     public record Workspace(long id, String name, String path, boolean unread, RailStatus railStatus) {

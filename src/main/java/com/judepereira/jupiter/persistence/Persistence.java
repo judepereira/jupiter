@@ -22,7 +22,16 @@ public final class Persistence {
     }
 
     public record ProjectView(long id, String name, String path, String workspaceInitCommands,
-            List<ProjectEnvironmentVariable> environmentVariables, String commandEnvironmentAllowlist) {
+            List<ProjectEnvironmentVariable> environmentVariables, String commandEnvironmentAllowlist, boolean unread,
+            RailStatus railStatus) {
+
+        public boolean failed() {
+            return railStatus == RailStatus.FAILED;
+        }
+
+        public boolean inProgress() {
+            return railStatus == RailStatus.IN_PROGRESS;
+        }
         private static final Pattern ENVIRONMENT_VARIABLE_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
         public Set<String> commandEnvironmentAllowlistNames() {

@@ -105,8 +105,12 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             Locator revoke = card(page, "restricted").getByRole(AriaRole.BUTTON,
                     new Locator.GetByRoleOptions().setName("Revoke"));
             page.onceDialog(dialog -> dialog.accept());
-            page.waitForResponse(response -> response.url().endsWith("/revoke")
+            var revokeResponse = page.waitForResponse(response -> response.url().endsWith("/revoke")
                     && response.request().method().equals("POST") && response.status() == 200, revoke::click);
+            String revokeHtml = revokeResponse.text();
+            if (!revokeHtml.contains("Revoked")) {
+                throw new AssertionError("Revoke response did not render revoked credential: " + revokeHtml);
+            }
             Locator revokedCard = page.locator("#inbound-mcp-settings article")
                     .filter(new Locator.FilterOptions().setHasText("restricted"));
             revokedCard.getByText("Revoked", new Locator.GetByTextOptions().setExact(true)).waitFor();

@@ -1,7 +1,7 @@
 <!doctype html>
 <th:block
     th:fragment="topbar"
-    th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, reviewPanelOpen=${reviewPanelOpen ?: false}"
+    th:with="shellRefreshFlag=${shellRefresh ?: false}, projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, activeWorkspaceView=${activeWorkspace}, reviewPanelOpen=${reviewPanelOpen ?: false}, globalFailedFlag=${globalFailed ?: false}, globalUnreadFlag=${globalUnread ?: false}"
 >
     <header id="top-bar" class="top-bar" th:attr="hx-swap-oob=${shellRefreshFlag} ? 'outerHTML' : null">
         <button
@@ -12,10 +12,22 @@
             aria-label="Toggle workspace rail"
             title="Toggle workspace rail"
         >
-            <img id="topbar-logo" src="/favicon-32x32.png" alt="Jupiter" width="100%">
+            <img
+                id="topbar-logo"
+                th:src="${globalFailedFlag ? '/favicon-failed-32x32.png' : globalUnreadFlag ? '/favicon-complete-32x32.png' : '/favicon-32x32.png'}"
+                alt="Jupiter"
+                width="100%"
+            >
         </button>
 
-        <nav class="project-tabs" aria-label="Projects">
+        <nav
+            id="project-tabs"
+            class="project-tabs"
+            aria-label="Projects"
+            th:fragment="projectTabs"
+            th:with="projectList=${projects ?: T(java.util.List).of()}, activeProjectView=${activeProject}, globalFailedFlag=${globalFailed ?: false}, globalUnreadFlag=${globalUnread ?: false}"
+            th:attr="data-global-failed=${globalFailedFlag}, data-global-unread=${globalUnreadFlag}"
+        >
             <!--            <button th:if="${#lists.isEmpty(projectList)}" type="button" class="project-tab project-tab-empty" disabled>-->
             <!--                No projects opened-->
             <!--            </button>-->
@@ -29,6 +41,11 @@
                     class="project-tab"
                     th:attr="hx-post=@{/ui/projects/{id}/activate(id=${project.id})}, hx-swap='none'"
                 >
+                    <th:block th:if="${activeProjectView == null or project.id != activeProjectView.id}">
+                        <th:block
+                            th:replace="~{fragments/project-components :: railStatusIndicator(${project.failed}, ${project.unread}, false)}"
+                        ></th:block>
+                    </th:block>
                     <span class="project-tab-label" th:text="${project.name}"></span>
                 </button>
                 <button
@@ -103,6 +120,11 @@
         <span th:if="${normalizedBusy}" class="visually-hidden">Git pull in progress</span>
         <i th:unless="${normalizedBusy}" class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
     </button>
+</th:block>
+
+<th:block th:fragment="workspaceRailRefresh">
+    <th:block th:replace="~{fragments/projects :: projectTabs}"></th:block>
+    <th:block th:replace="~{fragments/projects :: workspaceRail}"></th:block>
 </th:block>
 
 <th:block

@@ -26,6 +26,11 @@ import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.InvalidRequestException;
+import dev.langchain4j.exception.NonRetriableException;
+import dev.langchain4j.exception.TimeoutException;
+import dev.langchain4j.exception.UnresolvedModelServerException;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -36,6 +41,7 @@ import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 import dev.langchain4j.model.openai.OpenAiTokenUsage;
 import dev.langchain4j.model.output.FinishReason;
 import java.io.IOException;
+import java.nio.channels.UnresolvedAddressException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -45,6 +51,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class OpenAiAgentModelClientTest {
 
@@ -296,6 +304,23 @@ public class OpenAiAgentModelClientTest {
     }
 
     @Test
+    public void non_streaming_does_not_retry_response_mapping_failures() {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.from("assistant", List.of(
+                        ToolExecutionRequest.builder().id("call-1").name("read_file").arguments("not-json").build())))
+                .build());
+        RecordingClient client = new RecordingClient(chatModel, null,
+                openAiProperties(2, Duration.ZERO, Duration.ZERO));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "request", null, null, null)), List.of()));
+
+        assertEquals("Failed to parse tool call arguments", failure.getMessage());
+        verify(chatModel, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
     public void non_streaming_retries_transient_failures_then_succeeds() {
         OpenAiProperties openAiProperties = openAiProperties(2, Duration.ZERO, Duration.ZERO);
         ChatModel chatModel = mock(ChatModel.class);
@@ -313,6 +338,97 @@ public class OpenAiAgentModelClientTest {
                 .getAssistantText());
         assertEquals(2, attempts.get());
         verify(chatModel, times(2)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void non_streaming_retries_generic_runtime_failures() {
+        OpenAiProperties properties = openAiProperties(1, Duration.ZERO, Duration.ZERO);
+        ChatModel chatModel = mock(ChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        when(chatModel.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
+            if (attempts.getAndIncrement() == 0) {
+                throw new IllegalArgumentException("temporary provider failure");
+            }
+            return ChatResponse.builder().aiMessage(AiMessage.from("ok")).build();
+        });
+
+        RecordingClient client = new RecordingClient(chatModel, null, properties);
+
+        assertEquals("ok", client.chat(List.of(new Message(Message.Role.USER, "retry", null, null, null)), List.of())
+                .getAssistantText());
+        assertEquals(2, attempts.get());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403, 404, 408, 422, 499})
+    public void non_streaming_does_not_retry_client_http_errors(int status) {
+        ChatModel model = mock(ChatModel.class);
+        when(model.chat(any(ChatRequest.class))).thenThrow(new HttpException(status, "client error"));
+        RecordingClient client = new RecordingClient(model, null, openAiProperties(2, Duration.ZERO, Duration.ZERO));
+        assertThrows(IllegalStateException.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "request", null, null, null)), List.of()));
+        verify(model, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void non_streaming_retries_rate_limits_and_server_errors_but_not_converted_invalid_requests() {
+        assertRetryableFailure(new HttpException(429, "limited"));
+        assertRetryableFailure(new HttpException(503, "server"));
+
+        HttpException original = new HttpException(400, "invalid");
+        NonRetriableException converted = new NonRetriableException("invalid");
+        converted.initCause(original);
+        ChatModel model = mock(ChatModel.class);
+        when(model.chat(any(ChatRequest.class))).thenThrow(converted);
+        RecordingClient client = new RecordingClient(model, null, openAiProperties(2, Duration.ZERO, Duration.ZERO));
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "request", null, null, null)), List.of()));
+        assertEquals(400, ((HttpException) failure.getCause().getCause()).statusCode());
+        verify(model, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    public void non_streaming_retries_typed_non_retriable_and_unresolved_address_exceptions() {
+        assertRetryableFailure(new NonRetriableException("typed failure"));
+        assertRetryableFailure(new UnresolvedAddressException());
+        assertRetryableFailure(new UnresolvedModelServerException(new UnresolvedAddressException()));
+    }
+
+    @Test
+    public void non_streaming_rejects_sdk_http408_and_429_with_nested_4xx() {
+        assertNotRetryableFailure(new TimeoutException(new HttpException(408, "timeout")));
+        assertNotRetryableFailure(new HttpException(408, "timeout"));
+        HttpException rateLimited = new HttpException(429, "limited");
+        rateLimited.initCause(new HttpException(400, "nested client error"));
+        assertNotRetryableFailure(rateLimited);
+    }
+
+    @Test
+    public void non_streaming_does_not_retry_sdk_invalid_request() {
+        assertNotRetryableFailure(new InvalidRequestException(new HttpException(400, "invalid")));
+    }
+
+    private static void assertNotRetryableFailure(RuntimeException failure) {
+        ChatModel model = mock(ChatModel.class);
+        when(model.chat(any(ChatRequest.class))).thenThrow(failure);
+        RecordingClient client = new RecordingClient(model, null, openAiProperties(2, Duration.ZERO, Duration.ZERO));
+        assertThrows(IllegalStateException.class,
+                () -> client.chat(List.of(new Message(Message.Role.USER, "request", null, null, null)), List.of()));
+        verify(model, times(1)).chat(any(ChatRequest.class));
+    }
+
+    private static void assertRetryableFailure(RuntimeException failure) {
+        ChatModel model = mock(ChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        when(model.chat(any(ChatRequest.class))).thenAnswer(invocation -> {
+            if (attempts.getAndIncrement() == 0) {
+                throw new RuntimeException("wrapped", failure);
+            }
+            return ChatResponse.builder().aiMessage(AiMessage.from("ok")).build();
+        });
+        new RecordingClient(model, null, openAiProperties(1, Duration.ZERO, Duration.ZERO))
+                .chat(List.of(new Message(Message.Role.USER, "request", null, null, null)), List.of());
+        assertEquals(2, attempts.get());
     }
 
     @Test
@@ -340,6 +456,47 @@ public class OpenAiAgentModelClientTest {
         assertEquals(List.of("he", "llo"), deltas);
         assertEquals(2, attempts.get());
         verify(streamingModel, times(2)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"generic", "http-429"})
+    public void streaming_retries_generic_and_rate_limit_failures_before_output(String failureType) {
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            if (attempts.getAndIncrement() == 0) {
+                handler.onError("generic".equals(failureType)
+                        ? new IllegalArgumentException("temporary")
+                        : new HttpException(429, "limited"));
+            } else {
+                handler.onCompleteResponse(ChatResponse.builder().aiMessage(AiMessage.from("ok")).build());
+            }
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        RecordingClient client = new RecordingClient(null, model, openAiProperties(1, Duration.ZERO, Duration.ZERO));
+        assertEquals("ok", client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
+                List.of(), ignored -> {
+                }).getAssistantText());
+        assertEquals(2, attempts.get());
+    }
+
+    @Test
+    public void streaming_does_not_retry_wrapped_client_http_error_before_output() {
+        StreamingChatModel model = mock(StreamingChatModel.class);
+        doAnswer(invocation -> {
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            handler.onError(new RuntimeException("wrapped", new HttpException(400, "invalid")));
+            return null;
+        }).when(model).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        RecordingClient client = new RecordingClient(null, model, openAiProperties(2, Duration.ZERO, Duration.ZERO));
+        assertThrows(IllegalStateException.class,
+                () -> client.chatStreaming(List.of(new Message(Message.Role.USER, "stream", null, null, null)),
+                        List.of(), ignored -> {
+                        }));
+        verify(model, times(1)).chat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
     }
 
     @Test

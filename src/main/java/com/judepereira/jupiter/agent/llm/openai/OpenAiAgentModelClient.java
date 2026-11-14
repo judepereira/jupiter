@@ -12,8 +12,6 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.agent.llm.dto.ToolDefinition;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import dev.langchain4j.exception.HttpException;
-import dev.langchain4j.exception.InternalServerException;
-import dev.langchain4j.exception.RateLimitException;
 import dev.langchain4j.http.client.HttpClient;
 import dev.langchain4j.http.client.HttpClientBuilder;
 import dev.langchain4j.http.client.HttpRequest;
@@ -30,10 +28,6 @@ import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiResponsesChatModel;
 import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel;
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -89,8 +83,9 @@ public class OpenAiAgentModelClient implements AgentModelClient {
         ResolvedAuth auth = resolveAuth();
         ChatRequest request = chatRequestFactory.create(modelName, prepareConversation(conversation, auth), tools,
                 options);
-        return executeWithRetry(() -> messageMapper.toModelResponse(chatModel(modelName, auth).chat(request)),
+        ChatResponse response = executeWithRetry(() -> chatModel(modelName, auth).chat(request),
                 "OpenAI request failed");
+        return messageMapper.toModelResponse(response);
     }
 
     @Override
@@ -428,24 +423,15 @@ public class OpenAiAgentModelClient implements AgentModelClient {
     private boolean isTransient(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
-            if (current instanceof RateLimitException || current instanceof InternalServerException) {
-                return true;
-            }
-            if (current instanceof HttpException httpException
-                    && (httpException.statusCode() == 429 || httpException.statusCode() / 100 == 5)) {
-                return true;
-            }
-            if (isConnectivityFailure(current)) {
-                return true;
+            if (current instanceof HttpException httpException) {
+                int statusCode = httpException.statusCode();
+                if (statusCode >= 400 && statusCode < 500 && statusCode != 429) {
+                    return false;
+                }
             }
             current = current.getCause();
         }
-        return false;
-    }
-
-    private boolean isConnectivityFailure(Throwable throwable) {
-        return throwable instanceof IOException || throwable instanceof ConnectException
-                || throwable instanceof SocketTimeoutException || throwable instanceof UnknownHostException;
+        return true;
     }
 
     private enum AuthMode {
