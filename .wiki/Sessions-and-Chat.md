@@ -43,7 +43,4 @@ JPEG, GIF, and WebP workspace images inline in chat.
 ## Context Compaction
 
 Long-running sessions can eventually approach a model’s context limit. Jupiter automatically summarizes older completed
-conversation content while keeping recent work intact. A long-running turn does not have to finish before its completed
-tool activity can be compacted; each assistant tool-call batch and its results stay together. The full transcript
-remains visible in chat, including tool activity that has been summarized for model context. Each summary appears as a
-visible message in the conversation.
+turns while keeping recent work intact. The summary appears as a visible system message.
