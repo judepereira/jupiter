@@ -2,6 +2,7 @@ package com.judepereira.jupiter.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -51,6 +52,61 @@ class CommandStreamServiceTest {
         service.queue(7L, "user", "second", command(), ".", null);
 
         assertThat(registry.isClaimedBy("second", 7L)).isTrue();
+    }
+
+    @Test
+    void publishFailureFailsPersistedAssistantAndClearsActiveState() {
+        AppStateService appState = mock(AppStateService.class);
+        ActiveStreamRegistryService registry = new ActiveStreamRegistryService();
+        CommandStreamService service = new CommandStreamService(mock(CommandCatalogService.class), appState,
+                new RunCommandTool(), registry, mock(ChatToolCallHtmlService.class));
+        when(appState.appendUserMessageAndPendingAssistant(7L, "user", "assistant", "/command", null)).thenReturn(null);
+        RuntimeException failure = new RuntimeException("rail unavailable");
+        doThrow(failure).when(appState).publishWorkspaceRailRefresh();
+
+        assertThatThrownBy(() -> service.queue(7L, "user", "assistant", command(), ".", null)).isSameAs(failure);
+
+        verify(appState).failAssistantMessage(7L, "assistant", "Command execution failed: rail unavailable");
+        assertThat(service.pendingCommand("assistant")).isNull();
+        assertThat(registry.isClaimedBy("assistant", 7L)).isFalse();
+    }
+
+    @Test
+    void appendFailureDoesNotFailUnpersistedAssistantAndClearsClaim() {
+        AppStateService appState = mock(AppStateService.class);
+        ActiveStreamRegistryService registry = new ActiveStreamRegistryService();
+        CommandStreamService service = new CommandStreamService(mock(CommandCatalogService.class), appState,
+                new RunCommandTool(), registry, mock(ChatToolCallHtmlService.class));
+        RuntimeException failure = new RuntimeException("database unavailable");
+        when(appState.appendUserMessageAndPendingAssistant(7L, "user", "assistant", "/command", null))
+                .thenThrow(failure);
+
+        assertThatThrownBy(() -> service.queue(7L, "user", "assistant", command(), ".", null)).isSameAs(failure);
+
+        verify(appState, never()).failAssistantMessage(7L, "assistant",
+                "Command execution failed: database unavailable");
+        assertThat(service.pendingCommand("assistant")).isNull();
+        assertThat(registry.isClaimedBy("assistant", 7L)).isFalse();
+    }
+
+    @Test
+    void publishFailurePreservesCleanupFailureAsSuppressed() {
+        AppStateService appState = mock(AppStateService.class);
+        ActiveStreamRegistryService registry = new ActiveStreamRegistryService();
+        CommandStreamService service = new CommandStreamService(mock(CommandCatalogService.class), appState,
+                new RunCommandTool(), registry, mock(ChatToolCallHtmlService.class));
+        when(appState.appendUserMessageAndPendingAssistant(7L, "user", "assistant", "/command", null)).thenReturn(null);
+        RuntimeException failure = new RuntimeException("rail unavailable");
+        RuntimeException cleanupFailure = new RuntimeException("cleanup unavailable");
+        doThrow(failure).when(appState).publishWorkspaceRailRefresh();
+        when(appState.failAssistantMessage(7L, "assistant", "Command execution failed: rail unavailable"))
+                .thenThrow(cleanupFailure);
+
+        assertThatThrownBy(() -> service.queue(7L, "user", "assistant", command(), ".", null)).isSameAs(failure)
+                .satisfies(thrown -> assertThat(thrown.getSuppressed()).containsExactly(cleanupFailure));
+
+        assertThat(service.pendingCommand("assistant")).isNull();
+        assertThat(registry.isClaimedBy("assistant", 7L)).isFalse();
     }
 
     @Test

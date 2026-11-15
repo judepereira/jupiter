@@ -46,7 +46,7 @@ public class InboundMcpAuthFilter implements Filter {
         HttpServletRequest http = (HttpServletRequest) request;
         HttpServletResponse res = (HttpServletResponse) response;
         if (!validOrigin(http)) {
-            res.sendError(HttpServletResponse.SC_FORBIDDEN);
+            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
         String authorization = http.getHeader("Authorization");
@@ -67,11 +67,11 @@ public class InboundMcpAuthFilter implements Filter {
         if (session != null) {
             InboundMcpTokenService.SessionStatus status = tokens.sessionStatus(session, credential.id(), fingerprint);
             if (status == InboundMcpTokenService.SessionStatus.UNKNOWN) {
-                res.sendError(HttpServletResponse.SC_NOT_FOUND);
+                res.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
             if (status == InboundMcpTokenService.SessionStatus.MISMATCH) {
-                res.sendError(HttpServletResponse.SC_FORBIDDEN);
+                res.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 return;
             }
         }
@@ -102,7 +102,7 @@ public class InboundMcpAuthFilter implements Filter {
 
     private static void unauthorized(HttpServletResponse response) throws IOException {
         response.setHeader("WWW-Authenticate", "Bearer");
-        response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
     }
 
     private static String fingerprint(String bearer) {

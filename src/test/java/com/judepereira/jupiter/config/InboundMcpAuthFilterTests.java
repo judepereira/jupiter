@@ -40,7 +40,8 @@ class InboundMcpAuthFilterTests {
 
     @Test
     void rejectsInvalidAndForeignOrigins() throws Exception {
-        for (String origin : new String[]{"not-an-origin", "https://foreign.example"}) {
+        for (String origin : new String[]{"not-an-origin", "https://foreign.example", "http://user@localhost",
+                "http://localhost/path", "http://localhost?query=1", "http://localhost#fragment"}) {
             var tokens = mock(InboundMcpTokenService.class);
             var request = request();
             request.addHeader("Origin", origin);
@@ -101,8 +102,9 @@ class InboundMcpAuthFilterTests {
         when(tokens.authenticate(TOKEN)).thenReturn(null);
         var staleRequest = request();
         staleRequest.addHeader("Authorization", "Bearer " + TOKEN);
-        assertThat(invoke(new InboundMcpAuthFilter(tokens), staleRequest, mock(FilterChain.class)).getStatus())
-                .isEqualTo(401);
+        var staleResponse = invoke(new InboundMcpAuthFilter(tokens), staleRequest, mock(FilterChain.class));
+        assertThat(staleResponse.getStatus()).isEqualTo(401);
+        assertThat(staleResponse.getHeader("WWW-Authenticate")).isEqualTo("Bearer");
     }
 
     @Test

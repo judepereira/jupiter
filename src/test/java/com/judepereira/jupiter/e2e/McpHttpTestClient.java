@@ -42,6 +42,21 @@ final class McpHttpTestClient {
                 .statusCode();
     }
 
+    HttpResponse<String> postRaw(String authorization, String session) throws Exception {
+        String body = JSON
+                .writeValueAsString(Map.of("jsonrpc", "2.0", "id", 99, "method", "tools/list", "params", Map.of()));
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url)).header("Content-Type", "application/json")
+                .header("Accept", "application/json, text/event-stream").header("MCP-Protocol-Version", "2025-03-26");
+        if (authorization != null) {
+            request.header("Authorization", authorization);
+        }
+        if (session != null) {
+            request.header("Mcp-Session-Id", session);
+        }
+        return http.send(request.POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private JsonNode send(String method, Map<String, ?> params, boolean request) throws Exception {
         Map<String, Object> message = new LinkedHashMap<>();
         message.put("jsonrpc", "2.0");

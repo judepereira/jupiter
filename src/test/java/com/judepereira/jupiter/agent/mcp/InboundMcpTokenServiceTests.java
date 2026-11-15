@@ -62,5 +62,16 @@ class InboundMcpTokenServiceTests {
                 .isInstanceOf(IllegalArgumentException.class);
         String noTools = service.create("valid", true, Set.of(), Set.of());
         assertThat(service.authenticate(noTools).tools()).isEmpty();
+        String global = service.create("global", true, Set.of(999L), Set.of("list_projects"));
+        String globalId = service.authenticate(global).id();
+        service.edit(globalId, "global renamed", true, Set.of(999L), Set.of("list_agents"));
+        assertThat(service.authenticate(global).name()).isEqualTo("global renamed");
+        assertThat(service.authenticate(global).tools()).containsExactly("list_agents");
+        assertThat(service.list())
+                .anyMatch(record -> record.id().equals(globalId) && record.projectIds().contains(999L));
+        String scoped = service.create("scoped", true, Set.of(), Set.of("list_projects"));
+        String scopedId = service.authenticate(scoped).id();
+        assertThatThrownBy(() -> service.edit(scopedId, "scoped", false, Set.of(999L), Set.of("list_projects")))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

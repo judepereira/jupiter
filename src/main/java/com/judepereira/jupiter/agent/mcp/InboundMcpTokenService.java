@@ -89,7 +89,6 @@ public class InboundMcpTokenService {
     @Transactional
     public void edit(String id, String name, boolean allProjects, Set<Long> projectIds, Set<String> tools) {
         validate(name, allProjects, projectIds, tools);
-        requireProjects(projectIds);
         repository.updateInboundMcpCredential(id, name.trim(), allProjects,
                 json(projectIds == null ? Set.of() : projectIds), json(tools));
     }

@@ -1184,6 +1184,15 @@ public class AppStateRepository {
                 this::mapConversationMessage, "message " + publicId + " in session " + sessionId);
     }
 
+    Optional<AssistantMessageOwnerRow> findAssistantMessageOwnerByPublicId(String publicId) {
+        return queryOne("SELECT session_id, role FROM conversation_messages WHERE public_id = :publicId",
+                new MapSqlParameterSource("publicId", publicId),
+                (rs, rowNum) -> new AssistantMessageOwnerRow(rs.getLong("session_id"), rs.getString("role")));
+    }
+
+    record AssistantMessageOwnerRow(long sessionId, String role) {
+    }
+
     List<ConversationMessageRow> listMessagesBySession(long sessionId) {
         return jdbc.query("SELECT * FROM conversation_messages WHERE session_id = :sessionId ORDER BY sequence ASC",
                 new MapSqlParameterSource("sessionId", sessionId), this::mapConversationMessage);

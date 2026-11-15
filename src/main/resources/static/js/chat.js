@@ -21,14 +21,8 @@ function bindChatHtmxLifecycleListeners() {
     document.body.addEventListener(
         "htmx:beforeRequest",
         function (evt) {
-            const target = evt?.detail?.target;
-            const source = evt?.detail?.elt;
             const requestUrl = evt?.detail?.requestConfig?.path || "";
-            if (
-                target?.id === "chat-content" ||
-                source?.closest?.("#project-tabs, #workspace-session-rail") ||
-                /\/ui\/(projects|workspaces|sessions)\//.test(requestUrl)
-            ) {
+            if (/\/ui\/(projects|workspaces|sessions)\/[^?]*(activate|close|add|create)/.test(requestUrl)) {
                 invalidateWorkspaceRailRefresh();
             }
         },
@@ -36,7 +30,7 @@ function bindChatHtmxLifecycleListeners() {
     );
     document.body.addEventListener(
         "htmx:afterSwap",
-        function (evt) {
+        function () {
             Promise.resolve().then(() => {
                 bindPendingStreams();
                 syncFaviconWithRail();
@@ -46,7 +40,7 @@ function bindChatHtmxLifecycleListeners() {
     );
     document.body.addEventListener(
         "htmx:afterSettle",
-        function (evt) {
+        function () {
             Promise.resolve().then(() => {
                 bindPendingStreams();
                 syncFaviconWithRail();

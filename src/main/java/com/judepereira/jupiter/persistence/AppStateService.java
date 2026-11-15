@@ -13,7 +13,6 @@ import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
@@ -140,12 +139,11 @@ public class AppStateService {
             throw new InvalidGitBranchNameException("Invalid Git branch name: " + normalizedBranchName, null);
         }
         try {
-            Path canonicalTreesRoot = treesRoot.toRealPath();
-            Path canonicalParent = worktreePath.getParent().toRealPath();
+            Path canonicalTreesRoot = resolveExistingAncestor(treesRoot);
+            Path canonicalParent = resolveExistingAncestor(worktreePath.getParent());
             if (!canonicalParent.startsWith(canonicalTreesRoot)) {
                 throw new InvalidGitBranchNameException("Invalid Git branch name: " + normalizedBranchName, null);
             }
-        } catch (NoSuchFileException ignored) {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to validate workspace path", e);
         }
@@ -161,9 +159,20 @@ public class AppStateService {
 
     @Transactional(readOnly = true)
     public List<WorkspaceView> listWorkspaces(long projectId) {
+        Set<Long> activeSessionIds = activeStreamRegistryService.activeSessionIdsSnapshot();
         return repository.listWorkspacesByProject(projectId).stream()
-                .map(workspace -> toWorkspaceView(workspace, activeStreamRegistryService.activeSessionIdsSnapshot()))
-                .toList();
+                .map(workspace -> toWorkspaceView(workspace, activeSessionIds)).toList();
+    }
+
+    private Path resolveExistingAncestor(Path path) throws IOException {
+        Path ancestor = path;
+        while (ancestor != null && !Files.exists(ancestor)) {
+            ancestor = ancestor.getParent();
+        }
+        if (ancestor == null) {
+            throw new IOException("No existing ancestor for " + path);
+        }
+        return ancestor.toRealPath().resolve(ancestor.relativize(path)).normalize();
     }
 
     @Transactional(readOnly = true)
@@ -1391,6 +1400,12 @@ public class AppStateService {
                         : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected,
                 workspace.normalizedPath(), session.chatDraft());
+    }
+
+    public OptionalLong findAssistantMessageSessionId(String assistantPublicId) {
+        return repository.findAssistantMessageOwnerByPublicId(assistantPublicId)
+                .filter(message -> "assistant".equals(message.role()))
+                .map(message -> OptionalLong.of(message.sessionId())).orElseGet(OptionalLong::empty);
     }
 
     public ChatMessageView loadAssistantMessageDetails(long sessionId, String assistantPublicId) {

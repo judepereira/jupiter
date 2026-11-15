@@ -64,14 +64,24 @@ public class CommandStreamService {
             activeStreamRegistryService.unregister(assistantId);
             throw new IllegalStateException("SESSION_BUSY: A command stream is already active");
         }
+        boolean assistantAppended = false;
         try {
             var queued = appStateService.appendUserMessageAndPendingAssistant(sessionId, userId, assistantId,
                     "/" + command.id(), null);
+            assistantAppended = true;
             appStateService.publishWorkspaceRailRefresh();
             return queued;
         } catch (RuntimeException failure) {
             activeStreams.remove(assistantId, active);
             activeStreamRegistryService.unregister(assistantId);
+            if (assistantAppended) {
+                try {
+                    appStateService.failAssistantMessage(sessionId, assistantId,
+                            "Command execution failed: " + normalizeMessage(failure));
+                } catch (RuntimeException cleanupFailure) {
+                    failure.addSuppressed(cleanupFailure);
+                }
+            }
             throw failure;
         }
     }

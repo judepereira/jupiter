@@ -160,37 +160,40 @@ public class ChatStreamRuntime {
 
     void sendPersistedTerminalState(String assistantId, SseEmitter emitter) {
         try {
-            for (var session : appStateService.loadViewData().sessions()) {
-                ChatMessageView message;
-                try {
-                    message = appStateService.loadAssistantMessageDetails(session.id(), assistantId);
-                } catch (RuntimeException ignored) {
-                    continue;
-                }
-                if (message.pending()) {
-                    continue;
-                }
-                long sessionId = session.id();
-
-                String event = message.completedTs() == null
-                        ? "done"
-                        : message.text() != null && message.text().startsWith("Agent execution failed:")
-                                ? "error"
-                                : "done";
-                Map<String, Object> payload = event.equals("error")
-                        ? Map.of("message", message.text(), "completedTs", message.completedTs())
-                        : Map.of("text", message.text() == null ? "" : message.text(), "completedTs",
-                                message.completedTs());
-                if (chatToolCallHtmlService != null) {
-                    emitter.send(SseEmitter.event().name("tool_call_html").data(
-                            SseJson.writeValueAsString(chatToolCallHtmlService.hostSnapshot(sessionId, assistantId))));
-                }
-                emitter.send(SseEmitter.event().name(event).data(SseJson.writeValueAsString(payload)));
-                emitter.complete();
+            var sessionId = appStateService.findAssistantMessageSessionId(assistantId);
+            if (sessionId.isEmpty()) {
+                emitter.send(
+                        SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
                 return;
             }
-            emitter.send(
-                    SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
+            ChatMessageView message = appStateService.loadAssistantMessageDetails(sessionId.getAsLong(), assistantId);
+            if (message.pending()) {
+                emitter.send(
+                        SseEmitter.event().name("error").data(SseJson.writeValueAsString(Map.of("message", "no_job"))));
+                return;
+            }
+            long ownerSessionId = sessionId.getAsLong();
+            String event = message.completedTs() == null
+                    ? "done"
+                    : message.text() != null && message.text().startsWith("Agent execution failed:") ? "error" : "done";
+            Map<String, Object> payload = new HashMap<>();
+            if (event.equals("error")) {
+                payload.put("message", message.text());
+            } else {
+                payload.put("text", message.text() == null ? "" : message.text());
+            }
+            if (message.completedTs() != null) {
+                payload.put("completedTs", message.completedTs());
+            }
+            if (chatToolCallHtmlService != null) {
+                try {
+                    emitter.send(SseEmitter.event().name("tool_call_html").data(SseJson
+                            .writeValueAsString(chatToolCallHtmlService.hostSnapshot(ownerSessionId, assistantId))));
+                } catch (Exception e) {
+                    log.error("Failed to send persisted tool-call snapshot for assistant {}", assistantId, e);
+                }
+            }
+            emitter.send(SseEmitter.event().name(event).data(SseJson.writeValueAsString(payload)));
         } catch (Exception e) {
             log.debug("Could not send persisted terminal state for assistant {}", assistantId, e);
         } finally {
@@ -226,10 +229,15 @@ public class ChatStreamRuntime {
                         return;
                     }
                     active.cancellationToken().throwIfCancelled();
-                    accumulated.append(delta);
-                    appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId,
-                            accumulated.toString());
-                    broadcastEvent(active, assistantId, "delta", Map.of("text", delta));
+                    synchronized (active) {
+                        if (completed.get() || active.cancellationToken().isCancelled()) {
+                            return;
+                        }
+                        accumulated.append(delta);
+                        appStateService.updateStreamingAssistantText(pending.sessionId(), assistantId,
+                                accumulated.toString());
+                        broadcastEvent(active, assistantId, "delta", Map.of("text", delta));
+                    }
                 } catch (Exception e) {
                     onError(e);
                 }
@@ -346,12 +354,12 @@ public class ChatStreamRuntime {
                         return;
                     }
                     try {
+                        active.cancellationToken().cancel();
+                        Thread runner = active.runner().getAndSet(null);
+                        if (runner != null && runner != Thread.currentThread()) {
+                            runner.interrupt();
+                        }
                         if (e instanceof StreamCancelledException) {
-                            active.cancellationToken().cancel();
-                            Thread runner = active.runner().getAndSet(null);
-                            if (runner != null) {
-                                runner.interrupt();
-                            }
                             ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(pending.sessionId(),
                                     assistantId, accumulated.toString());
                             finalizeStream(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(),
@@ -481,10 +489,21 @@ public class ChatStreamRuntime {
             return;
         }
         finishActiveStream(active, assistantId);
-        broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, event, payload);
-        completeEmitters(active);
-        appStateService.publishWorkspaceRailRefresh();
+        try {
+            try {
+                broadcastToolCallHostSnapshot(active, assistantId);
+            } catch (Exception e) {
+                log.error("Failed to broadcast terminal tool-call snapshot for assistant {}", assistantId, e);
+            }
+            broadcastEvent(active, assistantId, event, payload);
+        } finally {
+            completeEmitters(active);
+            try {
+                appStateService.publishWorkspaceRailRefresh();
+            } catch (Exception e) {
+                log.error("Failed to publish workspace rail refresh", e);
+            }
+        }
     }
 
     public boolean stopActiveStream(String assistantId, long sessionId) {
