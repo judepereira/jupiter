@@ -26,6 +26,24 @@ class AppStateSchemaMigrationTests {
     }
 
     @Test
+    void inboundMcpCredentialsUseUniqueTokenHashIndexInV34() throws Exception {
+        var dataSource = SQLiteTestSupport
+                .fileBackedDataSource(Files.createTempDirectory("jupiter-schema-").resolve("app-state.db"));
+        Flyway flyway = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load();
+        flyway.migrate();
+
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        assertThat(jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE version = '34'", String.class))
+                .isEqualTo("34");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pragma_index_list('inbound_mcp_credentials') il "
+                        + "JOIN pragma_index_info(il.name) ii WHERE il.\"unique\" = 1 AND ii.name = 'token_hash'",
+                Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' "
+                + "AND name = 'idx_inbound_mcp_credentials_token_hash'", Integer.class)).isZero();
+    }
+
+    @Test
     void upgradeFromMainV31HistoryCreatesAgentPreferencesAtV32() throws Exception {
         var dataSource = SQLiteTestSupport
                 .fileBackedDataSource(Files.createTempDirectory("jupiter-schema-").resolve("app-state.db"));

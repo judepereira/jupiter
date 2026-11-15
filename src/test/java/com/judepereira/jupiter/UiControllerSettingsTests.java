@@ -436,8 +436,7 @@ public class UiControllerSettingsTests {
         AgentPreferenceService agentPreferenceService = Mockito.mock(AgentPreferenceService.class);
         return new TestContext(appStateService, tokenUsageService, openAiOAuthService, mcpRuntimeManager,
                 gitAutoUpdateService, executor, modelPreferencesService, providerAvailabilityService,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService, agentDefinitionService,
-                        modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService),
+                new UiController(properties, appStateService, agentDefinitionService, modelCatalogService,
                         preferenceResolver, agentPreferenceService, Mockito.mock(ModelPickerService.class),
                         modelPreferencesService, providerAvailabilityService,
                         new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -445,10 +444,9 @@ public class UiControllerSettingsTests {
                                 (emitter, eventName, data) -> emitter
                                         .send(SseEmitter.event().name(eventName).data(data))),
                         appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(),
-                        openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService),
-                        tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager,
-                        new ChatPresentationService(), null, null, new HttpAuthProperties(), gitAutoUpdateService,
-                        coordinator,
+                        openAiOAuthService, tokenUsageService, mock(CommandStreamService.class), commandCatalogService,
+                        mcpRuntimeManager, new ChatPresentationService(), null, new HttpAuthProperties(),
+                        gitAutoUpdateService, coordinator,
                         new ChatStreamRuntime(mock(CodingAgentHarness.class), properties, appStateService,
                                 agentDefinitionService, modelCatalogService,
                                 ModelCatalogTestSupport.resolutionService(modelCatalogService),

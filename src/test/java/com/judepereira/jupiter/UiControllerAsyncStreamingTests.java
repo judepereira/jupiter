@@ -358,8 +358,7 @@ public class UiControllerAsyncStreamingTests {
                 return Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 7L));
             }
         };
-        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog),
+        UiController ctrl = new UiController(props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
                 mock(ProviderAvailabilityService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -368,9 +367,8 @@ public class UiControllerAsyncStreamingTests {
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                contextCompactionService, null, mock(CommandStreamService.class),
-                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
-                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                null, mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                null, new ChatPresentationService(), null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
                 mock(ManualGitPullCoordinator.class),
                 new ChatStreamRuntime(fake, props, appStateService, agentDefinitionService, modelCatalog,
                         ModelCatalogTestSupport.resolutionService(modelCatalog), contextCompactionService,
@@ -550,8 +548,7 @@ public class UiControllerAsyncStreamingTests {
             }
         };
 
-        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog),
+        UiController ctrl = new UiController(props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
                 mock(ProviderAvailabilityService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -560,9 +557,8 @@ public class UiControllerAsyncStreamingTests {
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                contextCompactionService, null, mock(CommandStreamService.class),
-                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
-                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                null, mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                null, new ChatPresentationService(), null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
                 mock(ManualGitPullCoordinator.class),
                 new ChatStreamRuntime(harness, props, appStateService, agentDefinitionService, modelCatalog,
                         ModelCatalogTestSupport.resolutionService(modelCatalog), contextCompactionService,

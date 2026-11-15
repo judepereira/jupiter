@@ -18,6 +18,7 @@ import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import com.judepereira.jupiter.persistence.Persistence.SessionView;
 import java.util.List;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
@@ -31,18 +32,47 @@ class ChatStreamRuntimeTests {
         var runtime = runtime(state, registry);
         var token = new CancellationToken();
         var active = active(token);
+        active.accumulatedText().get().append("partial");
         when(state.stopAssistantMessage(7L, "assistant", "partial")).thenReturn(new ChatMessageView("ASSISTANT",
                 "partial\n\nAction Interrupted", 1L, false, "assistant", 10L, List.of(), null));
         runtime.activeStreams.put("assistant", active);
         registry.claim("assistant", 7L, ".");
 
-        runtime.stopActiveStream("assistant", active);
+        runtime.stopActiveStream("assistant", 7L);
         assertThat(active.completed().get()).isTrue();
         assertThat(active.finished().get()).isTrue();
         assertThat(token.isCancelled()).isTrue();
         assertThat(runtime.activeStreams).doesNotContainKey("assistant");
         assertThat(registry.hasActiveStreamForSession(7L)).isFalse();
         assertThat(active.emitters()).isEmpty();
+    }
+
+    @Test
+    void stopFallsBackToSessionWhenAssistantIdIsMissing() {
+        AppStateService state = mock(AppStateService.class);
+        var registry = new ActiveStreamRegistryService();
+        var runtime = runtime(state, registry);
+        var active = active(new CancellationToken());
+        runtime.activeStreams.put("assistant", active);
+        registry.claim("assistant", 7L, ".");
+
+        assertThat(runtime.stopActiveStream(null, 7L)).isTrue();
+        assertThat(runtime.activeStreams).doesNotContainKey("assistant");
+    }
+
+    @Test
+    void stopRejectsExplicitAssistantIdOwnedByAnotherSessionAndPreservesRegistry() {
+        AppStateService state = mock(AppStateService.class);
+        var registry = new ActiveStreamRegistryService();
+        var runtime = runtime(state, registry);
+        var active = active(new CancellationToken());
+        runtime.activeStreams.put("assistant", active);
+        registry.claim("assistant", 7L, ".");
+
+        Assertions.assertThatThrownBy(() -> runtime.stopActiveStream("assistant", 8L))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(registry.hasActiveStreamForSession(7L)).isTrue();
+        assertThat(runtime.activeStreams).containsEntry("assistant", active);
     }
 
     @Test
@@ -75,6 +105,7 @@ class ChatStreamRuntimeTests {
         var registry = new ActiveStreamRegistryService();
         var runtime = runtime(state, registry);
         var active = active(new CancellationToken());
+        active.accumulatedText().get().append("partial");
         var emitter = mock(SseEmitter.class);
         active.emitters().add(emitter);
         doThrow(new IllegalStateException("database unavailable")).when(state).stopAssistantMessage(7L, "assistant",
@@ -82,7 +113,7 @@ class ChatStreamRuntimeTests {
         runtime.activeStreams.put("assistant", active);
         registry.claim("assistant", 7L, ".");
 
-        runtime.stopActiveStream("assistant", active);
+        runtime.stopActiveStream("assistant", 7L);
         assertThat(active.completed().get()).isTrue();
         assertThat(active.finished().get()).isTrue();
         assertThat(runtime.activeStreams).doesNotContainKey("assistant");

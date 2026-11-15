@@ -1,7 +1,7 @@
 package com.judepereira.jupiter.ui;
 
 import com.judepereira.jupiter.agent.mcp.InboundMcpTokenService;
-import com.judepereira.jupiter.config.PublicRequestScheme;
+import com.judepereira.jupiter.config.RequestOrigin;
 import com.judepereira.jupiter.persistence.AppStateService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -108,7 +108,7 @@ public class InboundMcpSettingsController {
     }
     private void populate(Model model) {
         model.addAttribute("inboundCredentials", tokens.list());
-        model.addAttribute("inboundProjects", appState.loadViewData().projects());
+        model.addAttribute("inboundProjects", appState.listVisibleProjects());
         model.addAttribute("inboundTools", InboundMcpTokenService.TOOLS.stream().sorted().toList());
     }
     private void protect(HttpServletRequest request) {
@@ -117,24 +117,19 @@ public class InboundMcpSettingsController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
         String origin = request.getHeader("Origin");
-        if (origin == null) {
+        boolean isOrigin = origin != null;
+        if (!isOrigin) {
             origin = request.getHeader("Referer");
         }
-        if (origin == null || !sameOrigin(origin, request)) {
+        if (origin == null || !sameOrigin(origin, request, isOrigin)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
     }
-    private boolean sameOrigin(String value, HttpServletRequest request) {
+    private boolean sameOrigin(String value, HttpServletRequest request, boolean strictOrigin) {
         try {
             URI uri = URI.create(value);
-            int port = uri.getPort() == -1 ? ("https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80) : uri.getPort();
-            int requestPort = request.getServerPort();
-            if (requestPort == 0) {
-                requestPort = "https".equalsIgnoreCase(request.getScheme()) ? 443 : 80;
-            }
-            return uri.getScheme() != null && uri.getHost() != null
-                    && uri.getScheme().equalsIgnoreCase(PublicRequestScheme.isHttps(request) ? "https" : "http")
-                    && uri.getHost().equalsIgnoreCase(request.getServerName()) && port == requestPort;
+            return RequestOrigin.matches(uri, request) && uri.getRawUserInfo() == null && (!strictOrigin
+                    || uri.getRawPath().isEmpty() && uri.getRawQuery() == null && uri.getRawFragment() == null);
         } catch (RuntimeException e) {
             return false;
         }

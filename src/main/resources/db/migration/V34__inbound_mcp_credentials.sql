@@ -11,7 +11,6 @@ CREATE TABLE inbound_mcp_credentials (
     revoked_at TEXT
 );
 
-CREATE INDEX idx_inbound_mcp_credentials_token_hash ON inbound_mcp_credentials(token_hash);
 
 CREATE TABLE app_settings (
     setting_key TEXT PRIMARY KEY,

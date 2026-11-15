@@ -7,12 +7,9 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import com.microsoft.playwright.options.AriaRole;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -20,7 +17,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
     private static final ObjectMapper JSON = new ObjectMapper();
-
     @Test
     void browserManagedProjectAndToolScopesApplyImmediatelyAndRotationRevocationAreIndependent(@TempDir Path tempDir)
             throws Exception {
@@ -49,21 +45,21 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             create.locator("input[name='tools'][value='list_agents']").check();
             settingsAction(page, "/create", create.locator("button[type='submit']")::click);
             String restrictedToken = reveal(page, "restricted");
-            Mcp restricted = new Mcp(app.baseUrl(), restrictedToken);
-            restricted.initialize();
-            JsonNode listed = restricted.call("list_projects", "{}");
+            McpHttpTestClient restricted = new McpHttpTestClient(app.baseUrl(), restrictedToken);
+            restricted.initialize("authorization-e2e");
+            JsonNode listed = restricted.call("list_projects", Map.of());
             JsonNode visible = result(listed).path("result");
             if (!visible.isArray() || visible.size() != 1
                     || !visible.get(0).path("name").asText().equals("Authorization A")) {
                 throw new AssertionError("Project-scoped tools/list/call exposed unexpected projects: " + listed);
             }
             long projectAId = projectIdFromForm(page, "Authorization A");
-            JsonNode allowed = restricted.call("list_agents", "{\"projectId\":" + projectAId + "}");
+            JsonNode allowed = restricted.call("list_agents", Map.of("projectId", projectAId));
             if (result(allowed).path("result").isEmpty()) {
                 throw new AssertionError("Permitted project MCP call returned no agents: " + allowed);
             }
             long projectBId = projectIdFromForm(page, "Authorization B");
-            JsonNode denied = restricted.call("list_agents", "{\"projectId\":" + projectBId + "}");
+            JsonNode denied = restricted.call("list_agents", Map.of("projectId", projectBId));
             if (!denied.path("result").path("isError").asBoolean()) {
                 throw new AssertionError("Cross-project MCP call was not denied: " + denied);
             }
@@ -71,7 +67,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             Locator card = card(page, "restricted");
             Locator editForm = card.locator("form").filter(new Locator.FilterOptions()
                     .setHas(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Save changes"))));
-            JsonNode editedAllowed = restricted.call("list_agents", "{\"projectId\":" + projectAId + "}");
+            JsonNode editedAllowed = restricted.call("list_agents", Map.of("projectId", projectAId));
             if (result(editedAllowed).path("result").isEmpty()) {
                 throw new AssertionError("list_agents was not permitted before editing: " + editedAllowed);
             }
@@ -80,7 +76,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             settingsAction(page, "/edit", () -> editForm
                     .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save changes")).click());
             card = card(page, "restricted");
-            JsonNode changed = restricted.call("list_agents", "{\"projectId\":" + projectAId + "}");
+            JsonNode changed = restricted.call("list_agents", Map.of("projectId", projectAId));
             JsonNode changedError = changed.path("result").path("structuredContent").path("error");
             if (!changed.path("result").path("isError").asBoolean()
                     || !"RESOURCE_UNAVAILABLE".equals(changedError.path("code").asText())
@@ -97,10 +93,9 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             if (restricted.httpStatus("tools/list") != 401) {
                 throw new AssertionError("Rotated token remained valid");
             }
-            Mcp rotated = new Mcp(app.baseUrl(), rotatedToken);
-            rotated.initialize();
-            JsonNode rotatedTools = rotated
-                    .send("{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"tools/list\",\"params\":{}}");
+            McpHttpTestClient rotated = new McpHttpTestClient(app.baseUrl(), rotatedToken);
+            rotated.initialize("authorization-e2e");
+            JsonNode rotatedTools = rotated.tools();
             if (rotatedTools.path("result").path("tools").isEmpty()) {
                 throw new AssertionError("Rotated token did not work: " + rotatedTools);
             }
@@ -113,13 +108,9 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
                     new Locator.GetByRoleOptions().setName("Revoke"));
             page.onceDialog(dialog -> dialog.accept());
             armSettled(page, "/revoke");
-            var revokeResponse = page.waitForResponse(response -> response.url().endsWith("/revoke")
+            page.waitForResponse(response -> response.url().endsWith("/revoke")
                     && response.request().method().equals("POST") && response.status() == 200, revoke::click);
             waitForSettled(page, "/revoke");
-            String revokeHtml = revokeResponse.text();
-            if (!revokeHtml.contains("Revoked")) {
-                throw new AssertionError("Revoke response did not render revoked credential: " + revokeHtml);
-            }
             Locator revokedCard = page.locator("#inbound-mcp-settings article")
                     .filter(new Locator.FilterOptions().setHasText("restricted"));
             revokedCard.getByText("Revoked", new Locator.GetByTextOptions().setExact(true)).waitFor();
@@ -129,9 +120,9 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             if (rotated.httpStatus("tools/list") != 401) {
                 throw new AssertionError("Revoked credential remained valid");
             }
-            Mcp allProjects = new Mcp(app.baseUrl(), independentToken);
-            allProjects.initialize();
-            JsonNode futureProjectList = allProjects.call("list_projects", "{}");
+            McpHttpTestClient allProjects = new McpHttpTestClient(app.baseUrl(), independentToken);
+            allProjects.initialize("authorization-e2e");
+            JsonNode futureProjectList = allProjects.call("list_projects", Map.of());
             if (result(futureProjectList).path("result").size() < 2) {
                 throw new AssertionError("All-project token did not see both projects: " + futureProjectList);
             }
@@ -209,55 +200,4 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
         return JSON.readTree(content.get(0).path("text").asText());
     }
 
-    private static final class Mcp {
-        private final String url;
-        private final String token;
-        private final HttpClient http = HttpClient.newHttpClient();
-        private String session;
-        private int id;
-
-        private Mcp(String baseUrl, String token) {
-            url = baseUrl + "/mcp";
-            this.token = token;
-        }
-
-        private void initialize() throws Exception {
-            send("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"authorization-e2e\",\"version\":\"1\"}}}");
-            send("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
-        }
-
-        private JsonNode call(String name, String args) throws Exception {
-            return send("{\"jsonrpc\":\"2.0\",\"id\":" + (++id + 1)
-                    + ",\"method\":\"tools/call\",\"params\":{\"name\":\"" + name + "\",\"arguments\":" + args + "}}");
-        }
-
-        private int httpStatus(String method) throws Exception {
-            HttpResponse<String> response = post(
-                    "{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"" + method + "\",\"params\":{}}");
-            return response.statusCode();
-        }
-
-        private JsonNode send(String body) throws Exception {
-            HttpResponse<String> response = post(body);
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AssertionError("MCP HTTP " + response.statusCode() + ": " + response.body());
-            }
-            session = response.headers().firstValue("Mcp-Session-Id").orElse(session);
-            String data = response.body().lines().filter(line -> line.startsWith("data:"))
-                    .map(line -> line.substring(5).trim()).findFirst().orElse(response.body());
-            return data.isBlank() ? JSON.createObjectNode() : JSON.readTree(data);
-        }
-
-        private HttpResponse<String> post(String body) throws Exception {
-            HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url))
-                    .header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
-                    .header("Accept", "application/json, text/event-stream")
-                    .header("MCP-Protocol-Version", "2025-03-26");
-            if (session != null) {
-                request.header("Mcp-Session-Id", session);
-            }
-            return http.send(request.POST(HttpRequest.BodyPublishers.ofString(body)).build(),
-                    HttpResponse.BodyHandlers.ofString());
-        }
-    }
 }

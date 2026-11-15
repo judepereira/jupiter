@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 
 import com.judepereira.jupiter.agent.mcp.InboundMcpTokenService;
 import com.judepereira.jupiter.persistence.AppStateService;
-import com.judepereira.jupiter.persistence.Persistence.AppStateView;
 import java.util.List;
 import java.util.Set;
 import org.assertj.core.api.Assertions;
@@ -26,7 +25,7 @@ class InboundMcpSettingsControllerTests {
     @Test
     void createRejectsWhitespaceNameWithoutExposingToken() {
         when(tokens.list()).thenReturn(List.of());
-        when(appState.loadViewData()).thenReturn(mock(AppStateView.class));
+        when(appState.listVisibleProjects()).thenReturn(List.of());
         when(tokens.create("   ", false, Set.of(), Set.of())).thenThrow(new IllegalArgumentException("bad name"));
         var model = new ExtendedModelMap();
         var response = new MockHttpServletResponse();
@@ -42,7 +41,7 @@ class InboundMcpSettingsControllerTests {
     @Test
     void staleCredentialRevealAndRotateReturnSafeErrorsAndNoStore() {
         when(tokens.list()).thenReturn(List.of());
-        when(appState.loadViewData()).thenReturn(mock(AppStateView.class));
+        when(appState.listVisibleProjects()).thenReturn(List.of());
         when(tokens.reveal("stale")).thenThrow(new IllegalArgumentException("Credential not found"));
         when(tokens.rotate("stale")).thenThrow(new IllegalArgumentException("Credential not found"));
         var revealModel = new ExtendedModelMap();
@@ -85,13 +84,31 @@ class InboundMcpSettingsControllerTests {
         request.addHeader("Forwarded", "proto=http;host=attacker.example");
         when(tokens.reveal("credential")).thenReturn("secret-token");
         when(tokens.list()).thenReturn(List.of());
-        when(appState.loadViewData()).thenReturn(mock(AppStateView.class));
+        when(appState.listVisibleProjects()).thenReturn(List.of());
         var model = new ExtendedModelMap();
 
         controller.reveal("credential", request, new MockHttpServletResponse(), model);
 
         assertThat(model.getAttribute("issuedToken")).isEqualTo("secret-token");
         verify(tokens).reveal("credential");
+    }
+
+    @Test
+    void refererMayContainPathQueryAndFragmentButOriginMustBeSerialized() {
+        var refererRequest = sameOriginRequest();
+        refererRequest.removeHeader("Origin");
+        refererRequest.addHeader("Referer", "http://localhost/path?q=1#section");
+        when(tokens.reveal("credential")).thenReturn("secret-token");
+        when(tokens.list()).thenReturn(List.of());
+        when(appState.listVisibleProjects()).thenReturn(List.of());
+        controller.reveal("credential", refererRequest, new MockHttpServletResponse(), new ExtendedModelMap());
+        verify(tokens).reveal("credential");
+
+        var originRequest = sameOriginRequest();
+        originRequest.removeHeader("Origin");
+        originRequest.addHeader("Origin", "http://localhost/path");
+        Assertions.assertThatThrownBy(() -> controller.reveal("credential", originRequest,
+                new MockHttpServletResponse(), new ExtendedModelMap())).isInstanceOf(ResponseStatusException.class);
     }
 
     private MockHttpServletRequest sameOriginRequest() {

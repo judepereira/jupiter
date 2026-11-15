@@ -130,9 +130,8 @@ class UiControllerInvalidCheckoutBranchTests {
 
     private static UiController controller(Path projectRoot, AppStateService appStateService,
             SystemBalloonService balloonService) {
-        return new UiController(mock(CodingAgentHarness.class), agentProperties(projectRoot), appStateService,
+        return new UiController(agentProperties(projectRoot), appStateService,
                 new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
                 ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
                 mock(AgentPreferenceService.class), null, null, mock(ProviderAvailabilityService.class), balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
@@ -140,9 +139,8 @@ class UiControllerInvalidCheckoutBranchTests {
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                TestAppStateSupport.contextCompactionService(appStateService), null, mock(CommandStreamService.class),
-                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
-                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                null, mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                null, new ChatPresentationService(), null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
                 mock(ManualGitPullCoordinator.class),
                 new ChatStreamRuntime(mock(CodingAgentHarness.class), agentProperties(projectRoot), appStateService,
                         new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),

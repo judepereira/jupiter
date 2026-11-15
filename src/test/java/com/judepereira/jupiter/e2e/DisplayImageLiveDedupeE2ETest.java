@@ -44,14 +44,17 @@ class DisplayImageLiveDedupeE2ETest extends E2ETestSupport {
             page.locator("#chat-input").fill("show the image");
             page.locator("#chat-send-btn").click();
 
-            var call = page
+            var calls = page
                     .locator("#chat-messages-list [data-tool-call-target='call'][data-tool-call-id='display-image-1']");
-            call.waitFor();
-            assertThat(call.locator(".tool-call-image-preview")).hasCount(1);
-            assertThat(call.locator(".tool-call-image-preview img")).hasCount(1);
-            Assertions.assertThat((String) call.locator(".tool-call-image-preview figcaption > span")
+            var completedCall = page.locator(
+                    "#chat-messages-list [data-tool-call-target='call'][data-tool-call-id='display-image-1'][data-tool-call-state='done']");
+            completedCall.waitFor();
+            assertThat(calls).hasCount(1);
+            assertThat(completedCall.locator(".tool-call-image-preview")).hasCount(1);
+            assertThat(completedCall.locator(".tool-call-image-preview img")).hasCount(1);
+            Assertions.assertThat((String) completedCall.locator(".tool-call-image-preview figcaption > span")
                     .evaluate("el => el.textContent")).isEqualTo("Cat");
-            Assertions.assertThat((String) call.locator(".tool-call-image-preview figcaption > small")
+            Assertions.assertThat((String) completedCall.locator(".tool-call-image-preview figcaption > small")
                     .evaluate("el => el.textContent")).isEqualTo("images/cat.png");
 
             page.reload();

@@ -44,13 +44,8 @@ public class ActiveStreamRegistryService {
         if (assistantId == null || assistantId.isBlank()) {
             return;
         }
-        synchronized (admissionLock) {
-            if (assistantBySessionId.containsKey(sessionId) || streamsByAssistantId.containsKey(assistantId)) {
-                throw new IllegalStateException("SESSION_BUSY: A chat stream is already active");
-            }
-            StreamRef ref = new StreamRef(sessionId, workspaceRoot, normalize(workspaceRoot));
-            assistantBySessionId.put(sessionId, assistantId);
-            streamsByAssistantId.put(assistantId, ref);
+        if (!claim(assistantId, sessionId, workspaceRoot)) {
+            throw new IllegalStateException("SESSION_BUSY: A chat stream is already active");
         }
     }
 

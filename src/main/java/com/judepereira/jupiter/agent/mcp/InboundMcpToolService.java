@@ -77,11 +77,8 @@ public class InboundMcpToolService {
         if (project != null) {
             requireProject(project, c);
         }
-        List<Persistence.ProjectView> visibleProjects = permittedProjects(c);
-        List<WorkspaceOwner> workspaces = visibleProjects.stream().filter(p -> project == null || p.id() == project)
-                .flatMap(p -> appState.listWorkspaces(p.id()).stream().map(w -> new WorkspaceOwner(w, p.id())))
-                .filter(owner -> !args.containsKey("workspaceId")
-                        || owner.workspace().id() == positive(args, "workspaceId"))
+        List<WorkspaceOwner> workspaces = authorizedOwners(c, project).stream().filter(
+                owner -> !args.containsKey("workspaceId") || owner.workspace().id() == positive(args, "workspaceId"))
                 .toList();
         if (args.containsKey("workspaceId") && workspaces.isEmpty()) {
             throw denied();
@@ -95,16 +92,11 @@ public class InboundMcpToolService {
 
     private Object createWorkspace(Map<String, Object> args, InboundMcpTokenService.Credential c) {
         keys(args, "projectId", "branchName", "createBranch");
-        long project = positive(args, "projectId");
-        requireProject(project, c);
-        if (!(args.get("branchName") instanceof String branch) || branch.isBlank()
-                || !(args.get("createBranch") instanceof Boolean createBranch)) {
-            throw new IllegalArgumentException("Invalid arguments");
-        }
-        var workspace = appState.createWorkspace(project, branch, createBranch);
-        long sessionId = appState.listPrimarySessions(workspace.id()).stream().findFirst()
-                .orElseThrow(() -> new IllegalStateException("Initial session was not created")).id();
-        return Map.of("workspaceId", workspace.id(), "sessionId", sessionId, "name", workspace.name());
+        BranchRequest request = branchRequest(args);
+        requireProject(request.projectId(), c);
+        CreatedWorkspace created = createWorkspace(request);
+        return Map.of("workspaceId", created.workspace().id(), "sessionId", created.sessionId(), "name",
+                created.workspace().name());
     }
 
     private Object postMessage(Map<String, Object> args, InboundMcpTokenService.Credential c) {
@@ -129,42 +121,42 @@ public class InboundMcpToolService {
         if (create && sessionName != null && !sessionName.isBlank()) {
             throw new IllegalArgumentException("sessionName is not supported when creating a workspace");
         }
-        long sessionId;
-        long workspaceId;
-        long projectId;
+        BranchRequest branch = create ? branchRequest(args) : null;
+        WorkspaceOwner authorizedOwner = null;
+        Long targetId = null;
         if (session) {
-            sessionId = positive(args, "sessionId");
-            requireSession(sessionId, c);
-            var owner = permittedProjects(c).stream().flatMap(p -> appState.listWorkspaces(p.id()).stream())
-                    .filter(w -> appState.listPrimarySessions(w.id()).stream().anyMatch(s -> s.id() == sessionId))
-                    .findFirst().orElseThrow(InboundMcpToolService::denied);
-            workspaceId = owner.id();
-            projectId = projectForWorkspace(c, workspaceId);
+            targetId = positive(args, "sessionId");
+            authorizedOwner = authorizeSession(targetId, c);
         } else if (workspace) {
-            long wid = positive(args, "workspaceId");
-            var found = permittedWorkspace(wid, c);
-            workspaceId = found.id();
-            projectId = projectForWorkspace(c, workspaceId);
-            sessionId = sessionName == null || sessionName.isBlank()
-                    ? appState.createSession(workspaceId).id()
-                    : appState.createSession(workspaceId, sessionName).id();
+            targetId = positive(args, "workspaceId");
+            authorizedOwner = authorizeWorkspace(targetId, c);
         } else {
             if (!c.tools().contains("create_workspace")) {
                 throw denied();
             }
-            long project = positive(args, "projectId");
-            requireProject(project, c);
-            if (!(args.get("branchName") instanceof String branch) || branch.isBlank()
-                    || !(args.get("createBranch") instanceof Boolean createBranch)) {
-                throw new IllegalArgumentException("Invalid arguments");
-            }
-            var made = appState.createWorkspace(project, branch, createBranch);
-            workspaceId = made.id();
-            projectId = project;
-            sessionId = appState.listPrimarySessions(workspaceId).stream().findFirst()
-                    .orElseThrow(() -> new IllegalStateException("Initial session was not created")).id();
+            requireProject(branch.projectId(), c);
         }
-        var result = chatRuntime.submit(sessionId, message, agentId, modelId, thinkingLevel);
+        var selection = chatRuntime.validateSubmission(agentId, modelId, thinkingLevel);
+        long sessionId;
+        long workspaceId;
+        long projectId;
+        if (session) {
+            sessionId = targetId;
+            workspaceId = authorizedOwner.workspace().id();
+            projectId = authorizedOwner.projectId();
+        } else if (workspace) {
+            workspaceId = authorizedOwner.workspace().id();
+            projectId = authorizedOwner.projectId();
+            sessionId = sessionName == null || sessionName.isBlank()
+                    ? appState.createSession(workspaceId).id()
+                    : appState.createSession(workspaceId, sessionName).id();
+        } else {
+            CreatedWorkspace created = createWorkspace(branch);
+            workspaceId = created.workspace().id();
+            projectId = branch.projectId();
+            sessionId = created.sessionId();
+        }
+        var result = chatRuntime.submit(sessionId, message, selection);
         return Map.of("accepted", true, "status", "accepted", "sessionId", sessionId, "workspaceId", workspaceId,
                 "projectId", projectId, "assistantId", result.assistantId());
     }
@@ -172,7 +164,7 @@ public class InboundMcpToolService {
     private Object summarize(Map<String, Object> args, InboundMcpTokenService.Credential c) {
         keys(args, "sessionId");
         long sid = positive(args, "sessionId");
-        requireSession(sid, c);
+        authorizeSession(sid, c);
         var agent = agents.defaultAgent();
         var resolution = preferences.resolve(agent, null, null, false);
         var result = compaction.summarizeSession(sid, agent, resolution.model(), resolution.thinkingLevel());
@@ -189,21 +181,38 @@ public class InboundMcpToolService {
         return result.stdout().trim();
     }
 
-    private Persistence.WorkspaceView permittedWorkspace(long id, InboundMcpTokenService.Credential c) {
-        return permittedProjects(c).stream().flatMap(p -> appState.listWorkspaces(p.id()).stream())
-                .filter(w -> w.id() == id).findFirst().orElseThrow(InboundMcpToolService::denied);
+    private List<WorkspaceOwner> authorizedOwners(InboundMcpTokenService.Credential c, Long projectId) {
+        return permittedProjects(c).stream().filter(p -> projectId == null || p.id() == projectId)
+                .flatMap(p -> appState.listWorkspaces(p.id()).stream().map(w -> new WorkspaceOwner(w, p.id())))
+                .toList();
     }
-    private void requireSession(long id, InboundMcpTokenService.Credential c) {
-        boolean exists = permittedProjects(c).stream().flatMap(p -> appState.listWorkspaces(p.id()).stream())
-                .flatMap(w -> appState.listPrimarySessions(w.id()).stream()).anyMatch(s -> s.id() == id);
-        if (!exists) {
-            throw denied();
+
+    private WorkspaceOwner authorizeWorkspace(long workspaceId, InboundMcpTokenService.Credential c) {
+        return authorizedOwners(c, null).stream().filter(owner -> owner.workspace().id() == workspaceId).findFirst()
+                .orElseThrow(InboundMcpToolService::denied);
+    }
+
+    private WorkspaceOwner authorizeSession(long sessionId, InboundMcpTokenService.Credential c) {
+        return authorizedOwners(c, null).stream()
+                .filter(owner -> appState.listPrimarySessions(owner.workspace().id()).stream()
+                        .anyMatch(session -> session.id() == sessionId))
+                .findFirst().orElseThrow(InboundMcpToolService::denied);
+    }
+
+    private CreatedWorkspace createWorkspace(BranchRequest request) {
+        var workspace = appState.createWorkspace(request.projectId(), request.branchName(), request.createBranch());
+        long sessionId = appState.listPrimarySessions(workspace.id()).stream().findFirst()
+                .orElseThrow(() -> new IllegalStateException("Initial session was not created")).id();
+        return new CreatedWorkspace(workspace, sessionId);
+    }
+
+    private static BranchRequest branchRequest(Map<String, Object> args) {
+        long project = positive(args, "projectId");
+        if (!(args.get("branchName") instanceof String branch) || branch.isBlank()
+                || !(args.get("createBranch") instanceof Boolean createBranch)) {
+            throw new IllegalArgumentException("Invalid arguments");
         }
-    }
-    private long projectForWorkspace(InboundMcpTokenService.Credential c, long workspaceId) {
-        return permittedProjects(c).stream()
-                .filter(p -> appState.listWorkspaces(p.id()).stream().anyMatch(w -> w.id() == workspaceId))
-                .mapToLong(Persistence.ProjectView::id).findFirst().orElseThrow(InboundMcpToolService::denied);
+        return new BranchRequest(project, branch, createBranch);
     }
     private List<Persistence.ProjectView> permittedProjects(InboundMcpTokenService.Credential c) {
         return appState.listVisibleProjects().stream().filter(p -> allowed(p.id(), c)).toList();
@@ -238,6 +247,12 @@ public class InboundMcpToolService {
         }
         return n.longValue();
     }
+    private record BranchRequest(long projectId, String branchName, boolean createBranch) {
+    }
+
+    private record CreatedWorkspace(Persistence.WorkspaceView workspace, long sessionId) {
+    }
+
     private record WorkspaceOwner(Persistence.WorkspaceView workspace, long projectId) {
     }
 

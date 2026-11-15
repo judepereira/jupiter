@@ -121,28 +121,12 @@ public class InboundMcpAuthFilter implements Filter {
         }
         try {
             URI supplied = URI.create(origin);
-            String scheme = PublicRequestScheme.isHttps(request) ? "https" : "http";
-            int expectedPort = effectivePort(scheme, request.getServerPort());
-            return supplied.getScheme() != null && supplied.getScheme().equalsIgnoreCase(scheme)
-                    && supplied.getHost() != null && supplied.getHost().equalsIgnoreCase(request.getServerName())
-                    && effectivePort(supplied.getScheme(), supplied.getPort()) == expectedPort
-                    && supplied.getRawUserInfo() == null && supplied.getRawPath().isEmpty()
-                    && supplied.getRawQuery() == null && supplied.getRawFragment() == null;
+            return RequestOrigin.matches(supplied, request) && supplied.getRawUserInfo() == null
+                    && supplied.getRawPath().isEmpty() && supplied.getRawQuery() == null
+                    && supplied.getRawFragment() == null;
         } catch (IllegalArgumentException exception) {
             return false;
         }
     }
 
-    private static int hostPort(String host, String scheme, int fallback) {
-        try {
-            URI uri = URI.create("//" + host);
-            return uri.getPort() < 0 ? fallback : uri.getPort();
-        } catch (IllegalArgumentException exception) {
-            return fallback;
-        }
-    }
-
-    private static int effectivePort(String scheme, int port) {
-        return port < 0 ? ("https".equalsIgnoreCase(scheme) ? 443 : 80) : port;
-    }
 }

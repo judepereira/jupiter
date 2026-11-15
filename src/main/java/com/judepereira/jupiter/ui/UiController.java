@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.*;
 import com.judepereira.jupiter.agent.config.AgentProperties;
-import com.judepereira.jupiter.agent.harness.CodingAgentHarness;
 import com.judepereira.jupiter.agent.mcp.McpProjectMcpServerRuntimeManager;
 import com.judepereira.jupiter.agent.mcp.McpRuntimeEvents;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
@@ -17,10 +16,8 @@ import com.judepereira.jupiter.config.HttpAuthProperties;
 import com.judepereira.jupiter.config.PublicRequestScheme;
 import com.judepereira.jupiter.git.GitAutoUpdateService;
 import com.judepereira.jupiter.git.ManualGitPullCoordinator;
-import com.judepereira.jupiter.lifecycle.LifecycleHookService;
 import com.judepereira.jupiter.openai.oauth.OpenAiOAuthService;
 import com.judepereira.jupiter.persistence.AppStateService;
-import com.judepereira.jupiter.persistence.ContextCompactionService;
 import com.judepereira.jupiter.persistence.GitWorktreeException;
 import com.judepereira.jupiter.persistence.InvalidGitBranchNameException;
 import com.judepereira.jupiter.persistence.Persistence.*;
@@ -30,7 +27,6 @@ import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalPanelState;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.ui.ChatPresentationService.ChatMessage;
-import com.judepereira.jupiter.ui.ChatStreamRuntime.ActiveStream;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -62,18 +58,15 @@ public class UiController {
     private static final ObjectMapper SseJson = new ObjectMapper();
     private static final String DEFAULT_APP_VERSION = "0.0.1-SNAPSHOT";
 
-    private final CodingAgentHarness harness;
     private final AgentProperties agentProperties;
     private final AppStateService appStateService;
     private final AgentDefinitionService agentDefinitionService;
     private final ModelCatalogService modelCatalogService;
-    private final AgentModelResolutionService agentModelResolutionService;
     private final AgentPreferenceResolver agentPreferenceResolver;
     private final AgentPreferenceService agentPreferenceService;
     private final ModelPickerService modelPickerService;
     private final ModelPreferencesService modelPreferencesService;
     private final ProviderAvailabilityService providerAvailabilityService;
-    private final ContextCompactionService contextCompactionService;
     private final TokenUsageService tokenUsageService;
     private final CommandStreamService commandStreamService;
     private final CommandCatalogService commandCatalogService;
@@ -86,7 +79,6 @@ public class UiController {
     private final OpenAiOAuthService openAiOAuthService;
     private final ChatPresentationService chatPresentationService;
     private final ChatToolCallHtmlService chatToolCallHtmlService;
-    private final LifecycleHookService lifecycleHookService;
     private final HttpAuthProperties httpAuthProperties;
     private final GitAutoUpdateService gitAutoUpdateService;
     private final ManualGitPullCoordinator manualGitPullCoordinator;
@@ -105,35 +97,31 @@ public class UiController {
     }
 
     @Autowired
-    public UiController(CodingAgentHarness harness, AgentProperties agentProperties, AppStateService appStateService,
+    public UiController(AgentProperties agentProperties, AppStateService appStateService,
             AgentDefinitionService agentDefinitionService, ModelCatalogService modelCatalogService,
-            AgentModelResolutionService agentModelResolutionService, AgentPreferenceResolver agentPreferenceResolver,
-            AgentPreferenceService agentPreferenceService, ModelPickerService modelPickerService,
-            ModelPreferencesService modelPreferencesService, ProviderAvailabilityService providerAvailabilityService,
-            SystemBalloonService systemBalloonService, WorkspaceRailRefreshService workspaceRailRefreshService,
+            AgentPreferenceResolver agentPreferenceResolver, AgentPreferenceService agentPreferenceService,
+            ModelPickerService modelPickerService, ModelPreferencesService modelPreferencesService,
+            ProviderAvailabilityService providerAvailabilityService, SystemBalloonService systemBalloonService,
+            WorkspaceRailRefreshService workspaceRailRefreshService,
             ActiveStreamRegistryService activeStreamRegistryService, TerminalManager terminalManager,
             TerminalStateService terminalStateService, OpenAiOAuthService openAiOAuthService,
-            ContextCompactionService contextCompactionService, TokenUsageService tokenUsageService,
-            CommandStreamService commandStreamService, CommandCatalogService commandCatalogService,
-            McpProjectMcpServerRuntimeManager mcpRuntimeManager, ChatPresentationService chatPresentationService,
-            ChatToolCallHtmlService chatToolCallHtmlService, LifecycleHookService lifecycleHookService,
+            TokenUsageService tokenUsageService, CommandStreamService commandStreamService,
+            CommandCatalogService commandCatalogService, McpProjectMcpServerRuntimeManager mcpRuntimeManager,
+            ChatPresentationService chatPresentationService, ChatToolCallHtmlService chatToolCallHtmlService,
             HttpAuthProperties httpAuthProperties, GitAutoUpdateService gitAutoUpdateService,
             ManualGitPullCoordinator manualGitPullCoordinator, ChatStreamRuntime chatStreamRuntime,
             @Value("${app.version:" + DEFAULT_APP_VERSION + "}") String appVersion,
             @Value("${user.home}") String userHome) {
         this.chatStreamRuntime = chatStreamRuntime;
-        this.harness = harness;
         this.agentProperties = agentProperties;
         this.appStateService = appStateService;
         this.agentDefinitionService = agentDefinitionService;
         this.modelCatalogService = modelCatalogService;
-        this.agentModelResolutionService = agentModelResolutionService;
         this.agentPreferenceResolver = agentPreferenceResolver;
         this.agentPreferenceService = agentPreferenceService;
         this.modelPickerService = modelPickerService;
         this.modelPreferencesService = modelPreferencesService;
         this.providerAvailabilityService = providerAvailabilityService;
-        this.contextCompactionService = contextCompactionService;
         this.tokenUsageService = tokenUsageService;
         this.commandStreamService = commandStreamService;
         this.commandCatalogService = commandCatalogService;
@@ -146,7 +134,6 @@ public class UiController {
         this.openAiOAuthService = openAiOAuthService;
         this.chatPresentationService = chatPresentationService;
         this.chatToolCallHtmlService = chatToolCallHtmlService;
-        this.lifecycleHookService = lifecycleHookService;
         this.httpAuthProperties = httpAuthProperties;
         this.gitAutoUpdateService = gitAutoUpdateService;
         this.manualGitPullCoordinator = manualGitPullCoordinator;
@@ -278,17 +265,8 @@ public class UiController {
         }
 
         String targetAssistantId = assistantId;
-        ActiveStream active = targetAssistantId == null || targetAssistantId.isBlank()
-                ? null
-                : chatStreamRuntime.activeStreams.get(targetAssistantId);
-        if (active != null && active.pendingStream().sessionId() != session.id()) {
-            throw new IllegalStateException("Assistant stream does not belong to the active session");
-        }
-        if (active == null) {
-            active = chatStreamRuntime.activeStreams.values().stream()
-                    .filter(s -> s.pendingStream().sessionId() == session.id()).findFirst().orElse(null);
-        }
-        if (active == null) {
+        boolean chatStreamStopped = chatStreamRuntime.stopActiveStream(targetAssistantId, session.id());
+        if (!chatStreamStopped) {
             if (targetAssistantId != null && !targetAssistantId.isBlank()) {
                 Long streamSessionId = activeStreamRegistryService.sessionIdForAssistantId(targetAssistantId)
                         .orElse(null);
@@ -306,12 +284,6 @@ public class UiController {
             return "fragments/chat :: chat";
         }
 
-        if (targetAssistantId == null || targetAssistantId.isBlank()) {
-            ActiveStream targetActive = active;
-            targetAssistantId = chatStreamRuntime.activeStreams.entrySet().stream()
-                    .filter(entry -> entry.getValue() == targetActive).map(Map.Entry::getKey).findFirst().orElseThrow();
-        }
-        chatStreamRuntime.stopActiveStream(targetAssistantId, active);
         view = appStateService.loadViewData();
         populateChatControlsModel(model, activeChatSelection(view));
         populateProjectModel(model, view);

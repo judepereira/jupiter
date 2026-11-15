@@ -59,10 +59,11 @@ public class ChatStreamRuntime {
     public record Submission(QueuedChatTurn queuedTurn, ChatMessageView summary, String assistantId) {
     }
 
-    public Submission submit(long sessionId, String message, String agentId, String modelId, String thinkingLevel) {
-        if (message == null || message.isBlank()) {
-            throw new IllegalArgumentException("Message is required");
-        }
+    public record SubmissionSelection(AgentDefinition agent, AgentPreferenceResolver.Resolution preference,
+            boolean implicitModel) {
+    }
+
+    public SubmissionSelection validateSubmission(String agentId, String modelId, String thinkingLevel) {
         AgentDefinition agent = agentId == null || agentId.isBlank()
                 ? agentDefinitionService.defaultAgent()
                 : agentDefinitionService.getRequired(agentId);
@@ -79,6 +80,21 @@ public class ChatStreamRuntime {
             throw new IllegalArgumentException(
                     "That model is no longer available. Choose an available model in Settings.");
         }
+        return new SubmissionSelection(agent, preference, implicitModel);
+    }
+
+    public Submission submit(long sessionId, String message, String agentId, String modelId, String thinkingLevel) {
+        return submit(sessionId, message, validateSubmission(agentId, modelId, thinkingLevel));
+    }
+
+    public Submission submit(long sessionId, String message, SubmissionSelection selection) {
+        if (message == null || message.isBlank()) {
+            throw new IllegalArgumentException("Message is required");
+        }
+        var agent = selection.agent();
+        var preference = selection.preference();
+        boolean implicitModel = selection.implicitModel();
+        var model = preference.model();
         String workspaceRoot = appStateService.loadSessionDetail(sessionId).workspaceRoot();
         String assistantId = UUID.randomUUID().toString();
         if (!activeStreamRegistryService.claim(assistantId, sessionId, workspaceRoot)) {
@@ -103,7 +119,7 @@ public class ChatStreamRuntime {
             var active = ActiveStream.create(new PendingStream(sessionId, workspaceRoot, request), cancellation);
             activeStreams.put(assistantId, active);
             appStateService.publishWorkspaceRailRefresh();
-            startActiveStream(assistantId, active, null);
+            startActiveStream(assistantId, active);
             return new Submission(queued, summary.orElse(null), assistantId);
         } catch (RuntimeException e) {
             activeStreams.remove(assistantId);
@@ -182,13 +198,12 @@ public class ChatStreamRuntime {
         }
     }
 
-    void startActiveStream(String assistantId, ActiveStream active, SseEmitter emitter) {
+    void startActiveStream(String assistantId, ActiveStream active) {
         try {
             Thread runner = Thread.startVirtualThread(() -> runActiveStream(assistantId, active));
             active.runner().set(runner);
         } catch (Exception e) {
-            active.started().set(false);
-            listenerStartFailed(active, assistantId, e, emitter);
+            listenerStartFailed(active, assistantId, e);
         }
     }
 
@@ -311,7 +326,9 @@ public class ChatStreamRuntime {
                         dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_COMPLETED,
                                 pending.sessionId());
                         processChangedFiles(result, pending.sessionId(), pending.workspaceRoot());
-                        finalizeStreamSuccess(active, assistantId, completedMessage, completed);
+                        finalizeStream(active, assistantId, "done",
+                                Map.of("text", completedMessage.text(), "completedTs", completedMessage.completedTs()),
+                                completed);
                     } catch (Exception e) {
                         if (!completed.get()) {
                             onError(e);
@@ -337,7 +354,8 @@ public class ChatStreamRuntime {
                             }
                             ChatMessageView stoppedMessage = appStateService.stopAssistantMessage(pending.sessionId(),
                                     assistantId, accumulated.toString());
-                            finalizeStreamStopped(active, assistantId, stoppedMessage, completed);
+                            finalizeStream(active, assistantId, "stopped", Map.of("message", stoppedMessage.text(),
+                                    "completedTs", stoppedMessage.completedTs()), completed);
                             return;
                         }
                         String normalizedMessage = normalizeProviderErrorMessage(e);
@@ -346,7 +364,9 @@ public class ChatStreamRuntime {
                         dispatchLifecycleHook(LifecycleHookService.LifecycleEvent.ASSISTANT_ERRORED,
                                 pending.sessionId());
                         log.error("Execution failure!", e);
-                        finalizeStreamError(active, assistantId, normalizedMessage, failedMessage, e, completed);
+                        finalizeStream(active, assistantId, "error",
+                                Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()),
+                                completed);
                     } catch (Exception failure) {
                         log.error("Failed to finalize assistant stream {}", assistantId, failure);
                         finishActiveStream(active, assistantId);
@@ -368,7 +388,7 @@ public class ChatStreamRuntime {
         }
     }
 
-    private void listenerStartFailed(ActiveStream active, String assistantId, Exception e, SseEmitter emitter) {
+    private void listenerStartFailed(ActiveStream active, String assistantId, Exception e) {
         try {
             String normalizedMessage = normalizeProviderErrorMessage(e);
             ChatMessageView failedMessage = appStateService.failAssistantMessage(active.pendingStream().sessionId(),
@@ -389,9 +409,6 @@ public class ChatStreamRuntime {
                 log.error("Failed to publish workspace rail refresh", failure);
             }
             completeEmitters(active);
-            if (emitter != null) {
-                detachEmitter(active, emitter);
-            }
         }
     }
 
@@ -458,49 +475,38 @@ public class ChatStreamRuntime {
         }
     }
 
-    private void finalizeStreamSuccess(ActiveStream active, String assistantId, ChatMessageView completedMessage,
+    private void finalizeStream(ActiveStream active, String assistantId, String event, Map<String, Object> payload,
             AtomicBoolean completed) {
         if (!completed.compareAndSet(false, true)) {
             return;
         }
-
         finishActiveStream(active, assistantId);
         broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "done",
-                Map.of("text", completedMessage.text(), "completedTs", completedMessage.completedTs()));
+        broadcastEvent(active, assistantId, event, payload);
         completeEmitters(active);
         appStateService.publishWorkspaceRailRefresh();
     }
 
-    private void finalizeStreamError(ActiveStream active, String assistantId, String normalizedMessage,
-            ChatMessageView failedMessage, Exception e, AtomicBoolean completed) {
-        if (!completed.compareAndSet(false, true)) {
-            return;
+    public boolean stopActiveStream(String assistantId, long sessionId) {
+        ActiveStream active = assistantId == null || assistantId.isBlank() ? null : activeStreams.get(assistantId);
+        if (active != null && active.pendingStream().sessionId() != sessionId) {
+            throw new IllegalStateException("Assistant stream does not belong to the active session");
         }
-
-        finishActiveStream(active, assistantId);
-        broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "error",
-                Map.of("message", normalizedMessage, "completedTs", failedMessage.completedTs()));
-        completeEmitters(active);
-        appStateService.publishWorkspaceRailRefresh();
-    }
-
-    private void finalizeStreamStopped(ActiveStream active, String assistantId, ChatMessageView stoppedMessage,
-            AtomicBoolean completed) {
-        if (!completed.compareAndSet(false, true)) {
-            return;
+        if (active == null) {
+            var matchingEntry = activeStreams.entrySet().stream()
+                    .filter(entry -> entry.getValue().pendingStream().sessionId() == sessionId).findFirst()
+                    .orElse(null);
+            if (matchingEntry == null) {
+                return false;
+            }
+            assistantId = matchingEntry.getKey();
+            active = matchingEntry.getValue();
         }
-
-        finishActiveStream(active, assistantId);
-        broadcastToolCallHostSnapshot(active, assistantId);
-        broadcastEvent(active, assistantId, "stopped",
-                Map.of("message", stoppedMessage.text(), "completedTs", stoppedMessage.completedTs()));
-        completeEmitters(active);
-        appStateService.publishWorkspaceRailRefresh();
+        stopActiveStream(assistantId, active);
+        return true;
     }
 
-    void stopActiveStream(String assistantId, ActiveStream active) {
+    private void stopActiveStream(String assistantId, ActiveStream active) {
         synchronized (active) {
             if (!active.completed().compareAndSet(false, true)) {
                 return;
@@ -770,12 +776,12 @@ public class ChatStreamRuntime {
     record PendingStream(long sessionId, String workspaceRoot, AgentTurnRequest request) {
     }
 
-    record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean started,
-            AtomicBoolean finished, AtomicBoolean completed, AtomicReference<Thread> runner,
-            CancellationToken cancellationToken, AtomicReference<StringBuilder> accumulatedText) {
+    record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean finished,
+            AtomicBoolean completed, AtomicReference<Thread> runner, CancellationToken cancellationToken,
+            AtomicReference<StringBuilder> accumulatedText) {
         static ActiveStream create(PendingStream pendingStream, CancellationToken cancellationToken) {
             return new ActiveStream(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false),
-                    new AtomicBoolean(false), new AtomicBoolean(false), new AtomicReference<>(), cancellationToken,
+                    new AtomicBoolean(false), new AtomicReference<>(), cancellationToken,
                     new AtomicReference<>(new StringBuilder()));
         }
     }
