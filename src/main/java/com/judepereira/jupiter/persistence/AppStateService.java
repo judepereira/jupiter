@@ -1012,8 +1012,48 @@ public class AppStateService {
 
     @Transactional(readOnly = true)
     public List<AppStateRepository.ConversationMessageRow> listIncludedCompletedConversationMessages(long sessionId) {
-        return repository.listMessagesBySession(sessionId).stream()
-                .filter(message -> message.includeInModel() && !message.pending()).toList();
+        return orderedModelRows(repository.listMessagesBySession(sessionId));
+    }
+
+    private List<AppStateRepository.ConversationMessageRow> orderedModelRows(
+            List<AppStateRepository.ConversationMessageRow> source) {
+        List<AppStateRepository.ConversationMessageRow> messages = source.stream()
+                .filter(message -> message.includeInModel() && !message.pending() && !"info".equals(message.role()))
+                .toList();
+        long cutoff = messages.stream().filter(AppStateService::isLegacyCompactionSummary)
+                .mapToLong(AppStateRepository.ConversationMessageRow::compactedThroughTurnId).max()
+                .orElse(Long.MIN_VALUE);
+        List<AppStateRepository.ConversationMessageRow> summaries = messages.stream()
+                .filter(AppStateService::isCompactionSummary).toList();
+        List<AppStateRepository.ConversationMessageRow> retained = messages.stream().filter(
+                message -> !isCompactionSummary(message) && (cutoff == Long.MIN_VALUE || message.turnId() > cutoff))
+                .toList();
+        Map<String, Long> roots = new HashMap<>();
+        for (var message : retained) {
+            if ("assistant".equals(message.role()) && !message.showInChat()) {
+                for (var payload : toolCallPayloads(message.toolCallsJson())) {
+                    roots.put(payload.toolCallId(), message.sequence());
+                }
+            }
+        }
+        List<AppStateRepository.ConversationMessageRow> ordered = new ArrayList<>(retained.stream()
+                .sorted(Comparator.comparingLong(AppStateRepository.ConversationMessageRow::turnId)
+                        .thenComparingLong(message -> conversationHistoryGroupKey(message, roots))
+                        .thenComparingInt(this::conversationHistoryOrder)
+                        .thenComparingLong(AppStateRepository.ConversationMessageRow::sequence))
+                .toList());
+        summaries.stream().sorted(Comparator.comparingLong(AppStateRepository.ConversationMessageRow::sequence))
+                .forEach(ordered::addFirst);
+        return List.copyOf(ordered);
+    }
+
+    private static boolean isLegacyCompactionSummary(AppStateRepository.ConversationMessageRow message) {
+        return "system".equals(message.role()) && message.showInChat() && message.compactedThroughTurnId() != null
+                && message.compactedThroughTurnId() > 0;
+    }
+
+    private static boolean isCompactionSummary(AppStateRepository.ConversationMessageRow message) {
+        return "system".equals(message.role()) && message.showInChat() && message.compactedThroughTurnId() != null;
     }
 
     @Transactional
@@ -1028,52 +1068,36 @@ public class AppStateService {
      */
     @Transactional
     public ChatMessageView compactConversationAtomically(long sessionId,
-            List<AppStateRepository.ConversationMessageRow> expectedIncludedRows, long compactedThroughTurnId,
+            List<AppStateRepository.ConversationMessageRow> expectedIncludedRows, List<Long> compactedMessageIds,
             String summary, CompactionFitCheck fitsAfter) {
-        List<AppStateRepository.ConversationMessageRow> currentIncludedRows = repository
-                .listMessagesBySession(sessionId).stream()
-                .filter(message -> message.includeInModel() && !message.pending()).toList();
+        if (compactedMessageIds == null || compactedMessageIds.isEmpty()) {
+            throw new IllegalArgumentException("Compaction must select at least one conversation message");
+        }
+        List<AppStateRepository.ConversationMessageRow> currentIncludedRows = orderedModelRows(
+                repository.listMessagesBySession(sessionId));
         if (!currentIncludedRows.equals(expectedIncludedRows)) {
             throw new IllegalStateException("Conversation changed while context compaction was being generated");
         }
 
-        repository.updateConversationMessagesIncludeInModelUpToTurnId(sessionId, compactedThroughTurnId, false);
-        ChatMessageView summaryMessage = appendVisibleSystemMessage(sessionId, summary, compactedThroughTurnId);
-        List<AppStateRepository.ConversationMessageRow> afterRows = repository.listMessagesBySession(sessionId).stream()
-                .filter(message -> message.includeInModel() && !message.pending()).toList();
+        Set<Long> includedIds = currentIncludedRows.stream().map(AppStateRepository.ConversationMessageRow::id)
+                .collect(Collectors.toSet());
+        if (!includedIds.containsAll(compactedMessageIds)
+                || compactedMessageIds.stream().distinct().count() != compactedMessageIds.size()) {
+            throw new IllegalArgumentException("Compaction selection must contain unique included messages");
+        }
+        repository.updateConversationMessagesIncludeInModelByIds(sessionId, compactedMessageIds, false);
+        // Zero marks exact-message compaction; unlike turn summaries, it has no turn
+        // cutoff.
+        ChatMessageView summaryMessage = appendVisibleSystemMessage(sessionId, summary, 0L);
+        List<AppStateRepository.ConversationMessageRow> afterRows = orderedModelRows(
+                repository.listMessagesBySession(sessionId));
         fitsAfter.verify(afterRows);
         return summaryMessage;
     }
 
     public List<Message> buildConversationHistory(long sessionId) {
-        var messages = repository.listMessagesBySession(sessionId).stream()
-                .filter(message -> message.includeInModel() && !message.pending() && !"info".equals(message.role()))
+        return orderedModelRows(repository.listMessagesBySession(sessionId)).stream().map(this::toModelMessage)
                 .toList();
-
-        long compactionCutoffTurnId = messages.stream()
-                .filter(message -> "system".equals(message.role()) && message.showInChat()
-                        && message.compactedThroughTurnId() != null)
-                .mapToLong(AppStateRepository.ConversationMessageRow::compactedThroughTurnId).max()
-                .orElse(Long.MIN_VALUE);
-        if (compactionCutoffTurnId != Long.MIN_VALUE) {
-            messages = messages.stream().filter(message -> message.turnId() > compactionCutoffTurnId).toList();
-        }
-
-        Map<String, Long> toolCallRoots = new HashMap<>();
-        for (var message : messages) {
-            if ("assistant".equals(message.role()) && !message.showInChat()) {
-                for (var payload : toolCallPayloads(message.toolCallsJson())) {
-                    toolCallRoots.put(payload.toolCallId(), message.sequence());
-                }
-            }
-        }
-
-        return messages.stream()
-                .sorted(Comparator.comparingLong(AppStateRepository.ConversationMessageRow::turnId)
-                        .thenComparingLong(message -> conversationHistoryGroupKey(message, toolCallRoots))
-                        .thenComparingInt(this::conversationHistoryOrder)
-                        .thenComparingLong(AppStateRepository.ConversationMessageRow::sequence))
-                .map(this::toModelMessage).toList();
     }
 
     private long conversationHistoryGroupKey(AppStateRepository.ConversationMessageRow message,

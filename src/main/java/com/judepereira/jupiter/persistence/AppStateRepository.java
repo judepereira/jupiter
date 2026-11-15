@@ -1166,6 +1166,16 @@ public class AppStateRepository {
                         .addValue("completedAt", completedAt == null ? null : Timestamp.from(completedAt)));
     }
 
+    void updateConversationMessagesIncludeInModelByIds(long sessionId, List<Long> messageIds, boolean includeInModel) {
+        if (messageIds.isEmpty()) {
+            return;
+        }
+        jdbc.update(
+                "UPDATE conversation_messages SET include_in_model = :includeInModel WHERE session_id = :sessionId AND id IN (:messageIds)",
+                new MapSqlParameterSource().addValue("includeInModel", includeInModel).addValue("sessionId", sessionId)
+                        .addValue("messageIds", messageIds));
+    }
+
     void updateConversationMessagesIncludeInModelUpToTurnId(long sessionId, long maxTurnId, boolean includeInModel) {
         if (maxTurnId <= 0) {
             return;
