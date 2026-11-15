@@ -17,26 +17,6 @@ import org.junit.jupiter.api.io.TempDir;
 class GitWrapperProcessTests {
     private static final String TRAILER = "Co-authored-by: Jupiter IDE <340693705+jupiter-ide@users.noreply.github.com>";
     private static final Path REAL_GIT = resolveRealGit();
-
-    private static Path resolveRealGit() {
-        String configuredGit = System.getenv("JUPITER_GIT_REAL");
-        if (configuredGit != null && !configuredGit.isBlank()) {
-            return Path.of(configuredGit).toAbsolutePath().normalize();
-        }
-        String testGit = System.getenv("JUPITER_TEST_REAL_GIT");
-        if (testGit != null && !testGit.isBlank()) {
-            return Path.of(testGit).toAbsolutePath().normalize();
-        }
-        Path installedGit = Path.of("/usr/bin/git.real");
-        if (Files.isExecutable(installedGit)) {
-            return installedGit;
-        }
-        Path systemGit = Path.of("/usr/bin/git");
-        if (Files.isExecutable(systemGit)) {
-            return systemGit;
-        }
-        throw new IllegalStateException("Unable to locate real git executable; set JUPITER_GIT_REAL");
-    }
     private static final Path WRAPPER = Path.of("git-wrapper.sh").toAbsolutePath();
     private static final List<String> CONFIG_VARS = List.of("GIT_CONFIG", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS",
             "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_AUTHOR_NAME",
@@ -46,6 +26,18 @@ class GitWrapperProcessTests {
 
     @TempDir
     Path temp;
+
+    private static Path resolveRealGit() {
+        String configuredGit = System.getenv("JUPITER_GIT_REAL");
+        if (configuredGit != null && !configuredGit.isBlank()) {
+            return Path.of(configuredGit);
+        }
+        Path installedGit = Path.of("/usr/bin/git.real");
+        if (Files.isExecutable(installedGit)) {
+            return installedGit;
+        }
+        return Path.of("/usr/bin/git");
+    }
 
     @Test
     void ordinaryMessageGetsTrailerAndPreservesIdentity() throws Exception {
