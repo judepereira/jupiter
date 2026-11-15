@@ -1,5 +1,8 @@
 package com.judepereira.jupiter.persistence;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.catalog.AgentDefinition;
 import com.judepereira.jupiter.agent.catalog.ModelDefinition;
 import com.judepereira.jupiter.agent.catalog.ThinkingLevel;
@@ -13,20 +16,20 @@ import com.judepereira.jupiter.agent.skill.SkillDiscoveryService;
 import com.judepereira.jupiter.persistence.Persistence.ChatMessageView;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ContextCompactionService {
 
-    private static final int MIN_RECENT_COMPLETED_TURNS = 2;
     private static final int SAFETY_MARGIN_TOKENS = 512;
     private static final int MESSAGE_OVERHEAD_TOKENS = 16;
     private static final int TOOL_SCHEMA_TOKENS = 200;
+    private static final ObjectMapper TOOL_CALLS_MAPPER = new ObjectMapper();
 
     private static final String SUMMARY_SYSTEM_PROMPT = "Summarize the compacted conversation for future model context. "
             + "Keep it concise, preserve decisions, file paths, tool results, and open tasks, and do not mention that the summary was compacted.";
@@ -60,15 +63,12 @@ public class ContextCompactionService {
             return Optional.empty();
         }
 
-        List<TurnGroup> groups = groupByTurn(rows);
-        if (groups.size() <= MIN_RECENT_COMPLETED_TURNS) {
+        List<AppStateRepository.ConversationMessageRow> compactableRows = selectCompactionPrefix(rows, tokenCosts,
+                budget);
+        if (compactableRows.isEmpty()) {
             throw new IllegalStateException("Conversation is too large for " + model.id()
                     + " even before compaction: estimated " + estimatedBefore + " tokens for budget " + budget);
         }
-
-        List<TurnGroup> compactableGroups = groups.subList(0, groups.size() - MIN_RECENT_COMPLETED_TURNS);
-        List<AppStateRepository.ConversationMessageRow> compactableRows = compactableGroups.stream()
-                .flatMap(group -> group.rows().stream()).toList();
 
         int summaryRequestTokens = estimateSummaryRequestTokens(model, compactableRows);
         if (summaryRequestTokens > budget) {
@@ -76,7 +76,7 @@ public class ContextCompactionService {
                     + ": estimated " + summaryRequestTokens + " tokens for budget " + budget);
         }
 
-        String transcript = buildTranscript(compactableGroups);
+        String transcript = buildTranscript(compactableRows);
         AgentModelClient client = modelClientFactory.getClient(model.provider());
         AgentModelOptions options = new AgentModelOptions(model.id(), model.apiModelId(), thinkingLevel,
                 model.supportsReasoning(), agent.textVerbosity());
@@ -103,9 +103,10 @@ public class ContextCompactionService {
             throw new IllegalStateException("Context compaction produced an empty summary for model " + model.id());
         }
 
-        long compactedThroughTurnId = compactableGroups.getLast().turnId();
+        List<Long> compactedMessageIds = compactableRows.stream().map(AppStateRepository.ConversationMessageRow::id)
+                .toList();
         ChatMessageView summaryMessage = appStateService.compactConversationAtomically(sessionId, rows,
-                compactedThroughTurnId, summary, afterRows -> {
+                compactedMessageIds, summary, afterRows -> {
                     int estimatedAfter = estimateTurnTokens(tokenCosts, afterRows);
                     if (estimatedAfter > budget) {
                         throw new IllegalStateException("Conversation still does not fit after compaction for "
@@ -116,30 +117,99 @@ public class ContextCompactionService {
         return Optional.of(summaryMessage);
     }
 
-    private List<TurnGroup> groupByTurn(List<AppStateRepository.ConversationMessageRow> rows) {
-        Map<Long, List<AppStateRepository.ConversationMessageRow>> grouped = new LinkedHashMap<>();
-        for (var row : rows) {
-            grouped.computeIfAbsent(row.turnId(), turnId -> new ArrayList<>()).add(row);
+    private List<AppStateRepository.ConversationMessageRow> selectCompactionPrefix(
+            List<AppStateRepository.ConversationMessageRow> rows, PromptTokenCosts costs, int budget) {
+        List<AppStateRepository.ConversationMessageRow> selected = new ArrayList<>();
+        int retainedTokens = estimateRowsTokens(rows);
+        int target = compactThreshold(budget) - costs.promptTokens() - costs.userTextTokens() - costs.toolSchemaTokens()
+                - costs.outputTokens() - summaryReserveTokens(costs.outputTokens());
+        int compactedUnits = 0;
+        for (int index = 0; index < rows.size(); index++) {
+            var row = rows.get(index);
+            if (row.pending()) {
+                throw new IllegalStateException("Cannot compact an unfinished conversation message");
+            }
+            int end = index + 1;
+            boolean oldSummary = "system".equals(row.role()) && row.compactedThroughTurnId() != null;
+            if (oldSummary) {
+                selected.add(row);
+                retainedTokens -= estimateRowTokens(row);
+                continue;
+            }
+            if (retainedTokens <= target && compactedUnits > 0) {
+                break;
+            }
+            if ("assistant".equals(row.role()) && row.toolCallsJson() != null && !row.toolCallsJson().isBlank()) {
+                List<String> callIds = parseCallIds(row.toolCallsJson());
+                Set<String> found = new HashSet<>();
+                while (end < rows.size() && rows.get(end).turnId() == row.turnId()
+                        && "tool".equals(rows.get(end).role())) {
+                    var result = rows.get(end);
+                    if (!callIds.contains(result.toolCallId()) || !found.add(result.toolCallId())) {
+                        throw new IllegalStateException("Mismatched tool exchange in conversation");
+                    }
+                    end++;
+                    if (found.size() == callIds.size()) {
+                        break;
+                    }
+                }
+                if (found.size() != callIds.size()) {
+                    throw new IllegalStateException("Incomplete tool exchange in conversation");
+                }
+            } else if ("tool".equals(row.role())) {
+                throw new IllegalStateException("Orphan tool result in conversation");
+            }
+            List<AppStateRepository.ConversationMessageRow> unit = rows.subList(index, end);
+            selected.addAll(unit);
+            retainedTokens -= estimateRowsTokens(unit);
+            compactedUnits++;
+            index = end - 1;
         }
-        return grouped.entrySet().stream().map(entry -> new TurnGroup(entry.getKey(), List.copyOf(entry.getValue())))
-                .toList();
+        return compactedUnits == 0 ? List.of() : List.copyOf(selected);
     }
 
-    private String buildTranscript(List<TurnGroup> groups) {
+    private int summaryReserveTokens(int responseReserveTokens) {
+        return responseReserveTokens + MESSAGE_OVERHEAD_TOKENS
+                + estimateTextTokens("Previous conversation summary:\n\n");
+    }
+
+    private List<String> parseCallIds(String json) {
+        try {
+            var calls = TOOL_CALLS_MAPPER.readValue(json, new TypeReference<List<ToolCallPayload>>() {
+            });
+            List<String> ids = calls.stream().map(ToolCallPayload::toolCallId).toList();
+            if (ids.isEmpty() || ids.stream().anyMatch(id -> id == null || id.isBlank())
+                    || ids.stream().distinct().count() != ids.size()) {
+                throw new IllegalStateException("Invalid tool call IDs in conversation");
+            }
+            return ids;
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read tool call JSON", e);
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ToolCallPayload(String toolCallId) {
+    }
+
+    private String buildTranscript(List<AppStateRepository.ConversationMessageRow> rows) {
         StringBuilder transcript = new StringBuilder();
-        for (TurnGroup group : groups) {
-            transcript.append("[turn ").append(group.turnId()).append("]\n");
-            for (var row : group.rows()) {
-                transcript.append(row.role()).append(": ");
-                String content = row.content() == null ? "" : row.content();
-                transcript.append(content.isBlank() ? "(empty)" : content);
-                if (row.toolCallId() != null && !row.toolCallId().isBlank()) {
-                    transcript.append("\n  tool_call_id: ").append(row.toolCallId());
-                }
-                if (row.toolCallsJson() != null && !row.toolCallsJson().isBlank()) {
-                    transcript.append("\n  tool_calls_json: ").append(row.toolCallsJson());
-                }
-                transcript.append('\n');
+        long previousTurn = Long.MIN_VALUE;
+        for (var row : rows) {
+            if (row.turnId() != previousTurn) {
+                transcript.append("[turn ").append(row.turnId()).append("]\n");
+                previousTurn = row.turnId();
+            }
+            transcript.append(row.role()).append(": ");
+            String content = row.content() == null ? "" : row.content();
+            transcript.append(content.isBlank() ? "(empty)" : content);
+            if (row.toolCallId() != null && !row.toolCallId().isBlank()) {
+                transcript.append("\n  tool_call_id: ").append(row.toolCallId());
+            }
+            if (row.toolCallsJson() != null && !row.toolCallsJson().isBlank()) {
+                transcript.append("\n  tool_calls_json: ").append(row.toolCallsJson());
             }
             transcript.append('\n');
         }
@@ -148,7 +218,7 @@ public class ContextCompactionService {
 
     private int estimateSummaryRequestTokens(ModelDefinition model,
             List<AppStateRepository.ConversationMessageRow> rows) {
-        return estimatePromptTokens(SUMMARY_SYSTEM_PROMPT) + estimateRowsTokens(rows) + model.outputTokens();
+        return estimatePromptTokens(SUMMARY_SYSTEM_PROMPT) + estimateTranscriptTokens(rows) + model.outputTokens();
     }
 
     private PromptTokenCosts precomputeTokenCosts(AgentDefinition agent, ModelDefinition model, String workspaceRoot,
@@ -166,6 +236,10 @@ public class ContextCompactionService {
 
     private int estimateRowsTokens(List<AppStateRepository.ConversationMessageRow> rows) {
         return rows.stream().mapToInt(this::estimateRowTokens).sum();
+    }
+
+    private int estimateTranscriptTokens(List<AppStateRepository.ConversationMessageRow> rows) {
+        return estimateTextTokens(buildTranscript(rows)) + rows.size() * MESSAGE_OVERHEAD_TOKENS;
     }
 
     private int estimateRowTokens(AppStateRepository.ConversationMessageRow row) {
@@ -205,6 +279,4 @@ public class ContextCompactionService {
     private record PromptTokenCosts(int promptTokens, int userTextTokens, int toolSchemaTokens, int outputTokens) {
     }
 
-    private record TurnGroup(long turnId, List<AppStateRepository.ConversationMessageRow> rows) {
-    }
 }
