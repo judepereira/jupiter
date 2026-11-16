@@ -22,7 +22,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 class InboundMcpAuthFilterTests {
     private static final String TOKEN = "valid-token";
-    private static final String FINGERPRINT = "";
 
     @Test
     void missingOriginAndValidBearerAreAccepted() throws Exception {

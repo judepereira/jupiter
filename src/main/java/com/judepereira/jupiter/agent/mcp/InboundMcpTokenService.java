@@ -33,10 +33,6 @@ public class InboundMcpTokenService {
         return sessions.status(sessionId, credentialId, fingerprint);
     }
 
-    public boolean isSessionBound(String sessionId, String credentialId, String fingerprint) {
-        return sessionStatus(sessionId, credentialId, fingerprint) == SessionStatus.VALID;
-    }
-
     public void invalidateSession(String sessionId) {
         sessions.invalidate(sessionId);
     }
