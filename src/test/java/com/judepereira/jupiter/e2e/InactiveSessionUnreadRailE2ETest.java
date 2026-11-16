@@ -358,6 +358,51 @@ class InactiveSessionUnreadRailE2ETest extends E2ETestSupport {
     }
 
     @Test
+    void collapsingWorkspaceInvalidatesPendingRailRefresh(@TempDir Path tempDir) throws Exception {
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
+            assertThat(page.locator(".workspace-group.active .session-item")).hasCount(1);
+
+            AtomicReference<Route> delayedRoute = new AtomicReference<>();
+            AtomicReference<APIResponse> fetchedResponse = new AtomicReference<>();
+            page.route("**/ui/workspaces/rail", route -> {
+                if (delayedRoute.compareAndSet(null, route)) {
+                    fetchedResponse.set(route.fetch());
+                } else {
+                    route.resume();
+                }
+            });
+            page.evaluate("window.__railSyncReady = import('/js/chat/rail-sync.js')");
+            page.waitForFunction("() => window.__railSyncReady");
+            page.evaluate("window.__railSyncReady.then(module => module.refreshWorkspaceRail())");
+            page.waitForCondition(() -> delayedRoute.get() != null && fetchedResponse.get() != null,
+                    new Page.WaitForConditionOptions().setTimeout(10_000));
+
+            page.waitForResponse(
+                    response -> response.url().contains("/ui/workspaces/") && response.url().contains("/collapse")
+                            && response.status() == 200,
+                    () -> page.locator(".workspace-group.active .workspace-item").click());
+            assertThat(page.locator(".workspace-group.active .session-item")).hasCount(0);
+            try {
+                delayedRoute.get().fulfill(new Route.FulfillOptions().setResponse(fetchedResponse.get()));
+            } catch (PlaywrightException ignored) {
+                // Collapse may abort the intercepted request after invalidating the refresh.
+            }
+            page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+            assertThat(page.locator(".workspace-group.active .session-item")).hasCount(0);
+        }
+    }
+
+    @Test
     void openingNewSessionFormDoesNotInvalidatePendingRailRefresh(@TempDir Path tempDir) throws Exception {
         TestAppConfig.reset();
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));

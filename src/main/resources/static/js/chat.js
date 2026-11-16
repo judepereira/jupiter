@@ -22,7 +22,7 @@ function bindChatHtmxLifecycleListeners() {
         "htmx:beforeRequest",
         function (evt) {
             const requestUrl = evt?.detail?.requestConfig?.path || "";
-            if (/\/ui\/(projects|workspaces|sessions)\/[^?]*(activate|close|add|create)/.test(requestUrl)) {
+            if (/\/ui\/(projects|workspaces|sessions)\/[^?]*(activate|collapse|close|add|create)/.test(requestUrl)) {
                 invalidateWorkspaceRailRefresh();
             }
         },
