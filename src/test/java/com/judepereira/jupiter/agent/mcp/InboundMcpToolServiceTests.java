@@ -149,6 +149,46 @@ class InboundMcpToolServiceTests {
     }
 
     @Test
+    void postMessageToWorkspaceCreatesNamedSessionAndSubmits() {
+        var runtime = mock(ChatStreamRuntime.class);
+        var selection = mock(ChatStreamRuntime.SubmissionSelection.class);
+        var service = service(runtime);
+        authorizedWorkspace();
+        when(appState.createSession(11, "named session")).thenReturn(session());
+        when(runtime.validateSubmission(null, null, null)).thenReturn(selection);
+        when(runtime.submit(13, "hello", selection))
+                .thenReturn(new ChatStreamRuntime.Submission(null, null, "assistant"));
+
+        var response = service.call("post_message",
+                Map.of("workspaceId", 11L, "message", "hello", "sessionName", "named session"), credential);
+
+        assertThat(response).isEqualTo(Map.of("accepted", true, "status", "accepted", "sessionId", 13L, "workspaceId",
+                11L, "projectId", 7L, "assistantId", "assistant"));
+        verify(appState).createSession(11, "named session");
+        verify(runtime).submit(13, "hello", selection);
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidPostMessageArgs")
+    void malformedPostMessageTargetOrArgumentsAreRejected(Map<String, Object> args) {
+        var runtime = mock(ChatStreamRuntime.class);
+        var service = service(runtime);
+
+        assertThatThrownBy(() -> service.call("post_message", args, credential))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(runtime, never()).validateSubmission(null, null, null);
+        verify(runtime, never()).submit(anyLong(), anyString(), ArgumentMatchers.any());
+    }
+
+    static Stream<Map<String, Object>> invalidPostMessageArgs() {
+        return Stream.of(Map.of("message", "hello"), Map.of("message", "hello", "workspaceId", 0L),
+                Map.of("message", "hello", "workspaceId", 11L, "sessionId", 13L),
+                Map.of("message", "hello", "projectId", 7L),
+                Map.of("message", "hello", "workspaceId", 11L, "sessionName", 12));
+    }
+
+    @Test
     void unauthorizedWorkspaceTargetIsUnavailableWithoutLoadingWorkspaceDetails() {
         var service = service(mock(ChatStreamRuntime.class));
         assertThatThrownBy(

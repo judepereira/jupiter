@@ -295,6 +295,35 @@ class ChatStreamRuntimeTests {
     }
 
     @Test
+    void persistedReplayReportsPendingMessageAsNoJobAndCompletes() throws Exception {
+        AppStateService state = mock(AppStateService.class);
+        var runtime = runtime(state, new ActiveStreamRegistryService());
+        when(state.findAssistantMessageSessionId("assistant")).thenReturn(OptionalLong.of(7L));
+        when(state.loadAssistantMessageDetails(7L, "assistant"))
+                .thenReturn(new ChatMessageView("ASSISTANT", null, 1L, true, "assistant", null, List.of(), null));
+        var emitter = mock(SseEmitter.class);
+
+        runtime.sendPersistedTerminalState("assistant", emitter);
+
+        Mockito.verify(emitter).send(ArgumentMatchers.any(SseEmitter.SseEventBuilder.class));
+        Mockito.verify(emitter).complete();
+    }
+
+    @Test
+    void persistedReplayReportsMissingAssistantAsNoJobAndCompletes() throws Exception {
+        AppStateService state = mock(AppStateService.class);
+        var runtime = runtime(state, new ActiveStreamRegistryService());
+        when(state.findAssistantMessageSessionId("assistant")).thenReturn(OptionalLong.empty());
+        var emitter = mock(SseEmitter.class);
+
+        runtime.sendPersistedTerminalState("assistant", emitter);
+
+        Mockito.verify(emitter).send(ArgumentMatchers.any(SseEmitter.SseEventBuilder.class));
+        Mockito.verify(emitter).complete();
+        Mockito.verify(state, Mockito.never()).loadAssistantMessageDetails(Mockito.anyLong(), Mockito.anyString());
+    }
+
+    @Test
     void persistedReplayAllowsNullCompletionTimestamp() throws Exception {
         AppStateService state = mock(AppStateService.class);
         var runtime = runtime(state, new ActiveStreamRegistryService());

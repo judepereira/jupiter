@@ -64,6 +64,53 @@ class ContextCompactionServiceTests {
     }
 
     @Test
+    void summarizeSessionWithoutHistoryUsesDefaultAndSkipsModel() {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", "workspace");
+        long sessionId = service.loadViewData().activeSession().id();
+
+        var summary = compactionService(service, failIfUsedFactory()).summarizeSession(sessionId, testAgent(),
+                testModel(5000), ThinkingLevel.LOW);
+
+        assertThat(summary.summary()).isEqualTo("No conversation history.");
+        assertThat(summary.cutoffTurnId()).isNull();
+    }
+
+    @Test
+    void summarizeSessionRejectsOversizedHistoryBeforeModel() {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", "workspace");
+        long sessionId = service.loadViewData().activeSession().id();
+        var turn = service.appendUserMessageAndPendingAssistant(sessionId, "request " + "x".repeat(6000));
+        service.completeAssistantMessage(sessionId, turn.assistantMessage().id(), "reply", List.of());
+
+        assertThatThrownBy(() -> compactionService(service, failIfUsedFactory()).summarizeSession(sessionId,
+                testAgent(), testModel(1200), ThinkingLevel.LOW)).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("too large to summarize");
+    }
+
+    @Test
+    void summarizeSessionReturnsSummaryAndLastTurnCutoff() {
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", "workspace");
+        long sessionId = service.loadViewData().activeSession().id();
+        var firstTurn = service.appendUserMessageAndPendingAssistant(sessionId, "first request");
+        service.completeAssistantMessage(sessionId, firstTurn.assistantMessage().id(), "first reply", List.of());
+        var lastTurn = service.appendUserMessageAndPendingAssistant(sessionId, "last request");
+        service.completeAssistantMessage(sessionId, lastTurn.assistantMessage().id(), "last reply", List.of());
+        RecordingStreamingFactory factory = recordingStreamingFactory();
+
+        var summary = compactionService(service, factory).summarizeSession(sessionId, testAgent(), testModel(5000),
+                ThinkingLevel.LOW);
+
+        assertThat(summary.summary()).isEqualTo("streamed summary");
+        assertThat(summary.cutoffTurnId())
+                .isEqualTo(service.listIncludedCompletedConversationMessages(sessionId).getLast().turnId());
+        assertThat(factory.client.conversations).hasSize(1);
+        assertThat(factory.client.conversations.getFirst().getLast().getContent()).contains("last reply");
+    }
+
+    @Test
     void staleConversationIsRejectedBeforeAnyCompactionWrite() {
         AppStateService service = TestAppStateSupport.appStateService();
         service.addOrReopenProject("Alpha", "workspace");
