@@ -43,6 +43,7 @@ public class InboundMcpSettingsController {
             model.addAttribute("issuedToken", token);
         } catch (IllegalArgumentException e) {
             populate(model);
+            model.addAttribute("showCreateForm", true);
             model.addAttribute("settingsError", "Unable to create credential. Check the name, projects, and tools.");
         }
         return PANEL;
@@ -57,36 +58,6 @@ public class InboundMcpSettingsController {
             tokens.edit(id, allProjects, projectIds, tools == null ? Set.of() : tools);
         } catch (IllegalArgumentException e) {
             model.addAttribute("settingsError", "Unable to update credential. It may no longer be available.");
-        }
-        model.addAttribute("openCredential", id);
-        populate(model);
-        return PANEL;
-    }
-
-    @PostMapping("/{id}/reveal")
-    public String reveal(@PathVariable String id, HttpServletRequest request, HttpServletResponse response,
-            Model model) {
-        protect(request);
-        noStore(response);
-        try {
-            model.addAttribute("issuedToken", tokens.reveal(id));
-        } catch (IllegalArgumentException e) {
-            model.addAttribute("settingsError", "Unable to reveal credential. It may no longer be available.");
-        }
-        model.addAttribute("openCredential", id);
-        populate(model);
-        return PANEL;
-    }
-
-    @PostMapping("/{id}/rotate")
-    public String rotate(@PathVariable String id, HttpServletRequest request, HttpServletResponse response,
-            Model model) {
-        protect(request);
-        noStore(response);
-        try {
-            model.addAttribute("issuedToken", tokens.rotate(id));
-        } catch (IllegalArgumentException e) {
-            model.addAttribute("settingsError", "Unable to rotate credential. It may no longer be available.");
         }
         model.addAttribute("openCredential", id);
         populate(model);

@@ -20,8 +20,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -44,10 +42,29 @@ class InboundMcpE2ETest extends E2ETestSupport {
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click();
             page.getByRole(AriaRole.TAB, new Page.GetByRoleOptions().setName("Inbound MCP")).click();
             page.locator("#inbound-mcp-settings").waitFor();
-            Locator createForm = page.locator("#inbound-mcp-settings > form");
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings article")).hasCount(0);
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-create-form")).not().isVisible();
+            PlaywrightAssertions
+                    .assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")))
+                    .isVisible();
+            Locator createToggle = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token"));
+            PlaywrightAssertions.assertThat(createToggle).hasAttribute("aria-expanded", "false");
+            createToggle.click();
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-create-form")).isVisible();
+            Locator createForm = page.locator("#inbound-mcp-create-form form");
             createForm.locator("input[name='name']").fill("e2e client");
             createForm.locator("input[name='allProjects']").check();
-            createForm.locator("button[type='submit']").click();
+            page.waitForResponse(response -> response.url().endsWith("/create")
+                    && response.request().method().equals("POST") && response.status() == 200,
+                    createForm.locator("button[type='submit']")::click);
+            Locator issuedToken = page.locator("#inbound-mcp-settings .alert-warning code");
+            issuedToken.waitFor();
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-create-form")).not().isVisible();
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings").getByRole(AriaRole.BUTTON,
+                    new Locator.GetByRoleOptions().setName("Reveal"))).hasCount(0);
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings").getByRole(AriaRole.BUTTON,
+                    new Locator.GetByRoleOptions().setName("Rotate"))).hasCount(0);
+            String token = issuedToken.textContent().trim();
             Locator credential = page.locator("#inbound-mcp-settings article")
                     .filter(new Locator.FilterOptions().setHas(page.getByRole(AriaRole.BUTTON,
                             new Page.GetByRoleOptions().setName("e2e client").setExact(true))));
@@ -57,13 +74,9 @@ class InboundMcpE2ETest extends E2ETestSupport {
             PlaywrightAssertions.assertThat(credential.locator("input[name='name']")).hasCount(0);
             credentialHeader.click();
             PlaywrightAssertions.assertThat(credentialHeader).hasAttribute("aria-expanded", "true");
-            credential.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Reveal")).click();
-            String revealed = page.locator("#inbound-mcp-settings").textContent();
-            Matcher matcher = Pattern.compile("jup_[A-Za-z0-9_-]+").matcher(revealed);
-            if (!matcher.find()) {
-                throw new AssertionError("Created inbound MCP token was not revealed");
-            }
-            String token = matcher.group();
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings")
+                    .getByText("It cannot be viewed again:", new Locator.GetByTextOptions().setExact(false)))
+                    .isVisible();
             McpHttpTestClient client = new McpHttpTestClient(app.baseUrl(), token);
             JsonNode initialized = client.initialize("e2e");
             if (initialized.path("result").path("serverInfo").isMissingNode()) {

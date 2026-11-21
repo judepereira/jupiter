@@ -14,6 +14,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -23,92 +26,105 @@ class InboundMcpSettingsControllerTests {
     private final InboundMcpSettingsController controller = new InboundMcpSettingsController(tokens, appState);
 
     @Test
-    void createRejectsWhitespaceNameWithoutExposingToken() {
+    void creationReturnsTokenWithoutCachingAndFailureReopensForm() {
         when(tokens.list()).thenReturn(List.of());
         when(appState.listVisibleProjects()).thenReturn(List.of());
-        when(tokens.create("   ", false, Set.of(), Set.of())).thenThrow(new IllegalArgumentException("bad name"));
-        var model = new ExtendedModelMap();
+        when(tokens.create("credential", true, Set.of(), Set.of("list_projects"))).thenReturn("new-secret");
         var response = new MockHttpServletResponse();
-
-        controller.create("   ", false, Set.of(), Set.of(), sameOriginRequest(), response, model);
-
-        assertThat(model.getAttribute("settingsError"))
-                .isEqualTo("Unable to create credential. Check the name, projects, and tools.");
-        assertThat(model).doesNotContainKey("issuedToken");
+        var model = new ExtendedModelMap();
+        controller.create("credential", true, Set.of(), Set.of("list_projects"), sameOriginRequest(), response, model);
+        assertThat(model.getAttribute("issuedToken")).isEqualTo("new-secret");
         assertThat(response.getHeader("Cache-Control")).isEqualTo("no-store");
+
+        when(tokens.create("bad", false, Set.of(), Set.of())).thenThrow(new IllegalArgumentException());
+        var failedModel = new ExtendedModelMap();
+        controller.create("bad", false, Set.of(), Set.of(), sameOriginRequest(), response, failedModel);
+        assertThat(failedModel.getAttribute("showCreateForm")).isEqualTo(true);
+        assertThat(failedModel).doesNotContainKey("issuedToken");
     }
 
     @Test
-    void staleCredentialRevealAndRotateReturnSafeErrorsAndNoStore() {
-        when(tokens.list()).thenReturn(List.of());
-        when(appState.listVisibleProjects()).thenReturn(List.of());
-        when(tokens.reveal("stale")).thenThrow(new IllegalArgumentException("Credential not found"));
-        when(tokens.rotate("stale")).thenThrow(new IllegalArgumentException("Credential not found"));
-        var revealModel = new ExtendedModelMap();
-        var revealResponse = new MockHttpServletResponse();
-        controller.reveal("stale", sameOriginRequest(), revealResponse, revealModel);
-        assertThat(revealModel.getAttribute("settingsError"))
-                .isEqualTo("Unable to reveal credential. It may no longer be available.");
-        assertThat(revealModel).doesNotContainKey("issuedToken");
-        assertThat(revealResponse.getHeader("Cache-Control")).isEqualTo("no-store");
-
-        var rotateModel = new ExtendedModelMap();
-        var rotateResponse = new MockHttpServletResponse();
-        controller.rotate("stale", sameOriginRequest(), rotateResponse, rotateModel);
-        assertThat(rotateModel.getAttribute("settingsError"))
-                .isEqualTo("Unable to rotate credential. It may no longer be available.");
-        assertThat(rotateModel).doesNotContainKey("issuedToken");
-        assertThat(rotateResponse.getHeader("Cache-Control")).isEqualTo("no-store");
+    void removedRevealAndRotateEndpointsAreUnavailable() throws Exception {
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(controller).setViewResolvers((viewName, locale) -> null).build();
+        assertThat(mvc.perform(MockMvcRequestBuilders.post("/ui/settings/inbound-mcp/id/reveal")).andReturn()
+                .getResponse().getStatus()).isEqualTo(404);
+        assertThat(mvc.perform(MockMvcRequestBuilders.post("/ui/settings/inbound-mcp/id/rotate")).andReturn()
+                .getResponse().getStatus()).isEqualTo(404);
     }
 
     @Test
-    void crossOriginRequestIsForbiddenBeforeTokenOperation() {
+    void crossOriginCreationIsForbiddenBeforeTokenOperation() {
         var request = sameOriginRequest();
-        request.setSecure(true);
+        request.removeHeader("Origin");
         request.addHeader("Origin", "https://attacker.example");
-        request.addHeader("Forwarded", "proto=https;host=localhost");
-
-        Assertions.assertThatThrownBy(
-                () -> controller.reveal("credential", request, new MockHttpServletResponse(), new ExtendedModelMap()))
+        Assertions
+                .assertThatThrownBy(() -> controller.create("credential", true, Set.of(), Set.of(), request,
+                        new MockHttpServletResponse(), new ExtendedModelMap()))
                 .isInstanceOf(ResponseStatusException.class);
-        verify(tokens, never()).reveal("credential");
+        verify(tokens, never()).create("credential", true, Set.of(), Set.of());
     }
 
     @Test
-    void httpsSameOriginIsAcceptedRegardlessOfForwardedHeader() {
+    void rejectsOriginComponentsAndRefererUserInfo() {
+        for (String value : List.of("http://user@localhost", "http://localhost?query=1", "http://localhost/path",
+                "http://localhost#fragment")) {
+            var request = sameOriginRequest();
+            request.removeHeader("Origin");
+            request.addHeader("Origin", value);
+            Assertions
+                    .assertThatThrownBy(() -> controller.create("credential", true, Set.of(), Set.of(), request,
+                            new MockHttpServletResponse(), new ExtendedModelMap()))
+                    .isInstanceOf(ResponseStatusException.class);
+        }
+
+        var referer = sameOriginRequest();
+        referer.removeHeader("Origin");
+        referer.addHeader("Referer", "http://user@localhost");
+        Assertions
+                .assertThatThrownBy(() -> controller.create("credential", true, Set.of(), Set.of(), referer,
+                        new MockHttpServletResponse(), new ExtendedModelMap()))
+                .isInstanceOf(ResponseStatusException.class);
+        verify(tokens, never()).create("credential", true, Set.of(), Set.of());
+    }
+
+    @Test
+    void normalizedHttpsOriginIgnoresForwardedHeaders() {
         var request = sameOriginRequest();
+        request.setScheme("https");
         request.setSecure(true);
         request.setServerPort(443);
         request.removeHeader("Origin");
-        request.addHeader("Origin", "https://localhost");
+        request.addHeader("Origin", "HTTPS://LOCALHOST");
         request.addHeader("Forwarded", "proto=http;host=attacker.example");
-        when(tokens.reveal("credential")).thenReturn("secret-token");
         when(tokens.list()).thenReturn(List.of());
         when(appState.listVisibleProjects()).thenReturn(List.of());
-        var model = new ExtendedModelMap();
+        when(tokens.create("credential", true, Set.of(), Set.of())).thenReturn("secret");
 
-        controller.reveal("credential", request, new MockHttpServletResponse(), model);
+        controller.create("credential", true, Set.of(), Set.of(), request, new MockHttpServletResponse(),
+                new ExtendedModelMap());
 
-        assertThat(model.getAttribute("issuedToken")).isEqualTo("secret-token");
-        verify(tokens).reveal("credential");
+        verify(tokens).create("credential", true, Set.of(), Set.of());
     }
 
     @Test
     void refererMayContainPathQueryAndFragmentButOriginMustBeSerialized() {
-        var refererRequest = sameOriginRequest();
-        refererRequest.removeHeader("Origin");
-        refererRequest.addHeader("Referer", "http://localhost/path?q=1#section");
-        when(tokens.reveal("credential")).thenReturn("secret-token");
+        var referer = sameOriginRequest();
+        referer.removeHeader("Origin");
+        referer.addHeader("Referer", "http://localhost/path?q=1#section");
         when(tokens.list()).thenReturn(List.of());
         when(appState.listVisibleProjects()).thenReturn(List.of());
-        controller.reveal("credential", refererRequest, new MockHttpServletResponse(), new ExtendedModelMap());
-        verify(tokens).reveal("credential");
+        when(tokens.create("credential", true, Set.of(), Set.of())).thenReturn("secret");
+        controller.create("credential", true, Set.of(), Set.of(), referer, new MockHttpServletResponse(),
+                new ExtendedModelMap());
+        verify(tokens).create("credential", true, Set.of(), Set.of());
 
-        var originRequest = sameOriginRequest();
-        originRequest.removeHeader("Origin");
-        originRequest.addHeader("Origin", "http://localhost/path");
-        Assertions.assertThatThrownBy(() -> controller.reveal("credential", originRequest,
-                new MockHttpServletResponse(), new ExtendedModelMap())).isInstanceOf(ResponseStatusException.class);
+        var origin = sameOriginRequest();
+        origin.removeHeader("Origin");
+        origin.addHeader("Origin", "http://localhost/path");
+        Assertions
+                .assertThatThrownBy(() -> controller.create("credential", true, Set.of(), Set.of(), origin,
+                        new MockHttpServletResponse(), new ExtendedModelMap()))
+                .isInstanceOf(ResponseStatusException.class);
     }
 
     private MockHttpServletRequest sameOriginRequest() {

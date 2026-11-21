@@ -18,7 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
     private static final ObjectMapper JSON = new ObjectMapper();
     @Test
-    void browserManagedProjectAndToolScopesApplyImmediatelyAndRotationRevocationAreIndependent(@TempDir Path tempDir)
+    void browserManagedProjectAndToolScopesApplyImmediatelyWithIndependentEditAndRevocation(@TempDir Path tempDir)
             throws Exception {
         Path home = Files.createDirectories(tempDir.resolve("home"));
         Path projectA = Files.createDirectories(home.resolve("project-a"));
@@ -32,8 +32,10 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             openProject(page, "Authorization A", projectA);
             openProject(page, "Authorization B", projectB);
             settings(page);
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings p.alert-warning code")).hasCount(0);
 
-            Locator create = page.locator("#inbound-mcp-settings > form");
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")).click();
+            Locator create = page.locator("#inbound-mcp-create-form form");
             create.locator("input[name='name']").fill("restricted");
             create.locator("input[name='allProjects']").uncheck();
             create.locator("input[name='projectIds']").nth(0).check();
@@ -44,7 +46,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             create.locator("input[name='tools'][value='list_projects']").check();
             create.locator("input[name='tools'][value='list_agents']").check();
             settingsAction(page, "/create", create.locator("button[type='submit']")::click);
-            String restrictedToken = reveal(page, "restricted");
+            String restrictedToken = tokenText(page);
             McpHttpTestClient restricted = new McpHttpTestClient(app.baseUrl(), restrictedToken);
             restricted.initialize("authorization-e2e");
             JsonNode listed = restricted.call("list_projects", Map.of());
@@ -64,7 +66,10 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
                 throw new AssertionError("Cross-project MCP call was not denied: " + denied);
             }
 
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-create-form")).not().isVisible();
             Locator card = card(page, "restricted");
+            card.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("restricted").setExact(true))
+                    .click();
             Locator editForm = card.locator("form").filter(new Locator.FilterOptions()
                     .setHas(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Save changes"))));
             JsonNode editedAllowed = restricted.call("list_agents", Map.of("projectId", projectAId));
@@ -75,6 +80,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             editForm.locator("input[name='tools'][value='list_projects']").check();
             settingsAction(page, "/edit", () -> editForm
                     .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save changes")).click());
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings .alert-warning code")).hasCount(0);
             card = card(page, "restricted");
             JsonNode changed = restricted.call("list_agents", Map.of("projectId", projectAId));
             JsonNode changedError = changed.path("result").path("structuredContent").path("error");
@@ -83,27 +89,12 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
                     || !"Resource unavailable".equals(changedError.path("message").asText())) {
                 throw new AssertionError("Edited tool permission did not deny with RESOURCE_UNAVAILABLE: " + changed);
             }
-            Locator rotate = card(page, "restricted").getByRole(AriaRole.BUTTON,
-                    new Locator.GetByRoleOptions().setName("Rotate"));
-            page.onceDialog(dialog -> dialog.accept());
-            settingsAction(page, "/rotate", rotate::click);
-            Locator issuedToken = page.locator("#inbound-mcp-settings > p.alert.alert-warning code");
-            issuedToken.waitFor();
-            String rotatedToken = issuedToken.textContent().trim();
-            if (restricted.httpStatus("tools/list") != 401) {
-                throw new AssertionError("Rotated token remained valid");
-            }
-            McpHttpTestClient rotated = new McpHttpTestClient(app.baseUrl(), rotatedToken);
-            rotated.initialize("authorization-e2e");
-            JsonNode rotatedTools = rotated.tools();
-            if (rotatedTools.path("result").path("tools").isEmpty()) {
-                throw new AssertionError("Rotated token did not work: " + rotatedTools);
-            }
-            Locator independent = page.locator("#inbound-mcp-settings > form");
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")).click();
+            Locator independent = page.locator("#inbound-mcp-create-form form");
             independent.locator("input[name='name']").fill("independent");
             independent.locator("input[name='allProjects']").check();
             settingsAction(page, "/create", independent.locator("button[type='submit']")::click);
-            String independentToken = reveal(page, "independent");
+            String independentToken = tokenText(page);
             Locator restrictedCard = card(page, "restricted");
             Locator restrictedHeader = restrictedCard.getByRole(AriaRole.BUTTON,
                     new Locator.GetByRoleOptions().setName("restricted").setExact(true));
@@ -122,7 +113,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             PlaywrightAssertions
                     .assertThat(revokedCard.getByText("Revoked", new Locator.GetByTextOptions().setExact(true)))
                     .isVisible();
-            if (rotated.httpStatus("tools/list") != 401) {
+            if (restricted.httpStatus("tools/list") != 401) {
                 throw new AssertionError("Revoked credential remained valid");
             }
             McpHttpTestClient allProjects = new McpHttpTestClient(app.baseUrl(), independentToken);
@@ -171,19 +162,6 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
                 .setHas(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName(name).setExact(true))));
     }
 
-    private static String reveal(Page page, String name) {
-        Locator credential = card(page, name);
-        Locator header = credential.getByRole(AriaRole.BUTTON,
-                new Locator.GetByRoleOptions().setName(name).setExact(true));
-        PlaywrightAssertions.assertThat(header).hasAttribute("aria-expanded", "false");
-        PlaywrightAssertions.assertThat(credential.locator("input[name='name']")).hasCount(0);
-        header.click();
-        PlaywrightAssertions.assertThat(header).hasAttribute("aria-expanded", "true");
-        settingsAction(page, "/reveal", () -> card(page, name)
-                .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Reveal")).click());
-        return tokenText(page);
-    }
-
     private static String tokenText(Page page) {
         Matcher matcher = Pattern.compile("jup_[A-Za-z0-9_-]+")
                 .matcher(page.locator("#inbound-mcp-settings").textContent());
@@ -194,7 +172,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
     }
 
     private static long projectIdFromForm(Page page, String name) {
-        Locator checkbox = page.locator("#inbound-mcp-settings > form input[name='projectIds']")
+        Locator checkbox = page.locator("#inbound-mcp-create-form form input[name='projectIds']")
                 .filter(new Locator.FilterOptions());
         for (Locator candidate : checkbox.all()) {
             if (candidate.locator("xpath=..").textContent().contains(name)) {

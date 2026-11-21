@@ -1,65 +1,79 @@
 <th:block xmlns:th="http://www.thymeleaf.org" th:fragment="panel">
     <section class="settings-section" id="inbound-mcp-settings">
         <h3>Inbound MCP credentials</h3>
-        <p>Connect an MCP client to this Jupiter instance using the bearer token. Tokens are shown only on request.</p>
+        <p>
+            Connect an MCP client to this Jupiter instance using a bearer token. A token is shown only once, when
+            created.
+        </p>
         <p th:if="${settingsError != null}" class="alert alert-danger" role="alert" th:text="${settingsError}"></p>
-        <form
-            class="vstack gap-3"
-            hx-post="/ui/settings/inbound-mcp/create"
-            hx-target="#inbound-mcp-settings"
-            hx-swap="outerHTML"
+        <button
+            class="btn btn-primary mb-3"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#inbound-mcp-create-form"
+            th:attr="aria-expanded=${showCreateForm != null and showCreateForm},aria-controls='inbound-mcp-create-form'"
         >
-            <div>
-                <label class="form-label" for="inbound-credential-name">Name</label>
-                <input class="form-control" id="inbound-credential-name" name="name" maxlength="100" required>
-            </div>
-            <div class="form-check">
-                <input
-                    class="form-check-input"
-                    id="inbound-all-projects"
-                    type="checkbox"
-                    name="allProjects"
-                    value="true"
-                >
-                <label class="form-check-label" for="inbound-all-projects"
-                    >All projects, including future projects</label
-                >
-            </div>
-            <fieldset class="border rounded p-3">
-                <legend class="float-none w-auto px-2 fs-6">Projects (when not using all projects)</legend>
-                <div class="form-check" th:each="project : ${inboundProjects}">
+            create token
+        </button>
+        <div id="inbound-mcp-create-form" class="collapse" th:classappend="${showCreateForm} ? 'show' : ''">
+            <form
+                class="vstack gap-3"
+                hx-post="/ui/settings/inbound-mcp/create"
+                hx-target="#inbound-mcp-settings"
+                hx-swap="outerHTML"
+            >
+                <div>
+                    <label class="form-label" for="inbound-credential-name">Name</label>
+                    <input class="form-control" id="inbound-credential-name" name="name" maxlength="100" required>
+                </div>
+                <div class="form-check">
                     <input
                         class="form-check-input"
+                        id="inbound-all-projects"
                         type="checkbox"
-                        name="projectIds"
-                        th:id="|create-project-${project.id}|"
-                        th:value="${project.id}"
+                        name="allProjects"
+                        value="true"
                     >
-                    <label
-                        class="form-check-label"
-                        th:for="|create-project-${project.id}|"
-                        th:text="${project.name}"
-                    ></label>
-                </div>
-            </fieldset>
-            <fieldset class="border rounded p-3">
-                <legend class="float-none w-auto px-2 fs-6">Allowed tools</legend>
-                <div class="form-check" th:each="tool : ${inboundTools}">
-                    <input
-                        class="form-check-input"
-                        type="checkbox"
-                        name="tools"
-                        th:id="|create-tool-${tool}|"
-                        th:value="${tool}"
-                        checked
+                    <label class="form-check-label" for="inbound-all-projects"
+                        >All projects, including future projects</label
                     >
-                    <label class="form-check-label" th:for="|create-tool-${tool}|" th:text="${tool}"></label>
                 </div>
-            </fieldset>
-            <button class="btn btn-primary align-self-start" type="submit">Create credential</button>
-        </form>
+                <fieldset class="border rounded p-3">
+                    <legend class="float-none w-auto px-2 fs-6">Projects (when not using all projects)</legend>
+                    <div class="form-check" th:each="project : ${inboundProjects}">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="projectIds"
+                            th:id="|create-project-${project.id}|"
+                            th:value="${project.id}"
+                        >
+                        <label
+                            class="form-check-label"
+                            th:for="|create-project-${project.id}|"
+                            th:text="${project.name}"
+                        ></label>
+                    </div>
+                </fieldset>
+                <fieldset class="border rounded p-3">
+                    <legend class="float-none w-auto px-2 fs-6">Allowed tools</legend>
+                    <div class="form-check" th:each="tool : ${inboundTools}">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="tools"
+                            th:id="|create-tool-${tool}|"
+                            th:value="${tool}"
+                            checked
+                        >
+                        <label class="form-check-label" th:for="|create-tool-${tool}|" th:text="${tool}"></label>
+                    </div>
+                </fieldset>
+                <button class="btn btn-primary align-self-start" type="submit">Create credential</button>
+            </form>
+        </div>
         <p th:if="${issuedToken != null}" class="alert alert-warning" role="status">
-            Copy this token now: <code th:text="${issuedToken}"></code>
+            Copy this token now. It cannot be viewed again: <code th:text="${issuedToken}"></code>
         </p>
         <div class="accordion" id="inbound-mcp-credentials">
             <article th:each="credential : ${inboundCredentials}" class="accordion-item">
@@ -87,7 +101,7 @@
                         <p th:text="${credential.tools}"></p>
                         <form
                             th:if="${!credential.revoked}"
-                            th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/edit(id=${credential.id})},hx-vals=|{'openCredential':'${credential.id}'}|"
+                            th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/edit(id=${credential.id})}"
                             hx-target="#inbound-mcp-settings"
                             hx-swap="outerHTML"
                         >
@@ -144,24 +158,7 @@
                         </form>
                         <form
                             th:if="${!credential.revoked}"
-                            th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/reveal(id=${credential.id})},hx-vals=|{'openCredential':'${credential.id}'}|"
-                            hx-target="#inbound-mcp-settings"
-                            hx-swap="outerHTML"
-                        >
-                            <button class="btn btn-outline-secondary" type="submit">Reveal</button>
-                        </form>
-                        <form
-                            th:if="${!credential.revoked}"
-                            th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/rotate(id=${credential.id})},hx-vals=|{'openCredential':'${credential.id}'}|"
-                            hx-target="#inbound-mcp-settings"
-                            hx-swap="outerHTML"
-                            hx-confirm="Rotate this credential? Existing clients will stop working."
-                        >
-                            <button class="btn btn-outline-warning" type="submit">Rotate</button>
-                        </form>
-                        <form
-                            th:if="${!credential.revoked}"
-                            th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/revoke(id=${credential.id})},hx-vals=|{'openCredential':'${credential.id}'}|"
+                            th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/revoke(id=${credential.id})}"
                             hx-target="#inbound-mcp-settings"
                             hx-swap="outerHTML"
                             hx-confirm="Revoke this credential?"

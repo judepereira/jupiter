@@ -10,14 +10,11 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class InboundMcpTokenService {
-    public static final String DEFAULT_TOKEN_NAME = "Default";
     public static final Set<String> TOOLS = Set.of("list_projects", "list_workspaces", "list_sessions", "list_agents",
             "create_workspace", "post_message", "summarize_session");
     private final AppStateRepository repository;
@@ -55,31 +52,11 @@ public class InboundMcpTokenService {
         return token;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
-    @Transactional
-    public void initializeDefaultAtStartup() {
-        initializeDefault();
-    }
-
-    @Transactional
-    public boolean initializeDefault() {
-        String token = generateToken();
-        return repository.initializeInboundMcpCredential(UUID.randomUUID().toString(), DEFAULT_TOKEN_NAME, token,
-                json(Set.of()), json(TOOLS), Instant.now());
-    }
-
     @Transactional(readOnly = true)
     public List<CredentialRecord> list() {
         return repository.listInboundMcpCredentials().stream().map(row -> new CredentialRecord(row.id(), row.name(),
                 row.allProjects(), readLongs(row.projectIdsJson()), readStrings(row.allowedToolsJson()), row.revoked()))
                 .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public String reveal(String id) {
-        return repository.listInboundMcpCredentials().stream().filter(row -> row.id().equals(id) && !row.revoked())
-                .map(row -> row.token()).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Credential not found"));
     }
 
     @Transactional
@@ -90,13 +67,6 @@ public class InboundMcpTokenService {
         validate(credential.name(), allProjects, projectIds, tools);
         repository.updateInboundMcpCredential(id, allProjects, json(projectIds == null ? Set.of() : projectIds),
                 json(tools));
-    }
-
-    @Transactional
-    public String rotate(String id) {
-        String token = generateToken();
-        repository.replaceInboundMcpCredentialToken(id, token, Instant.now());
-        return token;
     }
 
     @Transactional

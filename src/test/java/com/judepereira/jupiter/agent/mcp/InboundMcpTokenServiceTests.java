@@ -25,28 +25,23 @@ class InboundMcpTokenServiceTests {
         assertThat(service.authenticate(first).tools()).containsExactly("list_sessions");
         assertThat(service.authenticate(second).tools()).containsExactly("list_agents");
 
-        String rotated = service.rotate(firstCredential.id());
-        assertThat(service.authenticate(first)).isNull();
-        assertThat(service.authenticate(rotated).tools()).containsExactly("list_sessions");
+        assertThat(service.list()).extracting(InboundMcpTokenService.CredentialRecord::name).containsExactly("first",
+                "second");
         service.revoke(firstCredential.id());
-        assertThat(service.authenticate(rotated)).isNull();
+        assertThat(service.authenticate(first)).isNull();
         assertThat(service.authenticate(second)).isNotNull();
     }
 
     @Test
-    void initializationDoesNotRecreateCredentialAfterAllAreRevoked() {
+    void credentialsAreCreatedOnlyWhenExplicitlyRequestedAndTokenIsNotListed() {
         var context = TestAppStateSupport.appStateContext(event -> {
         });
         var service = new InboundMcpTokenService(context.repository(), new ObjectMapper());
-        assertThat(service.initializeDefault()).isTrue();
-        assertThat(service.initializeDefault()).isFalse();
-        var initialized = service.list().getFirst();
-        assertThat(service.authenticate(service.reveal(initialized.id()))).isNotNull();
-        String id = initialized.id();
-        service.revoke(id);
-        assertThat(service.initializeDefault()).isFalse();
-        assertThat(service.list()).anyMatch(record -> record.id().equals(id) && record.revoked());
-        assertThat(service.list()).anyMatch(record -> record.revoked());
+        assertThat(service.list()).isEmpty();
+        String token = service.create("explicit", true, Set.of(), Set.of("list_projects"));
+        assertThat(service.authenticate(token)).isNotNull();
+        assertThat(service.list()).extracting(InboundMcpTokenService.CredentialRecord::name)
+                .containsExactly("explicit");
     }
 
     @Test

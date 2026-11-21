@@ -47,30 +47,16 @@ public class AppStateRepository {
     public void insertInboundMcpCredential(String id, String name, String token, boolean allProjects,
             String projectIdsJson, String allowedToolsJson, Instant now) {
         jdbc.update(
-                "INSERT INTO inbound_mcp_credentials (id, name, token_hash, token_ciphertext, all_projects, "
-                        + "project_ids_json, allowed_tools_json, created_at) VALUES (:id, :name, :hash, :token, "
+                "INSERT INTO inbound_mcp_credentials (id, name, token_hash, all_projects, "
+                        + "project_ids_json, allowed_tools_json, created_at) VALUES (:id, :name, :hash, "
                         + ":allProjects, :projects, :tools, :created)",
                 new MapSqlParameterSource().addValue("id", id)
                         .addValue("name", enc("inbound_mcp_credentials", "name", name))
                         .addValue("hash", crypto.blindIndex(token, "inbound-mcp-token"))
-                        .addValue("token", enc("inbound_mcp_credentials", "token_ciphertext", token))
                         .addValue("allProjects", allProjects ? 1 : 0)
                         .addValue("projects", enc("inbound_mcp_credentials", "project_ids_json", projectIdsJson))
                         .addValue("tools", enc("inbound_mcp_credentials", "allowed_tools_json", allowedToolsJson))
                         .addValue("created", now.toString()));
-    }
-
-    @Transactional
-    public boolean initializeInboundMcpCredential(String id, String name, String token, String projectsJson,
-            String toolsJson, Instant now) {
-        int inserted = jdbc.update(
-                "INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('inbound_mcp_initialized', '1')",
-                new MapSqlParameterSource());
-        if (inserted == 0) {
-            return false;
-        }
-        insertInboundMcpCredential(id, name, token, true, projectsJson, toolsJson, now);
-        return true;
     }
 
     public List<InboundMcpCredentialRow> listInboundMcpCredentials() {
@@ -83,8 +69,7 @@ public class AppStateRepository {
                 dec("inbound_mcp_credentials", "name", rs.getString("name")), rs.getInt("all_projects") != 0,
                 dec("inbound_mcp_credentials", "project_ids_json", rs.getString("project_ids_json")),
                 dec("inbound_mcp_credentials", "allowed_tools_json", rs.getString("allowed_tools_json")),
-                rs.getString("revoked_at") != null,
-                dec("inbound_mcp_credentials", "token_ciphertext", rs.getString("token_ciphertext")));
+                rs.getString("revoked_at") != null);
     }
 
     @Transactional(readOnly = true)
@@ -105,17 +90,6 @@ public class AppStateRepository {
     }
 
     @Transactional
-    public void replaceInboundMcpCredentialToken(String id, String token, Instant now) {
-        int updated = jdbc.update(
-                "UPDATE inbound_mcp_credentials SET token_hash=:hash, token_ciphertext=:token, rotated_at=:now WHERE id=:id AND revoked_at IS NULL",
-                new MapSqlParameterSource().addValue("id", id)
-                        .addValue("hash", crypto.blindIndex(token, "inbound-mcp-token"))
-                        .addValue("token", enc("inbound_mcp_credentials", "token_ciphertext", token))
-                        .addValue("now", now.toString()));
-        requireUpdatedCredential(updated);
-    }
-
-    @Transactional
     public void revokeInboundMcpCredential(String id, Instant now) {
         int updated = jdbc.update(
                 "UPDATE inbound_mcp_credentials SET revoked_at=:now WHERE id=:id AND revoked_at IS NULL",
@@ -130,7 +104,7 @@ public class AppStateRepository {
     }
 
     public record InboundMcpCredentialRow(String id, String name, boolean allProjects, String projectIdsJson,
-            String allowedToolsJson, boolean revoked, String token) {
+            String allowedToolsJson, boolean revoked) {
     }
 
     AppStateRow loadAppState() {
