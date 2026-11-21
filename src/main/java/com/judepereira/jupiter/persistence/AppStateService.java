@@ -113,6 +113,9 @@ public class AppStateService {
         long projectId = repository.insertProject(name, normalizedPath, repository.nextProjectDisplayOrder(), now);
         long workspaceId = repository.insertWorkspace(projectId, "Default Workspace", normalizedPath, 1L, now);
         long sessionId = createSessionInternal(workspaceId, now);
+        repository.updateProjectLastOpened(projectId, now);
+        repository.updateWorkspaceLastOpened(workspaceId, now);
+        repository.updateSessionLastOpened(sessionId, now);
         repository.updateAppState(projectId, workspaceId, sessionId);
         return toProjectView(repository.findProject(projectId));
     }
@@ -153,8 +156,16 @@ public class AppStateService {
         long workspaceId = repository.insertWorkspace(projectId, normalizedBranchName, worktreePath.toString(),
                 position, now);
         createSessionInternal(workspaceId, now);
+        publishWorkspaceRailRefresh();
         return toWorkspaceView(repository.findWorkspace(workspaceId),
                 activeStreamRegistryService.activeSessionIdsSnapshot());
+    }
+
+    @Transactional
+    public WorkspaceView createWorkspaceAndActivate(long projectId, String branchName, boolean createBranch) {
+        WorkspaceView workspace = createWorkspace(projectId, branchName, createBranch);
+        activateWorkspace(workspace.id());
+        return workspace;
     }
 
     @Transactional(readOnly = true)
@@ -345,6 +356,13 @@ public class AppStateService {
         long position = repository.nextSessionPosition(workspaceId);
         long sessionId = createSessionInternal(workspaceId, Instant.now(), position, name);
         return toSessionView(repository.findSession(sessionId));
+    }
+
+    @Transactional
+    public SessionView createSessionAndActivate(long workspaceId, String name) {
+        SessionView session = createSession(workspaceId, name);
+        activateSession(session.id());
+        return session;
     }
 
     @Transactional
@@ -1214,11 +1232,6 @@ public class AppStateService {
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
                 "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null,
                 null, null, null, null, null, null, now);
-        var workspace = repository.findWorkspace(workspaceId);
-        repository.updateProjectLastOpened(workspace.projectId(), now);
-        repository.updateWorkspaceLastOpened(workspaceId, now);
-        repository.updateSessionLastOpened(sessionId, now);
-        repository.updateAppState(workspace.projectId(), workspaceId, sessionId);
         return sessionId;
     }
 

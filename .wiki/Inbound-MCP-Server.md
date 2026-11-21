@@ -5,15 +5,18 @@ configures outbound connections from Jupiter to other MCP servers.
 
 ## Set up a credential
 
-Open **Settings → Inbound MCP**. Create a named credential, choose either **All projects, including future projects** or
-selected projects, and select allowed tools. Create additional named credentials for different clients or access scopes.
-The automatically-created **Default** credential covers all current and future projects and all seven tools; you can
-edit its scope like any other credential.
+Open **Settings → Inbound MCP** and choose **create token** to reveal the credential form. Give the credential a name,
+choose either **All projects, including future projects** or selected projects, and select allowed tools. New
+credentials allow all seven tools by default. Create separate named credentials for different clients or access scopes;
+each credential can have its own project and tool permissions. Credentials are not created automatically.
 
-The bearer token is shown when created and only when you explicitly choose **Reveal** or **Rotate**. Copy it into the
-MCP client securely. Rotate replaces the token, so update every client using it; revoke disables it. A credential's
-project and tool permissions can be edited without changing its token. There are no MCP tools for managing credentials:
-use Jupiter's settings UI.
+Copy the bearer token securely when it is displayed after creation. The token is shown only once, but remains usable
+until revoked; it cannot be revealed or rotated later. If you lose a token, create a replacement credential, update the
+clients to use its token, then revoke the old credential. If a token may be compromised, revoke it immediately and then
+create a replacement credential for the clients. Revocation removes it from the credential list and prevents it from
+authenticating; there is no revoked-token history. You can edit a credential's project and tool permissions without
+changing its token, but its name cannot be changed. There are no MCP tools for managing credentials: use Jupiter's
+settings UI.
 
 Configure an MCP client with the instance's `/mcp` URL and an `Authorization: Bearer <token>` header. When behind a
 TLS-terminating reverse proxy, configure trusted proxy header handling as described in
@@ -23,8 +26,9 @@ The token grants access to Jupiter tools and is not a sandbox for the connected 
 configure a separate network/OS sandbox appropriate to your deployment.
 
 When Jupiter itself connects to its own endpoint as an outbound MCP server, configure a server entry in **Settings → MCP
-Servers** with the `/mcp` URL and an `Authorization` header containing the bearer token. Update that header after
-rotation. Outbound server settings and their project access remain separate from inbound token permissions.
+Servers** with the `/mcp` URL and an `Authorization` header containing the bearer token. If replacing the credential,
+update that header with the new token. Outbound server settings and their project access remain separate from inbound
+token permissions.
 
 ## Tools
 
@@ -47,5 +51,7 @@ For example, list projects with `{}`; list workspaces with `{"projectId": 12}`; 
 `{"sessionId": 34, "message": "Inspect the failing tests"}`. To create a workspace and post in one call, use
 `{"projectId": 12, "branchName": "fix-tests", "createBranch": true, "message": "Inspect the failing tests"}`.
 
-Session listings include a `busy` flag. A busy session cannot accept another message. Accepted background work can
-continue after its token is revoked; revocation blocks subsequent authenticated requests, not jobs already accepted.
+Session listings include a `busy` flag. A busy session cannot accept another message. MCP activity creates work in the
+background and never changes the workspace or session selected in Jupiter's UI. Rail activity and unread indicators
+remain visible; select a workspace or session explicitly to open it. Accepted background work can continue after its
+token is revoked; revocation blocks subsequent authenticated requests, not jobs already accepted.

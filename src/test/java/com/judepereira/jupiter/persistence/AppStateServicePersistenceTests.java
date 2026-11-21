@@ -200,6 +200,95 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void creatingSessionDoesNotChangeActiveSelectionOrRecency(@TempDir Path projectPath) {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateService service = context.service();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView before = service.loadViewData();
+        AppStateRepository repository = context.repository();
+        var projectOpenedAt = repository.findProject(before.activeProject().id()).lastOpenedAt();
+        var workspaceOpenedAt = repository.findWorkspace(before.activeWorkspace().id()).lastOpenedAt();
+        var sessionOpenedAt = repository.findSession(before.activeSession().id()).lastOpenedAt();
+        SessionView created = service.createSession(before.activeWorkspace().id(), "Background");
+        AppStateView after = service.loadViewData();
+
+        assertThat(repository.findProject(before.activeProject().id()).lastOpenedAt()).isEqualTo(projectOpenedAt);
+        assertThat(repository.findWorkspace(before.activeWorkspace().id()).lastOpenedAt()).isEqualTo(workspaceOpenedAt);
+        assertThat(repository.findSession(before.activeSession().id()).lastOpenedAt()).isEqualTo(sessionOpenedAt);
+        assertThat(after.activeProject().id()).isEqualTo(before.activeProject().id());
+        assertThat(after.activeWorkspace().id()).isEqualTo(before.activeWorkspace().id());
+        assertThat(after.activeSession().id()).isEqualTo(before.activeSession().id());
+        assertThat(service.loadSessionDetail(created.id()).chatMessages()).extracting(ChatMessageView::text)
+                .contains("Welcome to Jupiter. Let's get started - what's on your mind?");
+    }
+
+    @Test
+    public void creatingBackgroundWorkspaceInAnotherProjectPreservesSelectionAndRecency(@TempDir Path projectsRoot)
+            throws Exception {
+        Path firstProject = projectsRoot.resolve("first");
+        Path secondProject = projectsRoot.resolve("second");
+        Files.createDirectories(firstProject);
+        Files.createDirectories(secondProject);
+        initGitRepo(firstProject);
+        initGitRepo(secondProject);
+        List<Object> events = new ArrayList<>();
+        var context = TestAppStateSupport.appStateContext(events::add);
+        AppStateService service = context.service();
+        service.addOrReopenProject("First", firstProject.toString());
+        long firstProjectId = service.loadViewData().activeProject().id();
+        service.addOrReopenProject("Second", secondProject.toString());
+        AppStateView second = service.loadViewData();
+        long secondProjectId = second.activeProject().id();
+        long secondWorkspaceId = second.activeWorkspace().id();
+        service.activateProject(firstProjectId);
+
+        var repository = context.repository();
+        var before = service.loadViewData();
+        var firstProjectOpenedAt = repository.findProject(firstProjectId).lastOpenedAt();
+        var firstWorkspaceOpenedAt = repository.findWorkspace(before.activeWorkspace().id()).lastOpenedAt();
+        var secondProjectOpenedAt = repository.findProject(secondProjectId).lastOpenedAt();
+        var secondWorkspaceOpenedAt = repository.findWorkspace(secondWorkspaceId).lastOpenedAt();
+        events.clear();
+
+        WorkspaceView background = service.createWorkspace(secondProjectId, "background", true);
+        long backgroundSessionId = service.findMostRecentlyOpenedVisiblePrimarySession(background.id()).orElseThrow()
+                .id();
+
+        var after = service.loadViewData();
+        assertThat(after.activeProject().id()).isEqualTo(firstProjectId);
+        assertThat(after.activeWorkspace().id()).isEqualTo(before.activeWorkspace().id());
+        assertThat(after.activeSession().id()).isEqualTo(before.activeSession().id());
+        assertThat(repository.findProject(firstProjectId).lastOpenedAt()).isEqualTo(firstProjectOpenedAt);
+        assertThat(repository.findWorkspace(before.activeWorkspace().id()).lastOpenedAt())
+                .isEqualTo(firstWorkspaceOpenedAt);
+        assertThat(repository.findProject(secondProjectId).lastOpenedAt()).isEqualTo(secondProjectOpenedAt);
+        assertThat(repository.findWorkspace(secondWorkspaceId).lastOpenedAt()).isEqualTo(secondWorkspaceOpenedAt);
+        assertThat(service.loadSessionDetail(backgroundSessionId).chatMessages()).extracting(ChatMessageView::text)
+                .contains("Welcome to Jupiter. Let's get started - what's on your mind?");
+        assertThat(events).extracting(Object::getClass).contains(WorkspaceRailRefreshEvent.class);
+    }
+
+    @Test
+    public void uiSessionCreationSelectsNewSessionWithoutClearingOtherUnreadSessions(@TempDir Path projectPath) {
+        var context = TestAppStateSupport.appStateContext(event -> {
+        });
+        AppStateService service = context.service();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        long workspaceId = service.loadViewData().activeWorkspace().id();
+        SessionView background = service.createSession(workspaceId, "Background");
+        context.repository().updateSessionUnread(background.id(), true);
+
+        SessionView selected = service.createSessionAndActivate(workspaceId, "Selected");
+
+        assertThat(service.loadViewData().activeSession().id()).isEqualTo(selected.id());
+        assertThat(service.loadViewData().sessions()).filteredOn(SessionView::id, background.id()).singleElement()
+                .extracting(SessionView::unread).isEqualTo(true);
+        assertThat(service.loadViewData().sessions()).filteredOn(SessionView::id, selected.id()).singleElement()
+                .extracting(SessionView::unread).isEqualTo(false);
+    }
+
+    @Test
     public void selectsMostRecentlyOpenedVisiblePrimarySessionWithoutActivating(@TempDir Path projectPath) {
         AppStateService service = TestAppStateSupport.appStateService();
         service.addOrReopenProject("Alpha", projectPath.toString());
@@ -275,8 +364,9 @@ public class AppStateServicePersistenceTests {
         AppStateView initial = service.loadViewData();
         long workspaceId = initial.activeWorkspace().id();
         long sessionOneId = initial.activeSession().id();
-        service.createSession(workspaceId, "Feature work");
-        long sessionTwoId = service.loadViewData().activeSession().id();
+        service.createSessionAndActivate(workspaceId, "Feature work");
+        long sessionTwoId = service.loadViewData().sessions().stream()
+                .filter(session -> session.name().equals("Feature work")).findFirst().orElseThrow().id();
 
         QueuedChatTurn inactiveTurn = service.appendUserMessageAndPendingAssistant(sessionOneId,
                 "hello from inactive session");
@@ -952,9 +1042,8 @@ public class AppStateServicePersistenceTests {
         QueuedChatTurn firstTurn = service.appendUserMessageAndPendingAssistant(sessionOneId, "hello from session one");
         service.completeAssistantMessage(sessionOneId, firstTurn.assistantMessage().id(), "reply one", List.of());
 
-        service.createSession(workspaceId, "Feature work");
+        long sessionTwoId = service.createSessionAndActivate(workspaceId, "Feature work").id();
         AppStateView afterCreate = service.loadViewData();
-        long sessionTwoId = afterCreate.activeSession().id();
 
         assertThat(afterCreate.activeSession().name()).isEqualTo("Feature work");
         assertThat(afterCreate.sessions()).extracting(SessionView::name).containsExactly("Session #1", "Feature work");
@@ -981,9 +1070,7 @@ public class AppStateServicePersistenceTests {
         long workspaceId = initial.activeWorkspace().id();
         long firstSessionId = initial.activeSession().id();
 
-        service.createSession(workspaceId, "Feature work");
-        AppStateView afterCreate = service.loadViewData();
-        long secondSessionId = afterCreate.activeSession().id();
+        long secondSessionId = service.createSessionAndActivate(workspaceId, "Feature work").id();
 
         service.closeSession(secondSessionId);
 
@@ -1011,6 +1098,26 @@ public class AppStateServicePersistenceTests {
         assertThat(view.activeWorkspace()).isNotNull();
         assertThat(view.sessions()).isEmpty();
         assertThat(view.activeSession()).isNull();
+    }
+
+    @Test
+    public void backgroundCreationDoesNotRestoreCollapsedWorkspaceOrProjectSelection(@TempDir Path projectPath)
+            throws Exception {
+        initGitRepo(projectPath);
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long projectId = initial.activeProject().id();
+        long workspaceId = initial.activeWorkspace().id();
+
+        service.collapseWorkspace(workspaceId);
+        service.createSession(workspaceId, "Background");
+        assertThat(service.loadViewData().activeWorkspace()).isNull();
+        assertThat(service.loadViewData().activeSession()).isNull();
+
+        service.createWorkspace(projectId, "collapsed-background", true);
+        assertThat(service.loadViewData().activeWorkspace()).isNull();
+        assertThat(service.loadViewData().activeSession()).isNull();
     }
 
     @Test
@@ -1060,7 +1167,7 @@ public class AppStateServicePersistenceTests {
         long projectId = initial.activeProject().id();
 
         String branchName = "feature-close-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        WorkspaceView featureWorkspace = service.createWorkspace(projectId, branchName, true);
+        WorkspaceView featureWorkspace = service.createWorkspaceAndActivate(projectId, branchName, true);
         AppStateView afterCreate = service.loadViewData();
         long featureSessionId = afterCreate.activeSession().id();
 
@@ -1121,7 +1228,7 @@ public class AppStateServicePersistenceTests {
         Path worktreePath = projectPath.toAbsolutePath().normalize().resolveSibling(".trees")
                 .resolve(projectPath.getFileName().toString()).resolve(branchName).toAbsolutePath().normalize();
 
-        WorkspaceView workspace = service.createWorkspace(projectId, branchName, true);
+        WorkspaceView workspace = service.createWorkspaceAndActivate(projectId, branchName, true);
         AppStateView view = service.loadViewData();
 
         assertThat(workspace.path()).isEqualTo(worktreePath.toString());

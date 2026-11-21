@@ -92,6 +92,10 @@ class InboundMcpE2ETest extends E2ETestSupport {
             page.locator("#settings-modal .btn-close").click();
             PlaywrightAssertions.assertThat((Locator) page.locator("#settings-modal")).not().isVisible();
             openProject(page, "MCP E2E Project", repository);
+            AppStateService appState = (AppStateService) app.context().getBean(AppStateService.class);
+            long originalSessionId = appState.loadViewData().activeSession().id();
+            long originalWorkspaceId = appState.loadViewData().activeWorkspace().id();
+            page.locator("#chat-container[data-session-id='" + originalSessionId + "']").waitFor();
             JsonNode projects = client.call("list_projects", Map.of());
             JsonNode projectResults = result(projects, "list_projects").path("result");
             if (!projectResults.isArray() || projectResults.isEmpty()) {
@@ -121,14 +125,29 @@ class InboundMcpE2ETest extends E2ETestSupport {
                 throw new AssertionError(("Workspace did not include its branch and initial session: " + (created)));
             }
             PlaywrightAssertions.assertThat((Locator) page.locator("#settings-modal")).not().isVisible();
-            page.locator("#chat-messages-list").waitFor();
+            page.locator(".workspace-group").filter(new Locator.FilterOptions().setHasText(branch)).waitFor();
+            PlaywrightAssertions
+                    .assertThat(page.locator("#chat-container[data-session-id='" + originalSessionId + "']"))
+                    .isVisible();
+            if (appState.loadViewData().activeSession().id() != originalSessionId
+                    || appState.loadViewData().activeWorkspace().id() != originalWorkspaceId) {
+                throw new AssertionError("MCP workspace creation changed the selected conversation");
+            }
             JsonNode posted = client.call("post_message",
                     Map.of("sessionId", sessionId, "message", "deterministic MCP request"));
             if (result(posted, "post_message").path("result").path("sessionId").asLong() != sessionId) {
                 throw new AssertionError((Object) ("post_message targeted an unexpected session: " + (posted)));
             }
-            AppStateService appState = (AppStateService) app.context().getBean(AppStateService.class);
             waitForCompleted(appState, sessionId);
+            page.locator(".workspace-group").filter(new Locator.FilterOptions().setHasText(branch)).waitFor();
+            PlaywrightAssertions
+                    .assertThat(page.locator("#chat-container[data-session-id='" + originalSessionId + "']"))
+                    .isVisible();
+            if (appState.loadViewData().activeSession().id() != originalSessionId
+                    || appState.loadViewData().activeWorkspace().id() != originalWorkspaceId) {
+                throw new AssertionError("MCP post_message changed the selected conversation");
+            }
+
             List<?> beforeSummary = appState.loadSessionDetail(sessionId).chatMessages();
             JsonNode summary = client.call("summarize_session", Map.of("sessionId", sessionId));
             JsonNode summaryResult = result(summary, "summarize_session").path("result");
@@ -152,6 +171,13 @@ class InboundMcpE2ETest extends E2ETestSupport {
                 throw new AssertionError((Object) ("Project-targeted post did not return a session: " + (projectPost)));
             }
             waitForCompleted(appState, projectSessionId);
+            PlaywrightAssertions
+                    .assertThat(page.locator("#chat-container[data-session-id='" + originalSessionId + "']"))
+                    .isVisible();
+            if (appState.loadViewData().activeSession().id() != originalSessionId
+                    || appState.loadViewData().activeWorkspace().id() != originalWorkspaceId) {
+                throw new AssertionError("Project-targeted post_message changed the selected conversation");
+            }
             JsonNode updatedWorkspaces = client.call("list_workspaces", Map.of("projectId", projectId));
             if (result(updatedWorkspaces, "list_workspaces").path("result").findValuesAsText("name").stream()
                     .noneMatch(branchTarget::equals)) {
@@ -160,11 +186,20 @@ class InboundMcpE2ETest extends E2ETestSupport {
             PlaywrightAssertions.assertThat((Locator) page.locator("#settings-modal")).not().isVisible();
             Page reopened = browser.newPage();
             reopened.navigate(app.baseUrl());
-            reopened.getByText(MODEL_MARKER).waitFor();
+            reopened.locator("#chat-container[data-session-id='" + originalSessionId + "']").waitFor();
+            PlaywrightAssertions.assertThat(reopened.locator("#chat-container")).not().containsText(MODEL_MARKER);
+            Locator targetWorkspace = reopened.locator(".workspace-group")
+                    .filter(new Locator.FilterOptions().setHasText(branchTarget));
+            targetWorkspace.locator(".workspace-item").click();
+            Locator targetSession = targetWorkspace
+                    .locator(".session-item[hx-post='/ui/sessions/" + projectSessionId + "/activate']");
+            targetSession.waitFor();
+            targetSession.click();
             PlaywrightAssertions
-                    .assertThat((Locator) reopened
-                            .locator("#chat-messages-list li[data-role='assistant'] .chat-message-text").last())
-                    .containsText(MODEL_MARKER);
+                    .assertThat(reopened.locator("#chat-container[data-session-id='" + projectSessionId + "']"))
+                    .isVisible();
+            reopened.getByText(MODEL_MARKER).waitFor();
+            PlaywrightAssertions.assertThat(reopened.locator("#chat-container")).containsText(MODEL_MARKER);
         }
     }
 

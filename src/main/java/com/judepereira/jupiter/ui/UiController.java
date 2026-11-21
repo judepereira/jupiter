@@ -979,7 +979,7 @@ public class UiController {
         boolean createBranch = parsedBranchMode == BranchMode.CREATE;
 
         try {
-            appStateService.createWorkspace(view.activeProject().id(), trimmedBranchName, createBranch);
+            appStateService.createWorkspaceAndActivate(view.activeProject().id(), trimmedBranchName, createBranch);
         } catch (InvalidGitBranchNameException e) {
             if (createBranch) {
                 String gitOutput = e.gitOutput();
@@ -1132,7 +1132,7 @@ public class UiController {
     @PostMapping("/ui/sessions/add")
     public String addSession(@RequestParam("name") String name, Model model) {
         AppStateView view = appStateService.loadViewData();
-        appStateService.createSession(view.activeWorkspace().id(), name);
+        appStateService.createSessionAndActivate(view.activeWorkspace().id(), name);
         view = appStateService.loadViewData();
         populateProjectModel(model, view);
         populateSessionModel(model, view);
