@@ -22,13 +22,29 @@ export function syncFaviconWithRail() {
     }
 }
 
+let railRefreshRequest = null;
+let railRefreshVersion = 0;
+
+export function invalidateWorkspaceRailRefresh() {
+    railRefreshVersion++;
+    if (railRefreshRequest) {
+        railRefreshRequest.abort();
+        railRefreshRequest = null;
+    }
+}
+
 export function refreshWorkspaceRail() {
     const rail = document.getElementById("workspace-session-rail");
     const tabs = document.querySelector(".project-tabs");
     if (!rail && !tabs) {
         return;
     }
-    fetch("/ui/workspaces/rail", { headers: { "HX-Request": "true" } })
+    const refreshVersion = ++railRefreshVersion;
+    if (railRefreshRequest) {
+        railRefreshRequest.abort();
+    }
+    railRefreshRequest = new AbortController();
+    fetch("/ui/workspaces/rail", { headers: { "HX-Request": "true" }, signal: railRefreshRequest.signal })
         .then((response) => {
             if (!response.ok) {
                 throw new Error("Workspace rail refresh failed");
@@ -36,6 +52,9 @@ export function refreshWorkspaceRail() {
             return response.text();
         })
         .then((html) => {
+            if (refreshVersion !== railRefreshVersion) {
+                return;
+            }
             const responseRoot = document.createElement("div");
             responseRoot.innerHTML = html;
             const refreshedRail = responseRoot.querySelector("#workspace-session-rail");
@@ -57,7 +76,9 @@ export function refreshWorkspaceRail() {
             syncFaviconWithRail();
         })
         .catch((error) => {
-            console.error(error);
+            if (error.name !== "AbortError") {
+                console.error(error);
+            }
         });
 }
 

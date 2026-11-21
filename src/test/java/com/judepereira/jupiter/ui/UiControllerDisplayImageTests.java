@@ -56,24 +56,28 @@ class UiControllerDisplayImageTests {
 
         var skillComponents = SkillTestSupport.defaultComponents();
         var promptComposer = new SystemPromptComposer(skillComponents.renderer());
-        UiController controller = new UiController(
-                new CodingAgentHarness(null, null, new AgentProperties(), null, null, null, null, null, null,
-                        promptComposer, skillComponents.discovery(), skillComponents.resolver(),
-                        skillComponents.injector()),
-                new AgentProperties(), appStateService, new AgentDefinitionService(new ObjectMapper()),
-                ModelCatalogTestSupport.modelCatalogService(), null, null, null, null, null, null,
-                new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
+        UiController controller = new UiController(new AgentProperties(), appStateService,
+                new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(), null,
+                null, null, null, null, new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
                         (emitter, eventName, data) -> emitter.send(SseEmitter.event().name(eventName).data(data))),
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                new ContextCompactionService(appStateService, mock(AgentModelClientFactory.class), null, promptComposer,
-                        skillComponents.discovery()),
                 null, mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
-                null, new ChatPresentationService(), null, null, new HttpAuthProperties(),
-                mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT",
-                System.getProperty("user.home"));
+                null, new ChatPresentationService(), null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class),
+                new ChatStreamRuntime(
+                        new CodingAgentHarness(null, null, new AgentProperties(), null, null, null, null, null, null,
+                                promptComposer, skillComponents.discovery(), skillComponents.resolver(),
+                                skillComponents.injector()),
+                        new AgentProperties(), appStateService, new AgentDefinitionService(new ObjectMapper()),
+                        ModelCatalogTestSupport.modelCatalogService(), null,
+                        new ContextCompactionService(appStateService, mock(AgentModelClientFactory.class), null,
+                                promptComposer, skillComponents.discovery()),
+                        null, null, mock(CommandStreamService.class), appStateService.activeStreamRegistryService(),
+                        new ChatPresentationService(), null, null),
+                "0.0.1-SNAPSHOT", System.getProperty("user.home"));
 
         var response = controller.streamDisplayImage(sessionId, "image-1");
 

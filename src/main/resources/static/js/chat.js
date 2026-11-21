@@ -1,7 +1,7 @@
 import { configureChatComposer, initChatComposer, resizeChatTextarea } from "./chat/composer.js";
 import { configureCommandPicker } from "./chat/commands.js";
 import { bindChatMessageCopyButtons, formatAllChatSubtitles, renderAllChatMarkdown } from "./chat/markdown.js";
-import { initWorkspaceRailSync, syncFaviconWithRail } from "./chat/rail-sync.js";
+import { initWorkspaceRailSync, invalidateWorkspaceRailRefresh, syncFaviconWithRail } from "./chat/rail-sync.js";
 import { bindAutoScrollListeners } from "./chat/scroll.js";
 import {
     activePrimaryPendingAssistantRow,
@@ -19,8 +19,18 @@ function bindChatHtmxLifecycleListeners() {
     chatHtmxListenersBound = true;
 
     document.body.addEventListener(
-        "htmx:afterSwap",
+        "htmx:beforeRequest",
         function (evt) {
+            const requestUrl = evt?.detail?.requestConfig?.path || "";
+            if (/\/ui\/(projects|workspaces|sessions)\/[^?]*(activate|collapse|close|add|create)/.test(requestUrl)) {
+                invalidateWorkspaceRailRefresh();
+            }
+        },
+        true,
+    );
+    document.body.addEventListener(
+        "htmx:afterSwap",
+        function () {
             Promise.resolve().then(() => {
                 bindPendingStreams();
                 syncFaviconWithRail();
@@ -30,7 +40,7 @@ function bindChatHtmxLifecycleListeners() {
     );
     document.body.addEventListener(
         "htmx:afterSettle",
-        function (evt) {
+        function () {
             Promise.resolve().then(() => {
                 bindPendingStreams();
                 syncFaviconWithRail();

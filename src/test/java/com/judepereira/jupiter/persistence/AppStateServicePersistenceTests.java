@@ -1156,6 +1156,32 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
+    public void creatingAWorkspaceRejectsSlashBranchEscapingThroughSymlink(@TempDir Path projectPath) throws Exception {
+        initGitRepo(projectPath);
+
+        AppStateService service = TestAppStateSupport.appStateService();
+        service.addOrReopenProject("Alpha", projectPath.toString());
+        AppStateView initial = service.loadViewData();
+        long projectId = initial.activeProject().id();
+
+        Path treesRoot = projectPath.toAbsolutePath().normalize().resolveSibling(".trees")
+                .resolve(projectPath.getFileName().toString());
+        Path outside = projectPath.resolveSibling("outside-worktrees");
+        Files.createDirectories(treesRoot);
+        Files.createDirectories(outside);
+        Files.createSymbolicLink(treesRoot.resolve("linked"), outside);
+        Path escapedPath = outside.resolve("missing").resolve("branch");
+
+        assertThatThrownBy(() -> service.createWorkspace(projectId, "linked/missing/branch", true))
+                .isInstanceOf(InvalidGitBranchNameException.class);
+
+        assertThat(Files.exists(escapedPath)).isFalse();
+        assertThat(Files.exists(outside.resolve("missing"))).isFalse();
+        assertThat(service.loadViewData().workspaces()).extracting(WorkspaceView::id)
+                .containsExactly(initial.activeWorkspace().id());
+    }
+
+    @Test
     public void creatingAWorkspaceRejectsInvalidNewBranchNameBeforePersistingWorkspace(@TempDir Path projectPath)
             throws Exception {
         initGitRepo(projectPath);
@@ -1192,15 +1218,22 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void checkingOutExistingBranchDoesNotUseNewBranchNameValidation(@TempDir Path projectPath) throws Exception {
+    public void checkingOutExistingBranchRejectsInvalidRefBeforeCreatingWorktree(@TempDir Path projectPath)
+            throws Exception {
         initGitRepo(projectPath);
 
         AppStateService service = TestAppStateSupport.appStateService();
         service.addOrReopenProject("Alpha", projectPath.toString());
-        long projectId = service.loadViewData().activeProject().id();
+        AppStateView initial = service.loadViewData();
+        long projectId = initial.activeProject().id();
+        Path externalPath = projectPath.getParent().resolve("unsafe");
 
-        assertThatThrownBy(() -> service.createWorkspace(projectId, "feature unsafe", false))
-                .isInstanceOf(GitWorktreeException.class).isNotInstanceOf(InvalidGitBranchNameException.class);
+        assertThatThrownBy(() -> service.createWorkspace(projectId, "../unsafe", false))
+                .isInstanceOf(InvalidGitBranchNameException.class);
+
+        assertThat(Files.exists(externalPath)).isFalse();
+        assertThat(service.loadViewData().workspaces()).extracting(WorkspaceView::id)
+                .containsExactly(initial.activeWorkspace().id());
     }
 
     @Test

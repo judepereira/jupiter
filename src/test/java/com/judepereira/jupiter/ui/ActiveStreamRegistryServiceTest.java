@@ -25,6 +25,16 @@ class ActiveStreamRegistryServiceTest {
     }
 
     @Test
+    void registerAndClaimCannotAdmitTheSameSession() {
+        ActiveStreamRegistryService registry = new ActiveStreamRegistryService();
+        assertThat(registry.claim("claimed", 7, null)).isTrue();
+
+        assertThatCode(() -> registry.register("command", 7, null)).isInstanceOf(IllegalStateException.class);
+        assertThat(registry.claim("other", 7, null)).isFalse();
+        assertThat(registry.assistantIdForSession(7)).contains("claimed");
+    }
+
+    @Test
     void symlinkAndRealWorkspaceAliasesMatch() throws IOException {
         Path real = Files.createDirectory(tempDir.resolve("real"));
         Path link = tempDir.resolve("link");

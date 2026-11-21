@@ -43,6 +43,76 @@ public class AppStateRepository {
         return value == null ? null : crypto.decrypt(value, table + "." + column);
     }
 
+    @Transactional
+    public void insertInboundMcpCredential(String id, String name, String token, boolean allProjects,
+            String projectIdsJson, String allowedToolsJson, Instant now) {
+        jdbc.update(
+                "INSERT INTO inbound_mcp_credentials (id, name, token_hash, all_projects, "
+                        + "project_ids_json, allowed_tools_json, created_at) VALUES (:id, :name, :hash, "
+                        + ":allProjects, :projects, :tools, :created)",
+                new MapSqlParameterSource().addValue("id", id)
+                        .addValue("name", enc("inbound_mcp_credentials", "name", name))
+                        .addValue("hash", crypto.blindIndex(token, "inbound-mcp-token"))
+                        .addValue("allProjects", allProjects ? 1 : 0)
+                        .addValue("projects", enc("inbound_mcp_credentials", "project_ids_json", projectIdsJson))
+                        .addValue("tools", enc("inbound_mcp_credentials", "allowed_tools_json", allowedToolsJson))
+                        .addValue("created", now.toString()));
+    }
+
+    public List<InboundMcpCredentialRow> listInboundMcpCredentials() {
+        return jdbc.query("SELECT * FROM inbound_mcp_credentials ORDER BY created_at, id", new MapSqlParameterSource(),
+                (rs, row) -> mapInboundMcpCredential(rs));
+    }
+
+    private InboundMcpCredentialRow mapInboundMcpCredential(ResultSet rs) throws SQLException {
+        return new InboundMcpCredentialRow(rs.getString("id"),
+                dec("inbound_mcp_credentials", "name", rs.getString("name")), rs.getInt("all_projects") != 0,
+                dec("inbound_mcp_credentials", "project_ids_json", rs.getString("project_ids_json")),
+                dec("inbound_mcp_credentials", "allowed_tools_json", rs.getString("allowed_tools_json")));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<InboundMcpAuthenticationRow> findInboundMcpCredentialByToken(String token) {
+        return jdbc.query(
+                "SELECT id, all_projects, project_ids_json, allowed_tools_json FROM inbound_mcp_credentials WHERE token_hash = :hash",
+                new MapSqlParameterSource("hash", crypto.blindIndex(token, "inbound-mcp-token")),
+                (rs, row) -> new InboundMcpAuthenticationRow(rs.getString("id"), rs.getInt("all_projects") != 0,
+                        dec("inbound_mcp_credentials", "project_ids_json", rs.getString("project_ids_json")),
+                        dec("inbound_mcp_credentials", "allowed_tools_json", rs.getString("allowed_tools_json"))))
+                .stream().findFirst();
+    }
+
+    @Transactional
+    public void updateInboundMcpCredential(String id, boolean allProjects, String projectsJson, String toolsJson) {
+        int updated = jdbc.update(
+                "UPDATE inbound_mcp_credentials SET all_projects=:allProjects, project_ids_json=:projects, allowed_tools_json=:tools WHERE id=:id",
+                new MapSqlParameterSource().addValue("id", id).addValue("allProjects", allProjects ? 1 : 0)
+                        .addValue("projects", enc("inbound_mcp_credentials", "project_ids_json", projectsJson))
+                        .addValue("tools", enc("inbound_mcp_credentials", "allowed_tools_json", toolsJson)));
+        requireUpdatedCredential(updated);
+    }
+
+    @Transactional
+    public void revokeInboundMcpCredential(String id) {
+        int updated = jdbc.update("DELETE FROM inbound_mcp_credentials WHERE id=:id",
+                new MapSqlParameterSource("id", id));
+        requireUpdatedCredential(updated);
+    }
+
+    private void requireUpdatedCredential(int updated) {
+        if (updated != 1) {
+            throw new IllegalArgumentException("Credential not found");
+        }
+    }
+
+    public record InboundMcpCredentialRow(String id, String name, boolean allProjects, String projectIdsJson,
+            String allowedToolsJson) {
+    }
+
+    public record InboundMcpAuthenticationRow(String id, boolean allProjects, String projectIdsJson,
+            String allowedToolsJson) {
+    }
+
     AppStateRow loadAppState() {
         return jdbc.queryForObject(
                 "SELECT active_project_id, active_workspace_id, active_session_id FROM app_state WHERE id = 1",
@@ -449,6 +519,11 @@ public class AppStateRepository {
     ProjectRow findProject(long id) {
         return queryRequired("SELECT * FROM projects WHERE id = :id", new MapSqlParameterSource("id", id),
                 this::mapProject, "project " + id);
+    }
+
+    public List<Long> listVisibleProjectIds() {
+        return jdbc.query("SELECT id FROM projects WHERE closed_at IS NULL", new MapSqlParameterSource(),
+                (rs, row) -> rs.getLong("id"));
     }
 
     List<ProjectSessionStatus> listVisibleProjectSessionStatuses() {
@@ -1084,6 +1159,15 @@ public class AppStateRepository {
                 "SELECT * FROM conversation_messages WHERE session_id = :sessionId AND public_id = :publicId",
                 new MapSqlParameterSource().addValue("sessionId", sessionId).addValue("publicId", publicId),
                 this::mapConversationMessage, "message " + publicId + " in session " + sessionId);
+    }
+
+    Optional<AssistantMessageOwnerRow> findAssistantMessageOwnerByPublicId(String publicId) {
+        return queryOne("SELECT session_id, role FROM conversation_messages WHERE public_id = :publicId",
+                new MapSqlParameterSource("publicId", publicId),
+                (rs, rowNum) -> new AssistantMessageOwnerRow(rs.getLong("session_id"), rs.getString("role")));
+    }
+
+    record AssistantMessageOwnerRow(long sessionId, String role) {
     }
 
     List<ConversationMessageRow> listMessagesBySession(long sessionId) {
