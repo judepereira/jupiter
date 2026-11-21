@@ -48,16 +48,23 @@ class InboundMcpE2ETest extends E2ETestSupport {
             createForm.locator("input[name='name']").fill("e2e client");
             createForm.locator("input[name='allProjects']").check();
             createForm.locator("button[type='submit']").click();
-            page.locator("#inbound-mcp-settings").getByText("e2e client").waitFor();
-            page.locator("#inbound-mcp-settings article").filter(new Locator.FilterOptions().setHasText("e2e client"))
-                    .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Reveal")).click();
+            Locator credential = page.locator("#inbound-mcp-settings article")
+                    .filter(new Locator.FilterOptions().setHas(page.getByRole(AriaRole.BUTTON,
+                            new Page.GetByRoleOptions().setName("e2e client").setExact(true))));
+            Locator credentialHeader = credential.getByRole(AriaRole.BUTTON,
+                    new Locator.GetByRoleOptions().setName("e2e client").setExact(true));
+            PlaywrightAssertions.assertThat(credentialHeader).hasAttribute("aria-expanded", "false");
+            PlaywrightAssertions.assertThat(credential.locator("input[name='name']")).hasCount(0);
+            credentialHeader.click();
+            PlaywrightAssertions.assertThat(credentialHeader).hasAttribute("aria-expanded", "true");
+            credential.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Reveal")).click();
             String revealed = page.locator("#inbound-mcp-settings").textContent();
             Matcher matcher = Pattern.compile("jup_[A-Za-z0-9_-]+").matcher(revealed);
             if (!matcher.find()) {
                 throw new AssertionError("Created inbound MCP token was not revealed");
             }
-            String credential = matcher.group();
-            McpHttpTestClient client = new McpHttpTestClient(app.baseUrl(), credential);
+            String token = matcher.group();
+            McpHttpTestClient client = new McpHttpTestClient(app.baseUrl(), token);
             JsonNode initialized = client.initialize("e2e");
             if (initialized.path("result").path("serverInfo").isMissingNode()) {
                 throw new AssertionError("MCP initialize response missing serverInfo: " + initialized);

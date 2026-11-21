@@ -95,13 +95,10 @@ public class AppStateRepository {
     }
 
     @Transactional
-    public void updateInboundMcpCredential(String id, String name, boolean allProjects, String projectsJson,
-            String toolsJson) {
+    public void updateInboundMcpCredential(String id, boolean allProjects, String projectsJson, String toolsJson) {
         int updated = jdbc.update(
-                "UPDATE inbound_mcp_credentials SET name=:name, all_projects=:allProjects, project_ids_json=:projects, allowed_tools_json=:tools WHERE id=:id AND revoked_at IS NULL",
-                new MapSqlParameterSource().addValue("id", id)
-                        .addValue("name", enc("inbound_mcp_credentials", "name", name))
-                        .addValue("allProjects", allProjects ? 1 : 0)
+                "UPDATE inbound_mcp_credentials SET all_projects=:allProjects, project_ids_json=:projects, allowed_tools_json=:tools WHERE id=:id AND revoked_at IS NULL",
+                new MapSqlParameterSource().addValue("id", id).addValue("allProjects", allProjects ? 1 : 0)
                         .addValue("projects", enc("inbound_mcp_credentials", "project_ids_json", projectsJson))
                         .addValue("tools", enc("inbound_mcp_credentials", "allowed_tools_json", toolsJson)));
         requireUpdatedCredential(updated);

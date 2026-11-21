@@ -49,16 +49,16 @@ public class InboundMcpSettingsController {
     }
 
     @PostMapping("/{id}/edit")
-    public String edit(@PathVariable String id, @RequestParam String name,
-            @RequestParam(defaultValue = "false") boolean allProjects,
+    public String edit(@PathVariable String id, @RequestParam(defaultValue = "false") boolean allProjects,
             @RequestParam(required = false) Set<Long> projectIds, @RequestParam(required = false) Set<String> tools,
             HttpServletRequest request, Model model) {
         protect(request);
         try {
-            tokens.edit(id, name, allProjects, projectIds, tools == null ? Set.of() : tools);
+            tokens.edit(id, allProjects, projectIds, tools == null ? Set.of() : tools);
         } catch (IllegalArgumentException e) {
             model.addAttribute("settingsError", "Unable to update credential. It may no longer be available.");
         }
+        model.addAttribute("openCredential", id);
         populate(model);
         return PANEL;
     }
@@ -73,6 +73,7 @@ public class InboundMcpSettingsController {
         } catch (IllegalArgumentException e) {
             model.addAttribute("settingsError", "Unable to reveal credential. It may no longer be available.");
         }
+        model.addAttribute("openCredential", id);
         populate(model);
         return PANEL;
     }
@@ -87,6 +88,7 @@ public class InboundMcpSettingsController {
         } catch (IllegalArgumentException e) {
             model.addAttribute("settingsError", "Unable to rotate credential. It may no longer be available.");
         }
+        model.addAttribute("openCredential", id);
         populate(model);
         return PANEL;
     }
@@ -99,6 +101,7 @@ public class InboundMcpSettingsController {
         } catch (IllegalArgumentException e) {
             model.addAttribute("settingsError", "Unable to revoke credential. It may no longer be available.");
         }
+        model.addAttribute("openCredential", id);
         populate(model);
         return PANEL;
     }

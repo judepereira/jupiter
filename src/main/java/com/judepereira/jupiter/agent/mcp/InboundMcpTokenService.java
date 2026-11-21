@@ -83,10 +83,13 @@ public class InboundMcpTokenService {
     }
 
     @Transactional
-    public void edit(String id, String name, boolean allProjects, Set<Long> projectIds, Set<String> tools) {
-        validate(name, allProjects, projectIds, tools);
-        repository.updateInboundMcpCredential(id, name.trim(), allProjects,
-                json(projectIds == null ? Set.of() : projectIds), json(tools));
+    public void edit(String id, boolean allProjects, Set<Long> projectIds, Set<String> tools) {
+        CredentialRecord credential = list().stream()
+                .filter(candidate -> candidate.id().equals(id) && !candidate.revoked()).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Credential not found"));
+        validate(credential.name(), allProjects, projectIds, tools);
+        repository.updateInboundMcpCredential(id, allProjects, json(projectIds == null ? Set.of() : projectIds),
+                json(tools));
     }
 
     @Transactional

@@ -104,6 +104,11 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             independent.locator("input[name='allProjects']").check();
             settingsAction(page, "/create", independent.locator("button[type='submit']")::click);
             String independentToken = reveal(page, "independent");
+            Locator restrictedCard = card(page, "restricted");
+            Locator restrictedHeader = restrictedCard.getByRole(AriaRole.BUTTON,
+                    new Locator.GetByRoleOptions().setName("restricted").setExact(true));
+            restrictedHeader.click();
+            PlaywrightAssertions.assertThat(restrictedHeader).hasAttribute("aria-expanded", "true");
             Locator revoke = card(page, "restricted").getByRole(AriaRole.BUTTON,
                     new Locator.GetByRoleOptions().setName("Revoke"));
             page.onceDialog(dialog -> dialog.accept());
@@ -163,10 +168,17 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
 
     private static Locator card(Page page, String name) {
         return page.locator("#inbound-mcp-settings article").filter(new Locator.FilterOptions()
-                .setHas(page.locator("strong").getByText(name, new Locator.GetByTextOptions().setExact(true))));
+                .setHas(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName(name).setExact(true))));
     }
 
     private static String reveal(Page page, String name) {
+        Locator credential = card(page, name);
+        Locator header = credential.getByRole(AriaRole.BUTTON,
+                new Locator.GetByRoleOptions().setName(name).setExact(true));
+        PlaywrightAssertions.assertThat(header).hasAttribute("aria-expanded", "false");
+        PlaywrightAssertions.assertThat(credential.locator("input[name='name']")).hasCount(0);
+        header.click();
+        PlaywrightAssertions.assertThat(header).hasAttribute("aria-expanded", "true");
         settingsAction(page, "/reveal", () -> card(page, name)
                 .getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Reveal")).click());
         return tokenText(page);

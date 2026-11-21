@@ -20,8 +20,8 @@ class InboundMcpTokenServiceTests {
         assertThat(firstCredential.name()).isEqualTo("first");
         assertThat(service.authenticate(second).tools()).containsExactly("list_agents");
 
-        service.edit(firstCredential.id(), "renamed", true, Set.of(), Set.of("list_sessions"));
-        assertThat(service.authenticate(first).name()).isEqualTo("renamed");
+        service.edit(firstCredential.id(), true, Set.of(), Set.of("list_sessions"));
+        assertThat(service.authenticate(first).name()).isEqualTo("first");
         assertThat(service.authenticate(first).tools()).containsExactly("list_sessions");
         assertThat(service.authenticate(second).tools()).containsExactly("list_agents");
 
@@ -64,14 +64,14 @@ class InboundMcpTokenServiceTests {
         assertThat(service.authenticate(noTools).tools()).isEmpty();
         String global = service.create("global", true, Set.of(999L), Set.of("list_projects"));
         String globalId = service.authenticate(global).id();
-        service.edit(globalId, "global renamed", true, Set.of(999L), Set.of("list_agents"));
-        assertThat(service.authenticate(global).name()).isEqualTo("global renamed");
+        service.edit(globalId, true, Set.of(999L), Set.of("list_agents"));
+        assertThat(service.authenticate(global).name()).isEqualTo("global");
         assertThat(service.authenticate(global).tools()).containsExactly("list_agents");
         assertThat(service.list())
                 .anyMatch(record -> record.id().equals(globalId) && record.projectIds().contains(999L));
         String scoped = service.create("scoped", true, Set.of(), Set.of("list_projects"));
         String scopedId = service.authenticate(scoped).id();
-        assertThatThrownBy(() -> service.edit(scopedId, "scoped", false, Set.of(999L), Set.of("list_projects")))
+        assertThatThrownBy(() -> service.edit(scopedId, false, Set.of(999L), Set.of("list_projects")))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }
