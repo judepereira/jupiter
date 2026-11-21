@@ -31,8 +31,8 @@ import org.mockito.ArgumentMatchers;
 
 class InboundMcpToolServiceTests {
     private final AppStateService appState = mock(AppStateService.class);
-    private final InboundMcpTokenService.Credential credential = new InboundMcpTokenService.Credential("id", "name",
-            false, Set.of(7L), Set.of("post_message", "create_workspace"));
+    private final InboundMcpTokenService.Credential credential = new InboundMcpTokenService.Credential("id", false,
+            Set.of(7L), Set.of("post_message", "create_workspace"));
 
     static Stream<String> invalidOptions() {
         return Stream.of("agentId", "modelId", "thinkingLevel");
@@ -87,8 +87,7 @@ class InboundMcpToolServiceTests {
     void projectCreationPermissionIsCheckedBeforeRuntimeValidation() {
         var runtime = mock(ChatStreamRuntime.class);
         var service = service(runtime);
-        var noCreatePermission = new InboundMcpTokenService.Credential("id", "name", false, Set.of(7L),
-                Set.of("post_message"));
+        var noCreatePermission = new InboundMcpTokenService.Credential("id", false, Set.of(7L), Set.of("post_message"));
         when(appState.listVisibleProjects()).thenReturn(List.of(project()));
 
         assertThatThrownBy(() -> service.call("post_message",

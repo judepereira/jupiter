@@ -7,11 +7,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -27,9 +24,7 @@ class InboundMcpHttpAuthRegressionE2ETest extends E2ETestSupport {
                 Map.of("jupiter.http-auth.username", "jupiter", "jupiter.http-auth.password", BASIC_PASSWORD))) {
             InboundMcpTokenService tokens = app.context().getBean(InboundMcpTokenService.class);
             String token = tokens.create("http regression", true, Set.of(), InboundMcpTokenService.TOOLS);
-            String fingerprint = HexFormat.of()
-                    .formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)));
-            tokens.bindSession("foreign-session", "different-credential", fingerprint);
+            tokens.bindSession("foreign-session", "different-credential");
             McpHttpTestClient client = new McpHttpTestClient(app.baseUrl(), token);
 
             HttpResponse<String> invalid = client.postRaw("Bearer invalid-token", null);

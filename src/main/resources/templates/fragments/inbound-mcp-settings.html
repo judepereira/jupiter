@@ -95,12 +95,9 @@
                     data-bs-parent="#inbound-mcp-credentials"
                 >
                     <div class="accordion-body">
-                        <span
-                            th:text="${credential.revoked ? 'Revoked' : (credential.allProjects ? 'All projects' : 'Selected projects')}"
-                        ></span>
+                        <span th:text="${credential.allProjects ? 'All projects' : 'Selected projects'}"></span>
                         <p th:text="${credential.tools}"></p>
                         <form
-                            th:if="${!credential.revoked}"
                             th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/edit(id=${credential.id})}"
                             hx-target="#inbound-mcp-settings"
                             hx-swap="outerHTML"
@@ -157,7 +154,6 @@
                             <button class="btn btn-primary" type="submit">Save changes</button>
                         </form>
                         <form
-                            th:if="${!credential.revoked}"
                             th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/revoke(id=${credential.id})}"
                             hx-target="#inbound-mcp-settings"
                             hx-swap="outerHTML"

@@ -17,7 +17,7 @@ final class InboundMcpSessionRegistry {
         this.clock = Objects.requireNonNull(clock);
     }
 
-    synchronized void bind(String sessionId, String credentialId, String fingerprint) {
+    synchronized void bind(String sessionId, String credentialId) {
         Instant now = clock.instant();
         removeExpired(now);
         sessions.remove(sessionId);
@@ -26,17 +26,16 @@ final class InboundMcpSessionRegistry {
             oldest.next();
             oldest.remove();
         }
-        sessions.put(sessionId, new SessionBinding(credentialId, fingerprint, now.plus(SESSION_TTL)));
+        sessions.put(sessionId, new SessionBinding(credentialId, now.plus(SESSION_TTL)));
     }
 
-    synchronized InboundMcpTokenService.SessionStatus status(String sessionId, String credentialId,
-            String fingerprint) {
+    synchronized InboundMcpTokenService.SessionStatus status(String sessionId, String credentialId) {
         removeExpired(clock.instant());
         SessionBinding binding = sessions.get(sessionId);
         if (binding == null) {
             return InboundMcpTokenService.SessionStatus.UNKNOWN;
         }
-        return binding.credentialId().equals(credentialId) && binding.fingerprint().equals(fingerprint)
+        return binding.credentialId().equals(credentialId)
                 ? InboundMcpTokenService.SessionStatus.VALID
                 : InboundMcpTokenService.SessionStatus.MISMATCH;
     }
@@ -49,10 +48,9 @@ final class InboundMcpSessionRegistry {
         sessions.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
     }
 
-    private record SessionBinding(String credentialId, String fingerprint, Instant expiresAt) {
+    private record SessionBinding(String credentialId, Instant expiresAt) {
         private SessionBinding {
             Objects.requireNonNull(credentialId);
-            Objects.requireNonNull(fingerprint);
         }
     }
 }

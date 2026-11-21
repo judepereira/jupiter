@@ -9,10 +9,6 @@ import com.judepereira.jupiter.agent.mcp.InboundMcpTokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -57,8 +53,7 @@ class InboundMcpAuthFilterTests {
     void unknownSessionReturnedByTheRegisteredFilterIsNotFound() throws Exception {
         var tokens = mock(InboundMcpTokenService.class);
         when(tokens.authenticate(TOKEN)).thenReturn(credential("own"));
-        when(tokens.sessionStatus("stale-session", "own", fingerprint(TOKEN)))
-                .thenReturn(InboundMcpTokenService.SessionStatus.UNKNOWN);
+        when(tokens.sessionStatus("stale-session", "own")).thenReturn(InboundMcpTokenService.SessionStatus.UNKNOWN);
         var request = request();
         request.addHeader("Authorization", "Bearer " + TOKEN);
         request.addHeader("Mcp-Session-Id", "stale-session");
@@ -69,20 +64,18 @@ class InboundMcpAuthFilterTests {
     }
 
     @Test
-    void sessionIsBoundToCredentialAndRotatedOrRevokedBearerIsRejected() throws Exception {
+    void sessionIsBoundToCredentialAndInvalidBearerIsRejected() throws Exception {
         var tokens = mock(InboundMcpTokenService.class);
         var own = credential("own");
         when(tokens.authenticate(TOKEN)).thenReturn(own);
-        when(tokens.sessionStatus("session", "own", fingerprint(TOKEN)))
-                .thenReturn(InboundMcpTokenService.SessionStatus.VALID);
+        when(tokens.sessionStatus("session", "own")).thenReturn(InboundMcpTokenService.SessionStatus.VALID);
         var ownRequest = request();
         ownRequest.addHeader("Authorization", "Bearer " + TOKEN);
         ownRequest.addHeader("Mcp-Session-Id", "session");
         assertThat(invoke(new InboundMcpAuthFilter(tokens), ownRequest, mock(FilterChain.class)).getStatus())
                 .isEqualTo(200);
 
-        when(tokens.sessionStatus("session", "other", fingerprint(TOKEN)))
-                .thenReturn(InboundMcpTokenService.SessionStatus.MISMATCH);
+        when(tokens.sessionStatus("session", "other")).thenReturn(InboundMcpTokenService.SessionStatus.MISMATCH);
         var otherRequest = request();
         otherRequest.addHeader("Authorization", "Bearer " + TOKEN);
         otherRequest.addHeader("Mcp-Session-Id", "session");
@@ -90,7 +83,7 @@ class InboundMcpAuthFilterTests {
         assertThat(invoke(new InboundMcpAuthFilter(tokens), otherRequest, mock(FilterChain.class)).getStatus())
                 .isEqualTo(403);
 
-        when(tokens.sessionStatus(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+        when(tokens.sessionStatus(Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(InboundMcpTokenService.SessionStatus.UNKNOWN);
         var unknownRequest = request();
         unknownRequest.addHeader("Authorization", "Bearer " + TOKEN);
@@ -119,7 +112,7 @@ class InboundMcpAuthFilterTests {
     }
 
     private static InboundMcpTokenService.Credential credential(String id) {
-        return new InboundMcpTokenService.Credential(id, "name", true, Set.of(), Set.of("list_projects"));
+        return new InboundMcpTokenService.Credential(id, true, Set.of(), Set.of("list_projects"));
     }
 
     private static MockHttpServletRequest request() {
@@ -137,12 +130,4 @@ class InboundMcpAuthFilterTests {
         return response;
     }
 
-    private static String fingerprint(String token) {
-        try {
-            return HexFormat.of()
-                    .formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new AssertionError(exception);
-        }
-    }
 }

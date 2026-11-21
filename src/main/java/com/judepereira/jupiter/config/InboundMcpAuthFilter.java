@@ -12,11 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.EnumSet;
-import java.util.HexFormat;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -62,10 +58,9 @@ public class InboundMcpAuthFilter implements Filter {
             unauthorized(res);
             return;
         }
-        String fingerprint = fingerprint(bearer);
         String session = http.getHeader("Mcp-Session-Id");
         if (session != null) {
-            InboundMcpTokenService.SessionStatus status = tokens.sessionStatus(session, credential.id(), fingerprint);
+            InboundMcpTokenService.SessionStatus status = tokens.sessionStatus(session, credential.id());
             if (status == InboundMcpTokenService.SessionStatus.UNKNOWN) {
                 res.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 return;
@@ -91,7 +86,7 @@ public class InboundMcpAuthFilter implements Filter {
 
             private void bind(String name, String value) {
                 if ("Mcp-Session-Id".equalsIgnoreCase(name) && value != null) {
-                    tokens.bindSession(value, credential.id(), fingerprint);
+                    tokens.bindSession(value, credential.id());
                 }
             }
         });
@@ -103,15 +98,6 @@ public class InboundMcpAuthFilter implements Filter {
     private static void unauthorized(HttpServletResponse response) throws IOException {
         response.setHeader("WWW-Authenticate", "Bearer");
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-    }
-
-    private static String fingerprint(String bearer) {
-        try {
-            return HexFormat.of()
-                    .formatHex(MessageDigest.getInstance("SHA-256").digest(bearer.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(exception);
-        }
     }
 
     private static boolean validOrigin(HttpServletRequest request) {

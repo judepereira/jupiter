@@ -17,11 +17,9 @@ class InboundMcpTokenServiceTests {
         String first = service.create(" first ", true, Set.of(), Set.of("list_projects"));
         String second = service.create("second", true, Set.of(), Set.of("list_agents"));
         var firstCredential = service.authenticate(first);
-        assertThat(firstCredential.name()).isEqualTo("first");
         assertThat(service.authenticate(second).tools()).containsExactly("list_agents");
 
         service.edit(firstCredential.id(), true, Set.of(), Set.of("list_sessions"));
-        assertThat(service.authenticate(first).name()).isEqualTo("first");
         assertThat(service.authenticate(first).tools()).containsExactly("list_sessions");
         assertThat(service.authenticate(second).tools()).containsExactly("list_agents");
 
@@ -60,7 +58,6 @@ class InboundMcpTokenServiceTests {
         String global = service.create("global", true, Set.of(999L), Set.of("list_projects"));
         String globalId = service.authenticate(global).id();
         service.edit(globalId, true, Set.of(999L), Set.of("list_agents"));
-        assertThat(service.authenticate(global).name()).isEqualTo("global");
         assertThat(service.authenticate(global).tools()).containsExactly("list_agents");
         assertThat(service.list())
                 .anyMatch(record -> record.id().equals(globalId) && record.projectIds().contains(999L));

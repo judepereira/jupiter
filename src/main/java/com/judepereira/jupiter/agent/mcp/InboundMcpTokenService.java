@@ -22,12 +22,12 @@ public class InboundMcpTokenService {
     private final SecureRandom random = new SecureRandom();
     private final InboundMcpSessionRegistry sessions = new InboundMcpSessionRegistry(Clock.systemUTC());
 
-    public void bindSession(String sessionId, String credentialId, String fingerprint) {
-        sessions.bind(sessionId, credentialId, fingerprint);
+    public void bindSession(String sessionId, String credentialId) {
+        sessions.bind(sessionId, credentialId);
     }
 
-    public SessionStatus sessionStatus(String sessionId, String credentialId, String fingerprint) {
-        return sessions.status(sessionId, credentialId, fingerprint);
+    public SessionStatus sessionStatus(String sessionId, String credentialId) {
+        return sessions.status(sessionId, credentialId);
     }
 
     public void invalidateSession(String sessionId) {
@@ -45,7 +45,8 @@ public class InboundMcpTokenService {
 
     @Transactional
     public String create(String name, boolean allProjects, Set<Long> projectIds, Set<String> tools) {
-        validate(name, allProjects, projectIds, tools);
+        validateName(name);
+        validatePermissions(allProjects, projectIds, tools);
         String token = generateToken();
         repository.insertInboundMcpCredential(UUID.randomUUID().toString(), name.trim(), token, allProjects,
                 json(projectIds == null ? Set.of() : projectIds), json(tools), Instant.now());
@@ -54,33 +55,36 @@ public class InboundMcpTokenService {
 
     @Transactional(readOnly = true)
     public List<CredentialRecord> list() {
-        return repository.listInboundMcpCredentials().stream().map(row -> new CredentialRecord(row.id(), row.name(),
-                row.allProjects(), readLongs(row.projectIdsJson()), readStrings(row.allowedToolsJson()), row.revoked()))
+        return repository
+                .listInboundMcpCredentials().stream().map(row -> new CredentialRecord(row.id(), row.name(),
+                        row.allProjects(), readLongs(row.projectIdsJson()), readStrings(row.allowedToolsJson())))
                 .toList();
     }
 
     @Transactional
     public void edit(String id, boolean allProjects, Set<Long> projectIds, Set<String> tools) {
-        CredentialRecord credential = list().stream()
-                .filter(candidate -> candidate.id().equals(id) && !candidate.revoked()).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Credential not found"));
-        validate(credential.name(), allProjects, projectIds, tools);
+        validatePermissions(allProjects, projectIds, tools);
         repository.updateInboundMcpCredential(id, allProjects, json(projectIds == null ? Set.of() : projectIds),
                 json(tools));
     }
 
     @Transactional
     public void revoke(String id) {
-        repository.revokeInboundMcpCredential(id, Instant.now());
+        repository.revokeInboundMcpCredential(id);
     }
 
     private String generateToken() {
         return "jup_" + Base64.getUrlEncoder().withoutPadding().encodeToString(secret());
     }
-    private void validate(String name, boolean allProjects, Set<Long> ids, Set<String> tools) {
-        if (name == null || name.isBlank() || name.trim().length() > 100 || tools == null || !TOOLS.containsAll(tools)
+    private void validateName(String name) {
+        if (name == null || name.isBlank() || name.trim().length() > 100) {
+            throw new IllegalArgumentException("Provide a valid name");
+        }
+    }
+    private void validatePermissions(boolean allProjects, Set<Long> ids, Set<String> tools) {
+        if (tools == null || !TOOLS.containsAll(tools)
                 || (ids != null && ids.stream().anyMatch(id -> id == null || id <= 0))) {
-            throw new IllegalArgumentException("Provide a valid name and tools");
+            throw new IllegalArgumentException("Provide valid permissions");
         }
         if (!allProjects) {
             requireProjects(ids);
@@ -92,16 +96,14 @@ public class InboundMcpTokenService {
             throw new IllegalArgumentException("Unknown project id");
         }
     }
-    public record CredentialRecord(String id, String name, boolean allProjects, Set<Long> projectIds, Set<String> tools,
-            boolean revoked) {
+    public record CredentialRecord(String id, String name, boolean allProjects, Set<Long> projectIds,
+            Set<String> tools) {
     }
 
     @Transactional(readOnly = true)
     public Credential authenticate(String bearer) {
-        return repository
-                .findInboundMcpCredentialByToken(bearer).map(row -> new Credential(row.id(), row.name(),
-                        row.allProjects(), readLongs(row.projectIdsJson()), readStrings(row.allowedToolsJson())))
-                .orElse(null);
+        return repository.findInboundMcpCredentialByToken(bearer).map(row -> new Credential(row.id(), row.allProjects(),
+                readLongs(row.projectIdsJson()), readStrings(row.allowedToolsJson()))).orElse(null);
     }
 
     private byte[] secret() {
@@ -132,6 +134,6 @@ public class InboundMcpTokenService {
             throw new IllegalStateException(e);
         }
     }
-    public record Credential(String id, String name, boolean allProjects, Set<Long> projectIds, Set<String> tools) {
+    public record Credential(String id, boolean allProjects, Set<Long> projectIds, Set<String> tools) {
     }
 }

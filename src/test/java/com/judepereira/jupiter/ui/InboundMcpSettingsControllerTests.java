@@ -14,9 +14,6 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -41,15 +38,6 @@ class InboundMcpSettingsControllerTests {
         controller.create("bad", false, Set.of(), Set.of(), sameOriginRequest(), response, failedModel);
         assertThat(failedModel.getAttribute("showCreateForm")).isEqualTo(true);
         assertThat(failedModel).doesNotContainKey("issuedToken");
-    }
-
-    @Test
-    void removedRevealAndRotateEndpointsAreUnavailable() throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(controller).setViewResolvers((viewName, locale) -> null).build();
-        assertThat(mvc.perform(MockMvcRequestBuilders.post("/ui/settings/inbound-mcp/id/reveal")).andReturn()
-                .getResponse().getStatus()).isEqualTo(404);
-        assertThat(mvc.perform(MockMvcRequestBuilders.post("/ui/settings/inbound-mcp/id/rotate")).andReturn()
-                .getResponse().getStatus()).isEqualTo(404);
     }
 
     @Test

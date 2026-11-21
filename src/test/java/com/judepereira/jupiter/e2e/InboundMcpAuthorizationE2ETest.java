@@ -107,12 +107,8 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             page.waitForResponse(response -> response.url().endsWith("/revoke")
                     && response.request().method().equals("POST") && response.status() == 200, revoke::click);
             waitForSettled(page, "/revoke");
-            Locator revokedCard = page.locator("#inbound-mcp-settings article")
-                    .filter(new Locator.FilterOptions().setHasText("restricted"));
-            revokedCard.getByText("Revoked", new Locator.GetByTextOptions().setExact(true)).waitFor();
-            PlaywrightAssertions
-                    .assertThat(revokedCard.getByText("Revoked", new Locator.GetByTextOptions().setExact(true)))
-                    .isVisible();
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings article")
+                    .filter(new Locator.FilterOptions().setHasText("restricted"))).hasCount(0);
             if (restricted.httpStatus("tools/list") != 401) {
                 throw new AssertionError("Revoked credential remained valid");
             }

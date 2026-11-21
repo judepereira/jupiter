@@ -14,32 +14,26 @@ class InboundMcpSessionRegistryTests {
     void bindingExpiresAtExactTtlAndCanBeReplaced() {
         var clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
         var registry = new InboundMcpSessionRegistry(clock);
-        registry.bind("session", "old", "fingerprint");
+        registry.bind("session", "old");
 
         clock.advance(Duration.ofHours(24));
-        assertThat(registry.status("session", "old", "fingerprint"))
-                .isEqualTo(InboundMcpTokenService.SessionStatus.UNKNOWN);
-        registry.bind("session", "new", "fingerprint");
-        assertThat(registry.status("session", "new", "fingerprint"))
-                .isEqualTo(InboundMcpTokenService.SessionStatus.VALID);
+        assertThat(registry.status("session", "old")).isEqualTo(InboundMcpTokenService.SessionStatus.UNKNOWN);
+        registry.bind("session", "new");
+        assertThat(registry.status("session", "new")).isEqualTo(InboundMcpTokenService.SessionStatus.VALID);
     }
 
     @Test
-    void unknownMismatchValidAndCapacityEvictionAreDistinguished() {
+    void ownershipUnknownAndCapacityEvictionAreDistinguished() {
         var registry = new InboundMcpSessionRegistry(Clock.systemUTC());
-        assertThat(registry.status("missing", "credential", "fingerprint"))
-                .isEqualTo(InboundMcpTokenService.SessionStatus.UNKNOWN);
-        registry.bind("one", "credential", "fingerprint");
-        assertThat(registry.status("one", "credential", "wrong"))
-                .isEqualTo(InboundMcpTokenService.SessionStatus.MISMATCH);
-        assertThat(registry.status("one", "credential", "fingerprint"))
-                .isEqualTo(InboundMcpTokenService.SessionStatus.VALID);
+        assertThat(registry.status("missing", "credential")).isEqualTo(InboundMcpTokenService.SessionStatus.UNKNOWN);
+        registry.bind("one", "credential");
+        assertThat(registry.status("one", "other")).isEqualTo(InboundMcpTokenService.SessionStatus.MISMATCH);
+        assertThat(registry.status("one", "credential")).isEqualTo(InboundMcpTokenService.SessionStatus.VALID);
 
         for (int index = 0; index < InboundMcpSessionRegistry.MAX_SESSIONS; index++) {
-            registry.bind("session-" + index, "credential", "fingerprint");
+            registry.bind("session-" + index, "credential");
         }
-        assertThat(registry.status("one", "credential", "fingerprint"))
-                .isEqualTo(InboundMcpTokenService.SessionStatus.UNKNOWN);
+        assertThat(registry.status("one", "credential")).isEqualTo(InboundMcpTokenService.SessionStatus.UNKNOWN);
     }
 
     private static final class MutableClock extends Clock {
