@@ -303,6 +303,7 @@
                     <rerunProfile>dontReuseForks</rerunProfile>
                     <retryRunCount>3</retryRunCount>
                     <mvnTestOpts>-fae</mvnTestOpts>
+                    <mavenCommand>./mvnw</mavenCommand>
                 </configuration>
             </plugin>
             <plugin>
