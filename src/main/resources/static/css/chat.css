@@ -268,11 +268,6 @@
     font-weight: 700;
 }
 
-.session-context-usage strong {
-    overflow-wrap: anywhere;
-    font-size: 12px;
-}
-
 .chat-control-label {
     font-weight: 300;
 }

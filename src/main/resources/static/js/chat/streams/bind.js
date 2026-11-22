@@ -115,7 +115,7 @@ function bindPendingStreams() {
                         ring.style.setProperty("--usage-angle", `${pct * 3.6}deg`);
                         ring.setAttribute(
                             "aria-label",
-                            valid ? `Context usage ${pct}%` : "Context usage not available",
+                            valid ? `Context Usage: ${pct}%` : "Context usage not available",
                         );
                         ring.firstElementChild.textContent = "";
                     }

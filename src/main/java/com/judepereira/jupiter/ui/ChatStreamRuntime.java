@@ -154,6 +154,10 @@ public class ChatStreamRuntime {
             if (!accumulated.isEmpty()) {
                 sendEventToEmitter(active, assistantId, emitter, "delta", Map.of("text", accumulated));
             }
+            Map<String, Object> contextUsage = active.contextUsage().get();
+            if (contextUsage != null) {
+                sendEventToEmitter(active, assistantId, emitter, "context_usage", contextUsage);
+            }
             sendToolCallSnapshot(active, assistantId, emitter);
         }
         return emitter;
@@ -224,12 +228,16 @@ public class ChatStreamRuntime {
                 }
                 Integer inputTokens = response.getMetadata().inputTokenCount();
                 if (inputTokens == null || model.contextTokens() <= 0) {
-                    broadcastEvent(active, assistantId, "context_usage", Map.of("percentage", "—"));
+                    Map<String, Object> usage = Map.of("percentage", "—");
+                    active.contextUsage().set(usage);
+                    broadcastEvent(active, assistantId, "context_usage", usage);
                     return;
                 }
                 int percentage = (int) Math.round(inputTokens * 100.0 / model.contextTokens());
-                broadcastEvent(active, assistantId, "context_usage", Map.of("inputTokens", inputTokens,
-                        "capacityTokens", model.contextTokens(), "percentage", percentage));
+                Map<String, Object> usage = Map.of("inputTokens", inputTokens, "capacityTokens", model.contextTokens(),
+                        "percentage", percentage);
+                active.contextUsage().set(usage);
+                broadcastEvent(active, assistantId, "context_usage", usage);
             }
 
             @Override
@@ -813,11 +821,11 @@ public class ChatStreamRuntime {
 
     record ActiveStream(PendingStream pendingStream, CopyOnWriteArrayList<SseEmitter> emitters, AtomicBoolean finished,
             AtomicBoolean completed, AtomicReference<Thread> runner, CancellationToken cancellationToken,
-            AtomicReference<StringBuilder> accumulatedText) {
+            AtomicReference<StringBuilder> accumulatedText, AtomicReference<Map<String, Object>> contextUsage) {
         static ActiveStream create(PendingStream pendingStream, CancellationToken cancellationToken) {
             return new ActiveStream(pendingStream, new CopyOnWriteArrayList<>(), new AtomicBoolean(false),
                     new AtomicBoolean(false), new AtomicReference<>(), cancellationToken,
-                    new AtomicReference<>(new StringBuilder()));
+                    new AtomicReference<>(new StringBuilder()), new AtomicReference<>());
         }
     }
 }
