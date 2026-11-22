@@ -1,19 +1,18 @@
 <th:block xmlns:th="http://www.thymeleaf.org" th:fragment="panel">
     <section class="settings-section" id="inbound-mcp-settings">
-        <h3>Inbound MCP credentials</h3>
         <p>
-            Connect an MCP client to this Jupiter instance using a bearer token. A token is shown only once, when
-            created.
+            Jupiter can expose itself as an MCP server. This enables use cases of having Jupiter control itself, or have
+            another agent control Jupiter.
         </p>
         <p th:if="${settingsError != null}" class="alert alert-danger" role="alert" th:text="${settingsError}"></p>
         <button
-            class="btn btn-primary mb-3"
+            class="btn btn-outline-primary mb-3"
             type="button"
             data-bs-toggle="collapse"
             data-bs-target="#inbound-mcp-create-form"
             th:attr="aria-expanded=${showCreateForm != null and showCreateForm},aria-controls='inbound-mcp-create-form'"
         >
-            create token
+            Create New MCP Token
         </button>
         <div id="inbound-mcp-create-form" class="collapse" th:classappend="${showCreateForm} ? 'show' : ''">
             <form
@@ -69,11 +68,12 @@
                         <label class="form-check-label" th:for="|create-tool-${tool}|" th:text="${tool}"></label>
                     </div>
                 </fieldset>
-                <button class="btn btn-primary align-self-start" type="submit">Create credential</button>
+                <button class="btn btn-outline-primary align-self-start" type="submit">Create MCP Token</button>
             </form>
         </div>
         <p th:if="${issuedToken != null}" class="alert alert-warning" role="status">
-            Copy this token now. It cannot be viewed again: <code th:text="${issuedToken}"></code>
+            Here's your token: <code th:text="${issuedToken}"></code>. Copy it and store it safely, as it cannot be
+            retrieved again.
         </p>
         <div class="accordion" id="inbound-mcp-credentials">
             <article th:each="credential : ${inboundCredentials}" class="accordion-item">
@@ -95,8 +95,6 @@
                     data-bs-parent="#inbound-mcp-credentials"
                 >
                     <div class="accordion-body">
-                        <span th:text="${credential.allProjects ? 'All projects' : 'Selected projects'}"></span>
-                        <p th:text="${credential.tools}"></p>
                         <form
                             th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/edit(id=${credential.id})}"
                             hx-target="#inbound-mcp-settings"
@@ -154,6 +152,7 @@
                             <button class="btn btn-primary" type="submit">Save changes</button>
                         </form>
                         <form
+                            style="text-align: right;"
                             th:attr="hx-post=@{/ui/settings/inbound-mcp/{id}/revoke(id=${credential.id})}"
                             hx-target="#inbound-mcp-settings"
                             hx-swap="outerHTML"
