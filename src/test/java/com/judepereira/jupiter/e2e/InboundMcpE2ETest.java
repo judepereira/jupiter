@@ -83,10 +83,14 @@ class InboundMcpE2ETest extends E2ETestSupport {
                 throw new AssertionError("MCP initialize response missing serverInfo: " + initialized);
             }
             JsonNode listed = client.tools();
+            JsonNode toolNames = listed.path("result").path("tools");
+            if (!toolNames.isArray()) {
+                throw new AssertionError("MCP tools/list response did not include a tools array: " + listed);
+            }
             for (String tool : new String[]{"list_projects", "list_workspaces", "list_sessions", "list_agents",
                     "create_workspace", "post_message", "summarize_session"}) {
-                if (!listed.toString().contains(tool)) {
-                    throw new AssertionError(("MCP tool missing: " + tool));
+                if (!toolNames.findValuesAsText("name").contains(tool)) {
+                    throw new AssertionError("MCP tool missing: " + tool);
                 }
             }
             page.locator("#settings-modal .btn-close").click();
@@ -103,12 +107,16 @@ class InboundMcpE2ETest extends E2ETestSupport {
             }
             long projectId = projectResults.get(0).path("id").asLong();
             JsonNode workspaces = client.call("list_workspaces", Map.of("projectId", projectId));
-            if (!result(workspaces, "list_workspaces").path("result").isArray()) {
-                throw new AssertionError(("Expected workspace list: " + (workspaces)));
+            JsonNode workspaceResults = result(workspaces, "list_workspaces").path("result");
+            if (!workspaceResults.isArray() || workspaceResults.findValuesAsText("id").stream()
+                    .noneMatch(id -> id.equals(Long.toString(originalWorkspaceId)))) {
+                throw new AssertionError("Expected the active workspace in workspace list: " + workspaces);
             }
             JsonNode sessions = client.call("list_sessions", Map.of("projectId", projectId));
-            if (!result(sessions, "list_sessions").path("result").isArray()) {
-                throw new AssertionError(("Expected session list: " + (sessions)));
+            JsonNode sessionResults = result(sessions, "list_sessions").path("result");
+            if (!sessionResults.isArray() || sessionResults.findValuesAsText("id").stream()
+                    .noneMatch(id -> id.equals(Long.toString(originalSessionId)))) {
+                throw new AssertionError("Expected the active session in session list: " + sessions);
             }
             JsonNode agents = client.call("list_agents", Map.of("projectId", projectId));
             if (!result(agents, "list_agents").path("result").isArray()
@@ -159,16 +167,26 @@ class InboundMcpE2ETest extends E2ETestSupport {
             if (!beforeSummary.equals(afterSummary)) {
                 throw new AssertionError("Summarization changed persistent conversation messages");
             }
-            assertPostMessage(client, appState,
-                    Map.of("workspaceId", workspaceId, "message", "workspace-targeted MCP request"), projectId,
-                    workspaceId, sessionId);
+            assertPostMessage(
+                    client, appState, Map.of("workspaceId", workspaceId, "message", "workspace-targeted MCP request",
+                            "sessionName", "named MCP session"),
+                    projectId, workspaceId, sessionId, "named MCP session");
             String branchTarget = "mcp-e2e-post-project";
             JsonNode projectPost = client.call("post_message", Map.of("projectId", projectId, "branchName",
                     branchTarget, "createBranch", true, "message", "project-targeted MCP request"));
             JsonNode projectPostResult = result(projectPost, "post_message").path("result");
             long projectSessionId = projectPostResult.path("sessionId").asLong();
-            if (projectSessionId <= 0L) {
-                throw new AssertionError((Object) ("Project-targeted post did not return a session: " + (projectPost)));
+            if (!projectPostResult.path("accepted").asBoolean()
+                    || !"accepted".equals(projectPostResult.path("status").asText()) || projectSessionId <= 0L
+                    || projectPostResult.path("projectId").asLong() != projectId
+                    || projectPostResult.path("workspaceId").asLong() <= 0L) {
+                throw new AssertionError("Project-targeted post returned unexpected target details: " + projectPost);
+            }
+            long projectWorkspaceId = projectPostResult.path("workspaceId").asLong();
+            JsonNode projectSessions = client.call("list_sessions", Map.of("workspaceId", projectWorkspaceId));
+            JsonNode projectSessionList = result(projectSessions, "list_sessions").path("result");
+            if (!projectSessionList.findValuesAsText("id").contains(Long.toString(projectSessionId))) {
+                throw new AssertionError("Project-targeted session missing from target workspace: " + projectSessions);
             }
             waitForCompleted(appState, projectSessionId);
             PlaywrightAssertions
@@ -204,7 +222,8 @@ class InboundMcpE2ETest extends E2ETestSupport {
     }
 
     private static void assertPostMessage(McpHttpTestClient client, AppStateService appState, Map<String, ?> arguments,
-            long expectedProjectId, long expectedWorkspaceId, long previousSessionId) throws Exception {
+            long expectedProjectId, long expectedWorkspaceId, long previousSessionId, String expectedSessionName)
+            throws Exception {
         JsonNode response = client.call("post_message", arguments);
         JsonNode result = result(response, "post_message").path("result");
         long sessionId = result.path("sessionId").asLong();
@@ -219,6 +238,11 @@ class InboundMcpE2ETest extends E2ETestSupport {
         if (!listedSessions.isArray() || listedSessions.findValuesAsText("id").stream()
                 .noneMatch(id -> id.equals(Long.toString(sessionId)))) {
             throw new AssertionError((Object) ("Expected newly accepted session in target workspace: " + (sessions)));
+        }
+        if (expectedSessionName != null && listedSessions.findParents("id").stream()
+                .filter(session -> Long.toString(session.path("id").asLong()).equals(Long.toString(sessionId)))
+                .noneMatch(session -> expectedSessionName.equals(session.path("name").asText()))) {
+            throw new AssertionError("Expected named session in target workspace: " + sessions);
         }
         waitForCompleted(appState, sessionId);
     }

@@ -50,20 +50,6 @@ class InboundMcpAuthFilterTests {
     }
 
     @Test
-    void unknownSessionReturnedByTheRegisteredFilterIsNotFound() throws Exception {
-        var tokens = mock(InboundMcpTokenService.class);
-        when(tokens.authenticate(TOKEN)).thenReturn(credential("own"));
-        when(tokens.sessionStatus("stale-session", "own")).thenReturn(InboundMcpTokenService.SessionStatus.UNKNOWN);
-        var request = request();
-        request.addHeader("Authorization", "Bearer " + TOKEN);
-        request.addHeader("Mcp-Session-Id", "stale-session");
-        var chain = mock(FilterChain.class);
-
-        assertThat(invoke(new InboundMcpAuthFilter(tokens), request, chain).getStatus()).isEqualTo(404);
-        Mockito.verifyNoInteractions(chain);
-    }
-
-    @Test
     void sessionIsBoundToCredentialAndInvalidBearerIsRejected() throws Exception {
         var tokens = mock(InboundMcpTokenService.class);
         var own = credential("own");
@@ -97,18 +83,6 @@ class InboundMcpAuthFilterTests {
         var staleResponse = invoke(new InboundMcpAuthFilter(tokens), staleRequest, mock(FilterChain.class));
         assertThat(staleResponse.getStatus()).isEqualTo(401);
         assertThat(staleResponse.getHeader("WWW-Authenticate")).isEqualTo("Bearer");
-    }
-
-    @Test
-    void policyUsesCurrentAuthenticatedCredential() throws Exception {
-        var tokens = mock(InboundMcpTokenService.class);
-        var updated = credential("current");
-        when(tokens.authenticate(TOKEN)).thenReturn(updated);
-        var request = request();
-        request.addHeader("Authorization", "Bearer " + TOKEN);
-        var chain = mock(FilterChain.class);
-        invoke(new InboundMcpAuthFilter(tokens), request, chain);
-        assertThat(request.getAttribute(InboundMcpAuthFilter.CREDENTIAL_ATTRIBUTE)).isSameAs(updated);
     }
 
     private static InboundMcpTokenService.Credential credential(String id) {

@@ -38,7 +38,7 @@ class CommandStreamServiceTest {
     }
 
     @Test
-    void persistenceFailureReleasesSessionForLaterCommand() {
+    void appendFailureDoesNotFailUnpersistedAssistantAndReleasesSessionForLaterCommand() {
         AppStateService appState = mock(AppStateService.class);
         ActiveStreamRegistryService registry = new ActiveStreamRegistryService();
         CommandStreamService service = new CommandStreamService(mock(CommandCatalogService.class), appState,
@@ -51,6 +51,9 @@ class CommandStreamServiceTest {
                 .hasMessage("database unavailable");
         service.queue(7L, "user", "second", command(), ".", null);
 
+        verify(appState, never()).failAssistantMessage(7L, "first", "Command execution failed: database unavailable");
+        assertThat(service.pendingCommand("first")).isNull();
+        assertThat(registry.isClaimedBy("first", 7L)).isFalse();
         assertThat(registry.isClaimedBy("second", 7L)).isTrue();
     }
 
@@ -67,24 +70,6 @@ class CommandStreamServiceTest {
         assertThatThrownBy(() -> service.queue(7L, "user", "assistant", command(), ".", null)).isSameAs(failure);
 
         verify(appState).failAssistantMessage(7L, "assistant", "Command execution failed: rail unavailable");
-        assertThat(service.pendingCommand("assistant")).isNull();
-        assertThat(registry.isClaimedBy("assistant", 7L)).isFalse();
-    }
-
-    @Test
-    void appendFailureDoesNotFailUnpersistedAssistantAndClearsClaim() {
-        AppStateService appState = mock(AppStateService.class);
-        ActiveStreamRegistryService registry = new ActiveStreamRegistryService();
-        CommandStreamService service = new CommandStreamService(mock(CommandCatalogService.class), appState,
-                new RunCommandTool(), registry, mock(ChatToolCallHtmlService.class));
-        RuntimeException failure = new RuntimeException("database unavailable");
-        when(appState.appendUserMessageAndPendingAssistant(7L, "user", "assistant", "/command", null))
-                .thenThrow(failure);
-
-        assertThatThrownBy(() -> service.queue(7L, "user", "assistant", command(), ".", null)).isSameAs(failure);
-
-        verify(appState, never()).failAssistantMessage(7L, "assistant",
-                "Command execution failed: database unavailable");
         assertThat(service.pendingCommand("assistant")).isNull();
         assertThat(registry.isClaimedBy("assistant", 7L)).isFalse();
     }

@@ -14,6 +14,7 @@ class InboundMcpTokenServiceTests {
         var context = TestAppStateSupport.appStateContext(event -> {
         });
         var service = new InboundMcpTokenService(context.repository(), new ObjectMapper());
+        assertThat(service.list()).isEmpty();
         String first = service.create(" first ", true, Set.of(), Set.of("list_projects"));
         String second = service.create("second", true, Set.of(), Set.of("list_agents"));
         var firstCredential = service.authenticate(first);
@@ -28,18 +29,6 @@ class InboundMcpTokenServiceTests {
         service.revoke(firstCredential.id());
         assertThat(service.authenticate(first)).isNull();
         assertThat(service.authenticate(second)).isNotNull();
-    }
-
-    @Test
-    void credentialsAreCreatedOnlyWhenExplicitlyRequestedAndTokenIsNotListed() {
-        var context = TestAppStateSupport.appStateContext(event -> {
-        });
-        var service = new InboundMcpTokenService(context.repository(), new ObjectMapper());
-        assertThat(service.list()).isEmpty();
-        String token = service.create("explicit", true, Set.of(), Set.of("list_projects"));
-        assertThat(service.authenticate(token)).isNotNull();
-        assertThat(service.list()).extracting(InboundMcpTokenService.CredentialRecord::name)
-                .containsExactly("explicit");
     }
 
     @Test

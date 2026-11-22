@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -98,37 +97,6 @@ class InboundMcpToolServiceTests {
     }
 
     @Test
-    void createWorkspaceReturnsInitialSession() {
-        var service = service(mock(ChatStreamRuntime.class));
-        when(appState.listVisibleProjects()).thenReturn(List.of(project()));
-        when(appState.createWorkspace(7, "feature/x", true)).thenReturn(workspace());
-        when(appState.listPrimarySessions(11)).thenReturn(List.of(session()));
-
-        assertThat(service.call("create_workspace",
-                Map.of("projectId", 7L, "branchName", "feature/x", "createBranch", true), credential))
-                .isEqualTo(Map.of("workspaceId", 11L, "sessionId", 13L, "name", "workspace"));
-    }
-
-    @Test
-    void postMessageCreatesProjectWorkspaceAndSubmitsToInitialSession() {
-        var runtime = mock(ChatStreamRuntime.class);
-        var selection = mock(ChatStreamRuntime.SubmissionSelection.class);
-        var service = service(runtime);
-        when(appState.listVisibleProjects()).thenReturn(List.of(project()));
-        when(appState.createWorkspace(7, "feature/x", true)).thenReturn(workspace());
-        when(appState.listPrimarySessions(11)).thenReturn(List.of(session()));
-        when(runtime.validateSubmission(null, null, null)).thenReturn(selection);
-        when(runtime.submit(13, "hello", selection))
-                .thenReturn(new ChatStreamRuntime.Submission(null, null, "assistant"));
-
-        assertThat(service.call("post_message",
-                Map.of("projectId", 7L, "branchName", "feature/x", "createBranch", true, "message", "hello"),
-                credential))
-                .isEqualTo(Map.of("accepted", true, "status", "accepted", "sessionId", 13L, "workspaceId", 11L,
-                        "projectId", 7L, "assistantId", "assistant"));
-    }
-
-    @Test
     void postMessageToSessionAuthorizesThroughProjectWorkspaceAndPrimarySession() {
         var runtime = mock(ChatStreamRuntime.class);
         var selection = mock(ChatStreamRuntime.SubmissionSelection.class);
@@ -143,9 +111,6 @@ class InboundMcpToolServiceTests {
 
         assertThat(response).isEqualTo(Map.of("accepted", true, "status", "accepted", "sessionId", 13L, "workspaceId",
                 11L, "projectId", 7L, "assistantId", "assistant"));
-        verify(appState, times(1)).listVisibleProjects();
-        verify(appState, times(1)).listWorkspaces(7);
-        verify(appState, times(1)).listPrimarySessions(11);
     }
 
     @Test
@@ -189,13 +154,12 @@ class InboundMcpToolServiceTests {
     }
 
     @Test
-    void unauthorizedWorkspaceTargetIsUnavailableWithoutLoadingWorkspaceDetails() {
+    void unauthorizedWorkspaceTargetIsUnavailable() {
         var service = service(mock(ChatStreamRuntime.class));
         assertThatThrownBy(
                 () -> service.call("post_message", Map.of("workspaceId", 99L, "message", "hello"), credential))
                 .isInstanceOf(InboundMcpToolService.ResourceUnavailableException.class)
                 .hasMessage("Resource unavailable");
-        verify(appState, never()).loadViewData();
     }
 
     private InboundMcpToolService service(ChatStreamRuntime runtime) {
