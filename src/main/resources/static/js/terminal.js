@@ -221,5 +221,5 @@ function initMount(mount) {
 
 queueSync();
 window.addEventListener("resize", queueSync);
-document.body.addEventListener("htmx:afterSwap", queueSync, true);
-document.body.addEventListener("htmx:afterSettle", queueSync, true);
+document.addEventListener("htmx:after:swap", queueSync, true);
+document.addEventListener("htmx:after:settle", queueSync, true);

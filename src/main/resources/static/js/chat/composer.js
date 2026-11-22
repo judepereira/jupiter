@@ -10,7 +10,7 @@ import { bindAutoScrollListeners, checkAndMaybeScroll } from "./scroll.js";
 import { isCommandPickerOpen, openCommandPicker } from "./commands.js";
 
 let chatDraftFlushBound = false;
-let htmxAfterOnLoadBound = false;
+let htmxAfterRequestBound = false;
 let htmxControlSwapHooksBound = false;
 let chatComposerConfig = {
     activePrimaryPendingAssistantRow: () => null,
@@ -44,19 +44,10 @@ function bindChatControlSwapHooks() {
         return;
     }
     htmxControlSwapHooksBound = true;
-    const afterSwap = (event) => {
-        const target = event.detail?.target;
-        if (target?.id !== "chat-controls") {
-            return;
-        }
-        const form = document.getElementById("chat-send-form");
-        if (form) {
-            bindChatControlListeners(form);
-        }
+    const afterSwap = () => {
+        initChatComposer();
     };
-    // OOB swaps have their own lifecycle; keep this generic so settings and other refreshes share it.
-    document.body.addEventListener("htmx:afterSwap", afterSwap, true);
-    document.body.addEventListener("htmx:oobAfterSwap", afterSwap, true);
+    document.addEventListener("htmx:after:swap", afterSwap, true);
 }
 
 function bindChatDraftFlushListeners() {
@@ -65,8 +56,8 @@ function bindChatDraftFlushListeners() {
     }
     chatDraftFlushBound = true;
 
-    document.body.addEventListener(
-        "htmx:beforeRequest",
+    document.addEventListener(
+        "htmx:before:request",
         function (evt) {
             try {
                 const path = getHtmxRequestPath(evt);
@@ -124,15 +115,15 @@ function bindChatControlListeners(form) {
     form.dataset.modelExplicit = initialExplicit === "true" ? "1" : initialExplicit || "0";
     if (form.dataset.chatControlsBound !== "1") {
         form.dataset.chatControlsBound = "1";
-        form.addEventListener("htmx:configRequest", (event) => {
+        form.addEventListener("htmx:config:request", (event) => {
             const agentOption = getChatSelectOption(form.querySelector("#chat-agent-select"));
             const modelSelect = form.querySelector("#chat-model-select");
-            const parameters = event.detail && event.detail.parameters;
-            if (!parameters || !agentOption || !modelSelect) {
+            const body = event.detail?.ctx?.request?.body;
+            if (!body || !agentOption || !modelSelect) {
                 return;
             }
             if (agentOption.dataset.defaultModel === modelSelect.value && form.dataset.modelExplicit !== "1") {
-                delete parameters.modelId;
+                body.delete("modelId");
             }
         });
     }
@@ -213,20 +204,21 @@ function insertChatTextareaNewline(textarea) {
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function bindHtmxAfterOnLoadListener() {
-    if (htmxAfterOnLoadBound) {
+function bindHtmxAfterRequestListener() {
+    if (htmxAfterRequestBound) {
         return;
     }
-    htmxAfterOnLoadBound = true;
-    document.body.addEventListener(
-        "htmx:afterOnLoad",
+    htmxAfterRequestBound = true;
+    document.addEventListener(
+        "htmx:after:request",
         function (evt) {
             try {
                 const detail = evt && evt.detail;
-                if (!detail || !detail.xhr) {
+                const ctx = detail && detail.ctx;
+                if (!ctx || ctx.response?.status < 200 || ctx.response?.status >= 300) {
                     return;
                 }
-                const path = detail.path || (detail.xhr && detail.xhr.responseURL) || "";
+                const path = ctx.request?.action || "";
                 if (!path) {
                     return;
                 }
@@ -281,10 +273,12 @@ export function initChatComposer() {
                 if (e.altKey || isMobileChatViewport()) {
                     e.preventDefault();
                     insertChatTextareaNewline(textarea);
+                    e.stopImmediatePropagation();
                     return;
                 }
 
                 e.preventDefault();
+                e.stopImmediatePropagation();
                 if (chatComposerConfig.activePrimaryPendingAssistantRow()) {
                     return;
                 }
@@ -326,7 +320,7 @@ export function initChatComposer() {
                 }
                 openCommandPicker(textarea, textarea.value);
             });
-            bindHtmxAfterOnLoadListener();
+            bindHtmxAfterRequestListener();
         }
 
         requestAnimationFrame(() => resizeChatTextarea(textarea));

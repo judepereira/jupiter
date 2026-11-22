@@ -56,8 +56,8 @@ if (divider && shell && leftRail) {
     });
 
     window.addEventListener("resize", updateVisibility);
-    document.body.addEventListener(
-        "htmx:afterSwap",
+    document.addEventListener(
+        "htmx:after:swap",
         () => {
             if (window.innerWidth <= 900) {
                 divider.classList.add("hidden");

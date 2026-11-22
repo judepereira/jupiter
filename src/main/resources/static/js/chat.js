@@ -18,9 +18,9 @@ function bindChatHtmxLifecycleListeners() {
     }
     chatHtmxListenersBound = true;
 
-    document.body.addEventListener(
-        "htmx:afterSwap",
-        function (evt) {
+    document.addEventListener(
+        "htmx:after:swap",
+        function () {
             Promise.resolve().then(() => {
                 bindPendingStreams();
                 syncFaviconWithRail();
@@ -28,9 +28,9 @@ function bindChatHtmxLifecycleListeners() {
         },
         true,
     );
-    document.body.addEventListener(
-        "htmx:afterSettle",
-        function (evt) {
+    document.addEventListener(
+        "htmx:after:settle",
+        function () {
             Promise.resolve().then(() => {
                 bindPendingStreams();
                 syncFaviconWithRail();
@@ -40,10 +40,10 @@ function bindChatHtmxLifecycleListeners() {
     );
 
     document.body.addEventListener(
-        "htmx:afterSwap",
+        "htmx:after:swap",
         function (evt) {
             try {
-                const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
+                const target = evt?.detail?.ctx?.target || evt.target || document;
                 const liveList = document.getElementById("chat-messages-list");
                 const base = liveList
                     ? liveList
@@ -59,10 +59,10 @@ function bindChatHtmxLifecycleListeners() {
         true,
     );
     document.body.addEventListener(
-        "htmx:afterSettle",
+        "htmx:after:settle",
         function (evt) {
             try {
-                const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
+                const target = evt?.detail?.ctx?.target || evt.target || document;
                 const liveList = document.getElementById("chat-messages-list");
                 const base = liveList
                     ? liveList
@@ -79,7 +79,7 @@ function bindChatHtmxLifecycleListeners() {
     );
 
     document.body.addEventListener(
-        "htmx:afterSwap",
+        "htmx:after:swap",
         function () {
             Promise.resolve().then(() => {
                 initChatComposer();
@@ -89,7 +89,7 @@ function bindChatHtmxLifecycleListeners() {
         true,
     );
     document.body.addEventListener(
-        "htmx:afterSettle",
+        "htmx:after:settle",
         function () {
             Promise.resolve().then(() => {
                 initChatComposer();

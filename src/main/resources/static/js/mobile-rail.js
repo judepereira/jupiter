@@ -172,9 +172,9 @@ if (!window.__mobileLeftRailControllerBound) {
         syncReviewToggleState();
     });
 
-    document.body.addEventListener("htmx:afterSwap", syncReviewToggleState, true);
+    document.addEventListener("htmx:after:swap", syncReviewToggleState, true);
     syncReviewToggleState();
 
-    document.body.addEventListener("htmx:afterSwap", syncAppSwitcherState, true);
+    document.addEventListener("htmx:after:swap", syncAppSwitcherState, true);
     syncAppSwitcherState();
 }

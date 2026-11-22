@@ -462,12 +462,12 @@ function bindSubagentScrollListeners() {
         true,
     );
 
-    document.body.addEventListener(
-        "htmx:afterSettle",
+    document.addEventListener(
+        "htmx:after:settle",
         function (evt) {
             try {
                 const detail = evt && evt.detail;
-                const target = detail && detail.target;
+                const target = detail?.ctx?.target;
                 const path = getHtmxRequestPath(evt);
                 if (!primaryChatScrollRestorePending || !primaryChatScrollState) {
                     return;
@@ -505,13 +505,13 @@ function bindSessionChangeScrollListeners() {
             Promise.resolve().then(syncChatAfterSessionChange);
         } catch (_) {}
     };
-    document.body.addEventListener("htmx:afterSwap", syncAfterContextTransition, true);
-    document.body.addEventListener("htmx:afterSettle", syncAfterContextTransition, true);
+    document.addEventListener("htmx:after:swap", syncAfterContextTransition, true);
+    document.addEventListener("htmx:after:settle", syncAfterContextTransition, true);
 }
 
 function htmxBeforeSwapListener(evt) {
     try {
-        const trg = (evt && evt.detail && evt.detail.target) || evt.target;
+        const trg = evt?.detail?.ctx?.target || evt.target;
         if (!trg) {
             return;
         }
@@ -534,7 +534,7 @@ function htmxBeforeSwapListener(evt) {
 
 function htmxChatListener(evt) {
     try {
-        const trg = (evt && evt.detail && evt.detail.target) || evt.target;
+        const trg = evt?.detail?.ctx?.target || evt.target;
         if (!trg) {
             return;
         }
@@ -564,9 +564,9 @@ export function bindAutoScrollListeners() {
         return;
     }
     chatAutoScrollBound = true;
-    document.body.addEventListener("htmx:beforeSwap", htmxBeforeSwapListener, true);
-    document.body.addEventListener("htmx:afterSwap", htmxChatListener, true);
-    document.body.addEventListener("htmx:afterSettle", htmxChatListener, true);
+    document.body.addEventListener("htmx:before:swap", htmxBeforeSwapListener, true);
+    document.body.addEventListener("htmx:after:swap", htmxChatListener, true);
+    document.body.addEventListener("htmx:after:settle", htmxChatListener, true);
     bindSubagentScrollListeners();
     bindSessionChangeScrollListeners();
     bindInitialChatScrollListeners();

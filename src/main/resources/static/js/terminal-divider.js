@@ -55,8 +55,8 @@ function clampTerminalPanelHeight() {
 }
 
 window.addEventListener("resize", clampTerminalPanelHeight);
-document.body.addEventListener(
-    "htmx:afterSwap",
+document.addEventListener(
+    "htmx:after:swap",
     () => {
         if (controller.isDragging()) {
             controller.cancel();

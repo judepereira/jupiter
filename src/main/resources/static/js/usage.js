@@ -80,8 +80,8 @@
             }
         }
     });
-    document.addEventListener("htmx:afterSwap", (event) => {
-        const chartContainer = event.target.querySelector?.("[data-settings-usage-chart]");
+    document.addEventListener("htmx:after:swap", (event) => {
+        const chartContainer = event.detail?.ctx?.target?.querySelector?.("[data-settings-usage-chart]");
         if (chartContainer) {
             render(chartContainer);
         }
@@ -93,7 +93,7 @@
         }
         const container = button.closest("[data-settings-usage-container]");
         container.dataset.loaded = "true";
-        htmx.ajax("GET", "/ui/settings/usage?range=" + button.dataset.usageRange, {
+        htmx.ajax("GET", "/ui/settings/usage?range=" + encodeURIComponent(button.dataset.usageRange), {
             target: container,
             swap: "innerHTML",
         });

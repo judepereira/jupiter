@@ -146,9 +146,16 @@
         probeHealth();
     }
 
-    document.addEventListener("htmx:sendError", transportFailure, true);
-    document.addEventListener("htmx:timeout", transportFailure, true);
-
+    document.addEventListener(
+        "htmx:error",
+        (event) => {
+            const ctx = event.detail?.ctx;
+            if (ctx?.request && !ctx.response) {
+                transportFailure();
+            }
+        },
+        true,
+    );
     window.addEventListener("online", () => {
         if (state.overlayVisible) {
             probeHealth();

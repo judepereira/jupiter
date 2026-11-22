@@ -52,7 +52,7 @@ function initDiffViewer(root = document) {
 }
 
 document.addEventListener("DOMContentLoaded", () => initDiffViewer());
-document.addEventListener("htmx:afterSwap", (event) => initDiffViewer(event.target));
-document.addEventListener("htmx:beforeCleanupElement", (event) => {
+document.addEventListener("htmx:after:swap", (event) => initDiffViewer(event.target));
+document.addEventListener("htmx:before:cleanup:element", (event) => {
     sourcesIn(event.target).forEach(disposeViewer);
 });
