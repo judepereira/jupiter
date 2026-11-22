@@ -40,7 +40,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             settings(page);
             PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings p.alert-warning code")).hasCount(0);
 
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")).click();
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create New MCP Token")).click();
             Locator create = page.locator("#inbound-mcp-create-form form");
             create.locator("input[name='name']").fill("restricted");
             create.locator("input[name='allProjects']").uncheck();
@@ -84,7 +84,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             assertThat(changed.path("result").path("isError").asBoolean()).isTrue();
             assertThat(changedError.path("code").asText()).isEqualTo("RESOURCE_UNAVAILABLE");
             assertThat(changedError.path("message").asText()).isEqualTo("Resource unavailable");
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")).click();
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create New MCP Token")).click();
             Locator independent = page.locator("#inbound-mcp-create-form form");
             independent.locator("input[name='name']").fill("independent");
             independent.locator("input[name='allProjects']").check();

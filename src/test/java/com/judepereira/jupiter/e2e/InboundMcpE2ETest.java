@@ -47,7 +47,7 @@ class InboundMcpE2ETest extends E2ETestSupport {
             page.getByRole(AriaRole.TAB, new Page.GetByRoleOptions().setName("Inbound MCP")).click();
             Locator settings = page.locator("#inbound-mcp-settings");
             PlaywrightAssertions.assertThat(settings.locator("article")).hasCount(0);
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")).click();
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Create New MCP Token")).click();
             Locator form = page.locator("#inbound-mcp-create-form form");
             form.locator("input[name='name']").fill("e2e client");
             form.locator("input[name='allProjects']").check();
