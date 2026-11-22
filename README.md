@@ -83,9 +83,7 @@ Always use a private VPN such as Tailscale.
 
 ## Documentation
 
-The full documentation lives in the [GitHub Wiki](https://github.com/judepereira/jupiter/wiki). To connect an MCP client
-to Jupiter and create a bearer token (shown only once) in **Settings → Inbound MCP**, see
-[Inbound MCP Server](https://github.com/judepereira/jupiter/wiki/Inbound-MCP-Server). A good place to begin is
+The full documentation lives in the [GitHub Wiki](https://github.com/judepereira/jupiter/wiki). A good place to begin is
 [Getting Started](https://github.com/judepereira/jupiter/wiki/Getting-Started), followed by
 [Workspaces and Git Worktrees](https://github.com/judepereira/jupiter/wiki/Workspaces-and-Git-Worktrees) and
 [Security Model](https://github.com/judepereira/jupiter/wiki/Security-Model).

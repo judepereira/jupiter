@@ -29,13 +29,6 @@ A TLS-terminating reverse proxy must support:
 
 Avoid aggressive buffering and short idle timeouts on streaming routes.
 
-Configure the embedded servlet container to normalize proxy headers only when requests come from your proxy. Do not
-accept forwarded headers from arbitrary clients: they can spoof the public scheme and host. For Spring Boot's native
-Tomcat handling, set `SERVER_FORWARD_HEADERS_STRATEGY=native` and configure `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` to
-match only your trusted proxy addresses. Ensure the proxy overwrites forwarded headers and blocks direct untrusted
-access to the application port. Jupiter uses the container-normalized scheme and port for HTTPS and origin checks; raw
-`Forwarded` and `X-Forwarded-*` headers are ignored.
-
 Basic authentication does not encrypt traffic, so use HTTPS outside a trusted local network.
 
 ## Trust Model
