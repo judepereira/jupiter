@@ -1,7 +1,7 @@
 import { configureChatComposer, initChatComposer, resizeChatTextarea } from "./chat/composer.js";
 import { configureCommandPicker } from "./chat/commands.js";
 import { bindChatMessageCopyButtons, formatAllChatSubtitles, renderAllChatMarkdown } from "./chat/markdown.js";
-import { initWorkspaceRailSync, syncFaviconWithRail } from "./chat/rail-sync.js";
+import { initWorkspaceRailSync, invalidateWorkspaceRailRefresh, syncFaviconWithRail } from "./chat/rail-sync.js";
 import { bindAutoScrollListeners } from "./chat/scroll.js";
 import {
     activePrimaryPendingAssistantRow,
@@ -19,6 +19,16 @@ function bindChatHtmxLifecycleListeners() {
     chatHtmxListenersBound = true;
 
     document.addEventListener(
+        "htmx:before:request",
+        function (evt) {
+            const requestUrl = evt?.detail?.ctx?.request?.action || "";
+            if (/\/ui\/(projects|workspaces|sessions)\/[^?]*(activate|collapse|close|add|create)/.test(requestUrl)) {
+                invalidateWorkspaceRailRefresh();
+            }
+        },
+        true,
+    );
+    document.addEventListener(
         "htmx:after:swap",
         function () {
             Promise.resolve().then(() => {
@@ -39,7 +49,7 @@ function bindChatHtmxLifecycleListeners() {
         true,
     );
 
-    document.body.addEventListener(
+    document.addEventListener(
         "htmx:after:swap",
         function (evt) {
             try {
@@ -58,7 +68,7 @@ function bindChatHtmxLifecycleListeners() {
         },
         true,
     );
-    document.body.addEventListener(
+    document.addEventListener(
         "htmx:after:settle",
         function (evt) {
             try {
@@ -78,7 +88,7 @@ function bindChatHtmxLifecycleListeners() {
         true,
     );
 
-    document.body.addEventListener(
+    document.addEventListener(
         "htmx:after:swap",
         function () {
             Promise.resolve().then(() => {
@@ -88,7 +98,7 @@ function bindChatHtmxLifecycleListeners() {
         },
         true,
     );
-    document.body.addEventListener(
+    document.addEventListener(
         "htmx:after:settle",
         function () {
             Promise.resolve().then(() => {

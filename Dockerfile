@@ -23,13 +23,13 @@ COPY --chmod=0755 entrypoint.sh git-wrapper.sh ./
 RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
     --mount=type=cache,id=root-cache,target=/root/.cache \
     --mount=type=secret,id=bluecave_token,required=false \
+    EXTRA_MVN_ARGS=""; \
     if [ -s /run/secrets/bluecave_token ]; then \
-      BLUECAVE_TOKEN="$(cat /run/secrets/bluecave_token)" \
-      BLUECAVE_EXTRA_OPTS="$BLUECAVE_EXTRA_OPTS" \
-      ./mvnw -B -ntp package bluecave:report; \
-    else \
-      ./mvnw -B -ntp package; \
-    fi
+      export BLUECAVE_TOKEN="$(cat /run/secrets/bluecave_token)"; \
+      export BLUECAVE_EXTRA_OPTS="$BLUECAVE_EXTRA_OPTS"; \
+      export EXTRA_MVN_ARGS="bluecave:report"; \
+    fi; \
+    ./mvnw -B -ntp supertest:supertest && ./mvnw -B -ntp -DskipTests=true package $EXTRA_MVN_ARGS;
 
 FROM eclipse-temurin:25-jre AS runtime
 

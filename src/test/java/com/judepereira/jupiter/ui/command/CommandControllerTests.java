@@ -106,14 +106,14 @@ class CommandControllerTests {
         when(appStateService.loadSessionProjectEnvironmentVariables(42L)).thenReturn(Map.of("MODE", "test"));
         QueuedChatTurn turn = new QueuedChatTurn(message("user", "/build", false, "u"),
                 message("assistant", null, true, "a"));
-        when(appStateService.appendUserMessageAndPendingAssistant(eq(42L), any(), any(), eq("/build"), isNull()))
-                .thenReturn(turn);
+        when(commandStreamService.queue(eq(42L), any(), any(), eq(command), eq("/workspace"),
+                eq(Map.of("MODE", "test")))).thenReturn(turn);
         Model model = mock(Model.class);
 
         assertThat(controller.execute("build", model)).isEqualTo("fragments/chat-response :: newRows");
 
-        verify(appStateService).appendUserMessageAndPendingAssistant(eq(42L), any(), any(), eq("/build"), isNull());
-        verify(commandStreamService).queue(eq(42L), any(), eq(command), eq("/workspace"), eq(Map.of("MODE", "test")));
+        verify(commandStreamService).queue(eq(42L), any(), any(), eq(command), eq("/workspace"),
+                eq(Map.of("MODE", "test")));
         verify(model).addAttribute(eq("newChatMessages"), any());
         verify(model).addAttribute("pendingStreamBaseUrl", "/ui/chat/stream");
         verify(model).addAttribute("subagentView", false);

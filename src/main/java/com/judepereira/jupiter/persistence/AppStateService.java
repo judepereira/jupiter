@@ -10,6 +10,7 @@ import com.judepereira.jupiter.agent.llm.dto.ToolCall;
 import com.judepereira.jupiter.persistence.Persistence.*;
 import com.judepereira.jupiter.security.ProcessEnvironmentSanitizer;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -112,6 +113,9 @@ public class AppStateService {
         long projectId = repository.insertProject(name, normalizedPath, repository.nextProjectDisplayOrder(), now);
         long workspaceId = repository.insertWorkspace(projectId, "Default Workspace", normalizedPath, 1L, now);
         long sessionId = createSessionInternal(workspaceId, now);
+        repository.updateProjectLastOpened(projectId, now);
+        repository.updateWorkspaceLastOpened(workspaceId, now);
+        repository.updateSessionLastOpened(sessionId, now);
         repository.updateAppState(projectId, workspaceId, sessionId);
         return toProjectView(repository.findProject(projectId));
     }
@@ -125,24 +129,67 @@ public class AppStateService {
         }
 
         String normalizedBranchName = branchName.trim();
-        if (createBranch) {
-            if (normalizedBranchName.isBlank()) {
-                throw new InvalidGitBranchNameException("Branch name is required", null);
-            }
-            validateGitBranchName(normalizedBranchName);
+        if (normalizedBranchName.isBlank()) {
+            throw new InvalidGitBranchNameException("Branch name is required", null);
         }
+        validateGitBranchName(normalizedBranchName);
 
-        Path projectRoot = Path.of(project.normalizedPath());
-        Path worktreePath = projectRoot.resolveSibling(".trees").resolve(projectRoot.getFileName().toString())
-                .resolve(normalizedBranchName).toAbsolutePath().normalize();
+        Path projectRoot = Path.of(project.normalizedPath()).toAbsolutePath().normalize();
+        Path treesRoot = projectRoot.resolveSibling(".trees").resolve(projectRoot.getFileName().toString())
+                .toAbsolutePath().normalize();
+        Path worktreePath = treesRoot.resolve(normalizedBranchName).normalize();
+        if (!worktreePath.startsWith(treesRoot)) {
+            throw new InvalidGitBranchNameException("Invalid Git branch name: " + normalizedBranchName, null);
+        }
+        try {
+            Path canonicalTreesRoot = resolveExistingAncestor(treesRoot);
+            Path canonicalParent = resolveExistingAncestor(worktreePath.getParent());
+            if (!canonicalParent.startsWith(canonicalTreesRoot)) {
+                throw new InvalidGitBranchNameException("Invalid Git branch name: " + normalizedBranchName, null);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to validate workspace path", e);
+        }
         runGitWorktreeAdd(projectRoot, worktreePath, normalizedBranchName, createBranch);
 
         long position = repository.nextWorkspacePosition(projectId);
         long workspaceId = repository.insertWorkspace(projectId, normalizedBranchName, worktreePath.toString(),
                 position, now);
         createSessionInternal(workspaceId, now);
+        publishWorkspaceRailRefresh();
         return toWorkspaceView(repository.findWorkspace(workspaceId),
                 activeStreamRegistryService.activeSessionIdsSnapshot());
+    }
+
+    @Transactional
+    public WorkspaceView createWorkspaceAndActivate(long projectId, String branchName, boolean createBranch) {
+        WorkspaceView workspace = createWorkspace(projectId, branchName, createBranch);
+        activateWorkspace(workspace.id());
+        return workspace;
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkspaceView> listWorkspaces(long projectId) {
+        Set<Long> activeSessionIds = activeStreamRegistryService.activeSessionIdsSnapshot();
+        return repository.listWorkspacesByProject(projectId).stream()
+                .map(workspace -> toWorkspaceView(workspace, activeSessionIds)).toList();
+    }
+
+    private Path resolveExistingAncestor(Path path) throws IOException {
+        Path ancestor = path;
+        while (ancestor != null && !Files.exists(ancestor)) {
+            ancestor = ancestor.getParent();
+        }
+        if (ancestor == null) {
+            throw new IOException("No existing ancestor for " + path);
+        }
+        return ancestor.toRealPath().resolve(ancestor.relativize(path)).normalize();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SessionView> listPrimarySessions(long workspaceId) {
+        return repository.listSessionsByWorkspace(workspaceId).stream().filter(session -> !session.hidden())
+                .map(this::toSessionView).toList();
     }
 
     @Transactional
@@ -309,6 +356,13 @@ public class AppStateService {
         long position = repository.nextSessionPosition(workspaceId);
         long sessionId = createSessionInternal(workspaceId, Instant.now(), position, name);
         return toSessionView(repository.findSession(sessionId));
+    }
+
+    @Transactional
+    public SessionView createSessionAndActivate(long workspaceId, String name) {
+        SessionView session = createSession(workspaceId, name);
+        activateSession(session.id());
+        return session;
     }
 
     @Transactional
@@ -485,6 +539,12 @@ public class AppStateService {
         repository.updateLifecycleHookSettings(normalizeOptionalScript(settings.assistantCompletedScript()),
                 normalizeOptionalScript(settings.assistantErroredScript()),
                 normalizeOptionalScript(settings.subagentCompletedScript()), settings.timeoutSeconds());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProjectView> listVisibleProjects() {
+        return repository.listVisibleProjects().stream()
+                .map(project -> toProjectView(project, new ProjectStatusAggregate())).toList();
     }
 
     public AppStateView loadViewData() {
@@ -1172,11 +1232,6 @@ public class AppStateService {
         repository.insertConversationMessage(sessionId, UUID.randomUUID().toString(), "system", 0L, 0L,
                 "Welcome to Jupiter. Let's get started - what's on your mind?", null, null, true, false, false, null,
                 null, null, null, null, null, null, now);
-        var workspace = repository.findWorkspace(workspaceId);
-        repository.updateProjectLastOpened(workspace.projectId(), now);
-        repository.updateWorkspaceLastOpened(workspaceId, now);
-        repository.updateSessionLastOpened(sessionId, now);
-        repository.updateAppState(workspace.projectId(), workspaceId, sessionId);
         return sessionId;
     }
 
@@ -1358,6 +1413,12 @@ public class AppStateService {
                         : toChangedFileView(repository.findChangedFile(session.selectedChangedFileId()));
         return new SessionDetailView(messages, files, session.reviewPanelOpen(), reviewSource, selected,
                 workspace.normalizedPath(), session.chatDraft());
+    }
+
+    public OptionalLong findAssistantMessageSessionId(String assistantPublicId) {
+        return repository.findAssistantMessageOwnerByPublicId(assistantPublicId)
+                .filter(message -> "assistant".equals(message.role()))
+                .map(message -> OptionalLong.of(message.sessionId())).orElseGet(OptionalLong::empty);
     }
 
     public ChatMessageView loadAssistantMessageDetails(long sessionId, String assistantPublicId) {

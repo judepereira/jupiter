@@ -8,24 +8,23 @@ import org.springframework.mock.web.MockHttpServletRequest;
 class PublicRequestSchemeTests {
 
     @Test
-    void usesDirectAndForwardedSchemes() {
+    void usesContainerNormalizedDirectAndProxySchemes() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         assertThat(PublicRequestScheme.isHttps(request)).isFalse();
 
         request.setSecure(true);
         assertThat(PublicRequestScheme.isHttps(request)).isTrue();
 
-        request.addHeader("X-Forwarded-Proto", "https, http");
-        assertThat(PublicRequestScheme.isHttps(request)).isTrue();
-        request.removeHeader("X-Forwarded-Proto");
-        request.addHeader("Forwarded", "for=1.2.3.4;proto=https, for=5.6.7.8;proto=http");
+        request.setSecure(false);
+        request.setScheme("https");
         assertThat(PublicRequestScheme.isHttps(request)).isTrue();
     }
 
     @Test
-    void doesNotTreatLaterProxyValueAsPublicScheme() {
+    void ignoresUntrustedForwardedHeaders() {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader("X-Forwarded-Proto", "http, https");
+        request.addHeader("X-Forwarded-Proto", "https");
+        request.addHeader("Forwarded", "proto=https");
 
         assertThat(PublicRequestScheme.isHttps(request)).isFalse();
     }

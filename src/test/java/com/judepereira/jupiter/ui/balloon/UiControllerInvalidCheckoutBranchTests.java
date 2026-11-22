@@ -24,6 +24,7 @@ import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.ChatStreamRuntime;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
 import java.io.IOException;
@@ -129,9 +130,8 @@ class UiControllerInvalidCheckoutBranchTests {
 
     private static UiController controller(Path projectRoot, AppStateService appStateService,
             SystemBalloonService balloonService) {
-        return new UiController(mock(CodingAgentHarness.class), agentProperties(projectRoot), appStateService,
+        return new UiController(agentProperties(projectRoot), appStateService,
                 new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
-                ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
                 ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
                 mock(AgentPreferenceService.class), null, null, mock(ProviderAvailabilityService.class), balloonService,
                 new WorkspaceRailRefreshService(() -> new SseEmitter(0L),
@@ -139,10 +139,17 @@ class UiControllerInvalidCheckoutBranchTests {
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                TestAppStateSupport.contextCompactionService(appStateService), null, mock(CommandStreamService.class),
-                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
-                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
+                null, mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                null, new ChatPresentationService(), null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class),
+                new ChatStreamRuntime(mock(CodingAgentHarness.class), agentProperties(projectRoot), appStateService,
+                        new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
+                        ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                        TestAppStateSupport.contextCompactionService(appStateService),
+                        ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null,
+                        mock(CommandStreamService.class), appStateService.activeStreamRegistryService(),
+                        new ChatPresentationService(), null, null),
+                "0.0.1-SNAPSHOT", System.getProperty("user.home"));
     }
 
     private static AgentProperties agentProperties(Path workspaceRoot) {

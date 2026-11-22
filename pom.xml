@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.judepereira</groupId>
     <artifactId>jupiter</artifactId>
-    <version>2026.11.16.2</version>
+    <version>2026.11.22.3</version>
     <name>jupiter</name>
     <description>jupiter</description>
     <url/>
@@ -38,6 +38,11 @@
         <langchain.version>1.23.0</langchain.version>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp</artifactId>
+            <version>2.1.0</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-flyway</artifactId>
@@ -126,12 +131,12 @@
         <dependency>
             <groupId>org.webjars.npm</groupId>
             <artifactId>bootstrap-icons</artifactId>
-            <version>1.11.3</version>
+            <version>1.13.2</version>
         </dependency>
         <dependency>
             <groupId>org.webjars.npm</groupId>
             <artifactId>dompurify</artifactId>
-            <version>3.4.11</version>
+            <version>3.4.18</version>
         </dependency>
         <dependency>
             <groupId>org.webjars.npm</groupId>
@@ -286,6 +291,17 @@
                 </configuration>
             </plugin>
             <plugin>
+                <groupId>com.clevertap</groupId>
+                <artifactId>supertest-maven-plugin</artifactId>
+                <version>1.14</version>
+                <configuration>
+                    <rerunProfile>dontReuseForks</rerunProfile>
+                    <retryRunCount>3</retryRunCount>
+                    <mvnTestOpts>-fae</mvnTestOpts>
+                    <mavenCommand>./mvnw</mavenCommand>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
@@ -365,6 +381,20 @@
     </build>
     <profiles>
         <profile>
+            <id>dontReuseForks</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <reuseForks>false</reuseForks>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>git-hooks</id>
             <activation>
                 <file>
@@ -376,7 +406,7 @@
                     <plugin>
                         <groupId>org.codehaus.mojo</groupId>
                         <artifactId>exec-maven-plugin</artifactId>
-                        <version>3.5.0</version>
+                        <version>3.7.0</version>
                         <configuration>
                             <workingDirectory>${project.basedir}</workingDirectory>
                             <executable>git</executable>

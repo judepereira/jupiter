@@ -29,9 +29,6 @@ A TLS-terminating reverse proxy must support:
 
 Avoid aggressive buffering and short idle timeouts on streaming routes.
 
-Forward the original HTTPS scheme using `Forwarded` or `X-Forwarded-Proto`. Jupiter uses that information when checking
-whether authenticated traffic is publicly using HTTPS.
-
 Basic authentication does not encrypt traffic, so use HTTPS outside a trusted local network.
 
 ## Trust Model

@@ -47,6 +47,7 @@ import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.ChatStreamRuntime;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
@@ -77,8 +78,10 @@ public class UiControllerAsyncStreamingTests {
     }
 
     @Test
-    public void sendReturnsQuickly_withPending_andDoesNotRunHarnessSynchronously() throws Exception {
+    public void sendStartsBackgroundWithoutSse() throws Exception {
         AtomicBoolean runCalled = new AtomicBoolean(false);
+        CountDownLatch harnessStarted = new CountDownLatch(1);
+        CountDownLatch allowHarnessToFinish = new CountDownLatch(1);
         CodingAgentHarness fake = new CodingAgentHarness(null, null, null, null, null, null, null, null, null,
                 new SystemPromptComposer(SkillTestSupport.defaultComponents().renderer()),
                 SkillTestSupport.defaultComponents().discovery(), SkillTestSupport.defaultComponents().resolver(),
@@ -86,12 +89,26 @@ public class UiControllerAsyncStreamingTests {
             @Override
             public AgentTurnResult runTurn(AgentTurnRequest request) {
                 runCalled.set(true);
+                harnessStarted.countDown();
+                try {
+                    allowHarnessToFinish.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
                 return new AgentTurnResult("final reply", List.of());
             }
 
             @Override
             public AgentTurnResult runTurnStreaming(AgentTurnRequest request, AgentStreamListener listener) {
                 runCalled.set(true);
+                harnessStarted.countDown();
+                try {
+                    allowHarnessToFinish.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
                 return new AgentTurnResult("final reply", List.of());
             }
         };
@@ -112,8 +129,12 @@ public class UiControllerAsyncStreamingTests {
         ChatPresentationService.ChatMessage last = (ChatPresentationService.ChatMessage) msgs.get(msgs.size() - 1);
         assertThat(last.text()).contains("Thinking");
 
-        // harness should NOT have been called during send
-        assertThat(runCalled.get()).isFalse();
+        String assistantId = assistantId((ConcurrentModel) model);
+        assertThat(harnessStarted.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(runCalled.get()).isTrue();
+        ctrl.streamChat(assistantId);
+        allowHarnessToFinish.countDown();
+        TestAppStateSupport.awaitAssistantCompletion(ctrl, assistantId);
 
         // fragment should be the chat response composite
         assertThat(frag).contains("fragments/chat-response :: response");
@@ -337,8 +358,7 @@ public class UiControllerAsyncStreamingTests {
                 return Optional.of(appStateService.appendVisibleSystemMessage(sessionId, "compact summary", 7L));
             }
         };
-        UiController ctrl = new UiController(fake, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog),
+        UiController ctrl = new UiController(props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
                 mock(ProviderAvailabilityService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -347,10 +367,15 @@ public class UiControllerAsyncStreamingTests {
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                contextCompactionService, null, mock(CommandStreamService.class),
-                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
-                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
+                null, mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                null, new ChatPresentationService(), null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class),
+                new ChatStreamRuntime(fake, props, appStateService, agentDefinitionService, modelCatalog,
+                        ModelCatalogTestSupport.resolutionService(modelCatalog), contextCompactionService,
+                        ModelCatalogTestSupport.preferenceResolver(modelCatalog), null,
+                        mock(CommandStreamService.class), appStateService.activeStreamRegistryService(),
+                        new ChatPresentationService(), null, null),
+                "0.0.1-SNAPSHOT", System.getProperty("user.home"));
 
         for (int i = 1; i <= 7; i++) {
             Model model = new ConcurrentModel();
@@ -523,8 +548,7 @@ public class UiControllerAsyncStreamingTests {
             }
         };
 
-        UiController ctrl = new UiController(harness, props, appStateService, agentDefinitionService, modelCatalog,
-                ModelCatalogTestSupport.resolutionService(modelCatalog),
+        UiController ctrl = new UiController(props, appStateService, agentDefinitionService, modelCatalog,
                 ModelCatalogTestSupport.preferenceResolver(modelCatalog), null, null, null,
                 mock(ProviderAvailabilityService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -533,10 +557,15 @@ public class UiControllerAsyncStreamingTests {
                 appStateService.activeStreamRegistryService(), mock(TerminalManager.class), new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         mock(AppStateRepository.class), null),
-                contextCompactionService, null, mock(CommandStreamService.class),
-                new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
-                null, null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
+                null, mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
+                null, new ChatPresentationService(), null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                mock(ManualGitPullCoordinator.class),
+                new ChatStreamRuntime(harness, props, appStateService, agentDefinitionService, modelCatalog,
+                        ModelCatalogTestSupport.resolutionService(modelCatalog), contextCompactionService,
+                        ModelCatalogTestSupport.preferenceResolver(modelCatalog), null,
+                        mock(CommandStreamService.class), appStateService.activeStreamRegistryService(),
+                        new ChatPresentationService(), null, null),
+                "0.0.1-SNAPSHOT", System.getProperty("user.home"));
 
         Model sendModel = new ConcurrentModel();
         ctrl.sendMessage("current turn", "engineer", null, null, sendModel, null);

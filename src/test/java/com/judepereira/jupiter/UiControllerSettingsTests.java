@@ -37,6 +37,7 @@ import com.judepereira.jupiter.terminal.TerminalManager;
 import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.ChatStreamRuntime;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
@@ -435,8 +436,7 @@ public class UiControllerSettingsTests {
         AgentPreferenceService agentPreferenceService = Mockito.mock(AgentPreferenceService.class);
         return new TestContext(appStateService, tokenUsageService, openAiOAuthService, mcpRuntimeManager,
                 gitAutoUpdateService, executor, modelPreferencesService, providerAvailabilityService,
-                new UiController(mock(CodingAgentHarness.class), properties, appStateService, agentDefinitionService,
-                        modelCatalogService, ModelCatalogTestSupport.resolutionService(modelCatalogService),
+                new UiController(properties, appStateService, agentDefinitionService, modelCatalogService,
                         preferenceResolver, agentPreferenceService, Mockito.mock(ModelPickerService.class),
                         modelPreferencesService, providerAvailabilityService,
                         new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -444,10 +444,17 @@ public class UiControllerSettingsTests {
                                 (emitter, eventName, data) -> emitter
                                         .send(SseEmitter.event().name(eventName).data(data))),
                         appStateService.activeStreamRegistryService(), terminalManager, new TerminalStateService(),
-                        openAiOAuthService, TestAppStateSupport.contextCompactionService(appStateService),
-                        tokenUsageService, mock(CommandStreamService.class), commandCatalogService, mcpRuntimeManager,
-                        new ChatPresentationService(), null, null, new HttpAuthProperties(), gitAutoUpdateService,
-                        coordinator, "test", System.getProperty("user.home")),
+                        openAiOAuthService, tokenUsageService, mock(CommandStreamService.class), commandCatalogService,
+                        mcpRuntimeManager, new ChatPresentationService(), null, new HttpAuthProperties(),
+                        gitAutoUpdateService, coordinator,
+                        new ChatStreamRuntime(mock(CodingAgentHarness.class), properties, appStateService,
+                                agentDefinitionService, modelCatalogService,
+                                ModelCatalogTestSupport.resolutionService(modelCatalogService),
+                                TestAppStateSupport.contextCompactionService(appStateService), preferenceResolver,
+                                Mockito.mock(ModelPickerService.class), mock(CommandStreamService.class),
+                                appStateService.activeStreamRegistryService(), new ChatPresentationService(), null,
+                                null),
+                        "test", System.getProperty("user.home")),
                 commandCatalogService);
     }
 

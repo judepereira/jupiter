@@ -24,6 +24,7 @@
 - [Built-in Tools](Built-in-Tools)
 - [Subagents](Subagents)
 - [MCP Servers](MCP-Servers)
+- [Inbound MCP Server](Inbound-MCP-Server)
 
 ## Configuration and Automation
 
