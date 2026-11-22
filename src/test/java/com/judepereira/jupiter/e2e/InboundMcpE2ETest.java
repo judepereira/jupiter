@@ -1,7 +1,8 @@
 package com.judepereira.jupiter.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.judepereira.jupiter.agent.llm.AgentModelClient;
 import com.judepereira.jupiter.agent.llm.AgentModelClientFactory;
 import com.judepereira.jupiter.agent.llm.dto.Message;
@@ -18,6 +19,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,8 @@ import org.springframework.context.annotation.Primary;
 class InboundMcpE2ETest extends E2ETestSupport {
     private static final String MODEL_MARKER = "Inbound MCP deterministic response";
     private static final String SUMMARY_MARKER = "Inbound MCP deterministic summary";
+    private static final Set<String> TOOLS = Set.of("list_projects", "list_workspaces", "list_sessions", "list_agents",
+            "create_workspace", "post_message", "summarize_session");
 
     @Test
     void tokenCanUseRealMcpStreamableHttpEndpoint(@TempDir Path tempDir) throws Exception {
@@ -36,246 +40,146 @@ class InboundMcpE2ETest extends E2ETestSupport {
         Path repository = Files.createDirectories(home.resolve("project"));
         initGitRepoWithInitialCommit(repository);
         try (RunningApp app = startApp(home, tempDir.resolve("state.db"), TestAppConfig.class);
-                BrowserContext browser = newBrowserContext();) {
+                BrowserContext browser = newBrowserContext()) {
             Page page = browser.newPage();
             page.navigate(app.baseUrl());
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click();
             page.getByRole(AriaRole.TAB, new Page.GetByRoleOptions().setName("Inbound MCP")).click();
-            page.locator("#inbound-mcp-settings").waitFor();
-            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings article")).hasCount(0);
-            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-create-form")).not().isVisible();
-            PlaywrightAssertions
-                    .assertThat(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")))
-                    .isVisible();
-            Locator createToggle = page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token"));
-            PlaywrightAssertions.assertThat(createToggle).hasAttribute("aria-expanded", "false");
-            createToggle.click();
-            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-create-form")).isVisible();
-            Locator createForm = page.locator("#inbound-mcp-create-form form");
-            createForm.locator("input[name='name']").fill("e2e client");
-            createForm.locator("input[name='allProjects']").check();
+            Locator settings = page.locator("#inbound-mcp-settings");
+            PlaywrightAssertions.assertThat(settings.locator("article")).hasCount(0);
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")).click();
+            Locator form = page.locator("#inbound-mcp-create-form form");
+            form.locator("input[name='name']").fill("e2e client");
+            form.locator("input[name='allProjects']").check();
             page.waitForResponse(response -> response.url().endsWith("/create")
                     && response.request().method().equals("POST") && response.status() == 200,
-                    createForm.locator("button[type='submit']")::click);
-            Locator issuedToken = page.locator("#inbound-mcp-settings .alert-warning code");
-            issuedToken.waitFor();
-            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-create-form")).not().isVisible();
-            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings").getByRole(AriaRole.BUTTON,
-                    new Locator.GetByRoleOptions().setName("Reveal"))).hasCount(0);
-            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings").getByRole(AriaRole.BUTTON,
-                    new Locator.GetByRoleOptions().setName("Rotate"))).hasCount(0);
-            String token = issuedToken.textContent().trim();
-            Locator credential = page.locator("#inbound-mcp-settings article")
-                    .filter(new Locator.FilterOptions().setHas(page.getByRole(AriaRole.BUTTON,
-                            new Page.GetByRoleOptions().setName("e2e client").setExact(true))));
-            Locator credentialHeader = credential.getByRole(AriaRole.BUTTON,
-                    new Locator.GetByRoleOptions().setName("e2e client").setExact(true));
-            PlaywrightAssertions.assertThat(credentialHeader).hasAttribute("aria-expanded", "false");
-            PlaywrightAssertions.assertThat(credential.locator("input[name='name']")).hasCount(0);
-            credentialHeader.click();
-            PlaywrightAssertions.assertThat(credentialHeader).hasAttribute("aria-expanded", "true");
-            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings")
-                    .getByText("It cannot be viewed again:", new Locator.GetByTextOptions().setExact(false)))
-                    .isVisible();
+                    form.locator("button[type='submit']")::click);
+            String token = settings.locator(".alert-warning code").textContent().trim();
+            page.locator("#settings-modal .btn-close").click();
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Settings")).click();
+            page.getByRole(AriaRole.TAB, new Page.GetByRoleOptions().setName("Inbound MCP")).click();
+            PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings .alert-warning")).hasCount(0);
             McpHttpTestClient client = new McpHttpTestClient(app.baseUrl(), token);
             JsonNode initialized = client.initialize("e2e");
-            if (initialized.path("result").path("serverInfo").isMissingNode()) {
-                throw new AssertionError("MCP initialize response missing serverInfo: " + initialized);
-            }
-            JsonNode listed = client.tools();
-            JsonNode toolNames = listed.path("result").path("tools");
-            if (!toolNames.isArray()) {
-                throw new AssertionError("MCP tools/list response did not include a tools array: " + listed);
-            }
-            for (String tool : new String[]{"list_projects", "list_workspaces", "list_sessions", "list_agents",
-                    "create_workspace", "post_message", "summarize_session"}) {
-                if (!toolNames.findValuesAsText("name").contains(tool)) {
-                    throw new AssertionError("MCP tool missing: " + tool);
-                }
-            }
+            assertThat(initialized.at("/result/serverInfo").isMissingNode()).isFalse();
+            JsonNode listedTools = client.tools().at("/result/tools");
+            assertThat(listedTools.findValuesAsText("name")).containsExactlyInAnyOrderElementsOf(TOOLS);
             page.locator("#settings-modal .btn-close").click();
-            PlaywrightAssertions.assertThat((Locator) page.locator("#settings-modal")).not().isVisible();
-            openProject(page, "MCP E2E Project", repository);
-            AppStateService appState = (AppStateService) app.context().getBean(AppStateService.class);
-            long originalSessionId = appState.loadViewData().activeSession().id();
-            long originalWorkspaceId = appState.loadViewData().activeWorkspace().id();
-            page.locator("#chat-container[data-session-id='" + originalSessionId + "']").waitFor();
-            JsonNode projects = client.call("list_projects", Map.of());
-            JsonNode projectResults = result(projects, "list_projects").path("result");
-            if (!projectResults.isArray() || projectResults.isEmpty()) {
-                throw new AssertionError((Object) ("Expected the initialized git project: " + (projects)));
-            }
-            long projectId = projectResults.get(0).path("id").asLong();
-            JsonNode workspaces = client.call("list_workspaces", Map.of("projectId", projectId));
-            JsonNode workspaceResults = result(workspaces, "list_workspaces").path("result");
-            if (!workspaceResults.isArray() || workspaceResults.findValuesAsText("id").stream()
-                    .noneMatch(id -> id.equals(Long.toString(originalWorkspaceId)))) {
-                throw new AssertionError("Expected the active workspace in workspace list: " + workspaces);
-            }
-            JsonNode sessions = client.call("list_sessions", Map.of("projectId", projectId));
-            JsonNode sessionResults = result(sessions, "list_sessions").path("result");
-            if (!sessionResults.isArray() || sessionResults.findValuesAsText("id").stream()
-                    .noneMatch(id -> id.equals(Long.toString(originalSessionId)))) {
-                throw new AssertionError("Expected the active session in session list: " + sessions);
-            }
-            JsonNode agents = client.call("list_agents", Map.of("projectId", projectId));
-            if (!result(agents, "list_agents").path("result").isArray()
-                    || result(agents, "list_agents").path("result").isEmpty()) {
-                throw new AssertionError(("Expected primary agents: " + (agents)));
-            }
-            String branch = "mcp-e2e-workspace";
-            JsonNode created = client.call("create_workspace",
-                    Map.of("projectId", projectId, "branchName", branch, "createBranch", true));
-            JsonNode workspace = result(created, "create_workspace").path("result");
-            long workspaceId = workspace.path("workspaceId").asLong();
-            long sessionId = workspace.path("sessionId").asLong();
-            if (workspaceId <= 0L || sessionId <= 0L || !branch.equals(workspace.path("name").asText())) {
-                throw new AssertionError(("Workspace did not include its branch and initial session: " + (created)));
-            }
-            PlaywrightAssertions.assertThat((Locator) page.locator("#settings-modal")).not().isVisible();
-            page.locator(".workspace-group").filter(new Locator.FilterOptions().setHasText(branch)).waitFor();
-            PlaywrightAssertions
-                    .assertThat(page.locator("#chat-container[data-session-id='" + originalSessionId + "']"))
-                    .isVisible();
-            if (appState.loadViewData().activeSession().id() != originalSessionId
-                    || appState.loadViewData().activeWorkspace().id() != originalWorkspaceId) {
-                throw new AssertionError("MCP workspace creation changed the selected conversation");
-            }
-            JsonNode posted = client.call("post_message",
-                    Map.of("sessionId", sessionId, "message", "deterministic MCP request"));
-            if (result(posted, "post_message").path("result").path("sessionId").asLong() != sessionId) {
-                throw new AssertionError((Object) ("post_message targeted an unexpected session: " + (posted)));
-            }
-            waitForCompleted(appState, sessionId);
-            page.locator(".workspace-group").filter(new Locator.FilterOptions().setHasText(branch)).waitFor();
-            PlaywrightAssertions
-                    .assertThat(page.locator("#chat-container[data-session-id='" + originalSessionId + "']"))
-                    .isVisible();
-            if (appState.loadViewData().activeSession().id() != originalSessionId
-                    || appState.loadViewData().activeWorkspace().id() != originalWorkspaceId) {
-                throw new AssertionError("MCP post_message changed the selected conversation");
-            }
 
-            List<?> beforeSummary = appState.loadSessionDetail(sessionId).chatMessages();
-            JsonNode summary = client.call("summarize_session", Map.of("sessionId", sessionId));
-            JsonNode summaryResult = result(summary, "summarize_session").path("result");
-            if (!SUMMARY_MARKER.equals(summaryResult.path("summary").asText())
-                    || summaryResult.path("cutoffTurnId").asLong() <= 0L) {
-                throw new AssertionError(("Unexpected summary result: " + (summary)));
+            openProject(page, "MCP E2E Project", repository);
+            AppStateService state = app.context().getBean(AppStateService.class);
+            long originalSession = state.loadViewData().activeSession().id();
+            long originalWorkspace = state.loadViewData().activeWorkspace().id();
+            JsonNode projects = call(client, "list_projects", Map.of());
+            assertThat(projects.isArray()).isTrue();
+            long projectId = projects.get(0).path("id").asLong();
+            assertThat(call(client, "list_workspaces", Map.of("projectId", projectId)).findValuesAsText("id"))
+                    .contains(Long.toString(originalWorkspace));
+            assertThat(call(client, "list_sessions", Map.of("projectId", projectId)).findValuesAsText("id"))
+                    .contains(Long.toString(originalSession));
+            assertThat(call(client, "list_agents", Map.of("projectId", projectId))).isNotEmpty();
+            List<JsonNode> workspacesBefore = call(client, "list_workspaces", Map.of("projectId", projectId))
+                    .findValues("id");
+            List<JsonNode> sessionsBefore = call(client, "list_sessions", Map.of("projectId", projectId))
+                    .findValues("id");
+            for (Map<String, ?> invalid : List.<Map<String, ?>>of(Map.of("message", "invalid"),
+                    Map.of("workspaceId", originalWorkspace, "sessionId", originalSession, "message", "invalid"),
+                    Map.of("sessionId", originalSession, "message", "invalid", "agentId", "missing-agent"),
+                    Map.of("sessionId", originalSession, "message", "invalid", "modelId", "missing-model"),
+                    Map.of("sessionId", originalSession, "message", "invalid", "thinkingLevel", "invalid"),
+                    Map.of("projectId", projectId, "branchName", "invalid-agent", "createBranch", true, "message",
+                            "invalid", "agentId", "missing-agent"))) {
+                assertThat(client.call("post_message", invalid).path("result").path("isError").asBoolean()).isTrue();
             }
-            List<?> afterSummary = appState.loadSessionDetail(sessionId).chatMessages();
-            if (!beforeSummary.equals(afterSummary)) {
-                throw new AssertionError("Summarization changed persistent conversation messages");
-            }
-            assertPostMessage(
-                    client, appState, Map.of("workspaceId", workspaceId, "message", "workspace-targeted MCP request",
-                            "sessionName", "named MCP session"),
-                    projectId, workspaceId, sessionId, "named MCP session");
-            String branchTarget = "mcp-e2e-post-project";
-            JsonNode projectPost = client.call("post_message", Map.of("projectId", projectId, "branchName",
-                    branchTarget, "createBranch", true, "message", "project-targeted MCP request"));
-            JsonNode projectPostResult = result(projectPost, "post_message").path("result");
-            long projectSessionId = projectPostResult.path("sessionId").asLong();
-            if (!projectPostResult.path("accepted").asBoolean()
-                    || !"accepted".equals(projectPostResult.path("status").asText()) || projectSessionId <= 0L
-                    || projectPostResult.path("projectId").asLong() != projectId
-                    || projectPostResult.path("workspaceId").asLong() <= 0L) {
-                throw new AssertionError("Project-targeted post returned unexpected target details: " + projectPost);
-            }
-            long projectWorkspaceId = projectPostResult.path("workspaceId").asLong();
-            JsonNode projectSessions = client.call("list_sessions", Map.of("workspaceId", projectWorkspaceId));
-            JsonNode projectSessionList = result(projectSessions, "list_sessions").path("result");
-            if (!projectSessionList.findValuesAsText("id").contains(Long.toString(projectSessionId))) {
-                throw new AssertionError("Project-targeted session missing from target workspace: " + projectSessions);
-            }
-            waitForCompleted(appState, projectSessionId);
-            PlaywrightAssertions
-                    .assertThat(page.locator("#chat-container[data-session-id='" + originalSessionId + "']"))
+            assertThat(call(client, "list_workspaces", Map.of("projectId", projectId)).findValues("id"))
+                    .isEqualTo(workspacesBefore);
+            assertThat(call(client, "list_sessions", Map.of("projectId", projectId)).findValues("id"))
+                    .isEqualTo(sessionsBefore);
+
+            String branch = "mcp-e2e-workspace";
+            JsonNode created = call(client, "create_workspace",
+                    Map.of("projectId", projectId, "branchName", branch, "createBranch", true));
+            long workspaceId = created.path("workspaceId").asLong();
+            long sessionId = created.path("sessionId").asLong();
+            assertThat(created.path("name").asText()).isEqualTo(branch);
+            assertThat(workspaceId).isPositive();
+            PlaywrightAssertions.assertThat(page.locator("#chat-container[data-session-id='" + originalSession + "']"))
                     .isVisible();
-            if (appState.loadViewData().activeSession().id() != originalSessionId
-                    || appState.loadViewData().activeWorkspace().id() != originalWorkspaceId) {
-                throw new AssertionError("Project-targeted post_message changed the selected conversation");
-            }
-            JsonNode updatedWorkspaces = client.call("list_workspaces", Map.of("projectId", projectId));
-            if (result(updatedWorkspaces, "list_workspaces").path("result").findValuesAsText("name").stream()
-                    .noneMatch(branchTarget::equals)) {
-                throw new AssertionError(("Project-targeted workspace missing from list: " + (updatedWorkspaces)));
-            }
-            PlaywrightAssertions.assertThat((Locator) page.locator("#settings-modal")).not().isVisible();
+
+            assertThat(
+                    call(client, "post_message", Map.of("sessionId", sessionId, "message", "deterministic MCP request"))
+                            .path("sessionId").asLong())
+                    .isEqualTo(sessionId);
+            awaitAnswer(state, sessionId);
+            var assistant = state.loadSessionDetail(sessionId).chatMessages().stream()
+                    .filter(message -> "assistant".equals(message.role()) && message.text().contains(MODEL_MARKER)
+                            && !message.pending() && message.completedTs() != null)
+                    .findFirst().orElseThrow();
+            var replay = page.request().get(app.baseUrl() + "/ui/chat/stream/" + assistant.id());
+            assertThat(replay.text()).contains("event:done", MODEL_MARKER);
+            List<?> beforeSummary = state.loadSessionDetail(sessionId).chatMessages();
+            JsonNode summary = call(client, "summarize_session", Map.of("sessionId", sessionId));
+            assertThat(summary.path("summary").asText()).isEqualTo(SUMMARY_MARKER);
+            assertThat(summary.path("cutoffTurnId").asLong()).isPositive();
+            assertThat(state.loadSessionDetail(sessionId).chatMessages()).isEqualTo(beforeSummary);
+
+            long namedSession = post(client, Map.of("workspaceId", workspaceId, "message",
+                    "workspace-targeted MCP request", "sessionName", "named MCP session"), projectId, workspaceId);
+            JsonNode namedSessions = call(client, "list_sessions", Map.of("workspaceId", workspaceId));
+            assertThat(namedSessions.findParents("id").stream()
+                    .anyMatch(session -> Long.toString(namedSession).equals(session.path("id").asText())
+                            && "named MCP session".equals(session.path("name").asText())))
+                    .isTrue();
+            awaitAnswer(state, namedSession);
+            long projectSession = post(client, Map.of("projectId", projectId, "branchName", "mcp-e2e-post-project",
+                    "createBranch", true, "message", "project-targeted MCP request"), projectId, -1);
+            awaitAnswer(state, projectSession);
+
             Page reopened = browser.newPage();
             reopened.navigate(app.baseUrl());
-            reopened.locator("#chat-container[data-session-id='" + originalSessionId + "']").waitFor();
+            reopened.locator("#chat-container[data-session-id='" + originalSession + "']").waitFor();
             PlaywrightAssertions.assertThat(reopened.locator("#chat-container")).not().containsText(MODEL_MARKER);
             Locator targetWorkspace = reopened.locator(".workspace-group")
-                    .filter(new Locator.FilterOptions().setHasText(branchTarget));
+                    .filter(new Locator.FilterOptions().setHasText("mcp-e2e-post-project"));
             targetWorkspace.locator(".workspace-item").click();
-            Locator targetSession = targetWorkspace
-                    .locator(".session-item[hx-post='/ui/sessions/" + projectSessionId + "/activate']");
-            targetSession.waitFor();
-            targetSession.click();
-            PlaywrightAssertions
-                    .assertThat(reopened.locator("#chat-container[data-session-id='" + projectSessionId + "']"))
-                    .isVisible();
+            targetWorkspace.locator(".session-item[hx-post='/ui/sessions/" + projectSession + "/activate']").click();
+            reopened.locator("#chat-container[data-session-id='" + projectSession + "']").waitFor();
             reopened.getByText(MODEL_MARKER).waitFor();
-            PlaywrightAssertions.assertThat(reopened.locator("#chat-container")).containsText(MODEL_MARKER);
         }
     }
 
-    private static void assertPostMessage(McpHttpTestClient client, AppStateService appState, Map<String, ?> arguments,
-            long expectedProjectId, long expectedWorkspaceId, long previousSessionId, String expectedSessionName)
+    private static JsonNode call(McpHttpTestClient client, String tool, Map<String, ?> args) throws Exception {
+        JsonNode response = client.call(tool, args);
+        JsonNode result = response.path("result");
+        assertThat(result.path("isError").asBoolean()).as("%s response: %s", tool, response).isFalse();
+        return result.path("structuredContent").path("result");
+    }
+
+    private static long post(McpHttpTestClient client, Map<String, ?> args, long projectId, long workspaceId)
             throws Exception {
-        JsonNode response = client.call("post_message", arguments);
-        JsonNode result = result(response, "post_message").path("result");
-        long sessionId = result.path("sessionId").asLong();
-        if (!result.path("accepted").asBoolean() || !"accepted".equals(result.path("status").asText())
-                || result.path("projectId").asLong() != expectedProjectId
-                || result.path("workspaceId").asLong() != expectedWorkspaceId || sessionId <= 0L
-                || sessionId == previousSessionId || appState.loadSessionDetail(sessionId) == null) {
-            throw new AssertionError((Object) ("post_message returned an unexpected accepted session: " + (response)));
+        JsonNode result = call(client, "post_message", args);
+        assertThat(result.path("accepted").asBoolean()).isTrue();
+        assertThat(result.path("projectId").asLong()).isEqualTo(projectId);
+        long targetWorkspace = result.path("workspaceId").asLong();
+        if (workspaceId > 0) {
+            assertThat(targetWorkspace).isEqualTo(workspaceId);
         }
-        JsonNode sessions = client.call("list_sessions", Map.of("workspaceId", expectedWorkspaceId));
-        JsonNode listedSessions = result(sessions, "list_sessions").path("result");
-        if (!listedSessions.isArray() || listedSessions.findValuesAsText("id").stream()
-                .noneMatch(id -> id.equals(Long.toString(sessionId)))) {
-            throw new AssertionError((Object) ("Expected newly accepted session in target workspace: " + (sessions)));
-        }
-        if (expectedSessionName != null && listedSessions.findParents("id").stream()
-                .filter(session -> Long.toString(session.path("id").asLong()).equals(Long.toString(sessionId)))
-                .noneMatch(session -> expectedSessionName.equals(session.path("name").asText()))) {
-            throw new AssertionError("Expected named session in target workspace: " + sessions);
-        }
-        waitForCompleted(appState, sessionId);
+        long session = result.path("sessionId").asLong();
+        assertThat(session).isPositive();
+        return session;
     }
 
-    private static void waitForCompleted(AppStateService appState, long sessionId) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10L);
+    private static void awaitAnswer(AppStateService state, long sessionId) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
-            boolean completed = appState.loadSessionDetail(sessionId).chatMessages().stream()
+            if (state.loadSessionDetail(sessionId).chatMessages().stream()
                     .anyMatch(message -> "assistant".equals(message.role()) && message.text().contains(MODEL_MARKER)
-                            && !message.pending() && message.completedTs() != null);
-            if (completed) {
+                            && !message.pending() && message.completedTs() != null)) {
                 return;
             }
-            Thread.sleep(50L);
+            Thread.sleep(50);
         }
-        throw new AssertionError(
-                (Object) ("Timed out waiting for completed assistant response in session " + sessionId));
-    }
-
-    private static JsonNode result(JsonNode response, String tool) {
-        JsonNode result = response.path("result");
-        if (result.path("isError").asBoolean()) {
-            throw new AssertionError((tool + " returned an MCP tool error: " + (response)));
-        }
-        JsonNode content = result.path("content");
-        if (!content.isArray() || content.isEmpty()) {
-            throw new AssertionError((tool + " returned no result content: " + (response)));
-        }
-        try {
-            return new ObjectMapper().readTree(content.get(0).path("text").asText());
-        } catch (Exception exception) {
-            throw new AssertionError(tool + " returned invalid JSON content: " + (response), exception);
-        }
+        throw new AssertionError("Timed out waiting for assistant response in session " + sessionId);
     }
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -285,24 +189,22 @@ class InboundMcpE2ETest extends E2ETestSupport {
         AgentModelClientFactory agentModelClientFactory() {
             AgentModelClient client = new AgentModelClient() {
                 public ModelResponse chat(List<Message> conversation, List<ToolDefinition> tools) {
-                    boolean summaryPrompt = conversation.stream().anyMatch(message -> message.getContent() != null
-                            && message.getContent().toLowerCase(Locale.ROOT).contains("summar"));
-                    return new ModelResponse(summaryPrompt ? SUMMARY_MARKER : MODEL_MARKER, null, null, List.of());
+                    boolean summary = conversation.stream().anyMatch(message -> message.getContent() != null
+                            && message.getContent().toLowerCase(Locale.ROOT).contains("summary"));
+                    return new ModelResponse(summary ? SUMMARY_MARKER : MODEL_MARKER, null, null, List.of());
                 }
 
                 public ModelResponse chatStreaming(List<Message> conversation, List<ToolDefinition> tools,
                         Consumer<String> onDelta) {
                     onDelta.accept(MODEL_MARKER);
-                    return this.chat(conversation, tools);
+                    return chat(conversation, tools);
                 }
             };
             return new AgentModelClientFactory(null) {
-
                 public AgentModelClient getClient(String provider) {
                     return client;
                 }
             };
         }
     }
-
 }

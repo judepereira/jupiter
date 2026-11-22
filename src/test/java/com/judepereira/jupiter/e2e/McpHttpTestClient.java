@@ -37,6 +37,10 @@ final class McpHttpTestClient {
         return send("tools/list", Map.of(), true);
     }
 
+    String sessionId() {
+        return sessionId;
+    }
+
     int httpStatus(String method) throws Exception {
         return post(JSON.writeValueAsString(Map.of("jsonrpc", "2.0", "id", 99, "method", method, "params", Map.of())))
                 .statusCode();

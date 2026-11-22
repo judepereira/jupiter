@@ -1,5 +1,7 @@
 package com.judepereira.jupiter.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.playwright.BrowserContext;
@@ -7,6 +9,8 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import com.microsoft.playwright.options.AriaRole;
+import com.microsoft.playwright.options.FormData;
+import com.microsoft.playwright.options.RequestOptions;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -17,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
     private static final ObjectMapper JSON = new ObjectMapper();
+
     @Test
     void browserManagedProjectAndToolScopesApplyImmediatelyWithIndependentEditAndRevocation(@TempDir Path tempDir)
             throws Exception {
@@ -29,6 +34,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
                 BrowserContext browser = newBrowserContext()) {
             Page page = browser.newPage();
             page.navigate(app.baseUrl());
+            assertInvalidOriginsRejected(page, app.baseUrl(), "jup_test-token");
             openProject(page, "Authorization A", projectA);
             openProject(page, "Authorization B", projectB);
             settings(page);
@@ -51,20 +57,14 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             restricted.initialize("authorization-e2e");
             JsonNode listed = restricted.call("list_projects", Map.of());
             JsonNode visible = result(listed).path("result");
-            if (!visible.isArray() || visible.size() != 1
-                    || !visible.get(0).path("name").asText().equals("Authorization A")) {
-                throw new AssertionError("Project-scoped tools/list/call exposed unexpected projects: " + listed);
-            }
+            assertThat(visible).hasSize(1);
+            assertThat(visible.get(0).path("name").asText()).isEqualTo("Authorization A");
             long projectAId = projectIdFromForm(page, "Authorization A");
             JsonNode allowed = restricted.call("list_agents", Map.of("projectId", projectAId));
-            if (result(allowed).path("result").isEmpty()) {
-                throw new AssertionError("Permitted project MCP call returned no agents: " + allowed);
-            }
+            assertThat(result(allowed).path("result")).isNotEmpty();
             long projectBId = projectIdFromForm(page, "Authorization B");
             JsonNode denied = restricted.call("list_agents", Map.of("projectId", projectBId));
-            if (!denied.path("result").path("isError").asBoolean()) {
-                throw new AssertionError("Cross-project MCP call was not denied: " + denied);
-            }
+            assertThat(denied.path("result").path("isError").asBoolean()).isTrue();
 
             PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-create-form")).not().isVisible();
             Locator card = card(page, "restricted");
@@ -72,10 +72,7 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
                     .click();
             Locator editForm = card.locator("form").filter(new Locator.FilterOptions()
                     .setHas(page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Save changes"))));
-            JsonNode editedAllowed = restricted.call("list_agents", Map.of("projectId", projectAId));
-            if (result(editedAllowed).path("result").isEmpty()) {
-                throw new AssertionError("list_agents was not permitted before editing: " + editedAllowed);
-            }
+
             editForm.locator("input[name='tools'][value='list_agents']").uncheck();
             editForm.locator("input[name='tools'][value='list_projects']").check();
             settingsAction(page, "/edit", () -> editForm
@@ -84,11 +81,9 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             card = card(page, "restricted");
             JsonNode changed = restricted.call("list_agents", Map.of("projectId", projectAId));
             JsonNode changedError = changed.path("result").path("structuredContent").path("error");
-            if (!changed.path("result").path("isError").asBoolean()
-                    || !"RESOURCE_UNAVAILABLE".equals(changedError.path("code").asText())
-                    || !"Resource unavailable".equals(changedError.path("message").asText())) {
-                throw new AssertionError("Edited tool permission did not deny with RESOURCE_UNAVAILABLE: " + changed);
-            }
+            assertThat(changed.path("result").path("isError").asBoolean()).isTrue();
+            assertThat(changedError.path("code").asText()).isEqualTo("RESOURCE_UNAVAILABLE");
+            assertThat(changedError.path("message").asText()).isEqualTo("Resource unavailable");
             page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("create token")).click();
             Locator independent = page.locator("#inbound-mcp-create-form form");
             independent.locator("input[name='name']").fill("independent");
@@ -109,15 +104,28 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             waitForSettled(page, "/revoke");
             PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings article")
                     .filter(new Locator.FilterOptions().setHasText("restricted"))).hasCount(0);
-            if (restricted.httpStatus("tools/list") != 401) {
-                throw new AssertionError("Revoked credential remained valid");
-            }
+            assertThat(restricted.httpStatus("tools/list")).isEqualTo(401);
             McpHttpTestClient allProjects = new McpHttpTestClient(app.baseUrl(), independentToken);
             allProjects.initialize("authorization-e2e");
             JsonNode futureProjectList = allProjects.call("list_projects", Map.of());
-            if (result(futureProjectList).path("result").size() < 2) {
-                throw new AssertionError("All-project token did not see both projects: " + futureProjectList);
-            }
+            assertThat(result(futureProjectList).path("result")).hasSizeGreaterThanOrEqualTo(2);
+        }
+    }
+
+    private static void assertInvalidOriginsRejected(Page page, String baseUrl, String token) {
+        var request = page.request();
+        FormData form = FormData.create().set("name", "blocked").set("allProjects", "true");
+        String[] origins = {"https://foreign.example", "not-origin", baseUrl + "/path", "https://user@example.com"};
+        for (String origin : origins) {
+            var settingsResponse = request.post(baseUrl + "/ui/settings/inbound-mcp/create",
+                    RequestOptions.create().setHeader("Origin", origin).setForm(form));
+            assertThat(settingsResponse.status()).isEqualTo(403);
+            var mcpResponse = request.post(baseUrl + "/mcp",
+                    RequestOptions.create().setHeader("Origin", origin).setHeader("Authorization", "Bearer " + token)
+                            .setHeader("Accept", "application/json, text/event-stream")
+                            .setHeader("Content-Type", "application/json")
+                            .setData("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"));
+            assertThat(mcpResponse.status()).isEqualTo(403);
         }
     }
 

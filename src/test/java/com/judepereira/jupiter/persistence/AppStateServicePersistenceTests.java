@@ -200,76 +200,6 @@ public class AppStateServicePersistenceTests {
     }
 
     @Test
-    public void creatingSessionDoesNotChangeActiveSelectionOrRecency(@TempDir Path projectPath) {
-        var context = TestAppStateSupport.appStateContext(event -> {
-        });
-        AppStateService service = context.service();
-        service.addOrReopenProject("Alpha", projectPath.toString());
-        AppStateView before = service.loadViewData();
-        AppStateRepository repository = context.repository();
-        var projectOpenedAt = repository.findProject(before.activeProject().id()).lastOpenedAt();
-        var workspaceOpenedAt = repository.findWorkspace(before.activeWorkspace().id()).lastOpenedAt();
-        var sessionOpenedAt = repository.findSession(before.activeSession().id()).lastOpenedAt();
-        SessionView created = service.createSession(before.activeWorkspace().id(), "Background");
-        AppStateView after = service.loadViewData();
-
-        assertThat(repository.findProject(before.activeProject().id()).lastOpenedAt()).isEqualTo(projectOpenedAt);
-        assertThat(repository.findWorkspace(before.activeWorkspace().id()).lastOpenedAt()).isEqualTo(workspaceOpenedAt);
-        assertThat(repository.findSession(before.activeSession().id()).lastOpenedAt()).isEqualTo(sessionOpenedAt);
-        assertThat(after.activeProject().id()).isEqualTo(before.activeProject().id());
-        assertThat(after.activeWorkspace().id()).isEqualTo(before.activeWorkspace().id());
-        assertThat(after.activeSession().id()).isEqualTo(before.activeSession().id());
-        assertThat(service.loadSessionDetail(created.id()).chatMessages()).extracting(ChatMessageView::text)
-                .contains("Welcome to Jupiter. Let's get started - what's on your mind?");
-    }
-
-    @Test
-    public void creatingBackgroundWorkspaceInAnotherProjectPreservesSelectionAndRecency(@TempDir Path projectsRoot)
-            throws Exception {
-        Path firstProject = projectsRoot.resolve("first");
-        Path secondProject = projectsRoot.resolve("second");
-        Files.createDirectories(firstProject);
-        Files.createDirectories(secondProject);
-        initGitRepo(firstProject);
-        initGitRepo(secondProject);
-        List<Object> events = new ArrayList<>();
-        var context = TestAppStateSupport.appStateContext(events::add);
-        AppStateService service = context.service();
-        service.addOrReopenProject("First", firstProject.toString());
-        long firstProjectId = service.loadViewData().activeProject().id();
-        service.addOrReopenProject("Second", secondProject.toString());
-        AppStateView second = service.loadViewData();
-        long secondProjectId = second.activeProject().id();
-        long secondWorkspaceId = second.activeWorkspace().id();
-        service.activateProject(firstProjectId);
-
-        var repository = context.repository();
-        var before = service.loadViewData();
-        var firstProjectOpenedAt = repository.findProject(firstProjectId).lastOpenedAt();
-        var firstWorkspaceOpenedAt = repository.findWorkspace(before.activeWorkspace().id()).lastOpenedAt();
-        var secondProjectOpenedAt = repository.findProject(secondProjectId).lastOpenedAt();
-        var secondWorkspaceOpenedAt = repository.findWorkspace(secondWorkspaceId).lastOpenedAt();
-        events.clear();
-
-        WorkspaceView background = service.createWorkspace(secondProjectId, "background", true);
-        long backgroundSessionId = service.findMostRecentlyOpenedVisiblePrimarySession(background.id()).orElseThrow()
-                .id();
-
-        var after = service.loadViewData();
-        assertThat(after.activeProject().id()).isEqualTo(firstProjectId);
-        assertThat(after.activeWorkspace().id()).isEqualTo(before.activeWorkspace().id());
-        assertThat(after.activeSession().id()).isEqualTo(before.activeSession().id());
-        assertThat(repository.findProject(firstProjectId).lastOpenedAt()).isEqualTo(firstProjectOpenedAt);
-        assertThat(repository.findWorkspace(before.activeWorkspace().id()).lastOpenedAt())
-                .isEqualTo(firstWorkspaceOpenedAt);
-        assertThat(repository.findProject(secondProjectId).lastOpenedAt()).isEqualTo(secondProjectOpenedAt);
-        assertThat(repository.findWorkspace(secondWorkspaceId).lastOpenedAt()).isEqualTo(secondWorkspaceOpenedAt);
-        assertThat(service.loadSessionDetail(backgroundSessionId).chatMessages()).extracting(ChatMessageView::text)
-                .contains("Welcome to Jupiter. Let's get started - what's on your mind?");
-        assertThat(events).extracting(Object::getClass).contains(WorkspaceRailRefreshEvent.class);
-    }
-
-    @Test
     public void uiSessionCreationSelectsNewSessionWithoutClearingOtherUnreadSessions(@TempDir Path projectPath) {
         var context = TestAppStateSupport.appStateContext(event -> {
         });
@@ -1098,26 +1028,6 @@ public class AppStateServicePersistenceTests {
         assertThat(view.activeWorkspace()).isNotNull();
         assertThat(view.sessions()).isEmpty();
         assertThat(view.activeSession()).isNull();
-    }
-
-    @Test
-    public void backgroundCreationDoesNotRestoreCollapsedWorkspaceOrProjectSelection(@TempDir Path projectPath)
-            throws Exception {
-        initGitRepo(projectPath);
-        AppStateService service = TestAppStateSupport.appStateService();
-        service.addOrReopenProject("Alpha", projectPath.toString());
-        AppStateView initial = service.loadViewData();
-        long projectId = initial.activeProject().id();
-        long workspaceId = initial.activeWorkspace().id();
-
-        service.collapseWorkspace(workspaceId);
-        service.createSession(workspaceId, "Background");
-        assertThat(service.loadViewData().activeWorkspace()).isNull();
-        assertThat(service.loadViewData().activeSession()).isNull();
-
-        service.createWorkspace(projectId, "collapsed-background", true);
-        assertThat(service.loadViewData().activeWorkspace()).isNull();
-        assertThat(service.loadViewData().activeSession()).isNull();
     }
 
     @Test

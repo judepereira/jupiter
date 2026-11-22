@@ -24,7 +24,9 @@ class InboundMcpHttpAuthRegressionE2ETest extends E2ETestSupport {
                 Map.of("jupiter.http-auth.username", "jupiter", "jupiter.http-auth.password", BASIC_PASSWORD))) {
             InboundMcpTokenService tokens = app.context().getBean(InboundMcpTokenService.class);
             String token = tokens.create("http regression", true, Set.of(), InboundMcpTokenService.TOOLS);
-            tokens.bindSession("foreign-session", "different-credential");
+            String otherToken = tokens.create("other credential", true, Set.of(), InboundMcpTokenService.TOOLS);
+            McpHttpTestClient otherClient = new McpHttpTestClient(app.baseUrl(), otherToken);
+            otherClient.initialize("other-session");
             McpHttpTestClient client = new McpHttpTestClient(app.baseUrl(), token);
 
             HttpResponse<String> invalid = client.postRaw("Bearer invalid-token", null);
@@ -35,7 +37,7 @@ class InboundMcpHttpAuthRegressionE2ETest extends E2ETestSupport {
             assertThat(unknown.statusCode()).isEqualTo(404);
             assertThat(unknown.headers().firstValue("WWW-Authenticate")).isEmpty();
 
-            HttpResponse<String> foreign = client.postRaw("Bearer " + token, "foreign-session");
+            HttpResponse<String> foreign = client.postRaw("Bearer " + token, otherClient.sessionId());
             assertThat(foreign.statusCode()).isEqualTo(403);
             assertThat(foreign.headers().firstValue("WWW-Authenticate")).isEmpty();
 
