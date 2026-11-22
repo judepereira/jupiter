@@ -93,7 +93,6 @@ public class ContextCompactionService {
         if (tokenUsageService != null) {
             tokenUsageService.recordModelResponse(sessionId, model.id(), "compaction", summaryResult);
         }
-
         String summary = summaryResult.getAssistantText();
         if (summary == null || summary.isBlank()) {
             summary = streamedSummary.toString();
@@ -115,6 +114,54 @@ public class ContextCompactionService {
                 });
 
         return Optional.of(summaryMessage);
+    }
+
+    public SessionSummary summarizeSession(long sessionId, AgentDefinition agent, ModelDefinition model,
+            ThinkingLevel thinkingLevel) {
+        List<AppStateRepository.ConversationMessageRow> rows = appStateService
+                .listIncludedCompletedConversationMessages(sessionId);
+        if (rows.isEmpty()) {
+            return new SessionSummary("No conversation history.", null);
+        }
+        int budget = availableInputBudget(model);
+        int requestTokens = estimateSummaryRequestTokens(model, rows);
+        if (requestTokens > budget) {
+            throw new IllegalArgumentException("Conversation is too large to summarize with " + model.id()
+                    + ": estimated " + requestTokens + " tokens for budget " + budget);
+        }
+        String summary = generateSummary(sessionId, agent, model, thinkingLevel, rows, "mcp_summary");
+        return new SessionSummary(summary, rows.getLast().turnId());
+    }
+
+    private String generateSummary(long sessionId, AgentDefinition agent, ModelDefinition model,
+            ThinkingLevel thinkingLevel, List<AppStateRepository.ConversationMessageRow> rows, String usageCategory) {
+        AgentModelClient client = modelClientFactory.getClient(model.provider());
+        AgentModelOptions options = new AgentModelOptions(model.id(), model.apiModelId(), thinkingLevel,
+                model.supportsReasoning(), agent.textVerbosity());
+        StringBuilder streamedSummary = new StringBuilder();
+        ModelResponse result = client.chatStreaming(
+                List.of(new Message(Message.Role.SYSTEM, SUMMARY_SYSTEM_PROMPT, null, null, null),
+                        new Message(Message.Role.USER, buildTranscript(rows), null, null, null)),
+                List.of(), options, delta -> {
+                    if (delta != null) {
+                        streamedSummary.append(delta);
+                    }
+                });
+        if (tokenUsageService != null) {
+            tokenUsageService.recordModelResponse(sessionId, model.id(), usageCategory, result);
+        }
+        String summary = result.getAssistantText();
+        if (summary == null || summary.isBlank()) {
+            summary = streamedSummary.toString();
+        }
+        summary = summary == null ? "" : summary.trim();
+        if (summary.isBlank()) {
+            throw new IllegalStateException("Context summary produced an empty summary for model " + model.id());
+        }
+        return summary;
+    }
+
+    public record SessionSummary(String summary, Long cutoffTurnId) {
     }
 
     private List<AppStateRepository.ConversationMessageRow> selectCompactionPrefix(

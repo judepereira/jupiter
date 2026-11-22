@@ -52,9 +52,7 @@ public class CommandController {
 
         String userId = UUID.randomUUID().toString();
         String assistantId = UUID.randomUUID().toString();
-        var queuedTurn = appStateService.appendUserMessageAndPendingAssistant(view.activeSession().id(), userId,
-                assistantId, "/" + command.id(), null);
-        commandStreamService.queue(view.activeSession().id(), assistantId, command,
+        var queuedTurn = commandStreamService.queue(view.activeSession().id(), userId, assistantId, command,
                 view.activeSessionDetail().workspaceRoot(),
                 appStateService.loadSessionProjectEnvironmentVariables(view.activeSession().id()));
 

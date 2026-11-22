@@ -39,6 +39,7 @@ import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.judepereira.jupiter.testsupport.TestEncryptionSupport;
 import com.judepereira.jupiter.ui.ActiveStreamRegistryService;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.ChatStreamRuntime;
 import com.judepereira.jupiter.ui.ChatToolCallHtmlService;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
@@ -146,9 +147,8 @@ public final class TestAppStateSupport {
         resolver.setTemplateMode(TemplateMode.HTML);
         resolver.setCacheable(false);
         templateEngine.setTemplateResolver(resolver);
-        UiController controller = new UiController(harness, properties, appStateService,
+        UiController controller = new UiController(properties, appStateService,
                 new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
-                ModelCatalogTestSupport.resolutionService(modelCatalogService),
                 ModelCatalogTestSupport.preferenceResolver(modelCatalogService), mock(AgentPreferenceService.class),
                 null, null, mock(ProviderAvailabilityService.class),
                 new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -157,13 +157,20 @@ public final class TestAppStateSupport {
                 activeStreamRegistryService, terminalManager, new TerminalStateService(),
                 new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                         context.repository(), null),
-                contextCompactionService(appStateService),
                 new TokenUsageService(context.repository(), new ObjectMapper()), mock(CommandStreamService.class),
                 new CommandCatalogService("", System.getProperty("user.home")),
                 mock(McpProjectMcpServerRuntimeManager.class), new ChatPresentationService(),
                 new ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
-                lifecycleHookService, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
-                mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT", System.getProperty("user.home"));
+                new HttpAuthProperties(), mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class),
+                new ChatStreamRuntime(harness, properties, appStateService,
+                        new AgentDefinitionService(new ObjectMapper()), modelCatalogService,
+                        ModelCatalogTestSupport.resolutionService(modelCatalogService),
+                        contextCompactionService(appStateService),
+                        ModelCatalogTestSupport.preferenceResolver(modelCatalogService), null,
+                        mock(CommandStreamService.class), activeStreamRegistryService, new ChatPresentationService(),
+                        new ChatToolCallHtmlService(templateEngine, new ChatPresentationService(), appStateService),
+                        lifecycleHookService),
+                "0.0.1-SNAPSHOT", System.getProperty("user.home"));
         return new ControllerTestContext(controller, appStateService);
     }
 

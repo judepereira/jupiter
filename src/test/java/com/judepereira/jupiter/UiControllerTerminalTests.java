@@ -27,6 +27,7 @@ import com.judepereira.jupiter.terminal.TerminalStateService;
 import com.judepereira.jupiter.terminal.TerminalTab;
 import com.judepereira.jupiter.testsupport.ModelCatalogTestSupport;
 import com.judepereira.jupiter.ui.ChatPresentationService;
+import com.judepereira.jupiter.ui.ChatStreamRuntime;
 import com.judepereira.jupiter.ui.UiController;
 import com.judepereira.jupiter.ui.balloon.SystemBalloonService;
 import com.judepereira.jupiter.ui.rail.WorkspaceRailRefreshService;
@@ -407,9 +408,8 @@ public class UiControllerTerminalTests {
             TerminalManager terminalManager, AgentProperties properties) {
 
         private UiController controller() {
-            return new UiController(mock(CodingAgentHarness.class), properties, appStateService,
-                    new AgentDefinitionService(new ObjectMapper()), ModelCatalogTestSupport.modelCatalogService(),
-                    ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+            return new UiController(properties, appStateService, new AgentDefinitionService(new ObjectMapper()),
+                    ModelCatalogTestSupport.modelCatalogService(),
                     ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()), null,
                     null, null, mock(ProviderAvailabilityService.class),
                     new SystemBalloonService(new ObjectMapper(), () -> new SseEmitter(0L)),
@@ -418,11 +418,19 @@ public class UiControllerTerminalTests {
                     appStateService.activeStreamRegistryService(), terminalManager, terminalStateService,
                     new OpenAiOAuthService(new OpenAiOAuthProperties(), new ObjectMapper(), HttpClient.newHttpClient(),
                             mock(AppStateRepository.class), null),
-                    TestAppStateSupport.contextCompactionService(appStateService), null,
-                    mock(CommandStreamService.class), new CommandCatalogService("", System.getProperty("user.home")),
-                    null, new ChatPresentationService(), null, null, new HttpAuthProperties(),
-                    mock(GitAutoUpdateService.class), mock(ManualGitPullCoordinator.class), "0.0.1-SNAPSHOT",
-                    System.getProperty("user.home"));
+                    null, mock(CommandStreamService.class),
+                    new CommandCatalogService("", System.getProperty("user.home")), null, new ChatPresentationService(),
+                    null, new HttpAuthProperties(), mock(GitAutoUpdateService.class),
+                    mock(ManualGitPullCoordinator.class),
+                    new ChatStreamRuntime(mock(CodingAgentHarness.class), properties, appStateService,
+                            new AgentDefinitionService(new ObjectMapper()),
+                            ModelCatalogTestSupport.modelCatalogService(),
+                            ModelCatalogTestSupport.resolutionService(ModelCatalogTestSupport.modelCatalogService()),
+                            TestAppStateSupport.contextCompactionService(appStateService),
+                            ModelCatalogTestSupport.preferenceResolver(ModelCatalogTestSupport.modelCatalogService()),
+                            null, mock(CommandStreamService.class), appStateService.activeStreamRegistryService(),
+                            new ChatPresentationService(), null, null),
+                    "0.0.1-SNAPSHOT", System.getProperty("user.home"));
         }
     }
 }
