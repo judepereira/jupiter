@@ -25,9 +25,9 @@ RUN --mount=type=cache,id=maven-cache,target=/root/.m2 \
     --mount=type=secret,id=bluecave_token,required=false \
     EXTRA_MVN_ARGS=""; \
     if [ -s /run/secrets/bluecave_token ]; then \
-      BLUECAVE_TOKEN="$(cat /run/secrets/bluecave_token)"; \
-      BLUECAVE_EXTRA_OPTS="$BLUECAVE_EXTRA_OPTS"; \
-      EXTRA_MVN_ARGS="bluecave:report"; \
+      export BLUECAVE_TOKEN="$(cat /run/secrets/bluecave_token)"; \
+      export BLUECAVE_EXTRA_OPTS="$BLUECAVE_EXTRA_OPTS"; \
+      export EXTRA_MVN_ARGS="bluecave:report"; \
     fi; \
     ./mvnw -B -ntp supertest:supertest && ./mvnw -B -ntp -DskipTests=true package $EXTRA_MVN_ARGS;
 
