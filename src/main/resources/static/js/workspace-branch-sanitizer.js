@@ -53,5 +53,5 @@ document.addEventListener("change", (event) => {
         sanitizeInput(input);
     }
 });
-document.body.addEventListener("htmx:afterSwap", (event) => initWorkspaceBranchSanitizer(event.target), true);
+document.addEventListener("htmx:after:swap", (event) => initWorkspaceBranchSanitizer(event.target), true);
 initWorkspaceBranchSanitizer(document);

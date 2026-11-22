@@ -1,8 +1,6 @@
 Jupiter can expose itself as an MCP server. This enables use cases of having Jupiter control itself, or have another
-agent control Jupiter.
-
-This is separate from [MCP Servers](MCP-Servers), which configures outbound connections from Jupiter to other MCP
-servers.
+agent control Jupiter. This is separate from [MCP Servers](MCP-Servers), which configures outbound connections from
+Jupiter to other MCP servers.
 
 ## Create a Credential
 

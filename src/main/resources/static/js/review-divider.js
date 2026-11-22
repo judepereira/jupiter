@@ -65,7 +65,7 @@ if (divider && shell) {
 
     function handleHtmxUpdate(evt) {
         try {
-            const trg = evt && evt.detail && evt.detail.target;
+            const trg = evt && evt.detail && evt.detail.ctx && evt.detail.ctx.target;
             if (trg && (trg.id === "review" || (review && review.contains && review.contains(trg)))) {
                 const newReview = getShellReviewPanel();
                 if (newReview) {
@@ -100,8 +100,8 @@ if (divider && shell) {
         },
     });
 
-    document.body.addEventListener(
-        "htmx:afterSwap",
+    document.addEventListener(
+        "htmx:after:swap",
         (evt) => {
             if (controller.isDragging()) {
                 controller.cancel();
@@ -110,7 +110,7 @@ if (divider && shell) {
         },
         true,
     );
-    document.body.addEventListener("htmx:afterSettle", handleHtmxUpdate, true);
+    document.addEventListener("htmx:after:settle", handleHtmxUpdate, true);
     window.addEventListener("resize", updateDividerVisibility);
 
     updateDividerVisibility();

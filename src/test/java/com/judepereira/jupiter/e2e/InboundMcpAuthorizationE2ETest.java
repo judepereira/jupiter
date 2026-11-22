@@ -98,10 +98,10 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
             Locator revoke = card(page, "restricted").getByRole(AriaRole.BUTTON,
                     new Locator.GetByRoleOptions().setName("Revoke"));
             page.onceDialog(dialog -> dialog.accept());
-            armSettled(page, "/revoke");
+            armRequestCompleted(page, "/revoke");
             page.waitForResponse(response -> response.url().endsWith("/revoke")
                     && response.request().method().equals("POST") && response.status() == 200, revoke::click);
-            waitForSettled(page, "/revoke");
+            waitForRequestCompleted(page, "/revoke");
             PlaywrightAssertions.assertThat(page.locator("#inbound-mcp-settings article")
                     .filter(new Locator.FilterOptions().setHasText("restricted"))).hasCount(0);
             assertThat(restricted.httpStatus("tools/list")).isEqualTo(401);
@@ -130,29 +130,28 @@ class InboundMcpAuthorizationE2ETest extends E2ETestSupport {
     }
 
     private static void settingsAction(Page page, String path, Runnable action) {
-        armSettled(page, path);
+        armRequestCompleted(page, path);
         page.waitForResponse(response -> response.url().endsWith(path) && response.request().method().equals("POST")
                 && response.status() == 200, action);
-        waitForSettled(page, path);
+        waitForRequestCompleted(page, path);
     }
 
-    private static void armSettled(Page page, String path) {
+    private static void armRequestCompleted(Page page, String path) {
         page.evaluate("""
                 path => {
-                    window.__settingsSettled = null;
-                    document.addEventListener('htmx:afterSettle', event => {
-                        const requestPath = event.detail.requestConfig?.path;
-                        const responseUrl = event.detail.xhr?.responseURL;
-                        if (requestPath?.endsWith(path) || responseUrl?.endsWith(path)) {
-                            window.__settingsSettled = path;
+                    window.__settingsRequestCompleted = null;
+                    document.addEventListener('htmx:finally:request', event => {
+                        const requestAction = event.detail.ctx.request.action;
+                        if (requestAction.endsWith(path)) {
+                            window.__settingsRequestCompleted = path;
                         }
                     });
                 }
                 """, path);
     }
 
-    private static void waitForSettled(Page page, String path) {
-        page.waitForFunction("path => window.__settingsSettled === path", path);
+    private static void waitForRequestCompleted(Page page, String path) {
+        page.waitForFunction("path => window.__settingsRequestCompleted === path", path);
     }
 
     private static void settings(Page page) {

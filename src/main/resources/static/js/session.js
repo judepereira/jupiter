@@ -24,6 +24,6 @@ function restoreSessionCreateButton(event) {
     window.htmx.ajax("GET", "/ui/sessions/new/button", { target: form, swap: "outerHTML" });
 }
 
-document.body.addEventListener("htmx:afterSwap", () => Promise.resolve().then(focusSessionNameInput), true);
-document.body.addEventListener("htmx:afterSettle", () => Promise.resolve().then(focusSessionNameInput), true);
+document.addEventListener("htmx:after:swap", () => Promise.resolve().then(focusSessionNameInput), true);
+document.addEventListener("htmx:after:settle", () => Promise.resolve().then(focusSessionNameInput), true);
 document.addEventListener("click", restoreSessionCreateButton);

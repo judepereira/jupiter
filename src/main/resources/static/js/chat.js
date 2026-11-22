@@ -18,18 +18,18 @@ function bindChatHtmxLifecycleListeners() {
     }
     chatHtmxListenersBound = true;
 
-    document.body.addEventListener(
-        "htmx:beforeRequest",
+    document.addEventListener(
+        "htmx:before:request",
         function (evt) {
-            const requestUrl = evt?.detail?.requestConfig?.path || "";
+            const requestUrl = evt?.detail?.ctx?.request?.action || "";
             if (/\/ui\/(projects|workspaces|sessions)\/[^?]*(activate|collapse|close|add|create)/.test(requestUrl)) {
                 invalidateWorkspaceRailRefresh();
             }
         },
         true,
     );
-    document.body.addEventListener(
-        "htmx:afterSwap",
+    document.addEventListener(
+        "htmx:after:swap",
         function () {
             Promise.resolve().then(() => {
                 bindPendingStreams();
@@ -38,8 +38,8 @@ function bindChatHtmxLifecycleListeners() {
         },
         true,
     );
-    document.body.addEventListener(
-        "htmx:afterSettle",
+    document.addEventListener(
+        "htmx:after:settle",
         function () {
             Promise.resolve().then(() => {
                 bindPendingStreams();
@@ -49,11 +49,11 @@ function bindChatHtmxLifecycleListeners() {
         true,
     );
 
-    document.body.addEventListener(
-        "htmx:afterSwap",
+    document.addEventListener(
+        "htmx:after:swap",
         function (evt) {
             try {
-                const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
+                const target = evt?.detail?.ctx?.target || evt.target || document;
                 const liveList = document.getElementById("chat-messages-list");
                 const base = liveList
                     ? liveList
@@ -68,11 +68,11 @@ function bindChatHtmxLifecycleListeners() {
         },
         true,
     );
-    document.body.addEventListener(
-        "htmx:afterSettle",
+    document.addEventListener(
+        "htmx:after:settle",
         function (evt) {
             try {
-                const target = (evt && evt.detail && evt.detail.target) || evt.target || document;
+                const target = evt?.detail?.ctx?.target || evt.target || document;
                 const liveList = document.getElementById("chat-messages-list");
                 const base = liveList
                     ? liveList
@@ -88,8 +88,8 @@ function bindChatHtmxLifecycleListeners() {
         true,
     );
 
-    document.body.addEventListener(
-        "htmx:afterSwap",
+    document.addEventListener(
+        "htmx:after:swap",
         function () {
             Promise.resolve().then(() => {
                 initChatComposer();
@@ -98,8 +98,8 @@ function bindChatHtmxLifecycleListeners() {
         },
         true,
     );
-    document.body.addEventListener(
-        "htmx:afterSettle",
+    document.addEventListener(
+        "htmx:after:settle",
         function () {
             Promise.resolve().then(() => {
                 initChatComposer();

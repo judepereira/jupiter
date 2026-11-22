@@ -1,22 +1,6 @@
 export function getHtmxRequestPath(evt) {
-    try {
-        const detail = evt && evt.detail;
-        return String(
-            (detail && detail.path) ||
-                (detail && detail.requestConfig && detail.requestConfig.path) ||
-                (detail &&
-                    detail.pathInfo &&
-                    (detail.pathInfo.requestPath || detail.pathInfo.finalRequestPath || detail.pathInfo.path)) ||
-                (detail &&
-                    detail.elt &&
-                    typeof detail.elt.getAttribute === "function" &&
-                    (detail.elt.getAttribute("hx-get") || detail.elt.getAttribute("hx-post"))) ||
-                (detail && detail.xhr && detail.xhr.responseURL) ||
-                "",
-        );
-    } catch (_) {
-        return "";
-    }
+    const ctx = evt?.detail?.ctx;
+    return typeof ctx?.request?.action === "string" ? ctx.request.action : "";
 }
 
 export function getChatComposerForm() {

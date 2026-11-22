@@ -13,11 +13,13 @@ import com.judepereira.jupiter.testsupport.SkillTestSupport;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Route.FulfillOptions;
 import com.microsoft.playwright.options.AriaRole;
 import com.microsoft.playwright.options.ViewportSize;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -74,6 +76,63 @@ class ChatComposerEnterBehaviorE2ETest extends E2ETestSupport {
             assertThat(copyButton).hasAttribute("aria-label", "Copied");
             assertThat(page.locator("textarea")).hasCount(textareaCountBefore);
             assertThat(copyButton).isFocused();
+        }
+    }
+
+    @Test
+    void failedChatSendPreservesDraftAndAllowsRetry(@TempDir Path tempDir) throws Exception {
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path projectDir = Files.createDirectories(fakeHome.resolve("child-project"));
+        Path sqliteDbFile = tempDir.resolve("sqlite-db/jupiter.db");
+        Files.createDirectories(sqliteDbFile.getParent());
+
+        AtomicInteger sendCount = new AtomicInteger();
+        try (RunningApp app = startAppWithConnectedOpenAi(fakeHome, sqliteDbFile, TestAppConfig.class);
+                BrowserContext context = newBrowserContext()) {
+            Page page = context.newPage();
+            installHtmxSettlingTracker(page);
+            page.route("**/ui/chat/send", route -> {
+                if (sendCount.incrementAndGet() == 1) {
+                    route.fulfill(new FulfillOptions().setStatus(500).setContentType("text/plain")
+                            .setBody("controlled send failure"));
+                } else {
+                    route.resume();
+                }
+            });
+
+            page.navigate(app.baseUrl());
+            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("New tab")).waitFor();
+            openProject(page, "Alpha", projectDir);
+
+            assertEquals("4.0.1", page.evaluate("() => htmx.version"));
+            assertEquals(false, page.evaluate("() => htmx.config.implicitInheritance"));
+
+            var composer = page.locator("#chat-input");
+            var messages = page.locator("#chat-messages-list li");
+            int initialMessageCount = messages.count();
+            String draft = "preserve this draft on failure";
+            composer.fill(draft);
+            page.waitForResponse(response -> response.url().contains("/ui/chat/send") && response.status() == 500,
+                    () -> composer.press("Enter"));
+            settlePage(page);
+
+            assertEquals(1, sendCount.get());
+            assertThat(composer).hasValue(draft);
+            assertThat(page.locator("#chat-messages-list li")).hasCount(initialMessageCount);
+            assertThat(page.locator("#chat-messages-list")).isVisible();
+
+            page.waitForResponse(response -> response.url().contains("/ui/chat/send") && response.status() == 200,
+                    () -> composer.press("Enter"));
+
+            var userMessages = page.locator("#chat-messages-list li[data-role='user']");
+            var assistantMessages = page.locator("#chat-messages-list li[data-role='assistant']");
+            assertThat(userMessages).hasCount(1);
+            assertThat(assistantMessages).hasCount(1);
+            assertThat(userMessages.first().locator(".chat-message-text")).hasText(draft);
+            assertThat(assistantMessages.first().locator(".chat-message-text"))
+                    .containsText("Deterministic assistant reply");
+            assertThat(composer).hasValue("");
+            assertEquals(2, sendCount.get());
         }
     }
 

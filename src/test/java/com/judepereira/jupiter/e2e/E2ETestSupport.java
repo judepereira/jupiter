@@ -74,16 +74,16 @@ abstract class E2ETestSupport {
                     }
                     const requests = new Set();
                     window.__jupiterHtmxRequests = requests;
-                    document.addEventListener('htmx:beforeRequest', event => {
-                        const xhr = event.detail?.xhr;
-                        if (xhr) {
-                            requests.add(xhr);
+                    document.addEventListener('htmx:before:request', event => {
+                        const ctx = event.detail?.ctx;
+                        if (ctx) {
+                            requests.add(ctx);
                         }
                     }, true);
-                    document.addEventListener('htmx:afterRequest', event => {
-                        const xhr = event.detail?.xhr;
-                        if (xhr) {
-                            requests.delete(xhr);
+                    document.addEventListener('htmx:finally:request', event => {
+                        const ctx = event.detail?.ctx;
+                        if (ctx) {
+                            requests.delete(ctx);
                         }
                     }, true);
                 })();
