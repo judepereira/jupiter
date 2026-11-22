@@ -156,6 +156,7 @@ public class CodingAgentHarness {
                     }
                     tokenUsageService.recordModelResponse(request.getSessionId(), usageModelKey, "harness", resp);
                 }
+                listener.onModelResponse(selectedModel, resp);
 
                 ToolCall call = resp.getToolCall();
                 String assistantText = resp.getAssistantText();

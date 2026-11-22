@@ -41,6 +41,14 @@ function bindPendingStreams() {
 
             const streamSessionId = getActiveChatSessionId();
             const isStreamSessionActive = () => getActiveChatSessionId() === streamSessionId;
+            if (streamSessionId) {
+                const ring = document.querySelector("#session-context-usage [data-context-ring]");
+                if (ring) {
+                    ring.style.setProperty("--usage-angle", "0deg");
+                    ring.setAttribute("aria-label", "Context usage not available");
+                    ring.firstElementChild.textContent = "—";
+                }
+            }
             const buffer = createStreamBuffer(assistantId, getLiveChatRow, isStreamSessionActive);
             const currentRow = () => (isStreamSessionActive() ? getLiveChatRow(assistantId) : null);
             const currentTextSpan = () => buffer.currentTextSpan();
@@ -90,6 +98,31 @@ function bindPendingStreams() {
             // Legacy tool-call events remain subscribed for protocol compatibility.
             es.addEventListener("tool_call_started", () => {});
             es.addEventListener("tool_call_progress", () => {});
+
+            es.addEventListener("context_usage", (e) => {
+                if (!isStreamSessionActive()) {
+                    return;
+                }
+                try {
+                    const payload = parseStreamPayload(e) || {};
+                    const ring = document.querySelector("#session-context-usage [data-context-ring]");
+                    const valid =
+                        Number.isFinite(payload.percentage) &&
+                        Number.isFinite(payload.inputTokens) &&
+                        Number.isFinite(payload.capacityTokens);
+                    if (ring) {
+                        const pct = valid ? Math.max(0, Math.min(100, payload.percentage)) : 0;
+                        ring.style.setProperty("--usage-angle", `${pct * 3.6}deg`);
+                        ring.setAttribute(
+                            "aria-label",
+                            valid ? `Context usage ${pct}%` : "Context usage not available",
+                        );
+                        ring.firstElementChild.textContent = "";
+                    }
+                } catch (error) {
+                    console.error("Failed to update context usage", error);
+                }
+            });
 
             es.addEventListener("status", (e) => {
                 try {

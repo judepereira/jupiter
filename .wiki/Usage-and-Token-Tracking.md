@@ -13,6 +13,10 @@ recorded against the model that actually handled the request.
 
 Context-compaction usage is tracked separately so its overhead remains visible.
 
+The chat controls also show the latest completed model request's input-token count as a percentage of that model's
+context capacity. This is a per-request context-consumption indicator, not cumulative token spend; it updates when a
+model response completes and is unavailable when the provider or model does not report the required values.
+
 ## Retention
 
 Local usage history is retained for 60 days.

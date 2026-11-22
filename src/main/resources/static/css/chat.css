@@ -230,13 +230,47 @@
     gap: 8px;
 }
 
-.chat-controls label {
+.chat-controls label,
+.session-context-usage {
     display: flex;
     flex-direction: column;
     gap: 4px;
     min-width: 0;
     font-size: 12px;
     color: #131d32;
+}
+
+.session-context-usage {
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: 0 4px;
+}
+
+.context-usage-ring {
+    --usage-angle: 0deg;
+    display: grid;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border-radius: 50%;
+    background: conic-gradient(var(--primary-colour, #536dfe) var(--usage-angle), #dce3ee 0);
+}
+
+.context-usage-ring > span {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    place-items: center;
+    border-radius: 50%;
+    background: white;
+    font-weight: 700;
+}
+
+.session-context-usage strong {
+    overflow-wrap: anywhere;
+    font-size: 12px;
 }
 
 .chat-control-label {

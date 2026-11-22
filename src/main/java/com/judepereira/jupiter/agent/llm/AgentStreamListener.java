@@ -5,6 +5,7 @@ import com.judepereira.jupiter.agent.harness.AgentTurnRequest;
 import com.judepereira.jupiter.agent.harness.AgentTurnResult;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import java.util.List;
 
 /**
@@ -20,6 +21,9 @@ public interface AgentStreamListener {
     }
 
     default void onModelResolved(String preferredModelId, ModelDefinition actualModel) {
+    }
+
+    default void onModelResponse(ModelDefinition model, ModelResponse response) {
     }
 
     default void onComplete(AgentTurnResult result) {

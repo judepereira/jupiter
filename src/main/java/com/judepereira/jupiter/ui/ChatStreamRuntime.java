@@ -12,6 +12,7 @@ import com.judepereira.jupiter.agent.harness.StreamCancelledException;
 import com.judepereira.jupiter.agent.harness.ToolCallTrace;
 import com.judepereira.jupiter.agent.llm.AgentStreamListener;
 import com.judepereira.jupiter.agent.llm.dto.Message;
+import com.judepereira.jupiter.agent.llm.dto.ModelResponse;
 import com.judepereira.jupiter.agent.tools.impl.FileUtils;
 import com.judepereira.jupiter.command.CommandStreamService;
 import com.judepereira.jupiter.lifecycle.LifecycleHookService;
@@ -216,6 +217,21 @@ public class ChatStreamRuntime {
         StringBuilder accumulated = active.accumulatedText().get();
 
         AgentStreamListener listener = new AgentStreamListener() {
+            @Override
+            public void onModelResponse(ModelDefinition model, ModelResponse response) {
+                if (model == null || response == null || response.getMetadata() == null) {
+                    return;
+                }
+                Integer inputTokens = response.getMetadata().inputTokenCount();
+                if (inputTokens == null || model.contextTokens() <= 0) {
+                    broadcastEvent(active, assistantId, "context_usage", Map.of("percentage", "—"));
+                    return;
+                }
+                int percentage = (int) Math.round(inputTokens * 100.0 / model.contextTokens());
+                broadcastEvent(active, assistantId, "context_usage", Map.of("inputTokens", inputTokens,
+                        "capacityTokens", model.contextTokens(), "percentage", percentage));
+            }
+
             @Override
             public void onModelResolved(String preferredModelId, ModelDefinition actualModel) {
                 appStateService.updateAssistantModelMetadata(pending.sessionId(), assistantId, actualModel.id(),

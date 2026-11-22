@@ -12,6 +12,16 @@ import {
 
 let chatHtmxListenersBound = false;
 
+function resetContextUsage() {
+    const ring = document.querySelector("#session-context-usage [data-context-ring]");
+    if (ring) {
+        ring.style.setProperty("--usage-angle", "0deg");
+        ring.setAttribute("aria-label", "Context usage not available");
+        const value = ring.firstElementChild;
+        if (value) value.textContent = "";
+    }
+}
+
 function bindChatHtmxLifecycleListeners() {
     if (chatHtmxListenersBound) {
         return;
@@ -24,6 +34,9 @@ function bindChatHtmxLifecycleListeners() {
             const requestUrl = evt?.detail?.requestConfig?.path || "";
             if (/\/ui\/(projects|workspaces|sessions)\/[^?]*(activate|collapse|close|add|create)/.test(requestUrl)) {
                 invalidateWorkspaceRailRefresh();
+                if (/\/activate(?:[/?#]|$)/.test(requestUrl)) {
+                    resetContextUsage();
+                }
             }
         },
         true,
