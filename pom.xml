@@ -35,7 +35,7 @@
         <spotless.version>3.10.2</spotless.version>
         <eclipse-jdt.version>4.39</eclipse-jdt.version>
         <biome.version>2.5.1</biome.version>
-        <langchain.version>1.23.0</langchain.version>
+        <langchain.version>1.24.0</langchain.version>
     </properties>
     <dependencies>
         <dependency>
